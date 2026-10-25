@@ -1,7 +1,7 @@
 # ComfyUI-FunPack (classic 4.x)
 
 > [!NOTE]
-> This is the classic FunPack 4.x, kept for anyone who needs the older UI. The newer UI is **FunPack v5** (the `main` branch): modules, pipeline cards, a timeline studio. If you do not have a reason to stay on 4.x, use v5. If you want the older UI without modules and the other v5 complications, you can stay here or switch to it. It receives no new features.
+> This is the classic FunPack 4.x, kept for anyone who needs the older UI. The newer UI is **FunUI v5** (formerly FunPack v5) (the `main` branch): modules, pipeline cards, a timeline studio. If you do not have a reason to stay on 4.x, use v5. If you want the older UI without modules and the other v5 complications, you can stay here or switch to it. It receives no new features.
 
 **FunPack is a UI that unlocks novel conditioning and sampling enhancements, wires cutting-edge techniques and allows simple non-linear video montage - all while using regular ComfyUI backend.**
 Graphs replaced with neat cards, get/set replaced with Linked inputs, and simple text fields leveled up to Composer - prefix, prompt, postfix, $variables, Ideas button, shortcuts and splits - for your prompting comfort.
