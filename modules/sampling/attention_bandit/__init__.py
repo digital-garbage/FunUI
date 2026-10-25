@@ -20,6 +20,8 @@ a real model.
 
 import random
 
+from comfy.patcher_extension import WrappersMP
+
 from ..._core import dit_hooks, log, registry
 
 ID = "attention_bandit"
@@ -188,7 +190,7 @@ def install(patcher, values, key):
         raise ValueError(f"no usable blocks in {values.get('blocks')!r}, so nothing would change")
     groups = split(blocks)
     signature = [len(groups), blocks[0], blocks[-1]]
-    live = {"temps": {}}
+    live = {"temps": {}, "scaled": 0, "calls": 0}
 
     def fresh():
         import torch
@@ -196,6 +198,7 @@ def install(patcher, values, key):
         picks = draw(counts(rows, signature, len(groups)))
         spread = manual_spread if manual else min(max(
             learned_spread(rows, signature) + random.gauss(0.0, EXPLORE), SPREAD_MIN), SPREAD_MAX)
+        live["scaled"] = live["calls"] = 0
         live["temps"] = {b: 1.0 + spread * ARMS[a] for g, a in zip(groups, picks) for b in g}
         captured.update({"arms": torch.tensor(picks), "sig": torch.tensor(signature),
                          "spread": torch.tensor(float(spread))})
@@ -219,9 +222,24 @@ def install(patcher, values, key):
 
     def override(func, q, k, v, *args, **kwargs):
         t = (kwargs.get("transformer_options") or {}).get(_SCOPE)
+        live["calls"] += 1
+        live["scaled"] += t is not None
         return func(q if t is None else q / t, k, v, *args, **kwargs)
 
     dit_hooks.add_attention_override(patcher, key, override)
+
+    def report(executor, *args, **kwargs):
+        out = executor(*args, **kwargs)
+        changed = any(t != 1.0 for t in live["temps"].values())
+        if changed and not live["scaled"]:
+            _say("changed nothing this run: no attention call reached the changed blocks "
+                 f"({live['calls']} calls seen). Another feature may have replaced attention.", log.WARNING)
+        elif changed:
+            log.once(f"{ID}:applied", log.INFO, "FunUI Attention explorer",
+                     f"applied to {live['scaled']} of {live['calls']} attention calls")
+        return out
+
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.report", report)
     size = f"size {manual_spread:g}" if manual else "size learned from ratings"
     return f"{len(groups)} depth groups over {len(blocks)} blocks, {size}"
 

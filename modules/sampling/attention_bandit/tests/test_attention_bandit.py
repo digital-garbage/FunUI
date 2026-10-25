@@ -160,3 +160,13 @@ def test_the_log_counts_rated_runs():
     rows = [_row(1.0, [1], [1, 0, 0]), _row(-1.0, [1], [1, 0, 0]), _row(-1.0, [1], [1, 0, 0])]
     assert tally(rows) == "3 rated runs (1 liked, 2 disliked)"
     assert tally([]) == "0 rated runs (0 liked, 0 disliked)"
+
+
+def test_the_log_says_how_many_attention_calls_were_changed(tiny_h3, monkeypatch):
+    from core import log
+    from modules.sampling import attention_bandit as m
+    patched, _ = _load(tiny_h3, mode="manual", blocks="0-3")
+    monkeypatch.setattr(m, "draw", lambda table, rng=random: [0] * len(table))
+    log.new_run()
+    _run(_outer(patched), lambda: tiny_h3.run(patched))
+    assert any("applied to" in e["message"] and "attention calls" in e["message"] for e in log.history())
