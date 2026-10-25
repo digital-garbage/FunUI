@@ -68,7 +68,7 @@ class Chain:
         the picture.
         """
         for name, member in self.members:
-            key = f"funpack.{name}"
+            key = f"funui.{name}"
             if key in self.dropped:
                 continue
             try:

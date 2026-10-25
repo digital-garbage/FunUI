@@ -48,8 +48,8 @@ class Executor:
 
 def _load(tiny):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny.patcher, {
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny.patcher, {
         "taste": {"key": "fox"}, "explore_first_step": {"enabled": True, "candidates": 4}}).result
     sample = [w for ws in patched.wrappers[WrappersMP.SAMPLER_SAMPLE].values() for w in ws][-1]
     for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values():

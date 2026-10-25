@@ -95,7 +95,7 @@ The order in `modules.js` is the order features are set up, so a feature that re
 
 ### When a feature is hidden
 
-Nothing of it reaches the screen. The reason is written once to the browser console (`[FunPack] <id> hidden: <why>`) and returned by the loader. A feature is hidden when:
+Nothing of it reaches the screen. The reason is written once to the browser console (`[FunUI] <id> hidden: <why>`) and returned by the loader. A feature is hidden when:
 
 - its file does not load (syntax error, bad import);
 - `mount` names a region nobody offers (the message lists what is offered);
@@ -207,7 +207,7 @@ A feature is handed a **copy** of `app`, so `app.thing = ...` inside `setup` is 
 
 A feature that exists only because a backend module exists names it: `modules: ["continuity"]`. If the module is not installed or failed to load, the feature is not drawn. Pair the two ids in a test the way `core/tests/test_ui_module_ids.py` does: it fails the build when a feature names a module id that does not exist.
 
-When the backend module offers routes, call them through `app.api` (add the method in `shell/api.js`, and test it in `shell/tests/api.test.js`). The path is `/funpack/api/m/<module id>/...`.
+When the backend module offers routes, call them through `app.api` (add the method in `shell/api.js`, and test it in `shell/tests/api.test.js`). The path is `/fun/api/m/<module id>/...`.
 
 ## Building the screen
 

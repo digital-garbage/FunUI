@@ -8,11 +8,11 @@ def _needs_comfy(comfyui):
 
 
 def _cut(frames, n=48, fps=24.0, with_audio=True):
-    from modules.output.cut_opening.nodes import FunPackCutOpening
+    from modules.output.cut_opening.nodes import FunUICutOpening
     images = torch.arange(n, dtype=torch.float32).view(n, 1, 1, 1).expand(n, 2, 2, 3)
     audio = {"waveform": torch.arange(2 * 44100, dtype=torch.float32).view(1, 1, -1),
              "sample_rate": 44100} if with_audio else None
-    return FunPackCutOpening.execute(images, frames, fps, audio).result
+    return FunUICutOpening.execute(images, frames, fps, audio).result
 
 
 def test_n_frames_off_the_front_and_the_same_time_off_the_sound():

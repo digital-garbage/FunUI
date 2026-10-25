@@ -9,7 +9,7 @@ the SPELLING of a type is in `comfy_types`, so they cannot disagree about it.
 
 Read from ComfyUI's own INPUT_TYPES, the same source its own frontend uses, so a
 node written for ComfyUI is editable here without knowing anything about
-FunPack. Nothing in this file names a node.
+FunUI. Nothing in this file names a node.
 
 A socket is not a widget. An input whose type is a socket type (MODEL, LATENT,
 IMAGE...) is filled by a wire, and offering a text box for it would invite a
@@ -54,8 +54,8 @@ def _one(name: str, declared: Any, required: bool) -> Dict[str, Any]:
         if key in options:
             widget[key] = options[key]
     # [{input, when}]: the form draws this only while every named input holds one of its values.
-    if isinstance(options.get("funpack_shows"), list):
-        widget["shows"] = options["funpack_shows"]
+    if isinstance(options.get("funui_shows"), list):
+        widget["shows"] = options["funui_shows"]
     return widget
 
 

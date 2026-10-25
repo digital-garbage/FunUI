@@ -6,8 +6,8 @@ from core import patching
 def _install(tiny, scale):
     from modules.sampling.audio_coupling import install
     patched = tiny.patcher.clone()
-    note = install(patching.GuardedPatcher(patched, "funpack.audio_coupling", patching.Dropped()),
-                   {"scale": scale}, key="funpack.audio_coupling")
+    note = install(patching.GuardedPatcher(patched, "funui.audio_coupling", patching.Dropped()),
+                   {"scale": scale}, key="funui.audio_coupling")
     return patched, note
 
 
@@ -39,7 +39,7 @@ def test_scaling_the_link_changes_the_sound_and_zero_changes_it_more(tiny_ltx):
 def test_it_comes_off_again(tiny_ltx):
     patched, _ = _install(tiny_ltx, 2.0)
     assert patched.object_patches
-    patching.strip(patched, "funpack.audio_coupling")
+    patching.strip(patched, "funui.audio_coupling")
     assert not patched.object_patches
     _, a = _forward(tiny_ltx, patched)
     assert torch.allclose(a, tiny_ltx.run()[1])

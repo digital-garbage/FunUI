@@ -2,7 +2,7 @@
 // enhancer node, edited through the shared pipeline state; off, or on failure, the prompt runs as typed.
 import { composer as c } from "../../composer/composer.js";
 
-const NODE = "FunPackEnhancePrompt";
+const NODE = "FunUIEnhancePrompt";
 const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wording, lower more predictable."], ["top_p", 0.92, 0, 1, 0.01, "Picks only among the likeliest words whose chances add up to this share."],
   ["top_k", 50, 1, 1000, 1, "Picks only among this many likeliest words."], ["min_p", 0.05, 0, 1, 0.01, "Drops words much less likely than the likeliest one; higher drops more."],
   ["repetition_penalty", 1.3, 1, 2, 0.05, "Above 1 discourages repeating words."], ["presence_penalty", 0, 0, 2, 0.05, "Above 0 discourages words already used."]];
@@ -31,7 +31,7 @@ export function enhance(app, own) {
   function draw() {
     if (!alive) return;
     const sl = slot();
-    if (!sl) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Pick a preset that has one, or add the “FunPack Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
+    if (!sl) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const v = sl.inputs || {}, val = (n, d) => (v[n] === undefined ? d : v[n]);
     const on = val("enabled", false), greedy = val("greedy", false);
     page.set([
@@ -50,7 +50,7 @@ export function enhance(app, own) {
         num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed"),
         c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
         c.label.section({ text: "Reference" }),
-        field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunPack shortcut files, on the machine running ComfyUI."),
+        field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
         field("Reference intro", c.textarea.md({ label: "Reference intro", rows: 2, value: val("reference_intro", ""), placeholder: defaults ? defaults.reference_intro : "", onCommit: (x) => set("reference_intro", x) })),
         ...readout()]),
     ]);

@@ -70,7 +70,7 @@ DIAL = rated_dial.Dial(start=0.5, lo=0.0, hi=1.5, explore=0.15)
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunPack Late-branch guidance", message)
+    log.once(f"{ID}:{message}", level, "FunUI Late-branch guidance", message)
 
 
 def _weak(args):
@@ -102,10 +102,10 @@ def install(patcher, values, key):
     def fresh():
         saved.clear()
         if manual:
-            return log.once(f"{ID}:state", log.INFO, "FunPack Late-branch guidance",
+            return log.once(f"{ID}:state", log.INFO, "FunUI Late-branch guidance",
                             f"manual strength {live['w']:.2f}, branch at block {branch}")
         live["w"], centre, held = DIAL.pick(rated_dial.history(taste.rows(KIND, blind_to="image"), {"b": branch}))
-        log.once(f"{ID}:state", log.INFO, "FunPack Late-branch guidance",
+        log.once(f"{ID}:state", log.INFO, "FunUI Late-branch guidance",
                  f"key {taste.key!r}: learned {centre:.2f} from {held} rating(s), trying "
                  f"{live['w']:.2f}, branch at block {branch}")
 
@@ -178,7 +178,7 @@ def install(patcher, values, key):
         except Exception as exc:                  # noqa: BLE001
             # The guard answers with the LAST model call, which is the weakened copy: hand
             # back the model's own answer before it can.
-            log.broke("FunPack Late-branch guidance", exc, "mixing the weak copy")
+            log.broke("FunUI Late-branch guidance", exc, "mixing the weak copy")
             return normal
 
     patcher.add_wrapper_with_key(WrappersMP.APPLY_MODEL, key, apply_model)

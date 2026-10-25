@@ -47,8 +47,8 @@ class Guider:
 
 def _load(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, {
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, {
         "camera_move": {"enabled": True, "pan_x": 0.5, "step": 2, **values}}).result
     sample = [w for ws in patched.wrappers[WrappersMP.SAMPLER_SAMPLE].values() for w in ws]
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
@@ -130,9 +130,9 @@ def test_a_sampler_that_repeats_a_step_is_declared_and_the_rest_of_the_run_is_le
 def test_no_move_is_set_and_the_wrapper_is_not_installed_and_says_so(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from core import log
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     log.new_run()
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"camera_move": {"enabled": True}}).result
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"camera_move": {"enabled": True}}).result
     assert any("nothing to move" in e["message"] for e in log.history())
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
 
@@ -143,7 +143,7 @@ def test_the_first_moved_call_is_marked_so_an_old_frame_push_is_not_added(tiny_h
     flags = []
 
     def spy(x, t, c_concat=None, c_crossattn=None, control=None, transformer_options=None, **k):
-        flags.append(bool((transformer_options or {}).get("funpack_frame_change")))
+        flags.append(bool((transformer_options or {}).get("funui_frame_change")))
         return x
 
     _steps(sample, wrap, x0, shapes, executor=spy)
@@ -154,7 +154,7 @@ def test_a_probe_call_is_neither_moved_nor_counted_as_a_step(tiny_h3):
     sample, wrap, _ = _load(tiny_h3, step=1)
     x0, shapes = _packed()
     seen = []
-    outs, _ = _steps(sample, wrap, x0, shapes, to=lambda i, n: {**_to(i, n), "funpack_probe": True},
+    outs, _ = _steps(sample, wrap, x0, shapes, to=lambda i, n: {**_to(i, n), "funui_probe": True},
                      executor=lambda x, *a, **k: (seen.append(x), x)[1])
     assert all(torch.equal(s, x0) for s in seen)
 
@@ -173,5 +173,5 @@ def test_a_repeated_step_never_logs_both_active_and_inactive(tiny_h3):
 
     log.new_run()
     sample(Ex(), Guider(), None, {"seed": 1}, None, x0, torch.zeros_like(x0), None, True)
-    msgs = [e["message"] for e in log.history() if e["source"] == "FunPack Camera move"]
+    msgs = [e["message"] for e in log.history() if e["source"] == "FunUI Camera move"]
     assert any("more than once" in m for m in msgs) and not any(m.startswith("Active") for m in msgs)

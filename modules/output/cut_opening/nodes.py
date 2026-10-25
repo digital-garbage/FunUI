@@ -1,15 +1,15 @@
-"""FunPack Cut Opening. See the module docstring."""
+"""FunUI Cut Opening. See the module docstring."""
 
 from comfy_api.latest import io
 
 
-class FunPackCutOpening(io.ComfyNode):
+class FunUICutOpening(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackCutOpening",
-            display_name="FunPack Cut Opening",
-            category="FunPack/Output",
+            node_id="FunUICutOpening",
+            display_name="FunUI Cut Opening",
+            category="FunUI/Output",
             description="Drop frames off the front of a clip, and the matching stretch of sound.",
             inputs=[
                 io.Image.Input("images"),

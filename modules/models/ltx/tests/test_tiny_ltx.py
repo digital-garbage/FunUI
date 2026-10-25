@@ -17,6 +17,6 @@ def test_a_block_replacement_sees_the_video_and_audio_pair(tiny_ltx):
         seen.append(type(args["img"]).__name__ + str(len(args["img"])))
         return extra["original_block"](args)
 
-    dit_hooks.add_block_hook(tiny_ltx.patcher, "funpack.test", 1, hook)
+    dit_hooks.add_block_hook(tiny_ltx.patcher, "funui.test", 1, hook)
     tiny_ltx.run()
     assert seen == ["tuple2"]

@@ -15,7 +15,7 @@ picture on a 512x512 image in ten seconds, so "the setting did what it said" is
 something to look at rather than infer.
 
 The maths is ComfyUI's own `LatentOperationSharpen`, not a copy of it. The
-technique here is FunPack's -- v4 measured this and settled on it -- but the
+technique here is FunUI's -- v4 measured this and settled on it -- but the
 kernel is core's, tested by core, and a second implementation of a gaussian
 unsharp mask would only be a second thing to keep correct.
 """
@@ -78,7 +78,7 @@ def install(patcher, values, key):
     if amount == 0.0:
         # Zero is a request for nothing, and saying so beats reporting that a
         # modifier ran when it could not have changed a single pixel.
-        log.alert("FunPack Detail", "enabled at amount 0, which changes nothing")
+        log.alert("FunUI Detail", "enabled at amount 0, which changes nothing")
         return None
 
     radius = int(values.get("radius", 5))

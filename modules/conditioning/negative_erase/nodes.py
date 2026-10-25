@@ -4,13 +4,13 @@ from ..._core import log
 from . import erase
 
 
-class FunPackNegativeErase(io.ComfyNode):
+class FunUINegativeErase(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackNegativeErase",
-            display_name="FunPack Negative Erase",
-            category="FunPack/Conditioning",
+            node_id="FunUINegativeErase",
+            display_name="FunUI Negative Erase",
+            category="FunUI/Conditioning",
             description="Give the negative prompt a job at CFG 1: take its direction out of the positive "
                         "prompt's words. Strength 0 passes the positive through untouched.",
             inputs=[io.Conditioning.Input("positive"), io.Conditioning.Input("negative"),
@@ -27,5 +27,5 @@ class FunPackNegativeErase(io.ComfyNode):
     def execute(cls, positive, negative, strength: float, mode: str, keep_size: bool = True) -> io.NodeOutput:
         out, note = erase.apply(positive, negative, strength, mode, keep_size)
         if note != "off":
-            log.once(f"negative_erase:{note}", log.ALERT, "FunPack Negative Erase", note)
+            log.once(f"negative_erase:{note}", log.ALERT, "FunUI Negative Erase", note)
         return io.NodeOutput(out, note)

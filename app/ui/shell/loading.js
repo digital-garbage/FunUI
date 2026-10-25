@@ -9,13 +9,13 @@ const name = (path) => {
 export function startLoading(c) {
   let win = null, text = null, bar = null;
   try {
-    text = c.text.md({ center: true, text: "Starting FunPack. Please wait for UI to finish loading." });
+    text = c.text.md({ center: true, text: "Starting FunUI. Please wait for UI to finish loading." });
     bar = c.progress.bar({ value: 0, max: 100, label: "Loading modules" });
     win = c.modal.generic({
-      title: "Loading FunPack", size: "md", centered: true, closeOnOutside: false, closeOnEsc: false,
+      title: "Loading FunUI", size: "md", centered: true, closeOnOutside: false, closeOnEsc: false,
       body: c.region.stack({ gap: "lg", children: [text, bar] }),
     });
-  } catch (err) { console.warn("[FunPack] loading window failed:", err.message); }      // no window is better than no app
+  } catch (err) { console.warn("[FunUI] loading window failed:", err.message); }      // no window is better than no app
   return {
     progress({ n, of, path }) {
       if (!win) return;

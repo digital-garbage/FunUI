@@ -44,7 +44,7 @@ QUARTERS = 4
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Early taste guidance", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Early taste guidance", message)
 
 
 def quarter(transformer_options):
@@ -70,7 +70,7 @@ def install(patcher, values, key):
         live["judges"] = {q: taste.judge(KIND, f"q{q}") for q in range(QUARTERS)} if strength > 0 else {}
         ready = [str(q + 1) for q, j in live["judges"].items() if j is not None]
         liked, disliked = taste.counts(KIND)
-        log.once(f"{ID}:state", log.INFO, "FunPack Early taste guidance",
+        log.once(f"{ID}:state", log.INFO, "FunUI Early taste guidance",
                  f"key {taste.key!r}: " + (f"steering quarter(s) {', '.join(ready)}" if ready else
                                             f"learning ({liked} liked / {disliked} disliked; "
                                             "each quarter steers from 10 rated clips)"))

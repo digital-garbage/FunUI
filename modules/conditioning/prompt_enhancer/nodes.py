@@ -26,7 +26,7 @@ def _own_encoder(file, family):
     if _LOADED.get("key") != (file, family):
         from ...loaders.clip import nodes as clip_nodes        # here, not at the top: the enhancer must load even when the CLIP loader module did not
         _LOADED.clear()
-        _LOADED.update(key=(file, family), clip=clip_nodes.FunPackCLIPLoader.execute(clip_name1=file, type=family).args[0])
+        _LOADED.update(key=(file, family), clip=clip_nodes.FunUICLIPLoader.execute(clip_name1=file, type=family).args[0])
     return _LOADED["clip"]
 
 
@@ -38,13 +38,13 @@ def _prompt_id():
         return ""
 
 
-class FunPackEnhancePrompt(io.ComfyNode):
+class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackEnhancePrompt",
-            display_name="FunPack Enhance Prompt",
-            category="FunPack/Conditioning",
+            node_id="FunUIEnhancePrompt",
+            display_name="FunUI Enhance Prompt",
+            category="FunUI/Conditioning",
             description="Rewrite the finished prompt with a language model before it is encoded. "
                         "Off, or on any failure, the prompt passes through unchanged.",
             inputs=[
@@ -107,14 +107,14 @@ class FunPackEnhancePrompt(io.ComfyNode):
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
         if _MARKUP.search(text or ""):
-            log.once("prompt_enhancer:markup", log.ALERT, "FunPack Prompt enhancer",
+            log.once("prompt_enhancer:markup", log.ALERT, "FunUI Prompt enhancer",
                      "the prompt has (word:1.5) / [a@2-4] / [a|b] markup, which the model will "
                      "read as plain text: with the enhancer on, markup does not survive a rewrite")
         if encoder_file:
             try:
                 clip = _own_encoder(encoder_file, encoder_family)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
-                log.warning("FunPack Prompt enhancer", f"could not load {encoder_file}: {e}; the original prompt is used")
+                log.warning("FunUI Prompt enhancer", f"could not load {encoder_file}: {e}; the original prompt is used")
                 RUNS.append({"prompt_id": _prompt_id(), "status": f"could not load the encoder {encoder_file}: {e}", "before": text,
                              "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "encoder failed")
@@ -124,7 +124,7 @@ class FunPackEnhancePrompt(io.ComfyNode):
             rounds = json.loads(chat) if str(chat or "").strip() else []
         except ValueError:
             rounds = []
-            log.warning("FunPack Prompt enhancer", "the Chat comments are not readable; ignored")
+            log.warning("FunUI Prompt enhancer", "the Chat comments are not readable; ignored")
         if not isinstance(rounds, list):
             rounds = []
         out, status, info = en.enhance(
@@ -136,6 +136,6 @@ class FunPackEnhancePrompt(io.ComfyNode):
             do_sample=not greedy)
         if not info["ok"]:
             # The prompt went through UNCHANGED and the person must know why.
-            log.warning("FunPack Prompt enhancer", f"{status}; the original prompt is used")
+            log.warning("FunUI Prompt enhancer", f"{status}; the original prompt is used")
         RUNS.append({"prompt_id": _prompt_id(), "status": status, **info})
         return io.NodeOutput(out, status)

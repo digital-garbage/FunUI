@@ -28,9 +28,9 @@ import asyncio, json, sys
 sys.path.insert(0, {comfy!r})
 import nodes
 ok = asyncio.run(nodes.load_custom_node({pack!r}, module_parent="custom_nodes"))
-print("FUNPACK_RESULT " + json.dumps({{
+print("FUNUI_RESULT " + json.dumps({{
     "ok": bool(ok),
-    "nodes": sorted(k for k in nodes.NODE_CLASS_MAPPINGS if k.startswith("FunPack")),
+    "nodes": sorted(k for k in nodes.NODE_CLASS_MAPPINGS if k.startswith("FunUI")),
 }}))
 """
 
@@ -45,11 +45,11 @@ def loaded(comfyui):
         [sys.executable, "-I", "-c", PROBE.format(comfy=comfyui, pack=str(ROOT))],
         capture_output=True, text=True, timeout=600, cwd=comfyui,
     )
-    line = next((l for l in result.stdout.splitlines() if l.startswith("FUNPACK_RESULT ")), None)
+    line = next((l for l in result.stdout.splitlines() if l.startswith("FUNUI_RESULT ")), None)
     if line is None:
         pytest.fail(f"the probe did not report.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}")
     import json
-    return json.loads(line[len("FUNPACK_RESULT "):]), result.stderr
+    return json.loads(line[len("FUNUI_RESULT "):]), result.stderr
 
 
 def test_the_pack_loads(loaded):

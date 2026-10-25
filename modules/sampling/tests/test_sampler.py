@@ -49,7 +49,7 @@ class _Modifier:
 def test_full_denoise_asks_for_exactly_the_steps_requested(comfyui, monkeypatch):
     import comfy.samplers
     import torch
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     seen = {}
 
@@ -63,7 +63,7 @@ def test_full_denoise_asks_for_exactly_the_steps_requested(comfyui, monkeypatch)
         def get_model_object(self, name):
             return None
 
-    out = FunPackSampler._sigmas(Model(), "normal", 6, 1.0)
+    out = FunUISampler._sigmas(Model(), "normal", 6, 1.0)
     assert seen["steps"] == 6 and len(out) == 7
 
 
@@ -72,7 +72,7 @@ def test_partial_denoise_is_the_tail_of_a_longer_schedule(comfyui, monkeypatch):
     curve. They are different curves and swapping them changes the picture."""
     import comfy.samplers
     import torch
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     seen = {}
 
@@ -86,19 +86,19 @@ def test_partial_denoise_is_the_tail_of_a_longer_schedule(comfyui, monkeypatch):
         def get_model_object(self, name):
             return None
 
-    out = FunPackSampler._sigmas(Model(), "normal", 10, 0.5)
+    out = FunUISampler._sigmas(Model(), "normal", 10, 0.5)
     assert seen["steps"] == 20, "the curve was not computed over the full length"
     assert len(out) == 11, "the tail was not trimmed to the requested steps"
 
 
 def test_zero_denoise_asks_for_nothing(comfyui):
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     class Model:
         def get_model_object(self, name):
             return None
 
-    assert len(FunPackSampler._sigmas(Model(), "normal", 10, 0.0)) == 0
+    assert len(FunUISampler._sigmas(Model(), "normal", 10, 0.0)) == 0
 
 
 def _run_capturing_sigmas(monkeypatch, **kwargs):
@@ -128,7 +128,7 @@ def _run_capturing_sigmas(monkeypatch, **kwargs):
     monkeypatch.setattr(comfy.samplers, "CFGGuider", Guider)
     monkeypatch.setattr(comfy.sample, "fix_empty_latent_channels", lambda m, x, *a: x)
     monkeypatch.setattr(latent_preview, "prepare_callback", lambda *a: None)
-    monkeypatch.setattr(nodes.FunPackSampler, "_sigmas",
+    monkeypatch.setattr(nodes.FunUISampler, "_sigmas",
                         classmethod(lambda cls, *a: torch.linspace(1.0, 0.0, 5)))
 
     class Model:
@@ -138,7 +138,7 @@ def _run_capturing_sigmas(monkeypatch, **kwargs):
                 latent={"samples": torch.zeros(1, 4, 8, 8)}, seed=0, steps=4, cfg=1.0,
                 sampler_name="euler", scheduler="normal")
     args.update(kwargs)
-    status = nodes.FunPackSampler.execute(**args).result[1]
+    status = nodes.FunUISampler.execute(**args).result[1]
     return seen["sigmas"], status
 
 
@@ -167,12 +167,12 @@ def test_a_malformed_wired_schedule_is_refused(registry, monkeypatch, bad, why):
 def test_a_modifier_sees_every_step_through_one_call_site(registry, comfyui):
     import torch
     from core import chain as chain_mod, patching
-    from modules.sampling.sampler.nodes import ACCEPTS, FunPackSampler
+    from modules.sampling.sampler.nodes import ACCEPTS, FunUISampler
 
     modifier = _Modifier()
     registry.specs["m"] = _spec("m", lambda values, accepts: modifier, hooks=["latent"])
 
-    chain, notes = FunPackSampler._chain(_TraitlessModel(), None, patching.Dropped())
+    chain, notes = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
     assert chain.ids == ["m"] and "m: on" in notes
 
     # Drive it the way the wrapped sampler function would.
@@ -183,11 +183,11 @@ def test_a_modifier_sees_every_step_through_one_call_site(registry, comfyui):
 
 def test_a_modifier_can_sit_out_a_step(registry, comfyui):
     from core import chain as chain_mod, patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     modifier = _Modifier(when=lambda ctx: ctx.index % 2 == 0)
     registry.specs["m"] = _spec("m", lambda values, accepts: modifier, hooks=["latent"])
-    chain, _ = FunPackSampler._chain(_TraitlessModel(), None, patching.Dropped())
+    chain, _ = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
 
     for index in range(4):
         chain.process(chain_mod.Step(index=index, sigma=1.0, sigmas=None, total=4), "l")
@@ -198,11 +198,11 @@ def test_a_modifier_wanting_a_hook_this_sampler_lacks_is_absent(registry, comfyu
     """The sampler keeps the veto. A modifier that needs a second pass cannot be
     usefully run by a sampler that makes one."""
     from core import patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     registry.specs["greedy"] = _spec("greedy", lambda values, accepts: _Modifier(),
                                      hooks=["second_pass"])
-    chain, notes = FunPackSampler._chain(_TraitlessModel(), None, patching.Dropped())
+    chain, notes = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
 
     assert chain.ids == []
     assert any("needs second_pass" in note for note in notes)
@@ -210,18 +210,18 @@ def test_a_modifier_wanting_a_hook_this_sampler_lacks_is_absent(registry, comfyu
 
 def test_a_modifier_needing_an_absent_trait_is_absent(registry, comfyui):
     from core import patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     registry.specs["audio"] = _spec("audio", lambda values, accepts: _Modifier(),
                                     requires=["audio_stream"])
-    chain, notes = FunPackSampler._chain(_TraitlessModel(), None, patching.Dropped())
+    chain, notes = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
     assert chain.ids == []
     assert any("audio_stream" in note for note in notes)
 
 
 def test_one_failing_modifier_does_not_end_the_run(registry, comfyui):
     from core import chain as chain_mod, patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     class Breaks:
         def active(self, ctx):
@@ -235,33 +235,33 @@ def test_one_failing_modifier_does_not_end_the_run(registry, comfyui):
     registry.specs["b_good"] = _spec("b_good", lambda v, a: good)
 
     dropped = patching.Dropped()
-    chain, _ = FunPackSampler._chain(_TraitlessModel(), None, dropped)
+    chain, _ = FunUISampler._chain(_TraitlessModel(), None, dropped)
 
     for index in range(5):
         out = chain.process(chain_mod.Step(index=index, sigma=1.0, sigmas=None, total=5), "l")
         assert out == "l"
 
     assert good.seen == [0, 1, 2, 3, 4], "a failing sibling stopped a healthy modifier"
-    assert "funpack.a_breaks" in dropped
+    assert "funui.a_breaks" in dropped
 
 
 def test_bad_settings_are_refused_before_sampling(registry, comfyui):
     from core import patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     registry.specs["m"] = _spec("m", lambda v, a: _Modifier(), settings={
         "strength": {"type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "label": "S"},
     })
     with pytest.raises(RuntimeError, match="above its maximum"):
-        FunPackSampler._chain(_TraitlessModel(), {"m": {"strength": 9.0}}, patching.Dropped())
+        FunUISampler._chain(_TraitlessModel(), {"m": {"strength": 9.0}}, patching.Dropped())
 
 
 def test_something_that_is_not_a_modifier_is_named_not_run(registry, comfyui):
     from core import patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     registry.specs["m"] = _spec("m", lambda v, a: object())
-    chain, notes = FunPackSampler._chain(_TraitlessModel(), None, patching.Dropped())
+    chain, notes = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
     assert chain.ids == []
     assert any("not a sampler modifier" in note for note in notes)
 

@@ -101,7 +101,7 @@ def test_a_provider_that_raises_is_not_reported_as_one_that_never_loaded():
 
 def test_declaring_no_traits_means_compatible_with_everything():
     # Narrowing, not opting in -- the property that lets a modifier reach models
-    # FunPack knows nothing about.
+    # FunUI knows nothing about.
     plain = ModuleSpec(id="plain", title="P", mount="")
     compatible, incompatible = split([plain], [])
     assert compatible == [plain] and incompatible == []
@@ -167,7 +167,7 @@ def test_every_real_model_config_can_be_read(real_configs):
 def test_traits_describe_the_tensor_not_an_assumed_modality(real_configs):
     """QwenImage is an IMAGE model with a 3-D latent. LTXV is a video model with
     a 3-D latent. They must read the same, because the latent really is the same
-    shape -- claiming otherwise would be FunPack guessing at modality, which
+    shape -- claiming otherwise would be FunUI guessing at modality, which
     ComfyUI itself does not classify."""
     by_name = {cfg.__name__: cfg for cfg in real_configs}
     qwen, ltxv = by_name.get("QwenImage"), by_name.get("LTXV")

@@ -1,7 +1,7 @@
 // A generation, from Generate to a picture on screen.
 //
 // ComfyUI's own queue and its own socket, not a second one alongside them.
-// FunPack has no queue of its own and must not grow one: two things tracking
+// FunUI has no queue of its own and must not grow one: two things tracking
 // what is running is two things that can disagree, and the one the user
 // believes is whichever spoke last. So this speaks to /prompt, /interrupt and
 // /ws exactly as any ComfyUI client does, and holds only what the UI needs to

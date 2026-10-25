@@ -32,7 +32,7 @@ AFTER = ["video_detail", "late_branch", "score_slider", "sharpen"]
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Phrase probe", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Phrase probe", message)
 
 
 def install(patcher, values, key):
@@ -84,13 +84,13 @@ def install(patcher, values, key):
                 for p in measure.peaks(res, top=3):
                     rt = ", ".join(f"b{b} {v * 100:.1f}%" for b, v in p["read_top"])
                     gt = ", ".join(f"b{b} +{v:.3f}" for b, v in p["response_growth_top"])
-                    log.once(f"{ID}:run:{p['phrase']}", log.INFO, "FunPack Phrase probe",
+                    log.once(f"{ID}:run:{p['phrase']}", log.INFO, "FunUI Phrase probe",
                              f"Active | phrase {p['phrase']} ({p['tokens']} tokens): read most at "
                              f"{rt or 'n/a'}; response grows most at {gt or 'n/a'}")
             elif live["on"]:
                 measure.problem = ("recording is on but this run had no phrases to measure: put a "
                                    "(word:1.5) or [phrase@2-4] in the prompt")
-                log.once(f"{ID}:none", log.INFO, "FunPack Phrase probe", "Inactive | " + measure.problem)
+                log.once(f"{ID}:none", log.INFO, "FunUI Phrase probe", "Inactive | " + measure.problem)
             else:
                 measure.problem = None
 
@@ -103,11 +103,11 @@ def install(patcher, values, key):
             return executor(x, t, *args, **kwargs)
         st = live["state"]
         if st is None:
-            phrases = measure.phrases_of(to.get("funpack_markup_phrases"))
+            phrases = measure.phrases_of(to.get("funui_markup_phrases"))
             if not phrases:
                 return executor(x, t, *args, **kwargs)
-            st = live["state"] = measure.State(phrases, to["funpack_markup_phrases"]["cond_len"])
-            log.once(f"{ID}:cost:{len(phrases)}", log.INFO, "FunPack Phrase probe",
+            st = live["state"] = measure.State(phrases, to["funui_markup_phrases"]["cond_len"])
+            log.once(f"{ID}:cost:{len(phrases)}", log.INFO, "FunUI Phrase probe",
                      f"{len(phrases)} phrase(s): the reading map is free, the response map costs "
                      f"{len(phrases)} extra forward(s) per model call this run")
         st.mode, st.block = -1, 0

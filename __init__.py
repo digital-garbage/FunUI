@@ -1,4 +1,4 @@
-"""ComfyUI entry point for FunPack v5.
+"""ComfyUI entry point for FunUI v5.
 
 Core mounts the app and the module loader. Nodes are announced by modules, never
 listed here.

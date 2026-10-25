@@ -59,8 +59,8 @@ def _sound(path):
 
 
 def _load(entry_id, **kw):
-    from modules.media.load.nodes import FunPackLoadMedia
-    return FunPackLoadMedia.execute(entry_id, **kw).result
+    from modules.media.load.nodes import FunUILoadMedia
+    return FunUILoadMedia.execute(entry_id, **kw).result
 
 
 def test_the_bin_lists_exactly_the_types_these_tests_cover():

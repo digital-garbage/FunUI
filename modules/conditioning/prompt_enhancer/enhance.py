@@ -62,10 +62,10 @@ def vocab(text) -> set[str]:
 
 def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
     """Reference groups: the picked shortcuts as one group, then one per file (a
-    SillyTavern lorebook with `entries`, or a FunPack shortcuts file). Entry:
+    SillyTavern lorebook with `entries`, or a FunUI shortcuts file). Entry:
     {block, words|keys, vocab, whole, constant}. A missing shortcut or an unreadable
     file is skipped and said so -- through `say` when given."""
-    say = say or (lambda m: log.warning("FunPack Prompt enhancer", m))
+    say = say or (lambda m: log.warning("FunUI Prompt enhancer", m))
 
     def sc_entry(sc):
         reps = [r for r in sc.replacements if r.strip()]

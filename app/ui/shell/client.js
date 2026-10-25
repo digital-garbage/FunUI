@@ -18,7 +18,7 @@
 // starts out sharing the id. That is the same collision, from a deliberate act,
 // and there is nothing readable on the page that would tell the two apart.
 
-const KEY = "funpack.client-id";
+const KEY = "funui.client-id";
 
 export function clientId() {
   try {
@@ -28,7 +28,7 @@ export function clientId() {
 
   const fresh = (globalThis.crypto && globalThis.crypto.randomUUID)
     ? globalThis.crypto.randomUUID()
-    : `funpack-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    : `funui-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   try { window.sessionStorage.setItem(KEY, fresh); } catch { /* not fatal */ }
   return fresh;
 }
@@ -86,9 +86,9 @@ export async function queuedFor(id, { fetch: doFetch = globalThis.fetch, base = 
         // the single-scalar attribution every existing caller reads, but
         // reattach needs the whole list or every scene past the first
         // silently gets no result recorded on reload.
-        return { promptId, running, sceneId: extra.funpack_scene_id || null,
-                 sceneIds: Array.isArray(extra.funpack_scene_ids) ? extra.funpack_scene_ids : [],
-                 projectId: extra.funpack_project_id || null };
+        return { promptId, running, sceneId: extra.funui_scene_id || null,
+                 sceneIds: Array.isArray(extra.funui_scene_ids) ? extra.funui_scene_ids : [],
+                 projectId: extra.funui_project_id || null };
       }
     }
   }

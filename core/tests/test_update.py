@@ -151,7 +151,7 @@ def test_a_stash_is_disclosed_even_when_the_checkout_step_itself_then_fails(repo
         update.checkout("other", pull_after=False)
 
     # The stash is real, not just claimed in the message.
-    assert "FunPack: auto-stashed" in _git(repo, "stash", "list").stdout
+    assert "FunUI: auto-stashed" in _git(repo, "stash", "list").stdout
 
 
 def test_a_stash_is_disclosed_when_pull_fails_after_a_successful_switch(repo):
@@ -171,7 +171,7 @@ def test_a_stash_is_disclosed_when_pull_fails_after_a_successful_switch(repo):
 
     # The checkout itself succeeded before pull() failed.
     assert update._current_branch() == "other"
-    assert "FunPack: auto-stashed" in _git(repo, "stash", "list").stdout
+    assert "FunUI: auto-stashed" in _git(repo, "stash", "list").stdout
 
 
 def test_a_stash_is_disclosed_when_the_reset_itself_then_fails(repo, monkeypatch):
@@ -194,7 +194,7 @@ def test_a_stash_is_disclosed_when_the_reset_itself_then_fails(repo, monkeypatch
     with pytest.raises(update.GitUpdateError, match="stashed first"):
         update.rollback()
 
-    assert "FunPack: auto-stashed" in _git(repo, "stash", "list").stdout
+    assert "FunUI: auto-stashed" in _git(repo, "stash", "list").stdout
 
 
 def test_a_stash_is_disclosed_even_when_the_failure_is_not_a_gitupdateerror(repo, monkeypatch):
@@ -220,7 +220,7 @@ def test_a_stash_is_disclosed_even_when_the_failure_is_not_a_gitupdateerror(repo
     with pytest.raises(update.GitUpdateError, match="stashed first"):
         update.rollback()
 
-    assert "FunPack: auto-stashed" in _git(repo, "stash", "list").stdout
+    assert "FunUI: auto-stashed" in _git(repo, "stash", "list").stdout
 
 
 def test_a_missing_requirement_is_installed_by_its_whole_line_so_a_pin_or_url_survives(repo, monkeypatch):
@@ -302,6 +302,6 @@ def test_an_unreadable_installed_list_installs_nothing(repo, monkeypatch):
 
 def test_v5_has_its_codename_and_so_does_every_major_with_one():
     from core import update as update_mod
-    assert update_mod.funpack_codename("5.0.0") == "Cunning Cranberry"
-    assert update_mod.funpack_codename("4.2.1") == "Blinding Blackout"
-    assert update_mod.funpack_codename("9.0.0") == "", "an unnamed major says nothing rather than guessing"
+    assert update_mod.funui_codename("5.0.0") == "Classy Chopper"
+    assert update_mod.funui_codename("4.2.1") == "Blinding Blackout"
+    assert update_mod.funui_codename("9.0.0") == "", "an unnamed major says nothing rather than guessing"

@@ -1,6 +1,6 @@
 // One upscale job from queue to result, and the swap of the new file under every render that plays the old one. Pure of the page.
 export const keyOf = (m) => `${m.type || "output"}/${m.subfolder || ""}/${m.filename}`;
-export const UPSCALED = "funpack_upscaled";
+export const UPSCALED = "funui_upscaled";
 export const RTX = "NVIDIA RTX Super Resolution";           // sent as the model name for that engine; the same string as modules/output/render/rtx.py NAME
 export const RTX_DEFAULTS = { quality: "ULTRA", resize: "scale", scale: 2, width: 1920, height: 1080, strength: 1, tenbit: false };
 const LEVEL = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", ULTRA: "Ultra" };

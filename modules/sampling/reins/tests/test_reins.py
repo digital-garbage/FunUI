@@ -17,11 +17,11 @@ def root(tmp_path, monkeypatch):
 
 
 def _load(tiny, key="fox", **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"reins": {"enabled": True, **values}}
     if key:
         settings["taste"] = {"key": key}
-    return FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    return FunUILoadModifiers.execute(tiny.patcher, settings).result
 
 
 def _teach(block, liked, disliked):

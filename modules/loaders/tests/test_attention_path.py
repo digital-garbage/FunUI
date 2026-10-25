@@ -91,7 +91,7 @@ def test_the_loader_writes_the_override_where_dispatch_looks(comfyui, monkeypatc
     monkeypatch.setattr(comfy.sd, "load_diffusion_model_state_dict",
                         lambda sd, **kw: FakeModel())
 
-    out = nodes.FunPackDiffusionModelLoader.execute(
+    out = nodes.FunUIDiffusionModelLoader.execute(
         model_name="m.safetensors", weight_dtype="default",
         compute_dtype="default", attention="pytorch")
 
@@ -114,7 +114,7 @@ def test_a_model_comfy_could_not_identify_fails_at_the_loader(comfyui, monkeypat
     monkeypatch.setattr(comfy.sd, "load_diffusion_model_state_dict", lambda sd, **kw: None)
 
     with pytest.raises(RuntimeError, match="Could not detect a diffusion model"):
-        nodes.FunPackDiffusionModelLoader.execute(
+        nodes.FunUIDiffusionModelLoader.execute(
             model_name="actually_a_vae.safetensors", weight_dtype="default",
             compute_dtype="default", attention="default")
 

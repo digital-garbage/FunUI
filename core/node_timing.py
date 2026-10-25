@@ -12,7 +12,7 @@ from . import log
 _runs = {}
 _END = ("execution_success", "execution_error", "execution_interrupted")
 STEPS = 3          # a node that reports at least this many steps gets a per-step line
-TAG = "_funpack_node_timing"
+TAG = "_funui_node_timing"
 
 
 def observe(event, data, now=None):
@@ -39,7 +39,7 @@ def observe(event, data, now=None):
         _runs.pop(pid, None)
         parts = sorted(run["spent"].items(), key=lambda kv: -kv[1])
         shown = " · ".join(f"{name} {secs:.1f}s" for name, secs in parts if secs >= 0.3)
-        log.info("FunPack Timing", f"{now - run['start']:.1f}s in nodes: {shown or 'nothing over 0.3s'}")
+        log.info("FunUI Timing", f"{now - run['start']:.1f}s in nodes: {shown or 'nothing over 0.3s'}")
 
 
 def _steps(run, now):
@@ -50,7 +50,7 @@ def _steps(run, now):
         return
     first, second = marks[0] - run["at"], marks[1] - marks[0]
     rest = (marks[-1] - marks[1]) / (len(marks) - 2)
-    log.info("FunPack Timing", f"{run['node']}: step 1 done {first:.1f}s after the node started, step 2 took "
+    log.info("FunUI Timing", f"{run['node']}: step 1 done {first:.1f}s after the node started, step 2 took "
              f"{second:.1f}s, the {len(marks) - 2} after that average {rest:.1f}s")
 
 

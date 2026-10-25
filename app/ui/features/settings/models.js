@@ -31,7 +31,7 @@ const FILE = /\.(safetensors|sft|gguf|ckpt|pt|pth|bin|onnx)$/i;
 export const needsChoice = (slot, spec, broken) => broken || !spec || /Loader$/.test(slot.node)
   || (spec.widgets || []).some((w) => w.name === "steps" || w.name === "sampler_name"
     || (w.type === "COMBO" && [...(w.choices || []), (slot.inputs || {})[w.name]].some((v) => typeof v === "string" && FILE.test(v))));
-const ALL_KEY = "funpack_models_all";
+const ALL_KEY = "funui_models_all";
 
 export const models = (app) => function mount() {
   const ps = app.pipeline, api = app.api;
@@ -205,7 +205,7 @@ export const models = (app) => function mount() {
     let url;
     try { url = URL.createObjectURL(await api.settingsCard(slotsNow(), app.project.project && app.project.project.name, app.theme && app.theme.get ? app.theme.get() : "dark")); } catch (err) { return say(`Could not render the card: ${err.message}`); }
     const win = c.modal.generic({ title: "Pipeline settings", size: "lg", body: c.viewer.media({ src: url, kind: "image" }), onClose: () => URL.revokeObjectURL(url) });
-    win.setFooter({ actions: [c.button.sm({ label: "Save PNG", tone: "primary", onClick: () => app.dom.download(url, "funpack-settings.png") })] });
+    win.setFooter({ actions: [c.button.sm({ label: "Save PNG", tone: "primary", onClick: () => app.dom.download(url, "funui-settings.png") })] });
   }
 
   function draw() {

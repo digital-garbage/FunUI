@@ -1,8 +1,8 @@
 """Saying what happened, at a severity, from somewhere.
 
-    [Log] Info: FunPack Diffusion Model Loader | flux.safetensors loaded, attention sage
-    [Log] Alert: FunPack Sampler | no image is connected, starting from noise
-    [Log] Warning: FunPack LoRA Loader | style.safetensors is empty and will not load
+    [Log] Info: FunUI Diffusion Model Loader | flux.safetensors loaded, attention sage
+    [Log] Alert: FunUI Sampler | no image is connected, starting from noise
+    [Log] Warning: FunUI LoRA Loader | style.safetensors is empty and will not load
     [Log] Critical: torch | cannot allocate 14 GB (3 GB free); the run will not start
 
 Four levels, and the difference between the middle two is the one that matters:
@@ -104,7 +104,7 @@ _PAINT = {ALERT: "\x1b[38;5;208m", WARNING: "\x1b[38;5;208m", CRITICAL: "\x1b[91
 
 def _colour_wanted() -> bool:
     import os
-    forced = os.environ.get("FUNPACK_LOG_COLOR", "").strip().lower()
+    forced = os.environ.get("FUNUI_LOG_COLOR", "").strip().lower()
     if forced in ("1", "on", "true", "yes"):
         return True
     if forced in ("0", "off", "false", "no") or "NO_COLOR" in os.environ:

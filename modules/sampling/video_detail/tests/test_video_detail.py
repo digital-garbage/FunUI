@@ -10,8 +10,8 @@ def _needs_comfy(comfyui):
 
 
 def _load(tiny, patcher=None, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    return FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    return FunUILoadModifiers.execute(
         patcher or tiny.patcher, {"video_detail": {"enabled": True, **values}}).result
 
 
@@ -44,8 +44,8 @@ def test_both_directions_move_the_picture(tiny_h3):
 
 def test_switched_off_on_a_second_pass_the_patch_is_gone(tiny_h3):
     once, _ = _load(tiny_h3, amount=1.5)
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    off, _ = FunPackLoadModifiers.execute(once, {"video_detail": {"enabled": False}}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    off, _ = FunUILoadModifiers.execute(once, {"video_detail": {"enabled": False}}).result
     assert not off.object_patches, "a feature switched off kept its patch"
     assert torch.allclose(_run_patched(tiny_h3, off)[0], tiny_h3.run()[0])
 

@@ -23,8 +23,8 @@ def test_strength_zero_changes_nothing_and_one_follows_the_memory():
 
 def _load(tiny, **v):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(
         tiny.patcher, {"momentum": {"enabled": True, **v}}).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     return patched, wrap, status
@@ -59,8 +59,8 @@ def test_it_acts_below_the_threshold_and_carries_the_edit_into_the_next_step(tin
 
 def test_off_installs_nothing(tiny_h3):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"momentum": {"enabled": False}}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"momentum": {"enabled": False}}).result
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
 
 

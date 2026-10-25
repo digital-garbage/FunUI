@@ -132,7 +132,7 @@ def server(store):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {"ready": threading.Event()}
@@ -179,55 +179,55 @@ def _request(port, method, path, body=None):
 
 
 def test_create_list_read_save_delete(server):
-    status, made = _request(server, "POST", "/funpack/api/projects", {"name": "HTTP"})
+    status, made = _request(server, "POST", "/fun/api/projects", {"name": "HTTP"})
     assert status == 200 and made["name"] == "HTTP"
     pid = made["id"]
 
-    status, listed = _request(server, "GET", "/funpack/api/projects")
+    status, listed = _request(server, "GET", "/fun/api/projects")
     assert status == 200 and [p["id"] for p in listed["projects"]] == [pid]
     assert listed["projects"][0]["scenes"] == 1
 
     made["scenes"].append({"text": "a second scene"})
-    status, saved = _request(server, "PUT", f"/funpack/api/projects/{pid}", made)
+    status, saved = _request(server, "PUT", f"/fun/api/projects/{pid}", made)
     assert status == 200 and len(saved["scenes"]) == 2
 
-    status, read = _request(server, "GET", f"/funpack/api/projects/{pid}")
+    status, read = _request(server, "GET", f"/fun/api/projects/{pid}")
     assert status == 200 and read["scenes"][1]["text"] == "a second scene"
 
-    assert _request(server, "DELETE", f"/funpack/api/projects/{pid}")[0] == 200
-    assert _request(server, "GET", f"/funpack/api/projects/{pid}")[0] == 404
+    assert _request(server, "DELETE", f"/fun/api/projects/{pid}")[0] == 200
+    assert _request(server, "GET", f"/fun/api/projects/{pid}")[0] == 404
 
 
 def test_a_put_cannot_rename_its_own_target(server):
     """The id comes from the URL. A body that could name a different project is
     a write over someone else's work, reported as a success."""
-    _, first = _request(server, "POST", "/funpack/api/projects", {"name": "First"})
-    _, second = _request(server, "POST", "/funpack/api/projects", {"name": "Second"})
+    _, first = _request(server, "POST", "/fun/api/projects", {"name": "First"})
+    _, second = _request(server, "POST", "/fun/api/projects", {"name": "Second"})
 
-    _request(server, "PUT", f"/funpack/api/projects/{first['id']}",
+    _request(server, "PUT", f"/fun/api/projects/{first['id']}",
              {**first, "id": second["id"], "name": "Overwritten"})
 
-    _, untouched = _request(server, "GET", f"/funpack/api/projects/{second['id']}")
+    _, untouched = _request(server, "GET", f"/fun/api/projects/{second['id']}")
     assert untouched["name"] == "Second"
-    _, target = _request(server, "GET", f"/funpack/api/projects/{first['id']}")
+    _, target = _request(server, "GET", f"/fun/api/projects/{first['id']}")
     assert target["name"] == "Overwritten"
 
 
 def test_a_body_that_is_not_an_object_is_refused(server):
-    _, made = _request(server, "POST", "/funpack/api/projects", {"name": "Shape"})
+    _, made = _request(server, "POST", "/fun/api/projects", {"name": "Shape"})
     for body in ([], "text", 7):
-        status, _ = _request(server, "PUT", f"/funpack/api/projects/{made['id']}", body)
+        status, _ = _request(server, "PUT", f"/fun/api/projects/{made['id']}", body)
         assert status == 400, body
 
 
 def test_saving_something_that_is_not_there_is_a_404(server):
-    status, _ = _request(server, "PUT", "/funpack/api/projects/0123456789ab", {"name": "Ghost"})
+    status, _ = _request(server, "PUT", "/fun/api/projects/0123456789ab", {"name": "Ghost"})
     assert status == 404
 
 
 def test_a_path_shaped_id_is_refused_not_served(server):
     for pid in ("..", "%2e%2e", "a/b"):
-        status, _ = _request(server, "GET", f"/funpack/api/projects/{pid}")
+        status, _ = _request(server, "GET", f"/fun/api/projects/{pid}")
         assert status in (404, 400), pid
 
 
@@ -236,21 +236,21 @@ def test_a_path_shaped_id_is_refused_not_served(server):
 def test_a_downloaded_project_imports_back_as_a_new_one(server):
     """The round trip the feature exists for: save it, move the file
     somewhere else, load it there."""
-    _, made = _request(server, "POST", "/funpack/api/projects", {"name": "Portable"})
+    _, made = _request(server, "POST", "/fun/api/projects", {"name": "Portable"})
     made["scenes"].append({"text": "a second scene"})
-    _request(server, "PUT", f"/funpack/api/projects/{made['id']}", made)
+    _request(server, "PUT", f"/fun/api/projects/{made['id']}", made)
 
-    status, downloaded = _request(server, "GET", f"/funpack/api/projects/{made['id']}/download")
+    status, downloaded = _request(server, "GET", f"/fun/api/projects/{made['id']}/download")
     assert status == 200
     assert downloaded["name"] == "Portable"
     assert len(downloaded["scenes"]) == 2
 
-    status, imported = _request(server, "POST", "/funpack/api/projects/import", downloaded)
+    status, imported = _request(server, "POST", "/fun/api/projects/import", downloaded)
     assert status == 200
     assert imported["name"] == "Portable"
     assert [s["text"] for s in imported["scenes"]] == ["", "a second scene"]
 
-    status, listed = _request(server, "GET", "/funpack/api/projects")
+    status, listed = _request(server, "GET", "/fun/api/projects")
     assert sorted(p["id"] for p in listed["projects"]) == sorted([made["id"], imported["id"]]), \
         "the import did not land as a project of its own"
 
@@ -258,16 +258,16 @@ def test_a_downloaded_project_imports_back_as_a_new_one(server):
 def test_importing_a_project_never_reuses_its_old_id(server):
     """Importing the SAME file twice -- or importing it back on the machine it
     came from -- must not silently overwrite whatever already has that id."""
-    _, made = _request(server, "POST", "/funpack/api/projects", {"name": "Original"})
-    status, downloaded = _request(server, "GET", f"/funpack/api/projects/{made['id']}/download")
+    _, made = _request(server, "POST", "/fun/api/projects", {"name": "Original"})
+    status, downloaded = _request(server, "GET", f"/fun/api/projects/{made['id']}/download")
     assert downloaded["id"] == made["id"]
 
-    status, imported = _request(server, "POST", "/funpack/api/projects/import", downloaded)
+    status, imported = _request(server, "POST", "/fun/api/projects/import", downloaded)
     assert status == 200
     assert imported["id"] != made["id"]
 
     # The original is untouched -- an id collision would have overwritten it.
-    _, original = _request(server, "GET", f"/funpack/api/projects/{made['id']}")
+    _, original = _request(server, "GET", f"/fun/api/projects/{made['id']}")
     assert original["name"] == "Original"
 
 
@@ -275,7 +275,7 @@ def test_an_id_offered_in_the_body_does_not_win_either(server):
     """Not just the downloaded shape -- ANY id in an imported body is a
     liability, including a made-up one that could collide with something
     imported later."""
-    status, imported = _request(server, "POST", "/funpack/api/projects/import",
+    status, imported = _request(server, "POST", "/fun/api/projects/import",
                                 {"id": "aaaaaaaaaaaa", "name": "Sneaky", "scenes": [{"text": ""}]})
     assert status == 200
     assert imported["id"] != "aaaaaaaaaaaa"
@@ -283,7 +283,7 @@ def test_an_id_offered_in_the_body_does_not_win_either(server):
 
 def test_something_that_does_not_look_like_a_project_is_refused(server):
     for body in ({"name": "not a project"}, {}):
-        status, resp = _request(server, "POST", "/funpack/api/projects/import", body)
+        status, resp = _request(server, "POST", "/fun/api/projects/import", body)
         assert status == 400, body
         assert "problems" in resp
 
@@ -293,14 +293,14 @@ def test_a_scenes_field_of_the_wrong_shape_degrades_to_empty_rather_than_errorin
     every other project load already follows (Project.from_dict), not a
     special case this route invents -- an import is not the one place a
     malformed file gets to crash instead of degrading."""
-    status, imported = _request(server, "POST", "/funpack/api/projects/import",
+    status, imported = _request(server, "POST", "/fun/api/projects/import",
                                 {"name": "Odd", "scenes": "not a list"})
     assert status == 200, imported
     assert imported["scenes"] == []
 
 
 def test_downloading_a_project_that_does_not_exist_is_a_404(server):
-    status, _ = _request(server, "GET", "/funpack/api/projects/0123456789ab/download")
+    status, _ = _request(server, "GET", "/fun/api/projects/0123456789ab/download")
     assert status == 404
 
 
@@ -315,7 +315,7 @@ def test_a_disk_failure_during_import_is_not_blamed_on_the_file(server, monkeypa
         raise OSError("No space left on device")
     monkeypatch.setattr(projects, "save", broken_save)
 
-    status, resp = _request(server, "POST", "/funpack/api/projects/import",
+    status, resp = _request(server, "POST", "/fun/api/projects/import",
                             {"name": "Fine", "scenes": [{"text": ""}]})
     assert status == 500, resp
     assert "No space left on device" in resp["problems"][0]

@@ -4,7 +4,7 @@ A node-only module: no settings, no panel, no mount. It exists to contribute one
 ComfyUI node, which is why `SETTINGS` is absent rather than empty.
 """
 
-from .nodes import FunPackLoadMedia
+from .nodes import FunUILoadMedia
 
 ID = "media_load"
 TITLE = "Media loader"
@@ -12,11 +12,11 @@ STAGE = "load"
 CATEGORY = "system"
 STATUS = "proven"
 
-NODES = [FunPackLoadMedia]
+NODES = [FunUILoadMedia]
 
 
 #: Two dev builds briefly shipped a node each for video and audio; Load Media does both now.
-_GONE = ("FunPackLoadMediaVideo", "FunPackLoadMediaAudio")
+_GONE = ("FunUILoadMediaVideo", "FunUILoadMediaAudio")
 
 
 def upgrade(slots, outputs):

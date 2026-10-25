@@ -5,7 +5,7 @@ import torch
 
 from core import patching
 
-KEY = "funpack.temporal_style"
+KEY = "funui.temporal_style"
 
 
 class Cond:
@@ -93,7 +93,7 @@ def test_a_failing_wrapper_is_dropped_and_the_model_still_runs(tiny_ltx):
     ran = []
     args = {"input": torch.zeros(1, 1, 4), "timestep": torch.tensor([0.5]), "c": {"frame_rate": Broken()}}
     out = p.model_options["model_function_wrapper"](lambda x, t, **c: ran.append(1) or x, args)
-    assert ran == [1] and out is args["input"] and "funpack.temporal_style" in dropped
+    assert ran == [1] and out is args["input"] and "funui.temporal_style" in dropped
 
 
 def _loop_args(video, audio, sigma=0.5):

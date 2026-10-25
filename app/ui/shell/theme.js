@@ -9,7 +9,7 @@
 // first paint is already in the right theme — a dark flash on a light setup is
 // the one bug a theme switcher cannot apologise for.
 (function () {
-  const LS_KEY = "funpack_theme";
+  const LS_KEY = "funui_theme";
   const CHOICES = ["dark", "light", "auto"];
   const listeners = new Set();
   let mq = null;

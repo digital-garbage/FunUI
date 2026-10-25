@@ -18,9 +18,9 @@ def root(tmp_path, monkeypatch):
 
 def _load(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"taste": {"key": "fox"}, "late_branch": {"enabled": True, "block": 2, **values}}
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, settings).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]
     return patched, wrap, outer, status
@@ -36,7 +36,7 @@ def _executor(tiny, patched, shapes):
         sigma = float(t.max())
         video, audio = tiny.run(patched, sigma=sigma, sigmas=torch.tensor([1.0, 0.75, 0.5, 0.25, 0.0]),
                                 options={k: v for k, v in (transformer_options or {}).items()
-                                         if k in ("funpack_weak_branch", "funpack_probe")})
+                                         if k in ("funui_weak_branch", "funui_probe")})
         return packed_av(video, audio)[0]
     return executor, calls
 
@@ -119,8 +119,8 @@ def test_probe_calls_and_negative_calls_are_left_unguided_and_weak_calls_are_mar
     assert len(calls) == 1
     calls.clear()
     _run(outer, lambda: go(_to(1)))
-    assert len(calls) == 2 and not calls[0].get("funpack_weak_branch")
-    assert calls[1]["funpack_weak_branch"] and dit_hooks.probing(calls[1])
+    assert len(calls) == 2 and not calls[0].get("funui_weak_branch")
+    assert calls[1]["funui_weak_branch"] and dit_hooks.probing(calls[1])
 
 
 def test_learned_mode_banks_strength_effect_and_branch_after_a_felt_push_only(tiny_h3, monkeypatch):
@@ -164,9 +164,9 @@ def test_manual_strength_zero_makes_one_call_per_step(tiny_h3):
 def test_a_branch_block_outside_the_model_is_refused_and_said(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from core import log
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     log.new_run()
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {
         "taste": {"key": "fox"}, "late_branch": {"enabled": True, "block": 43}}).result
     assert any("not a branch point" in e["message"] for e in log.history())
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)

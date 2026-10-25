@@ -16,8 +16,8 @@ from . import log, registry as registry_mod
 
 # Node ids are global in ComfyUI: `NODE_CLASS_MAPPINGS[schema.node_id]`, with no
 # collision check -- a clash silently overwrites whoever registered first. The
-# prefix is what keeps FunPack out of everyone else's namespace.
-PREFIX = "FunPack"
+# prefix is what keeps FunUI out of everyone else's namespace.
+PREFIX = "FunUI"
 
 
 def _schema_of(node) -> Optional[object]:
@@ -82,7 +82,7 @@ def collect(registry=None) -> Tuple[List[type], List[Tuple[str, str]]]:
 
 
 def install_into(mapping, display_mapping=None) -> List[type]:
-    """Put FunPack's nodes into a ComfyUI-shaped registry, and say which.
+    """Put FunUI's nodes into a ComfyUI-shaped registry, and say which.
 
     ComfyUI itself does this from `comfy_entrypoint` and nothing here should
     replace that -- a NODE_CLASS_MAPPINGS at module level would suppress the
@@ -117,7 +117,7 @@ def extension():
 
     nodes, rejected = collect()
 
-    class FunPackExtension(ComfyExtension):
+    class FunUIExtension(ComfyExtension):
         async def get_node_list(self) -> List[type]:
             return list(nodes)
 
@@ -125,4 +125,4 @@ def extension():
         log.warning("nodes", f"{len(rejected)} node(s) were not registered; "
                     + "; ".join(f"{where}: {why}" for where, why in rejected))
     log.info("nodes", f"registered {len(nodes)} node(s)")
-    return FunPackExtension()
+    return FunUIExtension()

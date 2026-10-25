@@ -457,7 +457,7 @@ def import_key(key, zip_path, overwrite=False):
                 except Exception as exc:                     # noqa: BLE001
                     raise ValueError(f"{info.filename} is not a readable taste file ({type(exc).__name__})") from exc
                 if not _sound_rows(data):
-                    raise ValueError(f"{info.filename} does not hold rated rows of the shape FunPack reads")
+                    raise ValueError(f"{info.filename} does not hold rated rows of the shape FunUI reads")
             with _LOCK:
                 if dest.exists():
                     if not overwrite:

@@ -47,7 +47,7 @@ NAME = "final"
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Taste guidance", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Taste guidance", message)
 
 
 def install(patcher, values, key):
@@ -63,7 +63,7 @@ def install(patcher, values, key):
     def fresh():
         live["judge"] = taste.judge(KIND, NAME) if strength > 0 else None
         liked, disliked = taste.counts(KIND, NAME)
-        log.once(f"{ID}:state", log.INFO, "FunPack Taste guidance",
+        log.once(f"{ID}:state", log.INFO, "FunUI Taste guidance",
                  f"key {taste.key!r}: " + (f"steering the last half from {liked} liked / {disliked} disliked"
                                             if live["judge"] is not None else
                                             f"learning ({liked} liked / {disliked} disliked; "

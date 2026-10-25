@@ -10,7 +10,7 @@ used when this module asks. UNTESTED on real weights or hardware: proven only on
 """
 
 from . import captions, jobs, loop, media_io, plan, rated, store, taggers, train
-from .nodes import FunPackTrainLora
+from .nodes import FunUITrainLora
 
 ID = "training_lora"
 TITLE = "LoRA training"
@@ -18,7 +18,7 @@ STAGE = "post"
 CATEGORY = "system"
 STATUS = "experimental"
 
-NODES = [FunPackTrainLora]
+NODES = [FunUITrainLora]
 
 
 def _bad(web, why, status=400):
@@ -38,7 +38,7 @@ def saved_files(rec) -> list[str]:
     """The files a run left in the loras folder: its finished LoRA, the copies saved along the way (name_stepN) and its preview."""
     import re
     name = (rec or {}).get("name") or ""
-    stem = "".join(c for c in name if c.isalnum() or c in "-_ .").strip() or "funpack_lora"
+    stem = "".join(c for c in name if c.isalnum() or c in "-_ .").strip() or "funui_lora"
     pattern = re.compile(rf"{re.escape(stem)}_(step(\d+)|preview)(_\d+)?\.safetensors")
     found = set()
     for folder in _loras_folders():

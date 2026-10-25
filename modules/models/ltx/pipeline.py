@@ -1,6 +1,6 @@
 """LTX 2.3 pipelines, as loadable presets.
 
-Built from ComfyUI's own LTX nodes plus FunPack's, the chain the stock templates use: the
+Built from ComfyUI's own LTX nodes plus FunUI's, the chain the stock templates use: the
 checkpoint carries the model and the picture VAE, the audio VAE and the text encoder are loaded
 from the same file, conditioning carries the frame rate, and the sampler runs the distilled
 schedule written out as numbers (`project_sigmas`: the official anchors, never replaced).
@@ -21,7 +21,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
     latent_source = ["latent", 0]
     model_source, positive_source, negative_source = ["modifiers", 0], ["conditioning", 0], ["conditioning", 1]
     slots = [
-        {"id": "model", "group": "Loaders", "node": "FunPackCheckpointLoader", "inputs": {"ckpt_name": ""}},
+        {"id": "model", "group": "Loaders", "node": "FunUICheckpointLoader", "inputs": {"ckpt_name": ""}},
         {"id": "audio_vae", "group": "Loaders", "node": "LTXVAudioVAELoader", "inputs": {"ckpt_name": ""}},
         {"id": "clip", "group": "Loaders", "node": "LTXAVTextEncoderLoader",
          "inputs": {"text_encoder": "", "ckpt_name": "", "device": "default"}},
@@ -36,7 +36,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
          "roles": [video],
          "inputs": {"positive": ["positive", 0], "negative": ["negative", 0], "frame_rate": 25.0}},
 
-        {"id": "latent", "group": "Preparation", "node": "FunPackEmptyLatent",
+        {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
          "roles": [{"at": "project.video", "input": "width", "label": "Width"},
                    {"at": "project.video", "input": "height", "label": "Height"},
                    {"at": "project.video", "input": "length", "label": "Length", "drives": "frames"},
@@ -46,7 +46,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
     ]
     if image_to_video:
         slots += [
-            {"id": "source_image", "group": "Reference media", "node": "FunPackLoadMedia",
+            {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
              "roles": [{"at": "assets.source_image", "input": "media_id"}],
              "inputs": {"media_id": ""}},
             {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent",
@@ -75,19 +75,19 @@ def _base(image_to_video: bool, as_guide: bool = False):
         latent_source = ["join", 0]
         positive_source, negative_source = guided
     slots += [
-        {"id": "settings", "group": "Preparation", "node": "FunPackModifierSettings", "inputs": {"settings": "{}"}},
-        {"id": "modifiers", "group": "Preparation", "node": "FunPackLoadModifiers",
+        {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
+        {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
          "inputs": {"model": ["model", 0], "settings": ["settings", 0]}},
     ]
     if image_to_video:
         slots += [
             # A reference face carried into the clip. The picture is the scene's first reference
             # (assets.reference_1): with none picked this node passes everything through untouched.
-            {"id": "identity", "group": "Preparation", "node": "FunPackIdentityTransfer",
+            {"id": "identity", "group": "Preparation", "node": "FunUIIdentityTransfer",
              "inputs": {"model": ["modifiers", 0], "vae": ["model", 2], "positive": positive_source,
                         "negative": negative_source, "latent": latent_source, "source_id": 2.0,
                         "phase_scale": 1.0, "id_strength": 1.0, "arcface_mode": "auto_adjust"}},
-            {"id": "identity_source", "group": "Reference media", "node": "FunPackLoadMedia",
+            {"id": "identity_source", "group": "Reference media", "node": "FunUILoadMedia",
              "roles": [{"at": "assets.reference_1", "input": "media_id",
                         "wireTo": {"slot": "identity", "input": "image"}}],
              "inputs": {"media_id": ""}},
@@ -95,7 +95,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
         model_source, positive_source, negative_source = ["identity", 0], ["identity", 1], ["identity", 2]
     slots += [
         {"id": "sigmas", "group": "Sampling", "node": "ManualSigmas", "inputs": {"sigmas": DISTILLED_SIGMAS}},
-        {"id": "sampler", "group": "Sampling", "node": "FunPackSampler",
+        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
          "roles": [{"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
                    {"at": "generation.seed", "input": "seed", "label": "Seed"}],
          "inputs": {"model": model_source, "positive": positive_source, "negative": negative_source,
@@ -104,11 +104,11 @@ def _base(image_to_video: bool, as_guide: bool = False):
                     "denoise": 1.0}},
 
         *_uncrop(as_guide),
-        {"id": "decode", "group": "Render", "node": "FunPackDecode", "inputs": {
+        {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
             "samples": ["rejoin", 0] if as_guide else ["sampler", 0], "vae": ["model", 2], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
-        {"id": "save", "group": "Render", "node": "FunPackSaveVideo",
+        {"id": "save", "group": "Render", "node": "FunUISaveVideo",
          "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
-         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunPack"}},
+         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
     ]
     return slots
 
@@ -127,7 +127,7 @@ def _uncrop(as_guide):
 
 
 #: See minimax_h3/pipeline.py: what to pass through when the node's module did not load.
-OPTIONAL_NODES = {"FunPackIdentityTransfer": {"pass": {"0": "model", "1": "positive", "2": "negative"}}}
+OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positive", "2": "negative"}}}
 
 
 def optional_nodes():

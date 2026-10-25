@@ -1,4 +1,4 @@
-// Files: what FunPack keeps on disk for prompts (the shortcut library, cut words) and the taste keys, to see and delete. As v4's tab.
+// Files: what FunUI keeps on disk for prompts (the shortcut library, cut words) and the taste keys, to see and delete. As v4's tab.
 import { composer as c } from "../../composer/composer.js";
 
 const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);

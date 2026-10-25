@@ -58,7 +58,7 @@ STEP_CAP = 0.30             # v4: the rotation is capped at 0.30 x strength of |
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Velocity bias", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Velocity bias", message)
 
 
 def structure_step(to):
@@ -132,7 +132,7 @@ def install(patcher, values, key):
         live["seen"].clear()
         live["rows"] = taste.rows(KIND)
         liked = sum(1 for r in live["rows"] if r["reward"] > 0)
-        log.once(f"{ID}:state", log.INFO, "FunPack Velocity bias",
+        log.once(f"{ID}:state", log.INFO, "FunUI Velocity bias",
                  f"key {taste.key!r}: {liked} liked clip(s) banked" if liked else
                  f"key {taste.key!r}: learning, nothing liked banked yet")
 
@@ -183,7 +183,7 @@ def install(patcher, values, key):
         run_x = x
         if direction is not None:
             run_x = rebuild(rotate(video_in, direction.unsqueeze(0), strength, ratio))
-            log.once(f"{ID}:applied:{how}", log.INFO, "FunPack Velocity bias", f"applied: {how}")
+            log.once(f"{ID}:applied:{how}", log.INFO, "FunUI Velocity bias", f"applied: {how}")
         elif strength > 0:
             _say("not applied this run: " + reference(live["rows"], video_in[row].shape, sig, nearest)[1])
         out = executor(run_x, t, *args, **kwargs)

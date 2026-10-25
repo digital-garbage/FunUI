@@ -15,7 +15,7 @@ Nothing is regrown to replace what is cut -- v4 tried, and the invented ending
 consistently moved worse. The clip just comes out shorter.
 """
 
-from .nodes import FunPackCutOpening
+from .nodes import FunUICutOpening
 
 ID = "output_cut_opening"
 TITLE = "Cut opening"
@@ -23,4 +23,4 @@ STAGE = "post"
 CATEGORY = "post"
 STATUS = "proven"
 
-NODES = [FunPackCutOpening]
+NODES = [FunUICutOpening]

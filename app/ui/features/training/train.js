@@ -4,7 +4,7 @@ import { stillOf } from "./state.js";
 
 /** The node's own defaults. A set remembers what was changed from them. */
 export const DEFAULTS = {
-  name: "funpack_lora", use: "all", preview_every: 0, preview_strength: 1, save_every: 0, steps: 500, learning_rate: 0.0001, rank: 16, algorithm: "LoRA", optimizer: "AdamW", loss: "MSE",
+  name: "funui_lora", use: "all", preview_every: 0, preview_strength: 1, save_every: 0, steps: 500, learning_rate: 0.0001, rank: 16, algorithm: "LoRA", optimizer: "AdamW", loss: "MSE",
   batch_size: 1, grad_accumulation: 1, resolution: 512, aspect_buckets: false, frames: 33, fps: 0, start: "start", seed: 0,
   training_dtype: "bf16", lora_dtype: "bf16", gradient_checkpointing: true, offloading: false, bypass: false, swap_blocks: 0,
 };

@@ -51,16 +51,16 @@ def folders(comfyui, tiny, tmp_path_factory):
 
 
 def test_the_vae_loader_decodes_in_every_dtype_it_offers(folders):
-    from modules.loaders.vae.nodes import DTYPES, FunPackVAELoader
+    from modules.loaders.vae.nodes import DTYPES, FunUIVAELoader
     for name in DTYPES:
-        vae, status = FunPackVAELoader.execute("tiny_vae.safetensors", name).result
+        vae, status = FunUIVAELoader.execute("tiny_vae.safetensors", name).result
         assert name in status
         assert vae.decode(torch.zeros(1, 4, 4, 4)).shape == (1, 32, 32, 3)
 
 
 def test_the_checkpoint_loader_says_what_a_file_without_encoder_or_vae_lacks(folders):
-    from modules.loaders.checkpoint.nodes import FunPackCheckpointLoader
-    model, clip, vae, status = FunPackCheckpointLoader.execute("unet_only.safetensors").result
+    from modules.loaders.checkpoint.nodes import FunUICheckpointLoader
+    model, clip, vae, status = FunUICheckpointLoader.execute("unet_only.safetensors").result
     assert type(model.model).__name__ == "MiniMaxH3"
     assert clip is None and "(no clip, vae)" in status
 
@@ -86,29 +86,29 @@ DIALECTS = {
 @pytest.mark.parametrize("dialect", DIALECTS)
 def test_a_lora_in_every_known_key_dialect_lands_in_the_model(dialect, tiny, folders):
     import safetensors.torch as st
-    from modules.loaders.lora.nodes import FunPackLoraLoader
+    from modules.loaders.lora.nodes import FunUILoraLoader
     prefix, down, up = DIALECTS[dialect]
     layer, shape = _target(tiny)
     st.save_file({f"{prefix}{layer}.{down}": torch.randn(4, shape[1]), f"{prefix}{layer}.{up}": torch.randn(shape[0], 4)},
                  str(folders / "loras" / f"{dialect.replace(' ', '_')}.safetensors"))
-    patched, _, status = FunPackLoraLoader.execute(tiny, f"{dialect.replace(' ', '_')}.safetensors", 0.7).result
+    patched, _, status = FunUILoraLoader.execute(tiny, f"{dialect.replace(' ', '_')}.safetensors", 0.7).result
     assert patched is not tiny and patched.patches, status
     assert "matched nothing" not in status
 
 
 def test_a_lora_for_another_model_is_reported_not_silently_applied(tiny, folders):
     import safetensors.torch as st
-    from modules.loaders.lora.nodes import FunPackLoraLoader
+    from modules.loaders.lora.nodes import FunUILoraLoader
     st.save_file({"nothing.here.lora_A.weight": torch.randn(4, 8), "nothing.here.lora_B.weight": torch.randn(8, 4)},
                  str(folders / "loras" / "other.safetensors"))
-    same, _, status = FunPackLoraLoader.execute(tiny, "other.safetensors", 1.0).result
+    same, _, status = FunUILoraLoader.execute(tiny, "other.safetensors", 1.0).result
     assert same is tiny and "matched nothing" in status
 
 
 def test_negative_and_large_strengths_apply(tiny, folders):
-    from modules.loaders.lora.nodes import FunPackLoraLoader
+    from modules.loaders.lora.nodes import FunUILoraLoader
     for strength in (-1.0, 0.01, 5.0):
-        patched, *_ = FunPackLoraLoader.execute(tiny, "diffusion_model.safetensors", strength).result
+        patched, *_ = FunUILoraLoader.execute(tiny, "diffusion_model.safetensors", strength).result
         assert patched.patches
 
 
@@ -124,13 +124,13 @@ def test_every_clip_family_name_is_accepted_or_refused_in_plain_words(folders, m
     monkeypatch.setattr(nodes.folder_paths, "get_full_path_or_raise", lambda kind, name: f"/x/{name}.safetensors")
     monkeypatch.setattr(nodes.gguf_support, "has_gguf_magic", lambda p: False)
     for family in nodes.clip_types():
-        out = nodes.FunPackCLIPLoader.execute("a", family, "default", clip_name2="b", clip_name3="c", clip_name4="d")
+        out = nodes.FunUICLIPLoader.execute("a", family, "default", clip_name2="b", clip_name3="c", clip_name4="d")
         assert f"type={family}" in out.result[1]
     assert len(seen) == len(nodes.clip_types()) and all(n == 4 for _, n, _ in seen)
-    nodes.FunPackCLIPLoader.execute("a", "ltxv", "cpu")
+    nodes.FunUICLIPLoader.execute("a", "ltxv", "cpu")
     assert seen[-1][2]["load_device"] == torch.device("cpu")
     with pytest.raises(RuntimeError, match="no encoder family"):
-        nodes.FunPackCLIPLoader.execute("a", "not_a_family")
+        nodes.FunUICLIPLoader.execute("a", "not_a_family")
     with pytest.raises(RuntimeError, match="could not|Could not"):
         monkeypatch.setattr(comfy.sd, "load_clip", lambda **k: None)
-        nodes.FunPackCLIPLoader.execute("a", "ltxv")
+        nodes.FunUICLIPLoader.execute("a", "ltxv")

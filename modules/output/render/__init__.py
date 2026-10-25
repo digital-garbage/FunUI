@@ -26,7 +26,7 @@ TITLE = "Render"
 STAGE = "post"
 CATEGORY = "post"
 STATUS = "experimental"
-NODES = [upscale.FunPackUpscaleVideo] if upscale.io is not None else []
+NODES = [upscale.FunUIUpscaleVideo] if upscale.io is not None else []
 
 
 def routes(table, base, web):
@@ -159,7 +159,7 @@ def _clip_bytes(clip: dict) -> bytes:
     if not needs_trim:
         with open(src, "rb") as fh:
             return fh.read()
-    out = files.temp_file(f"funpack_import_{int(time.time() * 1000)}.mp4")
+    out = files.temp_file(f"funui_import_{int(time.time() * 1000)}.mp4")
     try:
         files.trim(src, out, inn, dur)
         with open(out, "rb") as fh:

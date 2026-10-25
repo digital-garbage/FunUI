@@ -12,9 +12,9 @@ test("a clip's picture: a generated clip comes from the server's trimmed segment
   const got = sourceOf({ id: "a", source_in: 0.5, effects: { reverse: true } }, open, 3);
   assert.equal(got.from, 0);
   const u = new URL(got.url, "http://x");
-  assert.equal(u.pathname, "/funpack/api/m/render/projects/p%201/preview-segment/a");
+  assert.equal(u.pathname, "/fun/api/m/render/projects/p%201/preview-segment/a");
   assert.deepEqual(Object.fromEntries(u.searchParams), { filename: "a.mp4", subfolder: "", type: "output", render_in: "1", src_in: "0.5", dur: "3", rev: "1" });
-  assert.deepEqual(sourceOf({ id: "v", source: { type: "video", media_ref: "m 1" }, source_in: 2 }, open, 3), { url: "/funpack/api/media/m%201/file", from: 2 });
+  assert.deepEqual(sourceOf({ id: "v", source: { type: "video", media_ref: "m 1" }, source_in: 2 }, open, 3), { url: "/fun/api/media/m%201/file", from: 2 });
   assert.equal(sourceOf({ id: "b" }, open, 3), null);
   assert.equal(sourceOf({ id: "v", source: { type: "video" } }, open, 3), null);
 });

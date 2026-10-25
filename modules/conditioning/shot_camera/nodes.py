@@ -20,7 +20,7 @@ def _values(settings):
         return {}
     clean, problems = schema_mod.check_values(spec, (settings or {}).get(ID))
     for problem in problems or ():
-        log.once(f"shot_camera:{problem}", log.ALERT, "FunPack Shot Camera", f"setting ignored, default used: {problem}")
+        log.once(f"shot_camera:{problem}", log.ALERT, "FunUI Shot Camera", f"setting ignored, default used: {problem}")
     if control_mod.camera_off(settings):                       # the camera switch: the camera's rewrites sit out, liked details stay
         clean = {**clean, **dict.fromkeys(CAMERA_SWITCHES, False), **dict.fromkeys(CAMERA_CHANCES, 0.0)}
     return clean
@@ -107,16 +107,16 @@ def _rewrites(values, text):
     return bool(on and engine.SHOT.search(text or ""))
 
 
-class FunPackShotCamera(io.ComfyNode):
+class FunUIShotCamera(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackShotCamera",
-            display_name="FunPack Shot Camera",
-            category="FunPack/Conditioning",
+            node_id="FunUIShotCamera",
+            display_name="FunUI Shot Camera",
+            category="FunUI/Conditioning",
             description="Cut times, views and camera moves for the [Shot N] blocks of an H3 prompt, chosen by rules (no language model). Each is off until switched on in Settings ▸ Engine.",
             inputs=[io.String.Input("text", multiline=True, default=""),
-                    io.Custom("FUNPACK_SETTINGS").Input("settings", optional=True),
+                    io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
                     io.Int.Input("length", default=124, min=1, max=100000, tooltip="Frames of the video: with the frame rate, how long the shots have between them."),
                     io.Float.Input("frame_rate", default=25.0, min=1.0, max=240.0),
                     io.String.Input("project", default="", optional=True, tooltip="The project being made: the words focus infusion draws on are the ones this project's own prompts keep returning to.")],
@@ -144,13 +144,13 @@ class FunPackShotCamera(io.ComfyNode):
         try:
             out, said, chose = rewrite(text, values, seconds=length / frame_rate if frame_rate else None, project=project)
         except Exception as exc:                               # noqa: BLE001 -- a rewrite is never worth the run
-            log.broke("FunPack Shot Camera", exc, "rewriting the prompt")
+            log.broke("FunUI Shot Camera", exc, "rewriting the prompt")
             return io.NodeOutput(text, f"left as written ({exc})")
         pid = _prompt_id()
         if pid and (chose["views"] or chose["arms"] or chose.get("text") is not None):
             try:
                 memory.record_run(pid, chose)
             except Exception as exc:                           # noqa: BLE001 -- only the learning is lost, not the run
-                log.broke("FunPack Shot Camera", exc, "remembering this run")
-        log.info("FunPack Shot Camera", said)
+                log.broke("FunUI Shot Camera", exc, "remembering this run")
+        log.info("FunUI Shot Camera", said)
         return io.NodeOutput(out, said)

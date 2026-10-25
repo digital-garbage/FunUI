@@ -17,7 +17,7 @@ export function setupDom(html = "<!doctype html><html><body></body></html>") {
   // -- not on get or set. Anything that remembers a preference then silently
   // took its fallback path in every test, so "it is remembered" was untestable
   // here and looked like it worked.
-  const dom = new JSDOM(html, { pretendToBeVisual: true, url: "http://localhost/funpack/" });
+  const dom = new JSDOM(html, { pretendToBeVisual: true, url: "http://localhost/fun/" });
   for (const name of GLOBALS) globalThis[name] = dom.window[name];
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;

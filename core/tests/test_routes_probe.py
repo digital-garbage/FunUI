@@ -20,7 +20,7 @@ from core import config, routes  # noqa: E402
 
 @pytest.fixture(scope="module")
 def registered(comfyui):
-    """FunPack's modules importable the way the real registry scan needs --
+    """FunUI's modules importable the way the real registry scan needs --
     modules/models/minimax_h3 imports `comfy.*` at module level."""
     import asyncio
     import nodes as comfy_nodes
@@ -43,7 +43,7 @@ def server(registered, tmp_path_factory):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {}
@@ -97,7 +97,7 @@ def _write_safetensors(path, keys):
 def test_a_real_h3_signature_is_recognised_through_the_real_registry(server):
     _write_safetensors(server["models_dir"] / "h3.safetensors",
                        ["video_patch_proj.weight", "audio_patch_proj.weight"])
-    status, body = _request(server["port"], "GET", "/funpack/api/probe?file=h3.safetensors")
+    status, body = _request(server["port"], "GET", "/fun/api/probe?file=h3.safetensors")
     assert status == 200, body
     assert body["module"] == "model_minimax_h3"
     assert body["detected"] is True
@@ -105,20 +105,20 @@ def test_a_real_h3_signature_is_recognised_through_the_real_registry(server):
 
 def test_a_file_matching_no_known_signature_says_so(server):
     _write_safetensors(server["models_dir"] / "unknown.safetensors", ["some.other.weight"])
-    status, body = _request(server["port"], "GET", "/funpack/api/probe?file=unknown.safetensors")
+    status, body = _request(server["port"], "GET", "/fun/api/probe?file=unknown.safetensors")
     assert status == 200, body
     assert body["module"] is None
     assert body["detected"] is False
 
 
 def test_a_file_that_does_not_exist_says_not_found(server):
-    status, body = _request(server["port"], "GET", "/funpack/api/probe?file=nope.safetensors")
+    status, body = _request(server["port"], "GET", "/fun/api/probe?file=nope.safetensors")
     assert status == 200
     assert body["detected"] is False
     assert "not found" in body["reason"]
 
 
 def test_no_file_named_is_a_400_not_a_guess(server):
-    status, body = _request(server["port"], "GET", "/funpack/api/probe")
+    status, body = _request(server["port"], "GET", "/fun/api/probe")
     assert status == 400
     assert body["problems"]

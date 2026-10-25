@@ -27,7 +27,7 @@ export function videoLane(p, picked, focus, actions = () => [], ghostActions = (
         id: sc.id, start: seg.start, dur: seg.dur, trim: true,
         rating: mood(sc.rating) || undefined,
         head: [isVideoClip(sc) ? "▶ video" : rendered ? "✓" : "◌", ...(sc.source_image ? ["◐"] : []), `${seg.dur.toFixed(1)}s`, ...(mood(sc.rating) ? [mood(sc.rating) === "liked" ? "★" : "✕"] : []), ...tags(sc)],
-        thumbs: sc.source_image ? [`/funpack/api/media/${encodeURIComponent(sc.source_image)}/thumb`] : undefined,       // the picture it starts from
+        thumbs: sc.source_image ? [`/fun/api/media/${encodeURIComponent(sc.source_image)}/thumb`] : undefined,       // the picture it starts from
         title: first(sc.text) || "(empty scene)",
         selected: picked.includes(sc.id), focus: sc.id === focus, excluded: Boolean(sc.excluded),
         actions: actions(sc),

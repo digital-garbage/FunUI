@@ -174,7 +174,7 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
 
     from comfy_extras.nodes_audio import vae_decode_audio
     audio = vae_decode_audio(audio_vae, {"samples": audio_latent})
-    log.info("FunPack H3 decode", f"picture {t1 - t0:.1f}s ({_vae_state(vae)}, {tuple(images.shape[:3])}) · sound {time.perf_counter() - t1:.1f}s ({_vae_state(audio_vae)})")
+    log.info("FunUI H3 decode", f"picture {t1 - t0:.1f}s ({_vae_state(vae)}, {tuple(images.shape[:3])}) · sound {time.perf_counter() - t1:.1f}s ({_vae_state(audio_vae)})")
     return images, audio
 
 
@@ -205,7 +205,7 @@ def _video_images(vae, video_latent, tile_size):
         try:
             return _decode.decode_fast(vae, video_latent, tile_size)
         except Exception as exc:                            # noqa: BLE001
-            log.once(f"h3_decode_tiles:{type(exc).__name__}", log.ALERT, "FunPack H3 decode",
+            log.once(f"h3_decode_tiles:{type(exc).__name__}", log.ALERT, "FunUI H3 decode",
                      f"the tiled decode failed ({type(exc).__name__}: {exc}); decoded in one piece instead")
     return vae.decode(video_latent)
 

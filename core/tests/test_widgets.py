@@ -17,10 +17,10 @@ def _needs_comfy(comfyui):
 
 @pytest.fixture(autouse=True)
 def _registry():
-    """ComfyUI's own nodes, plus FunPack's, and PUT BACK afterwards.
+    """ComfyUI's own nodes, plus FunUI's, and PUT BACK afterwards.
 
     The same two steps the dev server takes, through the same function, because
-    a pipeline made of FunPack nodes cannot be described by a registry that only
+    a pipeline made of FunUI nodes cannot be described by a registry that only
     holds ComfyUI's.
 
     Restored because NODE_CLASS_MAPPINGS is a module-level dict shared by the
@@ -30,11 +30,11 @@ def _registry():
     before.
     """
     import nodes as comfy_nodes
-    from core import nodes as funpack_nodes
+    from core import nodes as funui_nodes
 
     before = dict(comfy_nodes.NODE_CLASS_MAPPINGS)
     before_names = dict(comfy_nodes.NODE_DISPLAY_NAME_MAPPINGS)
-    funpack_nodes.install_into(comfy_nodes.NODE_CLASS_MAPPINGS,
+    funui_nodes.install_into(comfy_nodes.NODE_CLASS_MAPPINGS,
                                comfy_nodes.NODE_DISPLAY_NAME_MAPPINGS)
     try:
         yield
@@ -98,7 +98,7 @@ def test_a_node_nobody_installed_is_null_rather_than_an_error():
 
 
 def test_output_names_label_a_multi_output_node_for_a_wiring_picker():
-    described = widgets.describe("FunPackDiffusionModelLoader")
+    described = widgets.describe("FunUIDiffusionModelLoader")
     assert described["outputs"] == ["MODEL", "STRING"]
     assert described["output_names"] == ["model", "status"]
 
@@ -175,11 +175,11 @@ def test_a_found_node_carries_what_a_picker_shows():
     assert entry["outputs"] == ["LATENT"]
 
 
-def test_funpacks_own_nodes_are_findable_too():
-    """The registry is one registry: a picker that could not offer FunPack's own
+def test_funuis_own_nodes_are_findable_too():
+    """The registry is one registry: a picker that could not offer FunUI's own
     nodes would make the built-in pipeline unrepairable from the window."""
-    names = [e["node"] for e in widgets.search("FunPack", limit=200)["nodes"]]
-    assert "FunPackSampler" in names
+    names = [e["node"] for e in widgets.search("FunUI", limit=200)["nodes"]]
+    assert "FunUISampler" in names
 
 
 # --- the two spellings of a combo ------------------------------------------
@@ -193,7 +193,7 @@ def test_a_v3_combo_carries_its_choices():
     window said "no files of this kind were found" over dropdowns that had
     seven entries. It was believable, which is what made it bad.
     """
-    described = widgets.describe("FunPackDiffusionModelLoader")
+    described = widgets.describe("FunUIDiffusionModelLoader")
     weights = next(w for w in described["widgets"] if w["name"] == "weight_dtype")
     assert "fp16" in weights["choices"]
     assert weights["default"] == "default"

@@ -1,4 +1,4 @@
-"""FunPack's own LoRA training loop, for models that tell the module what to train (H3 today).
+"""FunUI's own LoRA training loop, for models that tell the module what to train (H3 today).
 
 ComfyUI stays the backend: its model classes and ops, its sampler and model management that carry a
 batch through the network. What ComfyUI's trainer decides is done here instead: which layers get a
@@ -222,7 +222,7 @@ def train(model, payload, conds, cfg, adapt, nt, mm, torch, watch, shim, resume=
         diffusion = model.model.diffusion_model
         lora = Lora(adapt["lora_targets"](diffusion), cfg["rank"], cfg["rank"], lora_dtype, model.load_device, torch)
         jobs.trail("model prepared, starting")
-        log.info("FunPack LoRA training", f"LoRA on {len(lora.names)} layers, rank {cfg['rank']}, {sum(p.numel() for p in lora.parameters()) / 1e6:.1f}M trainable values")
+        log.info("FunUI LoRA training", f"LoRA on {len(lora.names)} layers, rank {cfg['rank']}, {sum(p.numel() for p in lora.parameters()) / 1e6:.1f}M trainable values")
         optimizer = optimizer_for(cfg["optimizer"], lora.parameters(), cfg["learning_rate"], torch)
         criterion = nt._create_loss_function(cfg["loss"])
         restore = checkpoint_modules(adapt["checkpoint"](diffusion), torch) if cfg["gradient_checkpointing"] else (lambda: None)
@@ -239,10 +239,10 @@ def train(model, payload, conds, cfg, adapt, nt, mm, torch, watch, shim, resume=
             lora.restore(resume["lora"])
             optimizer.load_state_dict(resume["optimizer"])
             first = int(resume["step"])
-            log.info("FunPack LoRA training", f"carrying on from step {first}")
+            log.info("FunUI LoRA training", f"carrying on from step {first}")
         sampler = Sampler.make(nt, torch, comfy.samplers, custom_sampler, lora, optimizer, criterion, cfg, dtype, stopped, first, saver)
         if cfg["offloading"]:
-            log.warning("FunPack LoRA training", "ComfyUI's own 'keep weights in system memory' is ignored by this training loop: it has brought ComfyUI down on H3. Use 'Blocks kept in system memory' instead")
+            log.warning("FunUI LoRA training", "ComfyUI's own 'keep weights in system memory' is ignored by this training loop: it has brought ComfyUI down on H3. Use 'Blocks kept in system memory' instead")
         guider = nt.TrainGuider(model, offloading=False)
         guider.set_conds(positive)
         paused = None

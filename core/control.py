@@ -186,7 +186,7 @@ def fault(key: str, exc: BaseException) -> None:
     (an interrupt, running out of memory) are left alone."""
     if _transient(exc):
         return
-    mid = key[len("funpack."):].split(".")[0] if key.startswith("funpack.") else None
+    mid = key[len("funui."):].split(".")[0] if key.startswith("funui.") else None
     if not mid:
         return
     from . import registry
@@ -214,7 +214,7 @@ def partition(specs: Iterable, settings) -> Tuple[List, List[str]]:
     from . import registry
     known = {s.id for s in specs} | set(registry.current().specs)        # the list passed in is filtered (traits, capability); "loaded" is the registry
     for gone in sorted(off - known):                  # a saved "turn this module off" for a module that is no longer loaded
-        log.once(f"stale_off:{gone}", log.WARNING, "FunPack modules",
+        log.once(f"stale_off:{gone}", log.WARNING, "FunUI modules",
                  f"{gone!r} is turned off in this project's settings, but no module with that id is loaded: ignored")
     held = quarantined(specs)
     kept, notes = [], []

@@ -44,7 +44,7 @@ KIND = measure.KIND
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Block influence", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Block influence", message)
 
 
 def install(patcher, values, key):
@@ -85,17 +85,17 @@ def install(patcher, values, key):
             if rows is None:
                 measure.problem = (f"the last recording run (key {taste.key!r}) measured nothing: no "
                                    "picture rows found in any block")
-                log.warning("FunPack Block influence",
+                log.warning("FunUI Block influence",
                             "recording is on but nothing was measured this run (no picture rows "
                             "found in any block); this run teaches nothing")
             else:
                 taste.capture(KIND, rows)
-                log.once(f"{ID}:run", log.INFO, "FunPack Block influence",
+                log.once(f"{ID}:run", log.INFO, "FunUI Block influence",
                          f"Active | measured {live['tally'].blocks_seen()} of {n} blocks on key "
                          f"{taste.key!r}; rate the clip to keep it")
         else:
             measure.problem = None
-            log.once(f"{ID}:off", log.INFO, "FunPack Block influence",
+            log.once(f"{ID}:off", log.INFO, "FunUI Block influence",
                      "Inactive | recording is off (Settings > Refinement & Taste turns it on)")
         return out
 

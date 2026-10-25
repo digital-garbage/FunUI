@@ -1,4 +1,4 @@
-// "Scene N · Rate…": say how a render turned out. FunPack's taste learns from it on the next Generate.
+// "Scene N · Rate…": say how a render turned out. FunUI's taste learns from it on the next Generate.
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";

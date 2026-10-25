@@ -55,6 +55,7 @@
 /* the About hero */
 .cx-settings-hero { align-items: center; text-align: center; gap: var(--sp-4); padding-block: var(--sp-4) var(--sp-7); }
 .cx-settings-hero .cx-h { font-size: var(--fs-d3); }
+.cx-settings-hero .cx-brand-mark { font-size: var(--fs-d3); }
 .cx-settings-content .cx-settings-control:has(> .cx-t) { flex: 1 1 auto; }
 .cx-settings-content .cx-settings-text { flex: 0 1 auto; min-inline-size: 0; }
 

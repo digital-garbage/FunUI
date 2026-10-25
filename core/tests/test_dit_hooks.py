@@ -25,8 +25,8 @@ def test_two_block_hooks_on_one_block_both_run_and_the_output_is_the_block(tiny_
             return extra["original_block"](args)
         return h
 
-    dit_hooks.add_block_hook(p, "funpack.a", 1, hook("a"))
-    dit_hooks.add_block_hook(p, "funpack.b", 1, hook("b"))
+    dit_hooks.add_block_hook(p, "funui.a", 1, hook("a"))
+    dit_hooks.add_block_hook(p, "funui.b", 1, hook("b"))
     out = tiny_h3.run(p)
     assert seen == ["b", "a"], "the second hook replaced the first instead of chaining"
     assert torch.allclose(out[0], base[0]) and torch.allclose(out[1], base[1])
@@ -43,8 +43,8 @@ def test_two_attention_overrides_both_see_every_call(tiny_h3):
             return func(q, k, v, *a, **kw)
         return o
 
-    dit_hooks.add_attention_override(p, "funpack.a", ov("a"))
-    dit_hooks.add_attention_override(p, "funpack.b", ov("b"))
+    dit_hooks.add_attention_override(p, "funui.a", ov("a"))
+    dit_hooks.add_attention_override(p, "funui.b", ov("b"))
     tiny_h3.run(p)
     # 4 DiT blocks + 1 token-refiner block
     assert calls == {"a": 5, "b": 5}
@@ -61,10 +61,10 @@ def test_strip_removes_ours_and_puts_back_a_foreign_hook_underneath(tiny_h3):
 
     dit = p.model_options["transformer_options"].setdefault("patches_replace", {}).setdefault("dit", {})
     dit[("double_block", 0)] = theirs
-    dit_hooks.add_block_hook(p, "funpack.x", 0, lambda a, e: e["original_block"](a))
-    dit_hooks.add_attention_override(p, "funpack.x", lambda f, *a, **k: f(*a, **k))
+    dit_hooks.add_block_hook(p, "funui.x", 0, lambda a, e: e["original_block"](a))
+    dit_hooks.add_attention_override(p, "funui.x", lambda f, *a, **k: f(*a, **k))
 
-    assert patching.strip(p, "funpack.") == 2
+    assert patching.strip(p, "funui.") == 2
     to = p.model_options["transformer_options"]
     assert to["patches_replace"]["dit"][("double_block", 0)] is theirs
     assert "optimized_attention_override" not in to
@@ -77,7 +77,7 @@ def test_a_failing_block_hook_is_dropped_and_the_run_matches_an_unhooked_one(tin
     base = tiny_h3.run()
     p = _clone(tiny_h3)
     dropped = patching.Dropped()
-    guarded = patching.GuardedPatcher(p, "funpack.bad", dropped)
+    guarded = patching.GuardedPatcher(p, "funui.bad", dropped)
 
     def bad(args, extra):
         raise RuntimeError("boom")
@@ -85,10 +85,10 @@ def test_a_failing_block_hook_is_dropped_and_the_run_matches_an_unhooked_one(tin
     def bad_attn(func, *a, **k):
         raise RuntimeError("boom")
 
-    dit_hooks.add_block_hook(guarded, "funpack.bad", 2, bad)
-    dit_hooks.add_attention_override(guarded, "funpack.bad", bad_attn)
+    dit_hooks.add_block_hook(guarded, "funui.bad", 2, bad)
+    dit_hooks.add_attention_override(guarded, "funui.bad", bad_attn)
     out = tiny_h3.run(p)
-    assert "funpack.bad" in dropped
+    assert "funui.bad" in dropped
     assert torch.allclose(out[0], base[0])
 
 
@@ -107,7 +107,7 @@ def test_without_compiler_switches_it_off_for_the_sample_and_back(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from core import dit_hooks
     p = tiny_h3.patcher.clone()
-    dit_hooks.without_compiler(p, "funpack.x")
+    dit_hooks.without_compiler(p, "funui.x")
     (outer,), = p.wrappers[WrappersMP.OUTER_SAMPLE].values()
     had = hasattr(comfy.cli_args.args, "disable_comfy_compiler")
     prior = getattr(comfy.cli_args.args, "disable_comfy_compiler", None)
@@ -123,6 +123,6 @@ def test_without_compiler_switches_it_off_for_the_sample_and_back(tiny_h3):
 ])
 def test_block_replacing_modules_turn_the_compiler_off(tiny_h3, module, settings):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {module: settings}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {module: settings}).result
     assert patched.wrappers.get(WrappersMP.OUTER_SAMPLE), f"{module} left the compiler on"

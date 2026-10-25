@@ -38,9 +38,9 @@ def _pre_cfg_args(conds):
 
 def test_a_hook_that_raises_mid_sampling_does_not_end_the_run(patcher):
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, _status = FunPackLoadModifiers.execute(
+    patched, _status = FunUILoadModifiers.execute(
         patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
 
     hook = patched.model_options["sampler_pre_cfg_function"][0]
@@ -52,30 +52,30 @@ def test_a_hook_that_raises_mid_sampling_does_not_end_the_run(patcher):
         out = hook(_pre_cfg_args(video))
         assert torch.equal(out[0], original), "the hook altered the latent after failing"
 
-    assert "funpack.sharpen" in patched.funpack_dropped
+    assert "funui.sharpen" in patched.funui_dropped
 
 
 def test_the_failure_is_recorded_with_its_reason(patcher):
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, _ = FunPackLoadModifiers.execute(
+    patched, _ = FunUILoadModifiers.execute(
         patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
     hook = patched.model_options["sampler_pre_cfg_function"][0]
     hook(_pre_cfg_args([torch.randn(1, 4, 8, 16, 16), torch.randn(1, 4, 8, 16, 16)]))
 
-    reasons = dict(patched.funpack_dropped.items())
-    assert "funpack.sharpen" in reasons
-    assert "NotImplementedError" in reasons["funpack.sharpen"]
+    reasons = dict(patched.funui_dropped.items())
+    assert "funui.sharpen" in reasons
+    assert "NotImplementedError" in reasons["funui.sharpen"]
 
 
 def test_it_is_reported_once_not_once_per_step(patcher, capsys):
     """Thirty tracebacks say nothing the first one did not, and burying the
     console is its own way of hiding a failure."""
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, _ = FunPackLoadModifiers.execute(
+    patched, _ = FunUILoadModifiers.execute(
         patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
     hook = patched.model_options["sampler_pre_cfg_function"][0]
 
@@ -91,9 +91,9 @@ def test_it_is_reported_once_not_once_per_step(patcher, capsys):
 def test_a_working_hook_is_untouched_by_the_guard(patcher):
     """The guard must not cost the thing it protects."""
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, _ = FunPackLoadModifiers.execute(
+    patched, _ = FunUILoadModifiers.execute(
         patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
     hook = patched.model_options["sampler_pre_cfg_function"][0]
 
@@ -101,7 +101,7 @@ def test_a_working_hook_is_untouched_by_the_guard(patcher):
     original = image[0].clone()
     out = hook(_pre_cfg_args(image))
     assert not torch.equal(out[0], original), "the guard swallowed a working modifier"
-    assert not patched.funpack_dropped
+    assert not patched.funui_dropped
 
 
 def test_one_failing_modifier_does_not_disable_another(patcher):
@@ -115,50 +115,50 @@ def test_one_failing_modifier_does_not_disable_another(patcher):
     def fine(args):
         return "changed"
 
-    bad = patching.guard(boom, "funpack.bad", lambda args: args["conds_out"], dropped)
-    good = patching.guard(fine, "funpack.good", lambda args: args["conds_out"], dropped)
+    bad = patching.guard(boom, "funui.bad", lambda args: args["conds_out"], dropped)
+    good = patching.guard(fine, "funui.good", lambda args: args["conds_out"], dropped)
 
     assert bad({"conds_out": "original"}) == "original"
     assert good({"conds_out": "original"}) == "changed"
-    assert "funpack.bad" in dropped and "funpack.good" not in dropped
+    assert "funui.bad" in dropped and "funui.good" not in dropped
 
 
 def test_the_record_is_per_run_not_per_process(patcher):
     """v4's inert-reason logging deduped for the life of the interpreter, so a
     long rental session reported the first generation and never again."""
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     def run():
-        patched, _ = FunPackLoadModifiers.execute(
+        patched, _ = FunUILoadModifiers.execute(
             patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
         hook = patched.model_options["sampler_pre_cfg_function"][0]
         hook(_pre_cfg_args([torch.randn(1, 4, 8, 16, 16), torch.randn(1, 4, 8, 16, 16)]))
-        return patched.funpack_dropped
+        return patched.funui_dropped
 
     from core import control
     first = run()
     assert control.release("sharpen")            # a fault is also remembered across runs: see core/tests/test_control.py
     second = run()
     assert first is not second
-    assert "funpack.sharpen" in first and "funpack.sharpen" in second
+    assert "funui.sharpen" in first and "funui.sharpen" in second
 
 
 def test_a_module_that_failed_stays_off_for_the_next_generation_until_turned_back_on(patcher):
     import torch
     from core import control
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     values = {"sharpen": {"enabled": True, "amount": 0.4}}
-    first, _ = FunPackLoadModifiers.execute(patcher, settings=values).result
+    first, _ = FunUILoadModifiers.execute(patcher, settings=values).result
     first.model_options["sampler_pre_cfg_function"][0](
         _pre_cfg_args([torch.randn(1, 4, 8, 16, 16), torch.randn(1, 4, 8, 16, 16)]))
     assert "sharpen" in control.quarantined(__import__("core.registry", fromlist=["x"]).current().specs.values())
-    second, status = FunPackLoadModifiers.execute(patcher, settings=values).result
+    second, status = FunUILoadModifiers.execute(patcher, settings=values).result
     assert "sampler_pre_cfg_function" not in second.model_options
     assert "sharpen: OFF" in status and "Settings ▸ Modules" in status
     control.release("sharpen")
-    third, _ = FunPackLoadModifiers.execute(patcher, settings=values).result
+    third, _ = FunUILoadModifiers.execute(patcher, settings=values).result
     assert "sampler_pre_cfg_function" in third.model_options
 
 
@@ -167,7 +167,7 @@ def test_a_hook_shape_with_no_known_neutral_result_is_named(patcher):
     loud, rather than counted as protected."""
     from core import patching
 
-    guarded = patching.GuardedPatcher(patcher, "funpack.x", patching.Dropped())
+    guarded = patching.GuardedPatcher(patcher, "funui.x", patching.Dropped())
     guarded.set_model_patch(lambda *a: None, "attn1_patch")
     assert "set_model_patch" in guarded.unguarded
 
@@ -175,11 +175,11 @@ def test_a_hook_shape_with_no_known_neutral_result_is_named(patcher):
 def test_a_guarded_hook_can_still_be_stripped(patcher):
     """Guarding must not make a hook unremovable, or chaining stacks again."""
     from core import patching
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     values = {"sharpen": {"enabled": True, "amount": 0.4}}
-    once = FunPackLoadModifiers.execute(patcher, settings=values).result[0]
-    twice = FunPackLoadModifiers.execute(once, settings=values).result[0]
+    once = FunUILoadModifiers.execute(patcher, settings=values).result[0]
+    twice = FunUILoadModifiers.execute(once, settings=values).result[0]
     assert len(twice.model_options.get("sampler_pre_cfg_function", [])) == 1
 
 
@@ -189,9 +189,9 @@ def test_full_control_lets_a_failing_modifier_end_the_run(patcher):
     """Asking for the raw behaviour means getting it. Someone exploring the
     edges wants the real traceback at the real step, not a tidy recovery."""
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, status = FunPackLoadModifiers.execute(patcher, settings={
+    patched, status = FunUILoadModifiers.execute(patcher, settings={
         "sharpen": {"enabled": True, "amount": 0.4},
         "full_control": {"enabled": True},
     }).result
@@ -205,8 +205,8 @@ def test_full_control_lets_a_failing_modifier_end_the_run(patcher):
 
 def test_full_control_is_never_silent(patcher):
     """A run made without the guards has to be identifiable as one afterwards."""
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    _model, status = FunPackLoadModifiers.execute(patcher, settings={
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    _model, status = FunUILoadModifiers.execute(patcher, settings={
         "sharpen": {"enabled": True, "amount": 0.4},
         "full_control": {"enabled": True},
     }).result
@@ -217,12 +217,12 @@ def test_the_guards_are_on_unless_asked_otherwise(patcher):
     """The surprising direction is the one you have to ask for. A missing
     module, a missing key and an explicit false all mean guarded."""
     import torch
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     for settings in ({"sharpen": {"enabled": True, "amount": 0.4}},
                      {"sharpen": {"enabled": True, "amount": 0.4},
                       "full_control": {"enabled": False}}):
-        patched, _ = FunPackLoadModifiers.execute(patcher, settings=settings).result
+        patched, _ = FunUILoadModifiers.execute(patcher, settings=settings).result
         hook = patched.model_options["sampler_pre_cfg_function"][0]
         video = [torch.randn(1, 4, 8, 16, 16), torch.randn(1, 4, 8, 16, 16)]
         original = video[0].clone()
@@ -257,7 +257,7 @@ def test_the_guard_never_swallows_a_cancel():
     def cancelled(args):
         raise InterruptProcessingException()
 
-    guarded = patching.guard(cancelled, "funpack.x",
+    guarded = patching.guard(cancelled, "funui.x",
                              lambda args: args["conds_out"], patching.Dropped())
 
     with pytest.raises(InterruptProcessingException):
@@ -270,7 +270,7 @@ def test_a_keyboard_interrupt_is_not_swallowed_either():
     def interrupted(args):
         raise KeyboardInterrupt()
 
-    guarded = patching.guard(interrupted, "funpack.x",
+    guarded = patching.guard(interrupted, "funui.x",
                              lambda args: args["conds_out"], patching.Dropped())
     with pytest.raises(KeyboardInterrupt):
         guarded({"conds_out": "untouched"})
@@ -285,14 +285,14 @@ def test_detail_is_absent_on_a_model_whose_latent_it_cannot_handle(temporal_patc
     modifier whose maths cannot take the shape a model produces has to say so
     in what it REQUIRES, and stop being offered there.
     """
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, status = FunPackLoadModifiers.execute(
+    patched, status = FunUILoadModifiers.execute(
         temporal_patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
 
     assert patched.model_options.get("sampler_pre_cfg_function", []) == []
-    assert not getattr(patched, "funpack_dropped", None) or \
-        "funpack.sharpen" not in patched.funpack_dropped, \
+    assert not getattr(patched, "funui_dropped", None) or \
+        "funui.sharpen" not in patched.funui_dropped, \
         "it was installed and then failed, rather than never being offered"
     assert "sharpen" in status and "spatial_latent" in status, status
 
@@ -300,9 +300,9 @@ def test_detail_is_absent_on_a_model_whose_latent_it_cannot_handle(temporal_patc
 def test_detail_is_offered_on_a_model_whose_latent_it_can_handle(patcher):
     """The other half, or the test above passes on a modifier that is simply
     broken everywhere."""
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
-    patched, _status = FunPackLoadModifiers.execute(
+    patched, _status = FunUILoadModifiers.execute(
         patcher, settings={"sharpen": {"enabled": True, "amount": 0.4}}).result
     assert len(patched.model_options.get("sampler_pre_cfg_function", [])) == 1
 
@@ -326,7 +326,7 @@ def test_a_modifier_that_breaks_while_installing_is_not_called_absent(patcher, m
     monkeypatch.setitem(spec.provides, mod.CAPABILITY, explode)
 
     log._reset()
-    mod.FunPackLoadModifiers.execute(
+    mod.FunUILoadModifiers.execute(
         patcher, settings={spec.id: {"enabled": True, "amount": 0.4}}).result
 
     said = [r["message"] for r in log.history()]
@@ -353,19 +353,19 @@ def test_a_wrapper_never_reruns_the_sampling_it_wraps():
         raise ValueError("bookkeeping broke")
 
     dropped = patching.Dropped()
-    guarded = patching.guard_wrapper(fails_after, "funpack.x", dropped)
+    guarded = patching.guard_wrapper(fails_after, "funui.x", dropped)
     assert guarded(executor, 3) == 6 and calls == [3]
-    assert "funpack.x" in dropped
+    assert "funui.x" in dropped
 
     def oom(x):
         raise RuntimeError("CUDA out of memory")
 
     dropped = patching.Dropped()
-    passthrough = patching.guard_wrapper(lambda ex, x: ex(x), "funpack.y", dropped)
+    passthrough = patching.guard_wrapper(lambda ex, x: ex(x), "funui.y", dropped)
     with pytest.raises(RuntimeError, match="out of memory"):
         passthrough(oom, 1)
-    assert "funpack.y" not in dropped
+    assert "funui.y" not in dropped
 
     calls.clear()
-    before = patching.guard_wrapper(lambda ex, x: 1 / 0, "funpack.z", patching.Dropped())
+    before = patching.guard_wrapper(lambda ex, x: 1 / 0, "funui.z", patching.Dropped())
     assert before(executor, 4) == 8 and calls == [4]

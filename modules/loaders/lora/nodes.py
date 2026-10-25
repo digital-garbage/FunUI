@@ -18,13 +18,13 @@ from .keys import match
 NONE = "None"
 
 
-class FunPackLoraLoader(io.ComfyNode):
+class FunUILoraLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackLoraLoader",
-            display_name="FunPack LoRA Loader",
-            category="FunPack/Loaders",
+            node_id="FunUILoraLoader",
+            display_name="FunUI LoRA Loader",
+            category="FunUI/Loaders",
             description="Apply one LoRA to a model, and optionally its text encoder. "
                         "Chain these for more than one.",
             inputs=[
@@ -56,7 +56,7 @@ class FunPackLoraLoader(io.ComfyNode):
         if strength_model == 0 and (clip is None or strength_clip == 0):
             # Loud, because "applied a LoRA at strength 0" is indistinguishable
             # from "forgot to set the strength" by looking at the picture.
-            log.alert("FunPack LoRA Loader",
+            log.alert("FunUI LoRA Loader",
                       f"{lora_name} has both strengths at 0 and was not applied")
             return io.NodeOutput(model, clip, f"{lora_name}: both strengths are 0, not applied")
 
@@ -64,7 +64,7 @@ class FunPackLoraLoader(io.ComfyNode):
         lora = comfy.utils.load_torch_file(path, safe_load=True)
         patches, how, dropped = match(model, clip, lora)
         if not patches:
-            log.alert("FunPack LoRA Loader", f"{lora_name} matched NOTHING in this model, so it does nothing: "
+            log.alert("FunUI LoRA Loader", f"{lora_name} matched NOTHING in this model, so it does nothing: "
                       "it is for another model, or names its layers in a way not known here")
             return io.NodeOutput(model, clip, f"{lora_name}: matched nothing, not applied")
         patched_model = model.clone()
@@ -74,12 +74,12 @@ class FunPackLoraLoader(io.ComfyNode):
             patched_clip = clip.clone()
             patched_clip.add_patches(patches, strength_clip)
         if dropped:
-            log.alert("FunPack LoRA Loader", f"{lora_name}: {dropped} of {len(patches) + dropped} weights do not fit this "
+            log.alert("FunUI LoRA Loader", f"{lora_name}: {dropped} of {len(patches) + dropped} weights do not fit this "
                       "model's shapes and were left out (trained on another variant of it)")
 
         applied = [f"model={strength_model}"]
         applied.append(f"clip={strength_clip}" if clip is not None else "clip=not wired")
         found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "")
-        log.info("FunPack LoRA Loader", f"{lora_name} applied ({', '.join(applied)}; {found})")
+        log.info("FunUI LoRA Loader", f"{lora_name} applied ({', '.join(applied)}; {found})")
         return io.NodeOutput(patched_model, patched_clip,
-                             f"FunPack LoRA Loader | {lora_name} ({', '.join(applied)}; {found})")
+                             f"FunUI LoRA Loader | {lora_name} ({', '.join(applied)}; {found})")

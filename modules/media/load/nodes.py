@@ -1,4 +1,4 @@
-"""Load one file from FunPack's media library (core/media.py): a picture, a video or sound.
+"""Load one file from FunUI's media library (core/media.py): a picture, a video or sound.
 
 The bridge between "picked in the Media bin" and "wired into the graph": the
 media store has no idea what a reference image or an aspect ratio source is, and
@@ -43,16 +43,16 @@ def _read_audio(path):
     return {"waveform": torch.from_numpy(np.concatenate(chunks, axis=1)).unsqueeze(0), "sample_rate": rate}
 
 
-class FunPackLoadMedia(io.ComfyNode):
+class FunUILoadMedia(io.ComfyNode):
     """Takes a picture, a video or an audio file and fills what it has: the app wires the output that fits."""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackLoadMedia",
-            display_name="FunPack Load Media",
-            category="FunPack/Media",
-            description="Load a picture, a video or an audio file from FunPack's media library by id. "
+            node_id="FunUILoadMedia",
+            display_name="FunUI Load Media",
+            category="FunUI/Media",
+            description="Load a picture, a video or an audio file from FunUI's media library by id. "
                         "image: the picture (a video's first frame). frames: a video's frames at 24 fps. "
                         "audio: a video's soundtrack or an audio file.",
             inputs=[
@@ -78,22 +78,22 @@ class FunPackLoadMedia(io.ComfyNode):
         mid = (media_id or "").strip()
         if not mid and blank_width > 0 and blank_height > 0:
             # A text-only start: the picture exists only to give the pipeline a SHAPE (see the H3 preset).
-            log.info("FunPack Load Media", f"nothing picked: a plain {blank_width}x{blank_height} picture stands in")
+            log.info("FunUI Load Media", f"nothing picked: a plain {blank_width}x{blank_height} picture stands in")
             grey = torch.full((1, blank_height, blank_width, 3), 0.5)
             return io.NodeOutput(grey, grey, _SILENCE)
         if not mid:
             raise RuntimeError(
-                "FunPack Load Media: nothing is picked for this input. "
+                "FunUI Load Media: nothing is picked for this input. "
                 "Choose a file in the Media bin.")
         entry = media_mod.get(mid)
         path = media_mod.path_for(mid)
         if entry is None or path is None:
             raise RuntimeError(
-                f"FunPack Load Media: media {mid!r} is not in the library any "
+                f"FunUI Load Media: media {mid!r} is not in the library any "
                 f"more -- it may have been deleted. Pick another.")
         name, kind = entry.get("name", mid), entry.get("kind")
         if kind not in ("image", "video", "audio"):
-            raise RuntimeError(f"FunPack Load Media: {name!r} is {kind or 'a file'}, which is not a picture, a video or sound.")
+            raise RuntimeError(f"FunUI Load Media: {name!r} is {kind or 'a file'}, which is not a picture, a video or sound.")
 
         if kind == "audio":
             try:
@@ -101,21 +101,21 @@ class FunPackLoadMedia(io.ComfyNode):
             except Exception:                                # noqa: BLE001 -- a damaged file raises whatever PyAV raises
                 sound = None
             if sound is None:
-                raise RuntimeError(f"FunPack Load Media: could not read {name!r}.")
-            log.info("FunPack Load Media", f"loaded {name} (audio)")
+                raise RuntimeError(f"FunUI Load Media: could not read {name!r}.")
+            log.info("FunUI Load Media", f"loaded {name} (audio)")
             grey = torch.full((1, 64, 64, 3), 0.5)       # no picture in it: the outputs for pictures are never wired
             return io.NodeOutput(grey, grey, sound)
 
         try:
             components = InputImpl.VideoFromFile(str(path)).get_components()
         except Exception as exc:                             # noqa: BLE001 -- a damaged file raises whatever PyAV raises
-            raise RuntimeError(f"FunPack Load Media: could not read {name!r} ({exc}).") from exc
+            raise RuntimeError(f"FunUI Load Media: could not read {name!r} ({exc}).") from exc
         images = components.images
         if images is None or images.shape[0] == 0:
-            raise RuntimeError(f"FunPack Load Media: could not read {name!r}.")
+            raise RuntimeError(f"FunUI Load Media: could not read {name!r}.")
         first = images[:1]
         if kind == "image" or not full:
-            log.info("FunPack Load Media", f"loaded {name}")
+            log.info("FunUI Load Media", f"loaded {name}")
             return io.NodeOutput(first, first, _SILENCE)
 
         fps = float(components.frame_rate or REF_VIDEO_FPS)
@@ -123,5 +123,5 @@ class FunPackLoadMedia(io.ComfyNode):
         count = max(1, int(images.shape[0] / fps * REF_VIDEO_FPS))
         index = torch.clamp((torch.arange(count) * fps / REF_VIDEO_FPS).long(), max=images.shape[0] - 1)
         sound = components.audio or _SILENCE
-        log.info("FunPack Load Media", f"loaded {name}: {count} frames at {REF_VIDEO_FPS} fps")
+        log.info("FunUI Load Media", f"loaded {name}: {count} frames at {REF_VIDEO_FPS} fps")
         return io.NodeOutput(first, images[index], sound)

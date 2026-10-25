@@ -73,7 +73,7 @@ def test_windows_and_cond_rows_keep_separate_pushes():
 
 def test_a_probe_and_an_off_schedule_call_are_inert_and_the_latter_says_so():
     s, x, out = input_steer.Steer("t"), _x(), _x()
-    probe = s.begin(x, _t(2), _to(2, funpack_probe=True))
+    probe = s.begin(x, _t(2), _to(2, funui_probe=True))
     assert probe.gate == 0.0 and probe.keep(out, out + 1) is out
     log._reset()
     off = s.begin(x, torch.tensor([0.123]), _to(2) | {"sigmas": torch.tensor([0.123])})
@@ -240,7 +240,7 @@ def test_each_run_says_its_own_result_not_just_the_first_of_the_prompt():
 def test_a_push_filed_before_the_frame_changed_is_not_added_after_it():
     s, x, out = input_steer.Steer("t"), _x(), _x()
     _edit(s, 2, x, out, torch.ones(1, 1, 12))
-    moved = s.begin(x, _t(3), _to(3, funpack_frame_change=True))
+    moved = s.begin(x, _t(3), _to(3, funui_frame_change=True))
     assert torch.equal(moved.x, x)
 
 

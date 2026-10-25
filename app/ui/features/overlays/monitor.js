@@ -11,7 +11,7 @@ function asItem(o, open) {
       bg: o.bg_enabled ? { color: o.bg_color, opacity: o.bg_opacity } : null };
   }
   const cw = open.width || 768, wpx = o.width_px != null ? o.width_px : Math.max(8, Math.min(1.5, Math.max(0.05, o.scale ?? 0.35)) * cw);
-  return { ...base, kind: "image", src: `/funpack/api/media/${encodeURIComponent(o.media_ref || "")}/file`, widthPx: wpx, heightPx: o.keep_aspect === false ? (o.height_px || wpx) : null };
+  return { ...base, kind: "image", src: `/fun/api/media/${encodeURIComponent(o.media_ref || "")}/file`, widthPx: wpx, heightPx: o.keep_aspect === false ? (o.height_px || wpx) : null };
 }
 
 export default {

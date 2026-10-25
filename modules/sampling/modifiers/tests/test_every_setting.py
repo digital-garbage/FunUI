@@ -56,9 +56,9 @@ def _registry():
 
 
 def _apply(model, module_id, values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"taste": {"key": "sweep"}, module_id: values}
-    return FunPackLoadModifiers.execute(model.patcher, settings).result
+    return FunUILoadModifiers.execute(model.patcher, settings).result
 
 
 def _finite(out):

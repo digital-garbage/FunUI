@@ -4,7 +4,7 @@ import { learn } from "../../shell/bin.js";
 import { referenceNumbers, sceneReferences } from "../../shell/reference_wiring.js";
 import { MEDIA_DRAG } from "../../shell/dnd.js";
 
-const base = (id) => `/funpack/api/media/${encodeURIComponent(id)}`;
+const base = (id) => `/fun/api/media/${encodeURIComponent(id)}`;
 
 export default {
   id: "media",

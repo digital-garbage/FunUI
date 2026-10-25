@@ -16,7 +16,7 @@
 // no such gap: it belongs to the actual OS-level drag session, unaffected by
 // which DOM node currently receives the events, and a drop from any OTHER
 // session simply never had this MIME type set.
-const MIME = "text/x-funpack-reorder";
+const MIME = "text/x-funui-reorder";
 
 /** wireDragReorder(node, ".cx-cell-selector", (draggedId, targetId) => {}) */
 export function wireDragReorder(node, cellSelector, onReorder) {

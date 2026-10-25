@@ -49,13 +49,13 @@ test("a file input nothing has chosen shows “choose”, not the first file, an
 
 test("the simple view shows only nodes that ask for a choice (files, sampler, broken); “Show all nodes” brings back the rest", async () => {
   globalThis.localStorage = window.localStorage; localStorage.clear();
-  const slots = [{ id: "m", node: "FunPackDiffusionModelLoader", group: "Loaders", inputs: { model_name: "h3.safetensors" } },
-    { id: "k", node: "FunPackSampler", group: "Sampling", inputs: { steps: 8 } },
-    { id: "pm", node: "FunPackPromptMarkup", group: "Prompt", inputs: { text: "" } }];
+  const slots = [{ id: "m", node: "FunUIDiffusionModelLoader", group: "Loaders", inputs: { model_name: "h3.safetensors" } },
+    { id: "k", node: "FunUISampler", group: "Sampling", inputs: { steps: 8 } },
+    { id: "pm", node: "FunUIPromptMarkup", group: "Prompt", inputs: { text: "" } }];
   const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
     loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [], queueable: () => true, removedIds: () => [], offered: () => [] };
-  const nodes = { FunPackDiffusionModelLoader: { widgets: [{ name: "model_name", type: "COMBO", choices: ["h3.safetensors"] }] },
-    FunPackSampler: { widgets: [{ name: "steps", type: "INT" }] }, FunPackPromptMarkup: { widgets: [{ name: "text", type: "STRING" }] } };
+  const nodes = { FunUIDiffusionModelLoader: { widgets: [{ name: "model_name", type: "COMBO", choices: ["h3.safetensors"] }] },
+    FunUISampler: { widgets: [{ name: "steps", type: "INT" }] }, FunUIPromptMarkup: { widgets: [{ name: "text", type: "STRING" }] } };
   const page = models({ dom: createDom(), pipeline: ps, api: { describeNodes: async () => ({ nodes }) } })();
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));
@@ -83,12 +83,12 @@ test("a problem that names no slot first (a loop) still shows its nodes in the s
 });
 
 test("a field still on screen for a node that was swapped away does not put its value on the new node", async () => {
-  let slots = [{ id: "k", node: "FunPackSampler", inputs: { steps: 8 } }];
+  let slots = [{ id: "k", node: "FunUISampler", inputs: { steps: 8 } }];
   const saved = [];
   const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
     save: async (b) => { saved.push(b); }, loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [],
     queueable: () => true, removedIds: () => [], offered: () => [] };
-  const nodes = { FunPackSampler: { widgets: [{ name: "steps", type: "INT", min: 1, max: 100 }] }, Other: { widgets: [] } };
+  const nodes = { FunUISampler: { widgets: [{ name: "steps", type: "INT", min: 1, max: 100 }] }, Other: { widgets: [] } };
   const page = models({ dom: createDom(), pipeline: ps, api: { describeNodes: async () => ({ nodes }), packProviders: async () => ({}) } })();
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));

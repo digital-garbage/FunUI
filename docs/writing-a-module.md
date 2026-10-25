@@ -1,6 +1,6 @@
 # Writing a module
 
-A module is one folder of Python that adds one feature. This guide builds a small one, then explains each part. Every field and capability is listed in the [Module reference](module-reference.md). Read [How FunPack is built](architecture.md) first if you have not.
+A module is one folder of Python that adds one feature. This guide builds a small one, then explains each part. Every field and capability is listed in the [Module reference](module-reference.md). Read [How FunUI is built](architecture.md) first if you have not.
 
 ## Where a module lives
 
@@ -59,7 +59,7 @@ def install(patcher, values, key):
 
     def per_call(executor, *args, **kwargs):
         video, audio = executor(*args, **kwargs)
-        log.once(f"{ID}:ran", log.INFO, "FunPack Calm", f"scaled the picture by {1.0 - strength:g}")
+        log.once(f"{ID}:ran", log.INFO, "FunUI Calm", f"scaled the picture by {1.0 - strength:g}")
         return video * (1.0 - strength), audio        # the picture only; sound is never touched
 
     patcher.add_wrapper_with_key(WrappersMP.DIFFUSION_MODEL, key, per_call)
@@ -82,8 +82,8 @@ def _needs_comfy(comfyui):
 
 
 def _load(tiny, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    return FunPackLoadModifiers.execute(tiny.patcher, {"calm": values}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    return FunUILoadModifiers.execute(tiny.patcher, {"calm": values}).result
 
 
 def test_it_is_off_until_switched_on(tiny_h3):
@@ -106,7 +106,7 @@ def test_it_leaves_the_original_model_alone(tiny_h3):
     assert torch.equal(base_video, tiny_h3.run(tiny_h3.patcher)[0])
 ```
 
-Run it with `pytest modules/sampling/calm` (see [Testing](testing.md) for the ComfyUI setup). That is the whole module. It needed no UI code, no registration and no list entry: the settings appear in **Settings > Engine > Guidance**, the node `FunPack Load Modifiers` installs it, and the Log names it when it runs.
+Run it with `pytest modules/sampling/calm` (see [Testing](testing.md) for the ComfyUI setup). That is the whole module. It needed no UI code, no registration and no list entry: the settings appear in **Settings > Engine > Guidance**, the node `FunUI Load Modifiers` installs it, and the Log names it when it runs.
 
 ## The announcement
 
@@ -203,7 +203,7 @@ A modifier is the usual module. It provides `"modifier"`, a function `install(pa
 
 - `patcher` is a **clone** of the model's patcher, wrapped so every hook you add is guarded (see below). The original model is never touched.
 - `values` is a dict with every declared setting, defaults filled in and checked. Read `values["x"]` directly.
-- `key` is `"funpack.<your id>"`. Use it as the hook key, or `f"{key}.suffix"` for a second hook.
+- `key` is `"funui.<your id>"`. Use it as the hook key, or `f"{key}.suffix"` for a second hook.
 - Return `None` if the module decided it is off. Return a short string if it installed: it appears in the run's status as `<id>: <string>`. Say what it did, with the numbers ("strength 0.3, blocks 29-46").
 - Raising makes the module off for the run, logs it and quarantines it (see failure model in the architecture page).
 
@@ -220,7 +220,7 @@ Install through ComfyUI's own mechanisms on the patcher you were handed:
 
 Rules that exist because they were learned the hard way:
 
-- **Tag what you install.** `add_wrapper_with_key` with your `key` is removable by key. Anonymous hooks (the `set_model_*` lists, `add_object_patch`) must be tagged: `patching.tag(fn, key)`. Before every install, `FunPack Load Modifiers` strips everything tagged `funpack.*`, so a model run through twice is not patched twice. An untagged hook cannot be removed and doubles every time.
+- **Tag what you install.** `add_wrapper_with_key` with your `key` is removable by key. Anonymous hooks (the `set_model_*` lists, `add_object_patch`) must be tagged: `patching.tag(fn, key)`. Before every install, `FunUI Load Modifiers` strips everything tagged `funui.*`, so a model run through twice is not patched twice. An untagged hook cannot be removed and doubles every time.
 - **Chain, do not assign.** Block replacement and attention override are single slots. `dit_hooks` chains them so your hook can call `extra["original_block"](args)` and never knows other modules exist.
 - **Gate on step position.** `dit_hooks.current_step(transformer_options)` gives `(index, total)`. Never gate on a sigma threshold: schedules differ and a gate can be open on none of the steps. `late_half`, `last_step` and `weak_branch` are ready-made.
 - **Ignore probe calls.** `dit_hooks.probing(to)` is true for throwaway model calls (a candidate scored and discarded). Learn and capture nothing from one.
@@ -246,8 +246,8 @@ For effects that need the step index, the schedule, or to run a step twice, a mo
 A module may contribute ComfyUI nodes with `NODES = [MyNode]`.
 
 - Write them against `comfy_api.latest.io` (the V3 `io.ComfyNode`): `define_schema()` and `execute()`.
-- `node_id` must start with `FunPack`. Node ids are global in ComfyUI and a clash silently overwrites, so a node without the prefix, or reusing an id, is left out and said.
-- Category `FunPack/<Area>`. Give every input a `tooltip` that says what it does.
+- `node_id` must start with `FunUI`. Node ids are global in ComfyUI and a clash silently overwrites, so a node without the prefix, or reusing an id, is left out and said.
+- Category `FunUI/<Area>`. Give every input a `tooltip` that says what it does.
 - Return a status string as the last output when it helps ("applied", "off") and use `log` for the reasons.
 - A node whose result depends on something outside its inputs (a switch in Settings) should answer `fingerprint_inputs` so ComfyUI re-runs it instead of handing back a cached result.
 - A **node widget** describes a file or how it is read (a loader's dtype). A **setting** is a feature knob (a strength, a window). Do not put feature knobs on loader nodes.
@@ -286,7 +286,7 @@ Core never defines a capability name; the contract is between the module that pr
 
 ### Routes
 
-A module that needs endpoints provides `"routes": routes(table, base, web)`. `base` is `/funpack/api/m/<id>`, so two modules never collide and removing a module removes its routes. Return JSON; on a bad request return `{"why": "..."}` with status 400, and say what to fix.
+A module that needs endpoints provides `"routes": routes(table, base, web)`. `base` is `/fun/api/m/<id>`, so two modules never collide and removing a module removes its routes. Return JSON; on a bad request return `{"why": "..."}` with status 400, and say what to fix.
 
 ### Learning from ratings
 
@@ -310,7 +310,7 @@ Ratings are odds, not bans. Say in the hint how many liked (and disliked) clips 
 | `log.warning` | Something will not do what its name says. Never swallow a failure and carry on silently. |
 | `log.critical` | The run cannot proceed. |
 
-`log.once(key, level, source, message)` says it the first time per run. Use it for anything inside a per-step hook. Thirty copies of one line say nothing the first did not. `log.broke(what, exc, doing)` and `log.failed(what, exc)` are for exceptions. Use `FunPack <Title>` as the source.
+`log.once(key, level, source, message)` says it the first time per run. Use it for anything inside a per-step hook. Thirty copies of one line say nothing the first did not. `log.broke(what, exc, doing)` and `log.failed(what, exc)` are for exceptions. Use `FunUI <Title>` as the source.
 
 Research or debug data does not go in the console: put a toggle, a Download button and a Clear button in Settings (see Refinement & Taste).
 
@@ -332,7 +332,7 @@ A module ships no JavaScript and draws nothing. It declares what it wants in `SE
 - [ ] Reaches core only with `from ..._core import ...`; imports no other module at load.
 - [ ] Every setting has a default, a plain `label` (unique in the module) and a one-sentence `hint`.
 - [ ] Every control that changes the output is a setting.
-- [ ] `install` returns `None` when off, a status string when on, and a hook key that starts with `funpack.`.
+- [ ] `install` returns `None` when off, a status string when on, and a hook key that starts with `funui.`.
 - [ ] Anonymous hooks are tagged. Nothing leaks from one run to the next.
 - [ ] Tests on a real tiny model (`tiny_h3`, `tiny_ltx`) or a real object, not a stand-in: off by default, the effect, nothing leaks, bad input.
 - [ ] The Log says what happened, once, at the right level.

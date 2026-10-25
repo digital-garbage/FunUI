@@ -52,10 +52,10 @@ def test_an_interrupt_or_out_of_memory_is_not_the_modules_fault(monkeypatch):
     class InterruptProcessingException(Exception): ...
     class OutOfMemoryError(Exception): ...
 
-    control.fault("funpack.a", InterruptProcessingException())
-    control.fault("funpack.a", OutOfMemoryError())
+    control.fault("funui.a", InterruptProcessingException())
+    control.fault("funui.a", OutOfMemoryError())
     assert control.fingerprint() == ""
-    control.fault("funpack.a", ValueError("bad"))
+    control.fault("funui.a", ValueError("bad"))
     assert control.fingerprint() == "a"
 
 
@@ -64,7 +64,7 @@ def test_a_hook_that_raised_in_a_run_reaches_the_quarantine(monkeypatch):
     a = spec("a")
     monkeypatch.setattr(registry, "current", lambda: types.SimpleNamespace(specs={"a": a}))
     dropped = patching.Dropped()
-    assert dropped.record("funpack.a", RuntimeError("step 3"))
+    assert dropped.record("funui.a", RuntimeError("step 3"))
     assert "a" in control.quarantined([a]) and "step 3" in control.quarantined([a])["a"]["reason"]
 
 
@@ -108,7 +108,7 @@ def test_running_out_of_memory_by_message_is_not_the_modules_fault(monkeypatch):
     from core import registry
     a = spec("a")
     monkeypatch.setattr(registry, "current", lambda: types.SimpleNamespace(specs={"a": a}))
-    control.fault("funpack.a", RuntimeError("MPS backend out of memory (MPS allocated: 9 GiB)"))
+    control.fault("funui.a", RuntimeError("MPS backend out of memory (MPS allocated: 9 GiB)"))
     assert control.fingerprint() == ""
 
 

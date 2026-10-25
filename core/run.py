@@ -2,7 +2,7 @@
 
 Previews, progress, results and log lines all have to be attributable to one
 generation, and ComfyUI gives a node no way to ask "which run am I in" -- there
-is no hook for "a run started". So FunPack marks its own: the first FunPack node
+is no hook for "a run started". So FunUI marks its own: the first FunUI node
 to execute in a graph starts a run, and everything after it reports under that
 id until the next one begins.
 

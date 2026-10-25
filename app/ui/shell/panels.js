@@ -50,7 +50,7 @@ export async function mountAll(manifest) {
       });
     } catch (err) {
       hidden.push({ id: spec.id, why: `${err.name}: ${err.message}` });
-      console.warn(`[FunPack] ${spec.id} did not mount: ${err.message}`);
+      console.warn(`[FunUI] ${spec.id} did not mount: ${err.message}`);
     }
   }
 

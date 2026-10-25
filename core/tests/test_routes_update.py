@@ -31,7 +31,7 @@ def server(comfyui, monkeypatch):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {"ready": threading.Event(), "restarts": restarts}
@@ -80,12 +80,12 @@ def _request(port, method, path, body=None):
 
 def test_the_app_can_see_which_branch_it_is_on(server):
     """The one question every update starts from."""
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status")
     assert status == 200
     assert body["ok"] is True, body
     assert body["branch"], "no branch reported"
     assert isinstance(body["branches"], list) and body["branches"]
-    assert body["repo"].endswith("ComfyUI-FunPack-v5")
+    assert body["repo"].endswith("FunUI-v5")
     assert server["restarts"] == [], "reading the status restarted ComfyUI"
 
 
@@ -93,7 +93,7 @@ def test_system_info_describes_the_host_comfyui_runs_on(server):
     """The About panel's hardware facts -- best-effort, but never a 500. This
     machine has no CUDA device, so gpus is empty and mps says whether that is
     because there is genuinely nothing (mps False too) or an Apple GPU instead."""
-    status, body = _request(server["port"], "GET", "/funpack/api/system")
+    status, body = _request(server["port"], "GET", "/fun/api/system")
     assert status == 200
     assert isinstance(body["cpu"]["threads"], int) and body["cpu"]["threads"] > 0
     assert isinstance(body["gpus"], list)
@@ -104,7 +104,7 @@ def test_system_info_describes_the_host_comfyui_runs_on(server):
 def test_switching_to_a_branch_that_is_not_there_is_refused_by_name(server):
     """A refusal has to say which branch and that it exists nowhere -- otherwise
     the user cannot tell it from a typo in their own request."""
-    status, body = _request(server["port"], "POST", "/funpack/api/git/checkout",
+    status, body = _request(server["port"], "POST", "/fun/api/git/checkout",
                             {"branch": "no-such-branch-here"})
     assert status == 400
     assert "no-such-branch-here" in body["detail"]
@@ -112,7 +112,7 @@ def test_switching_to_a_branch_that_is_not_there_is_refused_by_name(server):
 
 
 def test_switching_to_nothing_is_refused_before_git_is_touched(server):
-    status, body = _request(server["port"], "POST", "/funpack/api/git/checkout", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/checkout", {})
     assert status == 400
     assert "branch" in body["detail"].lower()
     assert server["restarts"] == []
@@ -124,7 +124,7 @@ def test_a_refusal_from_git_is_reported_as_a_reason_not_a_crash(server, monkeypa
         raise update_mod.GitUpdateError("Working tree has local changes.")
     monkeypatch.setattr(update_mod, "pull", refuse)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 400
     assert "local changes" in body["detail"]
     assert server["restarts"] == []
@@ -135,7 +135,7 @@ def test_an_update_that_worked_answers_before_it_restarts(server, monkeypatch):
     monkeypatch.setattr(update_mod, "pull",
                         lambda **_k: {"updated": True, "before": "a1", "after": "b2"})
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update",
+    status, body = _request(server["port"], "POST", "/fun/api/git/update",
                             {"branch": "dev"})
     assert status == 200, body
     assert body["restarting"] is True
@@ -147,7 +147,7 @@ def test_an_unexpected_failure_is_a_500_with_the_reason_not_a_hang(server, monke
         raise OSError("disk went away")
     monkeypatch.setattr(update_mod, "rollback", explode)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/rollback")
+    status, body = _request(server["port"], "POST", "/fun/api/git/rollback")
     assert status == 500
     assert "disk went away" in body["detail"]
     assert server["restarts"] == [], "a failed rollback restarted ComfyUI anyway"
@@ -156,7 +156,7 @@ def test_an_unexpected_failure_is_a_500_with_the_reason_not_a_hang(server, monke
 def test_the_status_can_be_had_without_touching_the_network(server):
     """The fetch is the only part that can hang. On a machine that cannot reach
     the remote it must still be possible to see which branch you are on."""
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status?remote=0")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status?remote=0")
     assert status == 200
     assert body["ok"] is True
     assert body["branch"]
@@ -174,7 +174,7 @@ def test_a_remote_that_cannot_be_reached_is_said_rather_than_guessed(server, mon
     _real = update_mod._run_git
     monkeypatch.setattr(update_mod, "_run_git", no_network)
 
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status")
     assert status == 200
     assert body["fetch_ok"] is False
     assert body["checked_remote"] is True
@@ -184,7 +184,7 @@ def test_a_remote_that_cannot_be_reached_is_said_rather_than_guessed(server, mon
 # --- node packs --------------------------------------------------------------
 
 def test_the_pack_list_says_where_it_is_looking(server):
-    status, body = _request(server["port"], "GET", "/funpack/api/packs")
+    status, body = _request(server["port"], "GET", "/fun/api/packs")
     assert status == 200, body
     assert body["root"].endswith("custom_nodes"), body["root"]
     assert isinstance(body["nodes"], list)
@@ -192,32 +192,32 @@ def test_the_pack_list_says_where_it_is_looking(server):
 
 def test_removing_something_that_is_not_a_pack_name_is_refused(server):
     """The delete is the whole risk here: one segment, resolved, inside
-    custom_nodes, and never FunPack itself."""
+    custom_nodes, and never FunUI itself."""
     for name in ["..", "../..", "a/b", ".git", ""]:
-        status, body = _request(server["port"], "POST", "/funpack/api/packs/remove",
+        status, body = _request(server["port"], "POST", "/fun/api/packs/remove",
                                 {"name": name})
         assert status == 400, (name, status, body)
         assert body["detail"], name
 
 
-def test_removing_funpack_itself_is_refused_by_name(server):
+def test_removing_funui_itself_is_refused_by_name(server):
     from core import nodes_manager
-    me = nodes_manager.FUNPACK_ROOT.name
-    status, body = _request(server["port"], "POST", "/funpack/api/packs/remove", {"name": me})
+    me = nodes_manager.FUNUI_ROOT.name
+    status, body = _request(server["port"], "POST", "/fun/api/packs/remove", {"name": me})
     assert status == 400
     # It has to say WHICH thing it refused to delete, or the user tries again.
-    assert "FunPack" in body["detail"]
+    assert "FunUI" in body["detail"]
 
 
 def test_a_pack_that_is_not_installed_is_refused_rather_than_created(server):
-    status, body = _request(server["port"], "POST", "/funpack/api/packs/update",
+    status, body = _request(server["port"], "POST", "/fun/api/packs/update",
                             {"name": "ComfyUI-DoesNotExist"})
     assert status == 400
     assert "ComfyUI-DoesNotExist" in body["detail"]
 
 
 def test_installing_from_nothing_is_refused(server):
-    status, body = _request(server["port"], "POST", "/funpack/api/packs/install", {"url": ""})
+    status, body = _request(server["port"], "POST", "/fun/api/packs/install", {"url": ""})
     assert status == 400
     assert body["detail"]
 
@@ -229,10 +229,10 @@ def test_an_install_outside_comfyui_says_it_cannot_tell_where_packs_live(server,
     from core import nodes_manager
     import sys as _sys
     monkeypatch.setitem(_sys.modules, "folder_paths", None)
-    monkeypatch.setattr(nodes_manager, "FUNPACK_ROOT",
-                        nodes_manager.Path("/tmp/somewhere/ComfyUI-FunPack-v5"))
+    monkeypatch.setattr(nodes_manager, "FUNUI_ROOT",
+                        nodes_manager.Path("/tmp/somewhere/FunUI-v5"))
 
-    status, body = _request(server["port"], "GET", "/funpack/api/packs")
+    status, body = _request(server["port"], "GET", "/fun/api/packs")
     assert status == 400, body
     assert "custom_nodes" in body["detail"]
     assert "/tmp/somewhere" in body["detail"], "it did not say where it thinks it is"
@@ -245,7 +245,7 @@ def test_an_update_that_changed_nothing_does_not_restart(server, monkeypatch):
     monkeypatch.setattr(update_mod, "pull",
                         lambda **_k: {"updated": False, "before": "a1", "after": "a1"})
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 200, body
     assert body["restarting"] is False
     assert server["restarts"] == [], "restarted for a checkout that had not moved"
@@ -258,7 +258,7 @@ def test_a_branch_switch_restarts_even_when_the_commit_is_the_same(server, monke
                         lambda **_k: {"updated": False, "before": "a1", "after": "a1",
                                       "before_branch": "v5", "branch": "dev"})
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/checkout",
+    status, body = _request(server["port"], "POST", "/fun/api/git/checkout",
                             {"branch": "dev"})
     assert status == 200, body
     assert body["restarting"] is True
@@ -279,7 +279,7 @@ def test_a_generation_started_during_the_07s_delay_still_stops_the_restart(serve
     running = False
     monkeypatch.setattr(routes, "_generation_running", lambda: running)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 200, body
     assert body["restarting"] is True, "scheduled optimistically, before the delay"
 
@@ -290,7 +290,7 @@ def test_a_generation_started_during_the_07s_delay_still_stops_the_restart(serve
 
     assert server["restarts"] == [], "restarted anyway despite the generation"
 
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status")
     assert body["restart_pending"] is True, "the deferred restart is not visible anywhere"
 
 
@@ -302,7 +302,7 @@ def test_a_moved_checkout_does_not_restart_while_a_generation_is_running(server,
                         lambda **_k: {"updated": True, "before": "a1", "after": "b2"})
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update",
+    status, body = _request(server["port"], "POST", "/fun/api/git/update",
                             {"branch": "dev"})
     assert status == 200, body
     assert body["restarting"] is False
@@ -320,22 +320,22 @@ def test_a_blocked_restart_is_actually_finishable_once_the_run_ends(server, monk
                         lambda **_k: {"updated": True, "before": "a1", "after": "b2"})
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 200, body
     assert body["restarting"] is False
 
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status")
     assert status == 200, body
     assert body["restart_pending"] is True, "the owed restart is not visible anywhere"
 
     # Nothing else here works while a restart is owed -- running another git
     # action on top of an unrestarted change is not a retry, it is a second
     # change stacked on the first.
-    status, body = _request(server["port"], "POST", "/funpack/api/git/update", {})
+    status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 409, body
 
     # Still running: the dedicated restart route refuses too, same as the guard.
-    status, body = _request(server["port"], "POST", "/funpack/api/git/restart")
+    status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
     assert body["restarting"] is False
     assert server["restarts"] == []
@@ -343,13 +343,13 @@ def test_a_blocked_restart_is_actually_finishable_once_the_run_ends(server, monk
     # The run ends. The SAME deferred restart finishes -- `pull` is not called
     # again, so if it were, this would fail on Mock's default None return.
     monkeypatch.setattr(routes, "_generation_running", lambda: False)
-    status, body = _request(server["port"], "POST", "/funpack/api/git/restart")
+    status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
     assert body["restarting"] is True
     time.sleep(1.0)
     assert server["restarts"] == [1]
 
-    status, body = _request(server["port"], "GET", "/funpack/api/git/status")
+    status, body = _request(server["port"], "GET", "/fun/api/git/status")
     assert body["restart_pending"] is False, "stayed pending after actually restarting"
 
 
@@ -357,7 +357,7 @@ def test_restarting_with_nothing_pending_just_restarts(server, monkeypatch):
     """The route now doubles as a plain "Restart ComfyUI" button: nothing owed
     is not a reason to refuse, it is the normal case for someone pressing it
     on purpose."""
-    status, body = _request(server["port"], "POST", "/funpack/api/git/restart")
+    status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
     assert body["restarting"] is True
     time.sleep(1.0)
@@ -366,7 +366,7 @@ def test_restarting_with_nothing_pending_just_restarts(server, monkeypatch):
 
 def test_restarting_with_nothing_pending_still_respects_a_running_generation(server, monkeypatch):
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
-    status, body = _request(server["port"], "POST", "/funpack/api/git/restart")
+    status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
     assert body["restarting"] is False
     assert body["blocked"]
@@ -385,14 +385,14 @@ def test_a_rollback_pressed_twice_while_blocked_does_not_roll_back_twice(server,
     monkeypatch.setattr(update_mod, "rollback", rollback)
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/rollback")
+    status, body = _request(server["port"], "POST", "/fun/api/git/rollback")
     assert status == 200, body
     assert body["restarting"] is False
     assert calls == [1]
 
     # Pressed again while still blocked: refused outright, `rollback` not called
     # a second time.
-    status, body = _request(server["port"], "POST", "/funpack/api/git/rollback")
+    status, body = _request(server["port"], "POST", "/fun/api/git/rollback")
     assert status == 409, body
     assert calls == [1], "ran rollback a second time instead of refusing"
 
@@ -424,8 +424,8 @@ def test_two_git_actions_at_once_do_not_touch_the_checkout_at_the_same_time(serv
     def fire(name, path, body):
         results[name] = _request(server["port"], "POST", path, body)
 
-    t1 = threading.Thread(target=fire, args=("update", "/funpack/api/git/update", {}))
-    t2 = threading.Thread(target=fire, args=("checkout", "/funpack/api/git/checkout", {"branch": "v5"}))
+    t1 = threading.Thread(target=fire, args=("update", "/fun/api/git/update", {}))
+    t2 = threading.Thread(target=fire, args=("checkout", "/fun/api/git/checkout", {"branch": "v5"}))
     t1.start()
     time.sleep(0.05)  # let the first one actually reach the lock first
     t2.start()
@@ -471,8 +471,8 @@ def test_status_with_a_remote_fetch_does_not_race_a_git_action_either(server, mo
     def fire(name, method, path, body=None):
         results[name] = _request(server["port"], method, path, body)
 
-    t1 = threading.Thread(target=fire, args=("update", "POST", "/funpack/api/git/update", {}))
-    t2 = threading.Thread(target=fire, args=("status", "GET", "/funpack/api/git/status"))
+    t1 = threading.Thread(target=fire, args=("update", "POST", "/fun/api/git/update", {}))
+    t2 = threading.Thread(target=fire, args=("status", "GET", "/fun/api/git/status"))
     t1.start()
     time.sleep(0.05)
     t2.start()
@@ -491,7 +491,7 @@ def test_a_rollback_restarts_because_the_commit_moved(server, monkeypatch):
     monkeypatch.setattr(update_mod, "rollback",
                         lambda: {"branch": "v5", "before": "b2", "after": "a1"})
 
-    status, body = _request(server["port"], "POST", "/funpack/api/git/rollback")
+    status, body = _request(server["port"], "POST", "/fun/api/git/rollback")
     assert status == 200, body
     assert body["restarting"] is True
     time.sleep(1.0)
@@ -506,7 +506,7 @@ def test_the_pack_check_answers_under_the_key_the_app_reads(server):
     shape = nodes_manager.check_updates.__doc__
     assert shape, "check_updates lost its docstring"
 
-    status, body = _request(server["port"], "POST", "/funpack/api/packs/check")
+    status, body = _request(server["port"], "POST", "/fun/api/packs/check")
     assert status == 200, body
     assert "checked" in body, f"the key the app reads is not in {sorted(body)}"
     assert isinstance(body["checked"], dict)
@@ -517,7 +517,7 @@ def test_the_pack_check_answers_under_the_key_the_app_reads(server):
 def test_the_log_comes_back_with_where_it_was_read_from(server):
     """A log panel showing lines from an unknown file is a panel nobody can
     check against the terminal they also have open."""
-    status, body = _request(server["port"], "GET", "/funpack/api/log?limit=5")
+    status, body = _request(server["port"], "GET", "/fun/api/log?limit=5")
     assert status == 200, body
     assert isinstance(body["lines"], list)
     assert len(body["lines"]) <= 5
@@ -532,7 +532,7 @@ def test_no_log_file_is_an_answer_with_a_reason(server, monkeypatch):
     monkeypatch.setattr(backend_log, "_memory", lambda: None)
     monkeypatch.setattr(backend_log, "log_file", lambda: None)
 
-    status, body = _request(server["port"], "GET", "/funpack/api/log")
+    status, body = _request(server["port"], "GET", "/fun/api/log")
     assert status == 200
     assert body["lines"] == []
     assert "terminal" in body["detail"], body["detail"]
@@ -546,7 +546,7 @@ def test_a_log_that_cannot_be_read_says_so_rather_than_raising(server, monkeypat
     monkeypatch.setattr(backend_log, "log_file", lambda: missing)
     missing.unlink()
 
-    status, body = _request(server["port"], "GET", "/funpack/api/log")
+    status, body = _request(server["port"], "GET", "/fun/api/log")
     assert status == 200, body
     assert body["lines"] == []
     assert "gone.log" in body["detail"]
@@ -561,7 +561,7 @@ def test_comfyuis_own_output_is_read_when_it_writes_no_file(server, monkeypatch)
     monkeypatch.setattr(backend_log, "_memory", lambda: writes)
     monkeypatch.setattr(backend_log, "log_file", lambda: None)
 
-    status, body = _request(server["port"], "GET", "/funpack/api/log")
+    status, body = _request(server["port"], "GET", "/fun/api/log")
     assert status == 200, body
     assert body["lines"] == ["boot", " 100%|##########", "Prompt executed"]
     assert body["detail"] == ""
@@ -569,16 +569,16 @@ def test_comfyuis_own_output_is_read_when_it_writes_no_file(server, monkeypatch)
 
 def test_a_silly_limit_does_not_read_a_whole_session_into_memory(server):
     for limit in ("999999", "-4", "0", "not-a-number"):
-        status, body = _request(server["port"], "GET", f"/funpack/api/log?limit={limit}")
+        status, body = _request(server["port"], "GET", f"/fun/api/log?limit={limit}")
         assert status == 200, (limit, body)
         assert len(body["lines"]) <= 2000, limit
 
 
-def test_funpacks_own_log_answers_at_its_own_path_not_the_backend_ones(server):
+def test_funuis_own_log_answers_at_its_own_path_not_the_backend_ones(server):
     """Both logs were once registered on the same path, one shadowing the
-    other -- FunPack's severity/source log never answered, and its consumer
+    other -- FunUI's severity/source log never answered, and its consumer
     crashed on `data.levels`. They live at different paths now."""
-    status, body = _request(server["port"], "GET", "/funpack/api/log/funpack")
+    status, body = _request(server["port"], "GET", "/fun/api/log/fun")
     assert status == 200, body
     assert "levels" in body and "records" in body
     assert isinstance(body["levels"], list)
@@ -600,7 +600,7 @@ def test_temp_files_come_back_newest_first_with_where_they_are(server, monkeypat
     os.utime(new, (2000, 2000))
     monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
 
-    status, body = _request(server["port"], "GET", "/funpack/api/temp")
+    status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert status == 200, body
     assert [f["filename"] for f in body["files"]] == ["new.mp4", "old.png"]
     assert body["files"][0]["subfolder"] == "sub"
@@ -617,14 +617,14 @@ def test_only_media_is_listed(server, monkeypatch, tmp_path):
         (tmp_path / name).write_bytes(b"x")
     monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
 
-    status, body = _request(server["port"], "GET", "/funpack/api/temp")
+    status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert sorted(f["filename"] for f in body["files"]) == ["keep.png", "keep.wav"]
 
 
 def test_an_empty_temp_directory_says_why_it_is_empty(server, monkeypatch, tmp_path):
     from core import temp_files
     monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
-    status, body = _request(server["port"], "GET", "/funpack/api/temp")
+    status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert body["files"] == []
     assert "wiped" in body["detail"]
 
@@ -632,7 +632,7 @@ def test_an_empty_temp_directory_says_why_it_is_empty(server, monkeypatch, tmp_p
 def test_no_comfyui_is_a_different_answer_from_an_empty_directory(server, monkeypatch):
     from core import temp_files
     monkeypatch.setattr(temp_files, "temp_dir", lambda: None)
-    status, body = _request(server["port"], "GET", "/funpack/api/temp")
+    status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert body["files"] == []
     assert "ComfyUI is not here" in body["detail"]
     assert body["path"] is None
@@ -644,9 +644,9 @@ def test_the_listing_is_bounded(server, monkeypatch, tmp_path):
         (tmp_path / f"f{i}.png").write_bytes(b"x")
     monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
 
-    status, body = _request(server["port"], "GET", "/funpack/api/temp?limit=10")
+    status, body = _request(server["port"], "GET", "/fun/api/temp?limit=10")
     assert len(body["files"]) == 10
-    status, body = _request(server["port"], "GET", "/funpack/api/temp?limit=999999")
+    status, body = _request(server["port"], "GET", "/fun/api/temp?limit=999999")
     assert len(body["files"]) <= temp_files.MAX_FILES
 
 
@@ -654,7 +654,7 @@ def test_requirements_route_runs_the_check_and_says_what_it_did(server, monkeypa
     monkeypatch.setattr(routes, "_generation_running", lambda: False)
     monkeypatch.setattr(update_mod, "install_requirements",
                         lambda: {"ran": False, "ok": True, "detail": "Nothing to install — every requirement is already present."})
-    status, body = _request(server["port"], "POST", "/funpack/api/requirements")
+    status, body = _request(server["port"], "POST", "/fun/api/requirements")
     assert status == 200 and body["ran"] is False and "already present" in body["detail"]
 
 
@@ -662,7 +662,7 @@ def test_requirements_route_refuses_during_a_generation(server, monkeypatch):
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
     monkeypatch.setattr(update_mod, "install_requirements",
                         lambda: (_ for _ in ()).throw(AssertionError("must not install during a generation")))
-    status, body = _request(server["port"], "POST", "/funpack/api/requirements")
+    status, body = _request(server["port"], "POST", "/fun/api/requirements")
     assert status == 409 and "generation" in body["detail"]
 
 
@@ -670,12 +670,12 @@ def test_requirements_route_refuses_during_a_generation(server, monkeypatch):
 
 def test_saved_files_are_listed_from_the_output_folder(server, monkeypatch, tmp_path):
     from core import temp_files
-    (tmp_path / "FunPack_00001_.mp4").write_bytes(b"x")
+    (tmp_path / "FunUI_00001_.mp4").write_bytes(b"x")
     monkeypatch.setattr(temp_files, "output_dir", lambda: str(tmp_path))
     monkeypatch.setattr(temp_files, "temp_dir", lambda: None)
-    status, body = _request(server["port"], "GET", "/funpack/api/temp?where=output")
-    assert [f["filename"] for f in body["files"]] == ["FunPack_00001_.mp4"]
-    status, body = _request(server["port"], "GET", "/funpack/api/temp")
+    status, body = _request(server["port"], "GET", "/fun/api/temp?where=output")
+    assert [f["filename"] for f in body["files"]] == ["FunUI_00001_.mp4"]
+    status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert body["files"] == [], "temp and saved were mixed up"
 
 
@@ -688,11 +688,11 @@ def test_delete_removes_a_media_file_and_nothing_else(server, monkeypatch, tmp_p
         f.write_bytes(b"x")
     monkeypatch.setattr(temp_files, "output_dir", lambda: str(out))
     port = server["port"]
-    ask = lambda **kw: _request(port, "POST", "/funpack/api/temp/delete", {"where": "output", **kw})
+    ask = lambda **kw: _request(port, "POST", "/fun/api/temp/delete", {"where": "output", **kw})
 
     assert ask(filename="a.png", subfolder="sub")[0] == 200 and not pic.exists()
     assert ask(filename="model.safetensors")[0] == 400 and weights.exists(), "a non-media file was deleted"
     assert ask(filename="secret.png", subfolder="..")[0] == 400 and outside.exists(), "left the folder"
     assert ask(filename="../secret.png")[0] == 400 and outside.exists()
     assert ask(filename="a.png", subfolder="sub")[0] == 400, "a second delete should say it is gone"
-    assert _request(port, "POST", "/funpack/api/temp/delete", {"where": "input", "filename": "a.png"})[0] == 400
+    assert _request(port, "POST", "/fun/api/temp/delete", {"where": "input", "filename": "a.png"})[0] == 400

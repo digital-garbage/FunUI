@@ -9,8 +9,8 @@ def _needs_comfy(comfyui):
 
 def _load(tiny, **v):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(
         tiny.patcher, {"sharpness": {"enabled": True, **v}}).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     return patched, wrap, status
@@ -23,8 +23,8 @@ def _to(i, steps=4):
 
 def test_off_installs_nothing(tiny_h3):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"sharpness": {"enabled": False}}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"sharpness": {"enabled": False}}).result
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
 
 

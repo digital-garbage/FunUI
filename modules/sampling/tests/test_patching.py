@@ -21,10 +21,10 @@ def test_a_tagged_pre_cfg_hook_is_removed(patcher):
     def hook(args):
         return args["conds_out"]
 
-    patcher.set_model_sampler_pre_cfg_function(patching.tag(hook, "funpack.x"))
+    patcher.set_model_sampler_pre_cfg_function(patching.tag(hook, "funui.x"))
     assert len(patcher.model_options["sampler_pre_cfg_function"]) == 1
 
-    assert patching.strip(patcher, "funpack.") == 1
+    assert patching.strip(patcher, "funui.") == 1
     assert patcher.model_options["sampler_pre_cfg_function"] == []
 
 
@@ -37,7 +37,7 @@ def test_an_untagged_hook_is_left_alone(patcher):
         return args["conds_out"]
 
     patcher.set_model_sampler_pre_cfg_function(theirs)
-    assert patching.strip(patcher, "funpack.") == 0
+    assert patching.strip(patcher, "funui.") == 0
     assert patcher.model_options["sampler_pre_cfg_function"] == [theirs]
 
 
@@ -48,7 +48,7 @@ def test_a_differently_namespaced_hook_is_left_alone(patcher):
         return args["conds_out"]
 
     patcher.set_model_sampler_pre_cfg_function(patching.tag(other, "otherpack.y"))
-    assert patching.strip(patcher, "funpack.") == 0
+    assert patching.strip(patcher, "funui.") == 0
 
 
 def test_something_that_cannot_be_tagged_is_refused_rather_than_installed():
@@ -56,17 +56,17 @@ def test_something_that_cannot_be_tagged_is_refused_rather_than_installed():
     in the accumulation this exists to prevent."""
     from core import patching
     with pytest.raises(TypeError, match="could never be removed"):
-        patching.tag(len, "funpack.x")
+        patching.tag(len, "funui.x")
 
 
 def test_chaining_the_loader_does_not_stack_a_pre_cfg_modifier(patcher):
     """The end-to-end version, through the real node."""
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     values = {"sharpen": {"enabled": True, "amount": 0.4, "radius": 5}}
-    once = FunPackLoadModifiers.execute(patcher, settings=values).result[0]
-    twice = FunPackLoadModifiers.execute(once, settings=values).result[0]
-    thrice = FunPackLoadModifiers.execute(twice, settings=values).result[0]
+    once = FunUILoadModifiers.execute(patcher, settings=values).result[0]
+    twice = FunUILoadModifiers.execute(once, settings=values).result[0]
+    thrice = FunUILoadModifiers.execute(twice, settings=values).result[0]
 
     def count(model):
         return len(model.model_options.get("sampler_pre_cfg_function", []))
@@ -81,13 +81,13 @@ def test_clone_keeps_the_fault_record_the_sampler_will_clear():
         def clone(self):
             return P()
     m = P()
-    m.funpack_dropped = patching.Dropped()
-    assert patching.clone(m).funpack_dropped is m.funpack_dropped
-    assert not hasattr(patching.clone(P()), "funpack_dropped")
+    m.funui_dropped = patching.Dropped()
+    assert patching.clone(m).funui_dropped is m.funui_dropped
+    assert not hasattr(patching.clone(P()), "funui_dropped")
 
 
 def test_a_stock_clone_between_the_nodes_keeps_the_fault_record(patcher):
     from core import patching
     record = patching.Dropped()
-    patcher.model_options["funpack_dropped"] = record
-    assert patcher.clone().model_options["funpack_dropped"] is record
+    patcher.model_options["funui_dropped"] = record
+    assert patcher.clone().model_options["funui_dropped"] is record

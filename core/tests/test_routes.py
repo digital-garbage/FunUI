@@ -6,8 +6,8 @@ all. This closes that.
 
 Requests are written onto the socket by hand rather than through aiohttp's
 TestClient, because TestClient normalises the URL BEFORE sending: ask it for
-`/funpack/modules/%2e%2e/app/boot.js` and the server receives a plain
-`/funpack/app/boot.js`. A test written that way silently checks nothing about
+`/fun/modules/%2e%2e/app/boot.js` and the server receives a plain
+`/fun/app/boot.js`. A test written that way silently checks nothing about
 traversal -- it looks like a routing bypass when it is only the client tidying up
 after itself.
 
@@ -37,7 +37,7 @@ def app(tmp_path, monkeypatch):
     (app_dir / "composer" / "composer.css").write_text(":root{}")
     (app_dir / "index.html").write_text("<p>shell</p>")
     (app_dir / "ui").mkdir(parents=True)
-    (app_dir / "ui" / "index.html").write_text('<script src="/funpack/app/ui/boot.js"></script>')
+    (app_dir / "ui" / "index.html").write_text('<script src="/fun/app/ui/boot.js"></script>')
 
     mod_dir = tmp_path / "modules" / "timing" / "audio_clock"
     mod_dir.mkdir(parents=True)
@@ -128,7 +128,7 @@ def test_query_string_does_not_change_the_target(app):
 
 def test_index_is_served(app):
     status, body = get(app, P + "/")
-    assert status == 200 and "/funpack/app/ui/boot.js" in body
+    assert status == 200 and "/fun/app/ui/boot.js" in body
 
 
 def test_health(app):
@@ -150,7 +150,7 @@ def test_the_nodes_route_describes_what_a_pipeline_points_at(app, comfyui):
     ComfyUI's own /object_info answers with every installed node, which on a
     machine with a few packs is megabytes for a question about a dozen.
     """
-    # ComfyUI's own registry only. Installing FunPack's nodes here would call
+    # ComfyUI's own registry only. Installing FunUI's nodes here would call
     # collect(), which scans MODULES_DIR -- and the `app` fixture has pointed
     # that at a temp directory holding one fake module. The scan is CACHED, so
     # every later test in the session then ran against an empty module registry:

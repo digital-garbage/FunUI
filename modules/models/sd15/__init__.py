@@ -37,21 +37,21 @@ def probe_traits(keys) -> list:
 def text_to_image():
     video = {"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}
     return [
-        {"id": "model", "group": "Loaders", "node": "FunPackCheckpointLoader", "inputs": {"ckpt_name": ""}},
+        {"id": "model", "group": "Loaders", "node": "FunUICheckpointLoader", "inputs": {"ckpt_name": ""}},
         {"id": "positive", "group": "Preparation", "node": "CLIPTextEncode",
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"}],
          "inputs": {"clip": ["model", 1], "text": ""}},
         {"id": "negative", "group": "Preparation", "node": "CLIPTextEncode",
          "roles": [{"at": "project.negative", "input": "text", "label": "Negative prompt"}],
          "inputs": {"clip": ["model", 1], "text": ""}},
-        {"id": "latent", "group": "Preparation", "node": "FunPackEmptyLatent",
+        {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
          "roles": [{"at": "project.video", "input": "width", "label": "Width"},
                    {"at": "project.video", "input": "height", "label": "Height"}],
          "inputs": {"model": ["model", 0], "width": 512, "height": 512, "length": 1, "batch_size": 1}},
-        {"id": "settings", "group": "Preparation", "node": "FunPackModifierSettings", "inputs": {"settings": "{}"}},
-        {"id": "modifiers", "group": "Preparation", "node": "FunPackLoadModifiers",
+        {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
+        {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
          "inputs": {"model": ["model", 0], "settings": ["settings", 0]}},
-        {"id": "sampler", "group": "Sampling", "node": "FunPackSampler",
+        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
          "roles": [{"at": "generation.sampling", "input": "steps", "label": "Steps"},
                    {"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
                    {"at": "generation.sampling", "input": "scheduler", "label": "Scheduler"},
@@ -60,13 +60,13 @@ def text_to_image():
                     "latent": ["latent", 0], "settings": ["settings", 0],
                     "seed": 0, "steps": 20, "cfg": 7.0, "sampler_name": "euler", "scheduler": "normal",
                     "denoise": 1.0}},
-        {"id": "decode", "group": "Render", "node": "FunPackDecode",
+        {"id": "decode", "group": "Render", "node": "FunUIDecode",
          "inputs": {"samples": ["sampler", 0], "vae": ["model", 2], "model": ["model", 0]}},
         {"id": "hold", "group": "Render", "node": "RepeatImageBatch",
          "roles": [{"at": "project.video", "input": "amount", "label": "Length", "drives": "frames"}],
          "inputs": {"image": ["decode", 0], "amount": 1}},
-        {"id": "save", "group": "Render", "node": "FunPackSaveVideo", "roles": [video],
-         "inputs": {"images": ["hold", 0], "fps": 24.0, "filename_prefix": "FunPack"}},
+        {"id": "save", "group": "Render", "node": "FunUISaveVideo", "roles": [video],
+         "inputs": {"images": ["hold", 0], "fps": 24.0, "filename_prefix": "FunUI"}},
     ]
 
 

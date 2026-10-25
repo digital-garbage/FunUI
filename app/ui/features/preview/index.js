@@ -10,12 +10,12 @@ export const timecode = (sec, fps) => { const s = Math.max(0, sec), w = Math.flo
  *  A generated clip is played from the server's own trimmed copy, never the raw render: ComfyUI's saver writes the index at
  *  the END of the file, which a browser cannot seek in (a deep seek stalls or blacks the monitor). */
 export function sourceOf(sc, open, dur) {
-  if (isVideoClip(sc)) return sc.source && sc.source.media_ref ? { url: `/funpack/api/media/${encodeURIComponent(sc.source.media_ref)}/file`, from: sc.source_in || 0 } : null;
+  if (isVideoClip(sc)) return sc.source && sc.source.media_ref ? { url: `/fun/api/media/${encodeURIComponent(sc.source.media_ref)}/file`, from: sc.source_in || 0 } : null;
   const r = (open.scene_renders || {})[sc.id];
   if (!(r && r.media)) return null;
   const q = new URLSearchParams({ filename: r.media.filename || "", subfolder: r.media.subfolder || "", type: r.media.type || "output", render_in: String(r.inSec || 0), src_in: String(sc.source_in || 0), dur: String(dur) });
   if (sc.effects && sc.effects.reverse) q.set("rev", "1");
-  return { url: `/funpack/api/m/render/projects/${encodeURIComponent(open.id)}/preview-segment/${encodeURIComponent(sc.id)}?${q}`, from: 0 };
+  return { url: `/fun/api/m/render/projects/${encodeURIComponent(open.id)}/preview-segment/${encodeURIComponent(sc.id)}?${q}`, from: 0 };
 }
 
 /** The clip on screen at `t`: a clip owns [start, end), and at the very end of the cut the last one keeps its final frame. */

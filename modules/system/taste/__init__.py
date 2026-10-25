@@ -30,7 +30,7 @@ SETTINGS = {
     },
 }
 
-_OPTION = "funpack_taste_key"
+_OPTION = "funui_taste_key"
 _judges = {}
 
 

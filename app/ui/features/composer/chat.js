@@ -3,7 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 
-const NODE = "FunPackEnhancePrompt";
+const NODE = "FunUIEnhancePrompt";
 
 /** Generate hook: the comments about THIS typed prompt go to the enhancer slot; the others are said to be left out. */
 export function chatHook({ project, scene, slots }) {
@@ -32,7 +32,7 @@ export function chat(app, own) {
     key = next;
     if (!p.project) return page.set([c.hint.default({ text: "Open a project first." })]);
     // Comments would reach nothing: said here, the way Enhance says it (they stay, for a pipeline that has one).
-    if (!here) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Chat comments go to the enhancer. Pick a preset that has one, or add the “FunPack Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
+    if (!here) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Chat comments go to the enhancer. Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const bubbles = [...list.flatMap((r) => [first(r) ? c.text.sm({ text: `Model: ${first(r)}` }) : null, c.text.sm({ text: `You: ${r.comment}` })]),
       ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.before || "").slice(0, 80)}` }), c.text.sm({ text: `Model: ${last.after}` })] : []),
       ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])].filter(Boolean);

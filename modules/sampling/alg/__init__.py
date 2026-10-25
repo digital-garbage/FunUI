@@ -71,7 +71,7 @@ def _once(message: str) -> None:
     """Say an inert reason once per RUN, not once per step and not once per
     process -- a session that deduped for the life of the interpreter reported
     the first generation that went inert and stayed quiet for every one after."""
-    log.once(f"alg:{message}", log.ALERT, "FunPack ALG", message)
+    log.once(f"alg:{message}", log.ALERT, "FunUI ALG", message)
 
 
 def install(patcher, values, key):

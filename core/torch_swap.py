@@ -96,7 +96,7 @@ def swap(timeout=3600):
         return {"installed": False, "message": f"torch {torch_v} is already a CUDA 13 build."}
     if old_tag and not old_tag.startswith("cu"):
         return {"installed": False, "message": f"torch {torch_v} is not a CUDA build ({old_tag}); switching it to CUDA 13 is not something this can judge."}
-    work = tempfile.mkdtemp(prefix="funpack_torch_")
+    work = tempfile.mkdtemp(prefix="funui_torch_")
     try:
         if shutil.disk_usage(work).free < NEED_FREE:
             return {"installed": False, "message": f"Not enough free disk for the download (needs ~{NEED_FREE // 1024 ** 3} GB). Nothing was changed."}

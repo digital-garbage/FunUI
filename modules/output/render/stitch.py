@@ -345,7 +345,7 @@ def render(project, clips: list[dict]) -> dict:
     cmd += ["-filter_complex", ";".join(lines), "-map", "[vout]"]
     if has_audio:
         cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"]
-    name = f"funpack_final_{_stamp()}.mp4"
+    name = f"funui_final_{_stamp()}.mp4"
     out = os.path.join(tempdir, name)
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
     try:
@@ -367,7 +367,7 @@ def concat(clips: list[dict]) -> dict:
     fps = None
     try:
         for i, c in enumerate(clips):
-            out = files.temp_file(f"funpack_seg_{stamp}_{i}.mp4")
+            out = files.temp_file(f"funui_seg_{stamp}_{i}.mp4")
             src = files.clip_path(c)
             if fps is None:
                 fps = files.frame_rate(src)           # the first clip's rate: the joiner keeps one
@@ -383,16 +383,16 @@ def concat(clips: list[dict]) -> dict:
         if any(sound) and not all(sound) and len(parts) > 1:      # the joiner keeps only the first part's streams
             for k, p in enumerate(parts):
                 if not sound[k]:
-                    fixed = files.temp_file(f"funpack_seg_{stamp}_{k}_s.mp4")
+                    fixed = files.temp_file(f"funui_seg_{stamp}_{k}_s.mp4")
                     files.add_silence(p, fixed)
                     os.remove(p)
                     parts[k] = fixed
-        name = f"funpack_export_{stamp}.mp4"
+        name = f"funui_export_{stamp}.mp4"
         out = files.temp_file(name)
         if len(parts) == 1:
             os.replace(parts[0], out)
         else:
-            listing = files.temp_file(f"funpack_concat_{stamp}.txt")
+            listing = files.temp_file(f"funui_concat_{stamp}.txt")
             with open(listing, "w", encoding="utf-8") as fh:
                 for p in parts:
                     fh.write("file '" + p.replace("'", "'\\''") + "'\n")

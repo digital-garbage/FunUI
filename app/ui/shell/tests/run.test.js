@@ -40,9 +40,9 @@ test("extra rides in extra_data, which ComfyUI echoes back on /queue and /histor
   // The only way a reload can learn which scene/project a run in flight
   // belongs to -- nothing else carries it through the queue.
   const { run, sent } = runner(ok({ prompt_id: "p-2", number: 4 }));
-  await run.start({ "1": {} }, { extra: { funpack_scene_id: "s1", funpack_project_id: "pr1" } });
+  await run.start({ "1": {} }, { extra: { funui_scene_id: "s1", funui_project_id: "pr1" } });
 
-  assert.deepEqual(sent[0].body.extra_data, { funpack_scene_id: "s1", funpack_project_id: "pr1" });
+  assert.deepEqual(sent[0].body.extra_data, { funui_scene_id: "s1", funui_project_id: "pr1" });
   assert.equal(sent[0].body.client_id, "c1", "client_id must still be sent alongside extra_data");
 });
 

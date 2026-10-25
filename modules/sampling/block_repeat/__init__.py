@@ -80,7 +80,7 @@ SETTINGS = {
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Block repeat", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Block repeat", message)
 
 
 def _in_window(args, steps):

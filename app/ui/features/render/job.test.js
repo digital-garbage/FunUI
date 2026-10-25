@@ -14,6 +14,6 @@ test("a job is started and polled under the render module's own routes", async (
   try {
     const state = await runJob(`${RENDER}/projects/p1/export-clips`, { clips: [] });
     assert.equal(state.state, "done");
-    assert.deepEqual(seen, ["POST /funpack/api/m/render/projects/p1/export-clips", "GET /funpack/api/m/render/projects/p1/export-clips/j1"]);
+    assert.deepEqual(seen, ["POST /fun/api/m/render/projects/p1/export-clips", "GET /fun/api/m/render/projects/p1/export-clips/j1"]);
   } finally { globalThis.setTimeout = real; }
 });

@@ -1,10 +1,10 @@
-# How FunPack is built
+# How FunUI is built
 
 Read this first. The other guides assume it.
 
 ## The idea
 
-FunPack is a browser app (`/funpack/`) on top of ComfyUI. Everything it does is a **module that announces itself**. Core keeps no list of features, so adding a feature is adding a folder, and removing one is deleting it.
+FunUI is a browser app (`/fun/`) on top of ComfyUI. Everything it does is a **module that announces itself**. Core keeps no list of features, so adding a feature is adding a folder, and removing one is deleting it.
 
 The same idea runs on both sides:
 
@@ -21,7 +21,7 @@ Anything that is announced can be absent. A module that fails to import, fails v
 ```
 browser  app/ui/            shell + kit + features (plain ES modules, no build step)
    |
-aiohttp  core/routes.py     routes mounted on ComfyUI's own server under /funpack/
+aiohttp  core/routes.py     routes mounted on ComfyUI's own server under /fun/
    |
 core/    Python             finds modules, validates them, builds the ComfyUI prompt
    |
@@ -39,10 +39,10 @@ ComfyUI  nodes + sampler    executes the prompt
 ## How a setting travels
 
 1. A module declares `SETTINGS` (see [Writing a module](writing-a-module.md)).
-2. `GET /funpack/api/modules` sends the browser the validated declarations, ordered by stage and relations, with the model's traits applied.
+2. `GET /fun/api/modules` sends the browser the validated declarations, ordered by stage and relations, with the model's traits applied.
 3. **Settings > Engine** (and the Sampler window) draw one row per setting. Nothing is hand-built per module.
-4. An edit is saved with the project. The values travel as one JSON object, `{module_id: {key: value}}`, in the `settings` input of the node a module named as its `settings_sink` (today `FunPack Modifier Settings`).
-5. At run time `FunPack Modifier Settings` checks every value against its declaration and `FunPack Load Modifiers` calls each enabled module's `install(patcher, values, key)` in order.
+4. An edit is saved with the project. The values travel as one JSON object, `{module_id: {key: value}}`, in the `settings` input of the node a module named as its `settings_sink` (today `FunUI Modifier Settings`).
+5. At run time `FunUI Modifier Settings` checks every value against its declaration and `FunUI Load Modifiers` calls each enabled module's `install(patcher, values, key)` in order.
 
 The screen is the truth: Generate reads the live UI state, and a module never reads the UI.
 
@@ -116,8 +116,8 @@ Python tests sit beside what they test (`core/tests/`, `modules/<group>/<name>/t
 
 ## Running it locally
 
-- **With ComfyUI**: clone into `ComfyUI/custom_nodes`, `pip install -r requirements.txt`, start ComfyUI, open `/funpack/`.
+- **With ComfyUI**: clone into `ComfyUI/custom_nodes`, `pip install -r requirements.txt`, start ComfyUI, open `/fun/`.
 - **Without ComfyUI**: `python tools/devserver.py 8199` serves the app on the real routes. There is no queue behind it, so Generate says so. Set `COMFYUI_ROOT` to a ComfyUI checkout, or most modules will be absent (they import `comfy`).
-- **The catalogue**: `/funpack/app/ui/catalogue/index.html` (tokens), `elements.html` (every element, both themes), `hide.html` (what happens when a module is broken), `log.html`.
+- **The catalogue**: `/fun/app/ui/catalogue/index.html` (tokens), `elements.html` (every element, both themes), `hide.html` (what happens when a module is broken), `log.html`.
 
 Tests are covered in [Testing and verification](testing.md).

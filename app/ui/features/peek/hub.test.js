@@ -15,10 +15,10 @@ test("the button turns the frame's auto-hide on and off, remembers it, and switc
   assert.deepEqual(calls, [false]);
   button.click();
   assert.deepEqual(calls, [false, true]);
-  assert.equal(localStorage.getItem("funpack_timeline_peek"), "1");
+  assert.equal(localStorage.getItem("funui_timeline_peek"), "1");
   assert.equal(button.getAttribute("aria-pressed"), "true");
   button.click();
-  assert.equal(localStorage.getItem("funpack_timeline_peek"), null);
+  assert.equal(localStorage.getItem("funui_timeline_peek"), null);
   off();
   assert.equal(calls.at(-1), false);
   assert.equal(host.children.length, 0);

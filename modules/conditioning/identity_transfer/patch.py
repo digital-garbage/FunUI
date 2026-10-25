@@ -26,7 +26,7 @@ _PREFIX = "diffusion_model."
 def _say(what, exc):
     # Said once per install, never silently: an untagged reference reads as the real first frame
     # (the clip opens on the reference image), and a half-applied patch looks like a working one.
-    log.once(f"identity_transfer:{what}", log.ALERT, "FunPack Identity Transfer",
+    log.once(f"identity_transfer:{what}", log.ALERT, "FunUI Identity Transfer",
              f"{what} failed ({type(exc).__name__}: {exc}) -- identity conditioning is NOT applied "
              f"correctly this run. This usually means a ComfyUI update changed the LTX model internals.")
 

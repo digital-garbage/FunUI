@@ -8,7 +8,7 @@ Read by `core/registry.py` from the module's `__init__.py` (the `FIELDS` table).
 
 | Constant | Python type | Default | Rule |
 |---|---|---|---|
-| `ID` | `str` | none | Required, non-empty. Unique across modules (a second claimant is left out and said). Keep it free of `.`: a fault is traced back to a module from its hook key `funpack.<id>`. |
+| `ID` | `str` | none | Required, non-empty. Unique across modules (a second claimant is left out and said). Keep it free of `.`: a fault is traced back to a module from its hook key `funui.<id>`. |
 | `TITLE` | `str` | none | Required, non-empty. |
 | `MOUNT` | `str` | `""` | Required and non-empty when the module has `SETTINGS`. |
 | `SETTINGS` | `dict` | `{}` | `{key: setting}`. Must be a dict. |
@@ -25,7 +25,7 @@ Read by `core/registry.py` from the module's `__init__.py` (the `FIELDS` table).
 | `TRAITS` | callable | none | `traits(model) -> iterable[str]`. |
 | `PROVIDES` | `dict[str, callable]` | `{}` | Capability name to function. Names must be non-empty strings. |
 
-`CONTRACT_VERSION` in `core/contract.py` is `1`. It is sent to the browser as `contract` in `/funpack/api/modules`. Core does not read a version from modules, so there is nothing for a module to declare.
+`CONTRACT_VERSION` in `core/contract.py` is `1`. It is sent to the browser as `contract` in `/fun/api/modules`. Core does not read a version from modules, so there is nothing for a module to declare.
 
 ## Setting keys
 
@@ -114,12 +114,12 @@ A capability is a name in `PROVIDES`. Core defines none: the contract is between
 
 | Name | Provided by | Signature | Called by |
 |---|---|---|---|
-| `modifier` | most sampling and guidance modules | `install(patcher, values, key) -> str or None` | `FunPack Load Modifiers` |
-| `sampler_modifier` | none yet | `make(values, accepts) -> object with active(ctx), process(ctx, latent)` or `None` | `FunPack Sampler` via `core/chain.py` |
+| `modifier` | most sampling and guidance modules | `install(patcher, values, key) -> str or None` | `FunUI Load Modifiers` |
+| `sampler_modifier` | none yet | `make(values, accepts) -> object with active(ctx), process(ctx, latent)` or `None` | `FunUI Sampler` via `core/chain.py` |
 | `settings_sink` | `sampling_modifiers` | `() -> {"node": node id, "input": input name}` | the manifest; the app writes settings there |
-| `cache_key` | `phrase_probe` | `() -> value` that changes with its switch | `FunPack Load Modifiers` cache key |
+| `cache_key` | `phrase_probe` | `() -> value` that changes with its switch | `FunUI Load Modifiers` cache key |
 | `guards_off` | `full_control` | `(settings) -> bool` | modifier nodes and the sampler |
-| `routes` | several | `routes(table, base, web)` | `core/routes.py`, base `/funpack/api/m/<id>` |
+| `routes` | several | `routes(table, base, web)` | `core/routes.py`, base `/fun/api/m/<id>` |
 
 ### Pipelines
 
@@ -147,7 +147,7 @@ A capability is a name in `PROVIDES`. Core defines none: the contract is between
 | `query_rotation` | `(rope_freqs, seq_len) -> rotate(x, rows, inverse=False)` or `None` | |
 | `anchor_pin` | `(kwargs, transform) -> kwargs` or `None` | |
 | `rescale_conditioning` | `(conditioning, height, width) -> (conditioning, count)` or `None` | |
-| `latent_upscaler` | `(state_dict) -> object with funpack_latent_upscale(x, scale)` or `None` | |
+| `latent_upscaler` | `(state_dict) -> object with funui_latent_upscale(x, scale)` or `None` | |
 | `training_adapt` | `(model) -> {name, step, video, batch_limit, fps, frames, pack, shims, silence}` or `None` | what LoRA training must know about a model whose latent is not a plain tensor (H3 packs picture and sound). `shims()` is a context manager that applies the repairs only for the length of a run |
 
 ### Learning
@@ -170,7 +170,7 @@ A capability is a name in `PROVIDES`. Core defines none: the contract is between
 | `captions.py` | Tag text helpers, shared in spirit with `app/ui/features/training/captions.js`. |
 | `taggers.py` | WD tagger models (ONNX) downloaded from Hugging Face on request, or any repo with `model.onnx` and `selected_tags.csv`; one tagging job at a time. |
 | `media_io.py`, `frames.py` | Pictures and clips as tensors, fitted to a size bucket. |
-| `plan.py` | Builds the graph a run is queued as: the pipeline's own loaders (ids `model`, `clip`, `vae`, `audio_vae`, or the first of each kind) feed `FunPackTrainLora`. |
+| `plan.py` | Builds the graph a run is queued as: the pipeline's own loaders (ids `model`, `clip`, `vae`, `audio_vae`, or the first of each kind) feed `FunUITrainLora`. |
 | `train.py`, `nodes.py` | The run, on ComfyUI's own Train LoRA node. Latents and conditioning are built from the set; each step's loss goes to `jobs.py`; Stop and ComfyUI's interrupt end it at the next step. |
 | `jobs.py` | The run in progress and finished run records under `training/runs/`. |
 
@@ -198,7 +198,7 @@ Most used:
 
 | Path | What |
 |---|---|
-| `/funpack/` | the app (`index.html`) |
-| `/funpack/api/modules` | the manifest (`?traits=a,b` narrows to a model) |
-| `/funpack/api/m/<id>/...` | a module's own routes |
-| `/funpack/app/...` | the app. Allowed types: `.js .css .html .woff2 .svg`. |
+| `/fun/` | the app (`index.html`) |
+| `/fun/api/modules` | the manifest (`?traits=a,b` narrows to a model) |
+| `/fun/api/m/<id>/...` | a module's own routes |
+| `/fun/app/...` | the app. Allowed types: `.js .css .html .woff2 .svg`. |

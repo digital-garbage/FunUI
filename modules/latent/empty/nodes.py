@@ -93,13 +93,13 @@ def derive(model, width, height, length, batch_size):
             "downscale_ratio_temporal": temporal}
 
 
-class FunPackEmptyLatent(io.ComfyNode):
+class FunUIEmptyLatent(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackEmptyLatent",
-            display_name="FunPack Empty Latent",
-            category="FunPack/Latent",
+            node_id="FunUIEmptyLatent",
+            display_name="FunUI Empty Latent",
+            category="FunUI/Latent",
             description="An empty latent shaped for the wired model, image or video.",
             inputs=[
                 io.Model.Input("model", tooltip="The latent's shape comes from this model."),

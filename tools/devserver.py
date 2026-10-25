@@ -49,7 +49,7 @@ def _reexec_with_comfyui_python(comfyui: str) -> None:
     misleading page.
     """
     import os
-    if os.environ.get("FUNPACK_DEVSERVER_REEXEC"):
+    if os.environ.get("FUNUI_DEVSERVER_REEXEC"):
         return                                   # already tried; do not loop
     try:
         import torch  # noqa: F401
@@ -64,7 +64,7 @@ def _reexec_with_comfyui_python(comfyui: str) -> None:
         return
 
     print(f"  re-running under {candidate} (this one has no torch)")
-    os.environ["FUNPACK_DEVSERVER_REEXEC"] = "1"
+    os.environ["FUNUI_DEVSERVER_REEXEC"] = "1"
     os.execv(str(candidate), [str(candidate), *sys.argv])
 
 
@@ -73,13 +73,13 @@ if COMFYUI:
     _reexec_with_comfyui_python(COMFYUI)
 
 from aiohttp import web                          # noqa: E402
-from core import config, routes as funpack_routes  # noqa: E402
+from core import config, routes as funui_routes  # noqa: E402
 
 P = config.UI_PREFIX
 
 
 def _register_nodes() -> str:
-    """Put ComfyUI's node registry, and FunPack's own nodes, where the routes
+    """Put ComfyUI's node registry, and FunUI's own nodes, where the routes
     can see them.
 
     Without this the pipeline is entirely "there is no node called X installed"
@@ -117,11 +117,11 @@ def _register_nodes() -> str:
     else:
         kjnodes_note = "; KJNodes not installed, skipped"
 
-    from core import nodes as funpack_nodes
-    ours = funpack_nodes.install_into(comfy_nodes.NODE_CLASS_MAPPINGS,
+    from core import nodes as funui_nodes
+    ours = funui_nodes.install_into(comfy_nodes.NODE_CLASS_MAPPINGS,
                                       comfy_nodes.NODE_DISPLAY_NAME_MAPPINGS)
     return (f"  {len(comfy_nodes.NODE_CLASS_MAPPINGS)} nodes registered "
-            f"({len(ours)} of them FunPack's){extras_note}{kjnodes_note}")
+            f"({len(ours)} of them FunUI's){extras_note}{kjnodes_note}")
 
 
 def build_app() -> web.Application:
@@ -130,7 +130,7 @@ def build_app() -> web.Application:
     # fail in a way production never would, on a ceiling nothing declared.
     app = web.Application(client_max_size=100 * 1024 * 1024)
     routes = web.RouteTableDef()
-    funpack_routes.register(routes)
+    funui_routes.register(routes)
 
     @routes.get("/")
     async def _root(_req):
@@ -142,7 +142,7 @@ def build_app() -> web.Application:
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8188
-    print(f"FunPack v5 dev server: http://127.0.0.1:{port}{P}/")
+    print(f"FunUI v5 dev server: http://127.0.0.1:{port}{P}/")
     print(_register_nodes())
     if COMFYUI:
         print(f"  with ComfyUI from {COMFYUI}")

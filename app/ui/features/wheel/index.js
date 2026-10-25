@@ -3,7 +3,7 @@ import { composer as c } from "../../composer/composer.js";
 import { offer } from "../../shell/actions.js";
 
 // Saved with the project (a new rental has an empty browser); the browser copy is only the starting point for a project that has no choice yet. enabled null = everything offered except the opt-in actions.
-const KEY = "funpack_wheel";
+const KEY = "funui_wheel";
 const clean = (p) => ({ shape: p.shape === "half" ? "half" : "full", side: p.side === "left" ? "left" : "right", enabled: Array.isArray(p.enabled) ? p.enabled : null });
 const fromBrowser = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 export function readPrefs(app) {

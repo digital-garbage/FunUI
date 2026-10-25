@@ -28,7 +28,7 @@ def server(comfyui):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {}
@@ -81,11 +81,11 @@ def _raw_request(port, method, path, body_bytes):
 def test_a_png_comes_back_for_a_real_pipeline(server):
     import json
     body = json.dumps({
-        "slots": [{"id": "model", "node": "FunPackDiffusionModelLoader",
+        "slots": [{"id": "model", "node": "FunUIDiffusionModelLoader",
                    "inputs": {"model_name": "h3.safetensors"}}],
         "project_name": "Integration test", "theme": "dark",
     }).encode()
-    status, headers, png = _raw_request(server, "POST", "/funpack/api/settings-card", body)
+    status, headers, png = _raw_request(server, "POST", "/fun/api/settings-card", body)
     assert status == 200
     assert headers.get("content-type") == "image/png"
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
@@ -94,7 +94,7 @@ def test_a_png_comes_back_for_a_real_pipeline(server):
 def test_no_slots_falls_back_to_the_default_pipeline(server):
     """Same convention as /api/pipeline: an ABSENT slots key means 'use the
     live default', an explicitly empty list means 'this pipeline has none'."""
-    status, headers, png = _raw_request(server, "POST", "/funpack/api/settings-card", b"{}")
+    status, headers, png = _raw_request(server, "POST", "/fun/api/settings-card", b"{}")
     assert status == 200
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
@@ -102,11 +102,11 @@ def test_no_slots_falls_back_to_the_default_pipeline(server):
 def test_a_malformed_pipeline_is_refused_not_rendered(server):
     import json
     body = json.dumps({"slots": [{"id": "dup"}, {"id": "dup"}]}).encode()
-    status, headers, raw = _raw_request(server, "POST", "/funpack/api/settings-card", body)
+    status, headers, raw = _raw_request(server, "POST", "/fun/api/settings-card", body)
     assert status == 400
     assert b"problems" in raw
 
 
 def test_a_non_object_body_is_a_400_not_a_500(server):
-    status, headers, raw = _raw_request(server, "POST", "/funpack/api/settings-card", b"[]")
+    status, headers, raw = _raw_request(server, "POST", "/fun/api/settings-card", b"[]")
     assert status == 400

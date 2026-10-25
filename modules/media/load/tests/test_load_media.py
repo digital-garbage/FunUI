@@ -1,4 +1,4 @@
-"""FunPackLoadMedia: the bridge from a media library id to an IMAGE tensor."""
+"""FunUILoadMedia: the bridge from a media library id to an IMAGE tensor."""
 
 import io as pyio
 
@@ -26,51 +26,51 @@ def _png_bytes():
 
 
 def test_a_picked_image_loads_as_an_image_tensor(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     entry = media.save_upload("ref.png", _png_bytes())
 
-    images, frames, _audio = FunPackLoadMedia.execute(entry["id"]).result
+    images, frames, _audio = FunUILoadMedia.execute(entry["id"]).result
     assert images.shape[0] == 1 and frames.shape[0] == 1
     assert images.shape[1:3] == (6, 4)   # H, W
 
 
 def test_no_media_id_is_refused_loudly(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     with pytest.raises(RuntimeError, match="nothing is picked"):
-        FunPackLoadMedia.execute("").result
+        FunUILoadMedia.execute("").result
 
 
 def test_an_unknown_id_is_refused_loudly(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     with pytest.raises(RuntimeError, match="not in the library"):
-        FunPackLoadMedia.execute("deadbeef0000").result
+        FunUILoadMedia.execute("deadbeef0000").result
 
 
 def test_a_file_that_cannot_be_read_is_refused_in_plain_words(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     for name in ("clip.mp4", "voice.wav"):
         entry = media.save_upload(name, b"not real media but has an ext")
         with pytest.raises(RuntimeError, match="could not read"):
-            FunPackLoadMedia.execute(entry["id"]).result
+            FunUILoadMedia.execute(entry["id"]).result
 
 
 def test_deleted_media_is_refused_even_with_a_well_formed_id(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     entry = media.save_upload("ref.png", _png_bytes())
     media.delete(entry["id"])
     with pytest.raises(RuntimeError, match="not in the library"):
-        FunPackLoadMedia.execute(entry["id"]).result
+        FunUILoadMedia.execute(entry["id"]).result
 
 
 def test_a_blank_size_stands_in_for_nothing_picked_and_a_picked_image_still_wins(store):
-    from modules.media.load.nodes import FunPackLoadMedia
-    images, *_ = FunPackLoadMedia.execute("", blank_width=64, blank_height=32).result
+    from modules.media.load.nodes import FunUILoadMedia
+    images, *_ = FunUILoadMedia.execute("", blank_width=64, blank_height=32).result
     assert tuple(images.shape) == (1, 32, 64, 3)
     entry = media.save_upload("ref.png", _png_bytes())
-    images, *_ = FunPackLoadMedia.execute(entry["id"], blank_width=64, blank_height=32).result
+    images, *_ = FunUILoadMedia.execute(entry["id"], blank_width=64, blank_height=32).result
     assert images.shape[1:3] == (6, 4)
     with pytest.raises(RuntimeError, match="nothing is picked"):
-        FunPackLoadMedia.execute("", blank_width=64, blank_height=0).result
+        FunUILoadMedia.execute("", blank_width=64, blank_height=0).result
 
 
 def _clip(store, seconds=1):
@@ -84,39 +84,39 @@ def _clip(store, seconds=1):
 
 
 def test_a_video_gives_its_first_frame_by_default(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     entry = _clip(store)
-    image, frames, _ = FunPackLoadMedia.execute(entry["id"]).result
+    image, frames, _ = FunUILoadMedia.execute(entry["id"]).result
     assert image.shape[0] == 1 and frames.shape[0] == 1
     assert image.shape[1:3] == (48, 64)
 
 
 def test_a_full_video_gives_every_frame_at_24_fps_and_its_sound(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     entry = _clip(store, seconds=2)
-    image, frames, audio = FunPackLoadMedia.execute(entry["id"], full=True).result
+    image, frames, audio = FunUILoadMedia.execute(entry["id"], full=True).result
     assert image.shape[0] == 1
     assert frames.shape[0] == 48            # 2 s at 24 fps
     assert audio["waveform"].shape[-1] > 1000
 
 
 def test_audio_loads_as_audio(store):
-    from modules.media.load.nodes import FunPackLoadMedia
+    from modules.media.load.nodes import FunUILoadMedia
     import struct, wave
     path = store.parent / "a.wav"
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000)
         w.writeframes(struct.pack("<800h", *([1000] * 800)))
     entry = media.save_upload("a.wav", path.read_bytes())
-    _, _, audio = FunPackLoadMedia.execute(entry["id"], full=True).result
+    _, _, audio = FunUILoadMedia.execute(entry["id"], full=True).result
     assert audio["sample_rate"] == 8000 and audio["waveform"].shape == (1, 1, 800)
 
 
 def test_slots_of_the_retired_video_and_audio_nodes_are_dropped_with_their_wires():
     from modules.media.load import upgrade
     slots = [{"id": "r2v", "node": "X", "inputs": {"a": ["v1", 1], "keep": 3, "b": ["ref", 0]}},
-             {"id": "v1", "node": "FunPackLoadMediaVideo", "inputs": {}},
-             {"id": "ref", "node": "FunPackLoadMedia", "inputs": {}}]
+             {"id": "v1", "node": "FunUILoadMediaVideo", "inputs": {}},
+             {"id": "ref", "node": "FunUILoadMedia", "inputs": {}}]
     out = upgrade(slots, None)
     assert [s["id"] for s in out] == ["r2v", "ref"]
     assert out[0]["inputs"] == {"keep": 3, "b": ["ref", 0]}

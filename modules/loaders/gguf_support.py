@@ -1,4 +1,4 @@
-"""Load .gguf model files through FunPack's own loaders.
+"""Load .gguf model files through FunUI's own loaders.
 
 Not a module: see common.py's own note -- a plain file at the domain level is a
 helper the loaders import, and ships no node of its own.
@@ -20,7 +20,7 @@ present:
 
   * **ComfyUI-GGUF installed** -- use it. It is the mature implementation of
     (2), and its output feeds `comfy.sd.load_diffusion_model_state_dict`
-    exactly like ours does, so FunPack's loader stays the only UI while its
+    exactly like ours does, so FunUI's loader stays the only UI while its
     runtime does the quantized maths.
   * **`gguf` package only** -- read and dequantize at LOAD time, then hand over
     an ordinary state dict. Fully native and correct, but the model occupies
@@ -101,7 +101,7 @@ def _walk(root: str, limit: int = 5000, depth: int = 12):
     yield from rec(root, "", frozenset({(st.st_dev, st.st_ino)}))
     if cut:
         from .._core import log
-        log.once(f"gguf_walk_cut:{root}", log.WARNING, "FunPack .gguf listing",
+        log.once(f"gguf_walk_cut:{root}", log.WARNING, "FunUI .gguf listing",
                  f"{root}: stopped looking inside {len(cut)} folder(s) (more than {depth - 1} levels deep or more than {limit} folders in all), so .gguf files there are not listed")
 
 
@@ -162,7 +162,7 @@ def gguf_path(folder: str, name: str) -> Optional[str]:
 
 # ── backends ──────────────────────────────────────────────────────────────────
 
-_PKG_NAME = "_funpack_gguf_pack"
+_PKG_NAME = "_funui_gguf_pack"
 
 
 def _ensure_pack_package(dirname: str) -> str:
@@ -241,18 +241,18 @@ def backend() -> Optional[str]:
 
 
 UNAVAILABLE = (
-    "No GGUF backend is available. The `gguf` package is one of FunPack's requirements, "
+    "No GGUF backend is available. The `gguf` package is one of FunUI's requirements, "
     "so an install that predates .gguf support just needs them re-run:\n"
-    "    pip install -r custom_nodes/ComfyUI-FunPack/requirements.txt\n"
+    "    pip install -r custom_nodes/FunUI/requirements.txt\n"
     "That gives a load-time dequantize: the file loads, but at its full size. To keep the "
     "weights quantized in VRAM -- which is the point of GGUF -- install the ComfyUI-GGUF "
-    "node pack as well; FunPack uses it as the runtime and stays the only loader you wire."
+    "node pack as well; FunUI uses it as the runtime and stays the only loader you wire."
 )
 
 
 PACK_NEEDS_GGUF = (
     "ComfyUI-GGUF is installed, but the `gguf` package it needs is not. Install it in ComfyUI's Python "
-    "(pip install -r custom_nodes/ComfyUI-FunPack/requirements.txt) and restart ComfyUI."
+    "(pip install -r custom_nodes/FunUI/requirements.txt) and restart ComfyUI."
 )
 
 

@@ -29,21 +29,21 @@ def upscaler_dir(tmp_path, monkeypatch):
 
 
 def test_the_loader_builds_h3s_upscaler_from_its_weights(upscaler_dir):
-    from modules.latent.second_pass.nodes import FunPackLatentUpscalerLoader
-    model = FunPackLatentUpscalerLoader.execute("h3_up.safetensors").result[0]
-    assert callable(model.funpack_latent_upscale)
+    from modules.latent.second_pass.nodes import FunUILatentUpscalerLoader
+    model = FunUILatentUpscalerLoader.execute("h3_up.safetensors").result[0]
+    assert callable(model.funui_latent_upscale)
 
 
 def test_an_unknown_file_is_refused_with_where_to_go(upscaler_dir):
-    from modules.latent.second_pass.nodes import FunPackLatentUpscalerLoader
+    from modules.latent.second_pass.nodes import FunUILatentUpscalerLoader
     with pytest.raises(RuntimeError, match="Load Latent Upscale Model"):
-        FunPackLatentUpscalerLoader.execute("other.safetensors")
+        FunUILatentUpscalerLoader.execute("other.safetensors")
 
 
 def test_the_newer_attention_upscaler_is_named_as_such(upscaler_dir):
-    from modules.latent.second_pass.nodes import FunPackLatentUpscalerLoader
+    from modules.latent.second_pass.nodes import FunUILatentUpscalerLoader
     with pytest.raises(RuntimeError, match="attention-based"):
-        FunPackLatentUpscalerLoader.execute("attn.safetensors")
+        FunUILatentUpscalerLoader.execute("attn.safetensors")
 
 
 def _nested(h=4, w=4):
@@ -58,10 +58,10 @@ def _pinned(h=4, w=4):
 
 
 def test_sharpen_keeps_the_size_changes_the_video_and_leaves_audio(comfyui):
-    from modules.latent.second_pass.nodes import FunPackLatentResample
+    from modules.latent.second_pass.nodes import FunUILatentResample
     samples = _nested()
     pos = _pinned()
-    out, p, _n, status = FunPackLatentResample.execute(
+    out, p, _n, status = FunUILatentResample.execute(
         {"samples": samples, "noise_mask": torch.ones(1)}, _small_resizer(), "sharpen", 2.0,
         positive=pos).result
     video, audio = out["samples"].unbind()
@@ -72,8 +72,8 @@ def test_sharpen_keeps_the_size_changes_the_video_and_leaves_audio(comfyui):
 
 
 def test_upscale_doubles_the_grid_and_resizes_the_pin(comfyui):
-    from modules.latent.second_pass.nodes import FunPackLatentResample
-    out, pos, _n, status = FunPackLatentResample.execute(
+    from modules.latent.second_pass.nodes import FunUILatentResample
+    out, pos, _n, status = FunUILatentResample.execute(
         {"samples": _nested()}, _small_resizer(), "upscale", 2.0, positive=_pinned()).result
     assert tuple(out["samples"].unbind()[0].shape[-2:]) == (8, 8)
     assert tuple(pos[0][1]["minimax_keyframes"][0]["latent"].shape[-2:]) == (8, 8)

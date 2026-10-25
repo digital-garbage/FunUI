@@ -90,7 +90,7 @@ async def playable(path: str) -> str:
             raise web.HTTPBadGateway(reason="Video could not be prepared for playback (remux failed).")
         digest = hashlib.md5(f"{path}|{sig[0]}|{sig[1]}".encode()).hexdigest()[:16]
         try:
-            out = files.temp_file(f"funpack_faststart_{digest}{os.path.splitext(path)[1].lower()}")
+            out = files.temp_file(f"funui_faststart_{digest}{os.path.splitext(path)[1].lower()}")
         except files.ClipError:
             raise web.HTTPServiceUnavailable(reason="Temp directory unavailable.", headers={"Retry-After": "5"})
         error = None
@@ -115,12 +115,12 @@ async def playable(path: str) -> str:
             raise _unavailable("Video file is still being written.")      # rewritten under the remux
         _remux_failed[path] = (sig, time.monotonic())
         from ..._core import log
-        log.warning("FunPack Render", f"could not prepare {os.path.basename(path)} for playback: {error}")
+        log.warning("FunUI Render", f"could not prepare {os.path.basename(path)} for playback: {error}")
         raise web.HTTPBadGateway(reason="Video could not be prepared for playback (remux failed).")
 
 
 def saved_name(path) -> str:
-    """What the browser's own "Save video as" calls the file: a random hash, never ComfyUI's FunPack_00001_."""
+    """What the browser's own "Save video as" calls the file: a random hash, never ComfyUI's FunUI_00001_."""
     return secrets.token_hex(6) + (os.path.splitext(str(path))[1] or ".mp4")
 
 
@@ -152,7 +152,7 @@ async def poster(request) -> "web.StreamResponse":
         raise web.HTTPNotFound()
     try:
         sig = files.signature(path)
-        out = files.temp_file("funpack_poster_" + hashlib.md5(f"{path}|{sig[0]}|{sig[1]}".encode()).hexdigest()[:16] + ".jpg")
+        out = files.temp_file("funui_poster_" + hashlib.md5(f"{path}|{sig[0]}|{sig[1]}".encode()).hexdigest()[:16] + ".jpg")
         if not os.path.isfile(out):
             async with _lock(out):
                 if not os.path.isfile(out):
@@ -252,7 +252,7 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
     hit = _frames.get(key)
     if hit and media.path_for(hit[0]):
         return {"media_id": hit[0], "brightness": hit[1], "dark": hit[1] < DARK_MEAN and hit[2] < DARK_PEAK}
-    out = files.temp_file(f"funpack_last_{projects.safe_part(project.id)[:8]}_{projects.safe_part(scene_id)}_{int(time.time() * 1000)}.png")
+    out = files.temp_file(f"funui_last_{projects.safe_part(project.id)[:8]}_{projects.safe_part(scene_id)}_{int(time.time() * 1000)}.png")
     try:
         brightness, peak = files.last_frame(src, out, clip["in"], clip["dur"], clip["fps"], first)
         with open(out, "rb") as fh:
@@ -300,7 +300,7 @@ async def segment(request, project) -> "web.StreamResponse":
         if hit and os.path.isfile(hit[1]):
             return web.FileResponse(hit[1], headers=headers)
         try:
-            out = files.temp_file(f"funpack_preview_{projects.safe_part(project.id)[:8]}_"
+            out = files.temp_file(f"funui_preview_{projects.safe_part(project.id)[:8]}_"
                                   f"{projects.safe_part(scene_id)}_{int(time.time() * 1000)}.mp4")
             await asyncio.to_thread(files.trim, src, out, clip.get("in"), clip.get("dur"),
                                     fast=True, reverse=reverse)

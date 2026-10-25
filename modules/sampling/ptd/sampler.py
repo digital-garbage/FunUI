@@ -62,10 +62,10 @@ def _between_hops(model, hop):
             vbar.set_watermark(vbar.max_size)
         free, total = torch.cuda.mem_get_info()
         resident = patcher.loaded_size() / 2**30 if patcher is not None else float("nan")
-        log.info("FunPack PTD", f"hop {hop} memory: model resident {resident:.1f} GB; cache {before:.1f} -> "
+        log.info("FunUI PTD", f"hop {hop} memory: model resident {resident:.1f} GB; cache {before:.1f} -> "
                  f"{torch.cuda.memory_reserved() / 2**30:.1f} GB; card {(total - free) / 2**30:.1f}/{total / 2**30:.1f} GB used")
     except Exception as exc:       # noqa: BLE001
-        log.once("ptd:memory", log.WARNING, "FunPack PTD", f"could not release cached memory between hops: {exc}")
+        log.once("ptd:memory", log.WARNING, "FunUI PTD", f"could not release cached memory between hops: {exc}")
 
 
 @torch.no_grad()
@@ -116,7 +116,7 @@ def sample_ptd(model, x, sigmas, extra_args=None, callback=None, disable=None, *
                 raise
             # A known intermittent ComfyUI failure when VRAM is nearly full. Drop the half-recorded graph and
             # sample this run again without the compiler; the hops are deterministic, so nothing changes.
-            log.warning("FunPack PTD", f"ComfyUI's allocation compiler failed at hop {done[0]} ({exc}); "
+            log.warning("FunUI PTD", f"ComfyUI's allocation compiler failed at hop {done[0]} ({exc}); "
                         "sampling this run again without it")
             import comfy.model_prefetch
             comfy.model_prefetch.cleanup_prefetch_queues()
@@ -131,5 +131,5 @@ def sample_ptd(model, x, sigmas, extra_args=None, callback=None, disable=None, *
     finally:
         bar.close()
     seconds = time.perf_counter() - started
-    log.info("FunPack PTD", f"{controller.hops} hops in {seconds:.1f} s ({seconds / controller.hops:.2f} s/hop)")
+    log.info("FunUI PTD", f"{controller.hops} hops in {seconds:.1f} s ({seconds / controller.hops:.2f} s/hop)")
     return out

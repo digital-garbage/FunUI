@@ -20,7 +20,7 @@ Deliberately NOT asserted: modality. ComfyUI does not classify it -- there is no
 such attribute on `supported_models_base.BASE` -- and it cannot be inferred from
 the latent, because image models borrow video VAEs (QwenImage, JoyImage, Krea2
 and HunyuanImage21Refiner all report latent_dimensions=3 while being image
-models). A "video" trait would be FunPack guessing, so the traits below describe
+models). A "video" trait would be FunUI guessing, so the traits below describe
 the tensor and the module tree instead: they are true either way.
 """
 

@@ -2,7 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { list } from "../../shell/project.js";
 
-const SEEN = "funpack_welcomed";
+const SEEN = "funui_welcomed";
 const card = (title, sub, onClick) => c.tile.action({ title, sub, onClick });
 
 export default {
@@ -33,7 +33,7 @@ export default {
         card("Update", "Pull the newest version from origin, install missing requirements and restart ComfyUI (after a running generation finishes)", () => app.maintenance.update()), card("Switch branch", "Pick another branch", () => app.maintenance.switchBranch()),
         card("Restart ComfyUI", "Reload the server without updating", () => app.maintenance.restart()), card("Rollback update", "Undo the last update", () => app.maintenance.rollback())] });
       win = c.modal.generic({
-        title: "Welcome to FunPack", size: "lg",
+        title: "Welcome to FunUI", size: "lg",
         body: c.region.stack({ gap: "md", children: [
           c.hint.default({ text: "Multi-scene video on a real timeline." }),
           c.button.lg({ label: "Begin", tone: "primary", onClick: done }),

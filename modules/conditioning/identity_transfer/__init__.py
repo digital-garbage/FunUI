@@ -6,7 +6,7 @@ trained projector into the text context (projector.py). H3 has no equivalent: th
 trained against LTX's text context and the overlap tokens against LTX's RoPE.
 """
 
-from .nodes import FunPackIdentityTransfer
+from .nodes import FunUIIdentityTransfer
 
 ID = "conditioning_identity_transfer"
 TITLE = "Identity transfer"
@@ -15,4 +15,4 @@ CATEGORY = "conditioning"
 STATUS = "experimental"
 REQUIRES = ["ltx_av"]
 
-NODES = [FunPackIdentityTransfer]
+NODES = [FunUIIdentityTransfer]

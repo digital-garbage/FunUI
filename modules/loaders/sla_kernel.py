@@ -1,6 +1,6 @@
 """Block-sparse attention forward kernel for MiniMax-H3.
 
-Vendored into FunPack from ComfyUI-H3-SLA-Attention, which vendored it from
+Vendored into FunUI from ComfyUI-H3-SLA-Attention, which vendored it from
 LightX2V (Apache-2.0). The provenance note and change list below are the
 original author's and still describe this file exactly.
 

@@ -78,7 +78,7 @@ MAX_DIMS = 8
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunPack STAS", message)
+    log.once(f"{ID}:{message}", level, "FunUI STAS", message)
 
 
 def first_steps(total):
@@ -137,10 +137,10 @@ def install(patcher, values, key):
     def fresh():
         live.update(spans={}, steered=0, empty=0, dims=None, why=None)
         if manual:
-            return log.once(f"{ID}:state", log.INFO, "FunPack STAS",
+            return log.once(f"{ID}:state", log.INFO, "FunUI STAS",
                             f"manual alpha {live['alpha']:.2f} at block {block}")
         live["alpha"], centre, held = DIAL.pick(rated_dial.history(taste.rows(KIND, blind_to="image"), {"b": block}))
-        log.once(f"{ID}:state", log.INFO, "FunPack STAS",
+        log.once(f"{ID}:state", log.INFO, "FunUI STAS",
                  f"key {taste.key!r}: learned alpha {centre:.2f} from {held} rating(s), trying "
                  f"{live['alpha']:.2f} at block {block}")
 
@@ -151,7 +151,7 @@ def install(patcher, values, key):
             fresh()
         out = executor(*args, **kwargs)
         if live["steered"]:
-            log.once(f"{ID}:result", log.INFO, "FunPack STAS",
+            log.once(f"{ID}:result", log.INFO, "FunUI STAS",
                      f"Active | alpha {live['alpha']:.2f} at block {block}: steered "
                      f"{live['steered']} call(s), channels {live['dims']}"
                      + (f"; {live['empty']} call(s) had no massive channel" if live["empty"] else ""))

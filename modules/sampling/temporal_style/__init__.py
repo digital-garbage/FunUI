@@ -56,7 +56,7 @@ def install(patcher, values, key):
         return None
     patcher.set_model_unet_function_wrapper(patching.tag(wrapper, key))
     installed = patcher.model_options["model_function_wrapper"]
-    installed._funpack_prev = old                       # so stripping ours puts the earlier one back
+    installed._funui_prev = old                       # so stripping ours puts the earlier one back
     return note
 
 

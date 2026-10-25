@@ -17,8 +17,8 @@ def _pin_payload():
 
 def _apply_wrapper(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(
         tiny.patcher, {"alg": {"enabled": True, **values}}).result
     (fn,), = patched.wrappers[WrappersMP.APPLY_MODEL].values()
     return fn, status

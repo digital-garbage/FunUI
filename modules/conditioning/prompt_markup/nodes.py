@@ -7,9 +7,9 @@ from comfy_api.latest import io
 from ..._core import dit_hooks, log, patching, registry as registry_mod
 from . import markup as mk
 
-MARKUP = io.Custom("FUNPACK_MARKUP")
-KEY = "funpack_markup.prompt"
-PHRASES = "funpack_markup_phrases"   # the transformer_options key the phrase probe reads
+MARKUP = io.Custom("FUNUI_MARKUP")
+KEY = "funui_markup.prompt"
+PHRASES = "funui_markup_phrases"   # the transformer_options key the phrase probe reads
 
 
 def _ask(capability, *args):
@@ -22,16 +22,16 @@ def _ask(capability, *args):
 
 
 def _say(message):
-    log.once(f"prompt_markup:{message}", log.ALERT, "FunPack Prompt Markup", message)
+    log.once(f"prompt_markup:{message}", log.ALERT, "FunUI Prompt Markup", message)
 
 
-class FunPackPromptMarkup(io.ComfyNode):
+class FunUIPromptMarkup(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackPromptMarkup",
-            display_name="FunPack Prompt Markup",
-            category="FunPack/Conditioning",
+            node_id="FunUIPromptMarkup",
+            display_name="FunUI Prompt Markup",
+            category="FunUI/Conditioning",
             description="Take (word:1.5), [phrase@2-4] and [a|b] out of a prompt, so the "
                         "encoder sees clean text and the markup can be applied properly.",
             inputs=[io.String.Input("text", multiline=True, default="")],
@@ -80,14 +80,14 @@ def _blend(cond, rows, clip, tokenizer, clean, offsets, blended):
     return out, done
 
 
-class FunPackApplyPromptMarkup(io.ComfyNode):
+class FunUIApplyPromptMarkup(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackApplyPromptMarkup",
-            display_name="FunPack Apply Prompt Markup",
-            category="FunPack/Conditioning",
-            description="Apply the markup FunPack Prompt Markup took out: weights and "
+            node_id="FunUIApplyPromptMarkup",
+            display_name="FunUI Apply Prompt Markup",
+            category="FunUI/Conditioning",
+            description="Apply the markup FunUI Prompt Markup took out: weights and "
                         "timed phrases on the model, blends on the conditioning.",
             inputs=[io.Model.Input("model"), io.Clip.Input("clip"),
                     io.Conditioning.Input("positive"), io.Latent.Input("latent"),
@@ -100,7 +100,7 @@ class FunPackApplyPromptMarkup(io.ComfyNode):
     @classmethod
     def execute(cls, model, clip, positive, latent, markup) -> io.NodeOutput:
         patched = patching.clone(model)
-        patching.strip(patched, "funpack_markup.")
+        patching.strip(patched, "funui_markup.")
         weighted, timed, blended = (markup or {}).get("weighted"), (markup or {}).get("timed"), \
             (markup or {}).get("blended")
         if not (weighted or timed or blended):

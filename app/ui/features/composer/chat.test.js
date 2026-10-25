@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chatHook } from "./chat.js";
 
-const slots = [{ id: "e", node: "FunPackEnhancePrompt" }, { id: "x", node: "Other" }];
+const slots = [{ id: "e", node: "FunUIEnhancePrompt" }, { id: "x", node: "Other" }];
 const project = { editor_settings: { enhance_chat: [{ comment: "warmer", original: "a cat" }, { comment: "old", original: "a dog" }, { comment: "any" }] } };
 
 test("comments reach the enhancer only when they are about the prompt being run, and the rest are said", () => {

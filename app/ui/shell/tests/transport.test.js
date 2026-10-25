@@ -113,14 +113,14 @@ test("a graph the queue refused says which node and why", () => {
       message: "Prompt outputs failed validation",
       nodes: {
         vae: {
-          class_type: "FunPackVAELoader",
+          class_type: "FunUIVAELoader",
           errors: [{ type: "value_not_in_list", message: "Value not in list",
                      details: "vae_name: 'gone.safetensors' not in []" }],
         },
       },
     },
   });
-  assert.match(said, /FunPackVAELoader/);
+  assert.match(said, /FunUIVAELoader/);
   assert.match(said, /vae/);
   assert.match(said, /Value not in list/);
   assert.match(said, /gone\.safetensors/);

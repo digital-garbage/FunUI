@@ -95,8 +95,8 @@ class Executor:
 
 def _load(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny.patcher, {
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny.patcher, {
         "taste": {"key": "fox"}, "shot_memory": {"enabled": True, **values}}).result
     sample = [w for ws in patched.wrappers[WrappersMP.SAMPLER_SAMPLE].values() for w in ws][-1]
     outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]
@@ -174,9 +174,9 @@ def test_a_non_empty_latent_is_left_alone_and_says_so_and_records_nothing(tiny_h
 def test_no_taste_key_is_off_and_says_so(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from core import log
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     log.new_run()
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"shot_memory": {"enabled": True}}).result
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"shot_memory": {"enabled": True}}).result
     assert any("Taste key" in e["message"] for e in log.history())
     assert not patched.wrappers.get(WrappersMP.SAMPLER_SAMPLE)
 

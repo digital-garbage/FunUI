@@ -76,7 +76,7 @@ AMOUNT_MIN, AMOUNT_MAX = 0.2, 0.95
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunPack Shot memory", message)
+    log.once(f"{ID}:{message}", level, "FunUI Shot memory", message)
 
 
 def _sign(x):
@@ -213,7 +213,7 @@ def install(patcher, values, key):
     def fresh():
         live["rows"], live["plan"] = shots(taste.rows(KIND, blind_to="image")), None
         liked = sum(1 for r in live["rows"] if r["reward"] > 0)
-        log.once(f"{ID}:state", log.INFO, "FunPack Shot memory",
+        log.once(f"{ID}:state", log.INFO, "FunUI Shot memory",
                  f"key {taste.key!r}: {liked} liked shot(s) of {len(live['rows'])} rated")
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS, fresh=fresh)
@@ -228,7 +228,7 @@ def install(patcher, values, key):
                 amount = manual_amount if manual else min(max(
                     learned_amount(live["rows"]) + random.gauss(0.0, EXPLORE), AMOUNT_MIN), AMOUNT_MAX)
                 why += f", amount {amount:.2f}"
-            log.once(f"{ID}:plan", log.INFO, "FunPack Shot memory", why)
+            log.once(f"{ID}:plan", log.INFO, "FunUI Shot memory", why)
             live["plan"] = (parent, amount)
         return live["plan"]
 

@@ -6,13 +6,13 @@ from ..._core import addons
 from . import train
 
 
-class FunPackTrainLora(io.ComfyNode):
+class FunUITrainLora(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackTrainLora",
-            display_name="FunPack Train LoRA",
-            category="FunPack/Training",
+            node_id="FunUITrainLora",
+            display_name="FunUI Train LoRA",
+            category="FunUI/Training",
             description="Train a LoRA from a saved training set, on ComfyUI's own trainer. Saves it to the loras folder.",
             is_output_node=True,
             inputs=[
@@ -21,7 +21,7 @@ class FunPackTrainLora(io.ComfyNode):
                 io.Vae.Input("vae", tooltip="The VAE that turns pictures and clips into latents."),
                 io.Vae.Input("audio_vae", optional=True, tooltip="Only for models that learn sound with the picture (H3): turns the clips' sound into latents."),
                 io.String.Input("set_name", default="", tooltip="The training set to learn from."),
-                io.String.Input("name", default="funpack_lora", tooltip="File name of the finished LoRA (no extension). An earlier file is never overwritten."),
+                io.String.Input("name", default="funui_lora", tooltip="File name of the finished LoRA (no extension). An earlier file is never overwritten."),
                 io.Combo.Input("use", options=list(train.USES), default="normal",
                                tooltip="normal: liked results and your own media. avoid: only the disliked results, for a LoRA you apply at negative strength. all: everything."),
                 io.Int.Input("steps", default=500, min=1, max=100000, tooltip="How many training steps."),

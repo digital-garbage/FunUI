@@ -48,10 +48,10 @@ CACHE_KEY = "cache_key"
 GUARDS_OFF = "guards_off"
 
 # Namespaced so removing ours never touches a wrapper somebody else installed.
-KEY_PREFIX = "funpack."
+KEY_PREFIX = "funui."
 
 
-class FunPackModifierSettings(io.ComfyNode):
+class FunUIModifierSettings(io.ComfyNode):
     """The values a person picked, on their way to the graph.
 
     One widget, not one per setting. A socket per setting would mean this node's
@@ -62,10 +62,10 @@ class FunPackModifierSettings(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackModifierSettings",
-            display_name="FunPack Modifier Settings",
-            category="FunPack/Sampling",
-            description="Settings for every FunPack modifier, as one payload.",
+            node_id="FunUIModifierSettings",
+            display_name="FunUI Modifier Settings",
+            category="FunUI/Sampling",
+            description="Settings for every FunUI modifier, as one payload.",
             inputs=[
                 io.String.Input(
                     "settings", multiline=True, default="{}",
@@ -73,7 +73,7 @@ class FunPackModifierSettings(io.ComfyNode):
                             'editing it by hand is fine, and mistakes are reported.'),
             ],
             outputs=[
-                io.Custom("FUNPACK_SETTINGS").Output(display_name="settings"),
+                io.Custom("FUNUI_SETTINGS").Output(display_name="settings"),
                 io.String.Output(display_name="status"),
             ],
         )
@@ -103,7 +103,7 @@ class FunPackModifierSettings(io.ComfyNode):
             raw = {}
         if cls._guards_off(raw):
             return True
-        return "FunPack Modifier Settings: " + "; ".join(problems)
+        return "FunUI Modifier Settings: " + "; ".join(problems)
 
     @classmethod
     def _problems(cls, settings: str):
@@ -149,10 +149,10 @@ class FunPackModifierSettings(io.ComfyNode):
         try:
             raw = json.loads(text)
         except ValueError as exc:
-            raise RuntimeError(f"FunPack Modifier Settings: this is not valid JSON -- {exc}")
+            raise RuntimeError(f"FunUI Modifier Settings: this is not valid JSON -- {exc}")
         if not isinstance(raw, dict):
             raise RuntimeError(
-                f"FunPack Modifier Settings: expected an object keyed by module id, "
+                f"FunUI Modifier Settings: expected an object keyed by module id, "
                 f"got {type(raw).__name__}.")
 
         specs = registry_mod.current().specs
@@ -173,7 +173,7 @@ class FunPackModifierSettings(io.ComfyNode):
             if spec is None:
                 # Saved settings outlive modules (removed, renamed, or one that failed to load). Refusing the run for a
                 # name nobody can act on would break every project that ever used it, so it is skipped -- out loud.
-                log.once(f"stale_module:{module_id}", log.WARNING, "FunPack Modifier Settings",
+                log.once(f"stale_module:{module_id}", log.WARNING, "FunUI Modifier Settings",
                          f"saved settings for {module_id!r} ignored: no module with that id is loaded")
                 continue
             clean, said = schema_mod.check_values(spec, values, keep_bad=guards_off)
@@ -181,26 +181,26 @@ class FunPackModifierSettings(io.ComfyNode):
             problems.extend(said)
 
         # Full control reaches this node too: it is in the payload being checked.
-        schema_mod.refuse_or_warn(problems, "FunPack Modifier Settings",
+        schema_mod.refuse_or_warn(problems, "FunUI Modifier Settings",
                                   guards_off=cls._guards_off(raw))
 
         named = ", ".join(sorted(checked)) or "nothing set"
         return io.NodeOutput(checked, f"settings for {named}")
 
 
-class FunPackLoadModifiers(io.ComfyNode):
+class FunUILoadModifiers(io.ComfyNode):
     """Whatever announced itself, filtered by this model, installed in order."""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackLoadModifiers",
-            display_name="FunPack Load Modifiers",
-            category="FunPack/Sampling",
+            node_id="FunUILoadModifiers",
+            display_name="FunUI Load Modifiers",
+            category="FunUI/Sampling",
             description="Apply the enabled modifiers to a model. Works with any sampler.",
             inputs=[
                 io.Model.Input("model"),
-                io.Custom("FUNPACK_SETTINGS").Input("settings", optional=True),
+                io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
@@ -221,8 +221,8 @@ class FunPackLoadModifiers(io.ComfyNode):
 
         if settings is not None and not isinstance(settings, dict):
             raise RuntimeError(
-                f"FunPack Load Modifiers: settings must be an object keyed by module "
-                f"id, got {type(settings).__name__}. Wire FunPack Modifier Settings "
+                f"FunUI Load Modifiers: settings must be an object keyed by module "
+                f"id, got {type(settings).__name__}. Wire FunUI Modifier Settings "
                 f"into this input.")
 
         registry = registry_mod.current()
@@ -246,8 +246,8 @@ class FunPackLoadModifiers(io.ComfyNode):
         # one's id. The sampler marks the run instead: it is what generates, and
         # it re-executes whenever anything about the generation differs.
         dropped = patching.Dropped()
-        patched.funpack_dropped = dropped
-        patched.model_options["funpack_dropped"] = dropped      # stock nodes' clone() keeps model_options, not attributes
+        patched.funui_dropped = dropped
+        patched.model_options["funui_dropped"] = dropped      # stock nodes' clone() keeps model_options, not attributes
 
         # Asked for by capability, so nothing here names the module that answers
         # and a build without it installed has nobody saying yes -- which reads
@@ -264,9 +264,9 @@ class FunPackLoadModifiers(io.ComfyNode):
             notes.append(f"replaced {stripped} modifier(s) already on this model")
         notes.extend(switched)
 
-        # Checked HERE, not only where the payload was made. A FUNPACK_SETTINGS
+        # Checked HERE, not only where the payload was made. A FUNUI_SETTINGS
         # socket is typed by a string tag, so a dict can reach this node without
-        # ever passing through FunPackModifierSettings -- a raw API prompt, or a
+        # ever passing through FunUIModifierSettings -- a raw API prompt, or a
         # second producer of that type. Validating only at the producer is a
         # guard on one of two doors, and the one left open let NaN through:
         # `sigma > nan` is False at every step, so a modifier became a permanent
@@ -276,14 +276,14 @@ class FunPackLoadModifiers(io.ComfyNode):
         known = registry_mod.current().specs
         for module_id in (settings or {}):
             if module_id not in known and module_id not in control_mod.RESERVED:
-                log.once(f"stale_module_load:{module_id}", log.WARNING, "FunPack Load Modifiers",
+                log.once(f"stale_module_load:{module_id}", log.WARNING, "FunUI Load Modifiers",
                          f"saved settings for {module_id!r} ignored: no module with that id is loaded")
         for spec in ordered:
             values, said = schema_mod.check_values(
                 spec, (settings or {}).get(spec.id), keep_bad=full_control)
             chosen[spec.id] = values
             problems.extend(said)
-        schema_mod.refuse_or_warn(problems, "FunPack Load Modifiers",
+        schema_mod.refuse_or_warn(problems, "FunUI Load Modifiers",
                                   guards_off=full_control)
 
         for spec in ordered:

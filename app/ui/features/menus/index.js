@@ -27,7 +27,7 @@ export default {
         const open = p.project;
         app.dom.saveBlob(new Blob([JSON.stringify(open, null, 2)], { type: "application/json" }), `${open.name || "project"}.json`);
       },
-      load: () => choose("Load project file", "a FunPack project .json", ".json,application/json", false, async ([file]) => {
+      load: () => choose("Load project file", "a FunUI project .json", ".json,application/json", false, async ([file]) => {
         let data; try { data = JSON.parse(await file.text()); } catch { throw new Error("That is not a project file."); }
         await p.importProject(data);
       }),

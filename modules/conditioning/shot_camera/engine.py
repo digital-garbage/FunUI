@@ -89,7 +89,7 @@ _tried = False
 
 def _say(what, error, effect):
     """One log line, once, when something falls back."""
-    log.once(f"shot_camera:{what}", log.ALERT, "FunPack Shot Camera", f"{what}: {type(error).__name__}: {error} -- {effect}")
+    log.once(f"shot_camera:{what}", log.ALERT, "FunUI Shot Camera", f"{what}: {type(error).__name__}: {error} -- {effect}")
 
 
 def _spacy():

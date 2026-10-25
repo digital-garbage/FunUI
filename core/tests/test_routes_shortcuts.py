@@ -24,7 +24,7 @@ def server(tmp_path, monkeypatch):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {"ready": threading.Event()}
@@ -68,48 +68,48 @@ def _request(port, method, path, body=None):
 
 
 def test_save_list_delete(server):
-    status, resp = _request(server, "POST", "/funpack/api/shortcuts",
+    status, resp = _request(server, "POST", "/fun/api/shortcuts",
                              {"name": "Fox", "triggers": ["fox"], "replacements": ["red fox"]})
     assert status == 200, resp
     assert [s["name"] for s in resp["shortcuts"]] == ["Fox"]
 
-    status, listed = _request(server, "GET", "/funpack/api/shortcuts")
+    status, listed = _request(server, "GET", "/fun/api/shortcuts")
     assert status == 200 and [s["name"] for s in listed["shortcuts"]] == ["Fox"]
 
-    status, deleted = _request(server, "DELETE", "/funpack/api/shortcuts/Fox")
+    status, deleted = _request(server, "DELETE", "/fun/api/shortcuts/Fox")
     assert status == 200 and deleted["shortcuts"] == []
 
 
 def test_saving_a_shortcut_with_no_triggers_is_a_400(server):
-    status, resp = _request(server, "POST", "/funpack/api/shortcuts",
+    status, resp = _request(server, "POST", "/fun/api/shortcuts",
                              {"name": "Nothing", "triggers": [], "replacements": ["x"]})
     assert status == 400
     assert resp["problems"]
 
 
 def test_clear_empties_the_library(server):
-    _request(server, "POST", "/funpack/api/shortcuts",
+    _request(server, "POST", "/fun/api/shortcuts",
              {"name": "Fox", "triggers": ["fox"], "replacements": ["red fox"]})
-    status, resp = _request(server, "POST", "/funpack/api/shortcuts/clear")
+    status, resp = _request(server, "POST", "/fun/api/shortcuts/clear")
     assert status == 200 and resp["shortcuts"] == []
 
 
 def test_prompt_expand_combines_anchor_scene_and_postfix(server):
-    status, resp = _request(server, "POST", "/funpack/api/prompt/expand",
+    status, resp = _request(server, "POST", "/fun/api/prompt/expand",
                              {"text": "a fox runs", "anchor": "cinematic", "postfix": "4k"})
     assert status == 200
     assert resp["text"] == "cinematic a fox runs 4k"
 
 
 def test_prompt_expand_uses_the_saved_shortcut_library(server):
-    _request(server, "POST", "/funpack/api/shortcuts",
+    _request(server, "POST", "/fun/api/shortcuts",
              {"name": "Fox", "triggers": ["fox"], "replacements": ["red fox"]})
-    status, resp = _request(server, "POST", "/funpack/api/prompt/expand", {"text": "a fox runs"})
+    status, resp = _request(server, "POST", "/fun/api/prompt/expand", {"text": "a fox runs"})
     assert status == 200 and resp["text"] == "a red fox runs"
 
 
 def test_prompt_expand_with_variables_and_postfix_disabled(server):
-    status, resp = _request(server, "POST", "/funpack/api/prompt/expand", {
+    status, resp = _request(server, "POST", "/fun/api/prompt/expand", {
         "text": "a $animal runs", "anchor": "", "postfix": "ignored",
         "postfix_enabled": False, "variables": [{"name": "animal", "value": "fox"}],
     })
@@ -117,46 +117,46 @@ def test_prompt_expand_with_variables_and_postfix_disabled(server):
 
 
 def test_prompt_expand_on_a_non_object_body_is_a_400(server):
-    status, resp = _request(server, "POST", "/funpack/api/prompt/expand", ["nope"])
+    status, resp = _request(server, "POST", "/fun/api/prompt/expand", ["nope"])
     assert status == 400 and resp["problems"]
 
 
 def test_story_split_join_and_markers_over_http(server):
-    _, joined = _request(server, "POST", "/funpack/api/story/join", {"scenes": ["a", "", "b"]})
-    status, split = _request(server, "POST", "/funpack/api/story/split", {"text": joined["text"]})
+    _, joined = _request(server, "POST", "/fun/api/story/join", {"scenes": ["a", "", "b"]})
+    status, split = _request(server, "POST", "/fun/api/story/split", {"text": joined["text"]})
     assert status == 200 and split["scenes"] == ["a", "", "b"]
 
-    status, saved = _request(server, "POST", "/funpack/api/story/markers", {"markers": ["cut"]})
+    status, saved = _request(server, "POST", "/fun/api/story/markers", {"markers": ["cut"]})
     assert status == 200 and saved["markers"] == ["cut"]
-    _, split = _request(server, "POST", "/funpack/api/story/split", {"text": "x cut y qcut z"})
+    _, split = _request(server, "POST", "/fun/api/story/split", {"text": "x cut y qcut z"})
     assert split["scenes"] == ["x", "y qcut z"]
 
 
 def test_story_rejects_bad_bodies_and_an_empty_marker_list(server):
-    assert _request(server, "POST", "/funpack/api/story/markers", {"markers": []})[0] == 400
-    assert _request(server, "POST", "/funpack/api/story/split", {"text": 5})[0] == 400
-    assert _request(server, "POST", "/funpack/api/story/join", {"scenes": [1]})[0] == 400
+    assert _request(server, "POST", "/fun/api/story/markers", {"markers": []})[0] == 400
+    assert _request(server, "POST", "/fun/api/story/split", {"text": 5})[0] == 400
+    assert _request(server, "POST", "/fun/api/story/join", {"scenes": [1]})[0] == 400
 
 
 def test_categories_export_import_over_http(server):
-    _, r = _request(server, "POST", "/funpack/api/shortcuts/category", {"category": "Camera", "sub_category": "Moves"})
+    _, r = _request(server, "POST", "/fun/api/shortcuts/category", {"category": "Camera", "sub_category": "Moves"})
     assert r["categories"] == [{"name": "Camera", "sub_categories": ["Moves"]}]
-    assert _request(server, "POST", "/funpack/api/shortcuts/category", {"category": ""})[0] == 400
-    _request(server, "POST", "/funpack/api/shortcuts", {"name": "Fox", "triggers": ["fox"], "replacements": ["red fox"]})
-    status, exported = _request(server, "GET", "/funpack/api/shortcuts/export")
+    assert _request(server, "POST", "/fun/api/shortcuts/category", {"category": ""})[0] == 400
+    _request(server, "POST", "/fun/api/shortcuts", {"name": "Fox", "triggers": ["fox"], "replacements": ["red fox"]})
+    status, exported = _request(server, "GET", "/fun/api/shortcuts/export")
     assert status == 200 and [s["name"] for s in exported["shortcuts"]] == ["Fox"]
-    _request(server, "POST", "/funpack/api/shortcuts/clear")
-    status, back = _request(server, "POST", "/funpack/api/shortcuts/import", {"data": exported, "mode": "replace"})
+    _request(server, "POST", "/fun/api/shortcuts/clear")
+    status, back = _request(server, "POST", "/fun/api/shortcuts/import", {"data": exported, "mode": "replace"})
     assert status == 200 and back["imported"] == 1 and back["categories"] == exported["categories"]
-    assert _request(server, "POST", "/funpack/api/shortcuts/import", {"data": {"shortcuts": 5}})[0] == 400
-    assert _request(server, "POST", "/funpack/api/shortcuts/import", {"mode": "merge"})[0] == 400
+    assert _request(server, "POST", "/fun/api/shortcuts/import", {"data": {"shortcuts": 5}})[0] == 400
+    assert _request(server, "POST", "/fun/api/shortcuts/import", {"mode": "merge"})[0] == 400
 
 
 def test_revolver_over_http_only_a_real_run_commits(server):
-    _request(server, "POST", "/funpack/api/shortcuts", {"name": "L", "triggers": ["lt"], "replacements": ["A", "B"]})
-    _, st = _request(server, "POST", "/funpack/api/shortcuts/revolver", {"enabled": True})
+    _request(server, "POST", "/fun/api/shortcuts", {"name": "L", "triggers": ["lt"], "replacements": ["A", "B"]})
+    _, st = _request(server, "POST", "/fun/api/shortcuts/revolver", {"enabled": True})
     assert st == {"enabled": True, "random": False}
-    ask = lambda commit: _request(server, "POST", "/funpack/api/prompt/expand", {"text": "lt", "commit": commit})[1]["text"]
+    ask = lambda commit: _request(server, "POST", "/fun/api/prompt/expand", {"text": "lt", "commit": commit})[1]["text"]
     assert [ask(False), ask(False), ask(True), ask(True), ask(True)] == ["A", "A", "A", "B", "A"]
-    assert _request(server, "GET", "/funpack/api/shortcuts/revolver")[1]["enabled"] is True
-    assert _request(server, "POST", "/funpack/api/shortcuts/revolver", [])[0] == 400
+    assert _request(server, "GET", "/fun/api/shortcuts/revolver")[1]["enabled"] is True
+    assert _request(server, "POST", "/fun/api/shortcuts/revolver", [])[0] == 400

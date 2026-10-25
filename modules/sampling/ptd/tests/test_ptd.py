@@ -33,12 +33,12 @@ def folder(tmp_path):
 
 def _guarded(patcher):
     from modules._core import patching
-    return patching.GuardedPatcher(patcher, "funpack.ptd", patching.Dropped())
+    return patching.GuardedPatcher(patcher, "funui.ptd", patching.Dropped())
 
 
 def _install(ptd, patcher, name, kernels="exact"):
-    note = ptd.install(_guarded(patcher), {"enabled": True, "adapter": name, "kernels": kernels}, "funpack.ptd")
-    return patcher.model_options["funpack_ptd_controller"], note
+    note = ptd.install(_guarded(patcher), {"enabled": True, "adapter": name, "kernels": kernels}, "funui.ptd")
+    return patcher.model_options["funui_ptd_controller"], note
 
 
 def _clone(base):
@@ -219,13 +219,13 @@ def test_no_file_chosen_is_said_not_quarantined(ptd, folder):
     from modules._core import control
     with pytest.raises(control.Unavailable):
         ptd.install(_guarded(_clone(_tiny.native_model())), {"enabled": True, "adapter": "", "kernels": "exact"},
-                    "funpack.ptd")
+                    "funui.ptd")
 
 
 def test_off_installs_nothing(ptd, folder):
     patcher = _clone(_tiny.native_model())
-    assert ptd.install(_guarded(patcher), {"enabled": False, "adapter": "", "kernels": "exact"}, "funpack.ptd") is None
-    assert "funpack_ptd_controller" not in patcher.model_options
+    assert ptd.install(_guarded(patcher), {"enabled": False, "adapter": "", "kernels": "exact"}, "funui.ptd") is None
+    assert "funui_ptd_controller" not in patcher.model_options
 
 
 def test_load_modifiers_strips_ptd_so_a_second_pass_reinstalls_it_once(ptd, folder):
@@ -235,12 +235,12 @@ def test_load_modifiers_strips_ptd_so_a_second_pass_reinstalls_it_once(ptd, fold
     model = _clone(base)
     _install(ptd, model, "a.safetensors")
     again = model.clone()
-    assert patching.strip(again, "funpack.") >= 3
-    assert "funpack_ptd_controller" not in again.model_options
+    assert patching.strip(again, "funui.") >= 3
+    assert "funui_ptd_controller" not in again.model_options
     assert again.model_options.get("model_function_wrapper") is None
     _install(ptd, again, "a.safetensors")                      # no "already carries" error
-    assert "funpack_ptd_controller" in again.model_options
-    assert "funpack_ptd_controller" not in base.model_options and not base.object_patches
+    assert "funui_ptd_controller" in again.model_options
+    assert "funui_ptd_controller" not in base.model_options and not base.object_patches
 
 
 def test_a_latent_that_does_not_start_empty_is_refused(ptd, folder):
@@ -257,19 +257,19 @@ def test_a_latent_that_does_not_start_empty_is_refused(ptd, folder):
 
 def test_it_installs_through_load_modifiers_on_an_h3_model(ptd, folder, monkeypatch):
     from core import registry
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     base = _tiny.native_model()
     _tiny.pdd_file(folder / "r.safetensors", base.get_model_object("diffusion_model"))
     spec = registry.current().specs["ptd"]
     monkeypatch.setitem(spec.settings["adapter"], "options", [{"value": "r.safetensors", "label": "r"}])
     monkeypatch.setitem(spec.settings["adapter"], "default", "r.safetensors")
-    patched, status = FunPackLoadModifiers.execute(_clone(base), {"ptd": {"enabled": True}}).result
+    patched, status = FunUILoadModifiers.execute(_clone(base), {"ptd": {"enabled": True}}).result
     assert "ptd: r.safetensors, 4 hops" in status
     assert "failed" not in status
     out = _sample(patched)
     assert all(torch.isfinite(t).all() for t in out)
     # switched off, the same model samples as the plain one does
-    plain, status = FunPackLoadModifiers.execute(_clone(base), {"ptd": {"enabled": False}}).result
+    plain, status = FunUILoadModifiers.execute(_clone(base), {"ptd": {"enabled": False}}).result
     assert "ptd" not in status.splitlines()[0]
 
 
@@ -351,7 +351,7 @@ def test_the_hop_schedule_sits_where_the_sampler_was_given_its_own(ptd, folder, 
         model_patcher = None
 
     extra = {"model_options": {"transformer_options": {}}}
-    run = model.wrappers[WrappersMP.SAMPLER_SAMPLE]["funpack.ptd"][0]
+    run = model.wrappers[WrappersMP.SAMPLER_SAMPLE]["funui.ptd"][0]
     sigmas = torch.linspace(1.0, 0.0, 21, device="meta")
     assert run(None, Guider(), sigmas, extra, None, None, None, None, True) == "done"
     assert given["sigmas"].device == sigmas.device and given["sigmas"].dtype == sigmas.dtype

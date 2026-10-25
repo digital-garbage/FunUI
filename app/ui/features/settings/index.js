@@ -17,7 +17,7 @@ export default {
   needs: ["api", "theme", "pipeline", "maintenance", "dom"],
   setup({ host, app }) {
     const add = (id, title, subtitle, icon, tone, mount, group = "", keywords = "") => host.add({ id, group, title, subtitle, icon, tone, mount, keywords: `${keywords} ${title}` });
-    add("about", "About FunPack", "", "◎", "accent", about(app.api), "", "version commit branch cpu memory gpu disk python torch");
+    add("about", "About FunUI", "", "◎", "accent", about(app.api), "", "version commit branch cpu memory gpu disk python torch");
     add("readiness", "Ready to generate?", "Check this machine before a first run: ffmpeg, GPU, models, nodes, modules.", "✓", "accent", readiness(app.api), "", "check preflight rental gpu ffmpeg models missing nodes");
     add("appearance", "Appearance", "Light, dark, or follow the system.", "◐", "neutral", appearance(app.theme), "", "theme colour light dark auto");
     add("editor", "Editor", "How the editor behaves. The open project remembers these, so they follow it to another machine.", "☰", "neutral",
@@ -40,7 +40,7 @@ export default {
     };
     app.pipeline.ensureLoaded().then(offerShot);
     app.pipeline.subscribe(offerShot);
-    add("system", "Updates & ComfyUI", "Update FunPack, switch its branch, roll back, or restart ComfyUI.", "⟳", "good",
+    add("system", "Updates & ComfyUI", "Update FunUI, switch its branch, roll back, or restart ComfyUI.", "⟳", "good",
       system(app), "System", "update git branch restart rollback");
     add("customnodes", "Custom Nodes", "Install, update and remove ComfyUI node packs.", "⧉", "neutral",
       packs(app), "System", "custom nodes packs install");

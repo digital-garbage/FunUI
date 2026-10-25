@@ -27,7 +27,7 @@ def _load_with(monkeypatch, compute_dtype, model):
     monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: ({}, None))
     monkeypatch.setattr(comfy.sd, "load_diffusion_model_state_dict", lambda sd, **kw: model)
-    return nodes.FunPackDiffusionModelLoader.execute(
+    return nodes.FunUIDiffusionModelLoader.execute(
         model_name="m.safetensors", weight_dtype="default",
         compute_dtype=compute_dtype, attention="default")
 

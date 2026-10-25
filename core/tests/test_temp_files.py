@@ -4,10 +4,10 @@ from core import temp_files
 
 
 def test_saved_files_are_listed_from_output_not_temp(monkeypatch, tmp_path):
-    (tmp_path / "FunPack_00001_.mp4").write_bytes(b"x")
+    (tmp_path / "FunUI_00001_.mp4").write_bytes(b"x")
     monkeypatch.setattr(temp_files, "output_dir", lambda: str(tmp_path))
     monkeypatch.setattr(temp_files, "temp_dir", lambda: None)
-    assert [f["filename"] for f in temp_files.listing(where="output")["files"]] == ["FunPack_00001_.mp4"]
+    assert [f["filename"] for f in temp_files.listing(where="output")["files"]] == ["FunUI_00001_.mp4"]
     assert temp_files.listing()["files"] == []
 
 

@@ -13,7 +13,7 @@ from core.tests.test_routes_shortcuts import server  # noqa: E402,F401
 from modules.output.render import jobs  # noqa: E402
 from modules.output.render.tests.clips import comfy, make_clip, needs_ffmpeg, probe  # noqa: E402,F401
 
-BASE = "/funpack/api/m/render"
+BASE = "/fun/api/m/render"
 
 
 def call(port, method, path, body=None):

@@ -19,7 +19,7 @@ function server() {
     bbbbbbbbbbbb: { id: "bbbbbbbbbbbb", name: "B", scenes: [], updated_at: 1 },
   };
   globalThis.fetch = async (path, opts = {}) => {
-    if (path === "/funpack/api/projects" && (!opts.method || opts.method === "GET")) return { ok: true, status: 200, json: async () => ({ projects: Object.values(store).map((p) => ({ id: p.id })) }) };
+    if (path === "/fun/api/projects" && (!opts.method || opts.method === "GET")) return { ok: true, status: 200, json: async () => ({ projects: Object.values(store).map((p) => ({ id: p.id })) }) };
     const id = decodeURIComponent(String(path).split("/").pop());
     if (opts.method === "PUT") { const body = JSON.parse(opts.body); store[id] = { ...body, updated_at: 2 }; return { ok: true, status: 200, json: async () => store[id] }; }
     return { ok: true, status: 200, json: async () => JSON.parse(JSON.stringify(store[id])) };

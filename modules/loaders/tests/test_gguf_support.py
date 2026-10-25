@@ -74,7 +74,7 @@ def test_no_backend_refuses_with_both_remedies(monkeypatch):
         gguf_support.load_state_dict("/nope.gguf")
     msg = str(e.value)
     # Both ways out must be named: they have different consequences for VRAM.
-    # `gguf` is a FunPack requirement now, so the first is a re-run of them
+    # `gguf` is a FunUI requirement now, so the first is a re-run of them
     # rather than a lone package.
     assert "ComfyUI-GGUF" in msg
     assert "requirements.txt" in msg
@@ -239,7 +239,7 @@ def test_a_pack_refusal_without_the_library_still_raises(tmp_path, monkeypatch):
 
 
 def test_gguf_is_a_declared_requirement():
-    """The advice in UNAVAILABLE is "re-run FunPack's requirements", which is
+    """The advice in UNAVAILABLE is "re-run FunUI's requirements", which is
     only true while gguf is actually in them."""
     import pathlib
     reqs = pathlib.Path(__file__).resolve().parents[3] / "requirements.txt"

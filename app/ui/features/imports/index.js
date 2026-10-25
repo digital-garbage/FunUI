@@ -13,7 +13,7 @@ export default {
   needs: ["project", "api", "playhead", "dom"],
   setup({ host, app }) {
     const p = app.project;
-    const lengthOf = (asset) => app.dom.length(asset.kind, `/funpack/api/media/${encodeURIComponent(asset.id)}/file`);       // null when the browser cannot say
+    const lengthOf = (asset) => app.dom.length(asset.kind, `/fun/api/media/${encodeURIComponent(asset.id)}/file`);       // null when the browser cannot say
 
     async function choose(kind) {
       let bin;

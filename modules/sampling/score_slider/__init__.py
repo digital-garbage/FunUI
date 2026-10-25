@@ -56,7 +56,7 @@ STEP = 0.15                 # the nudge, as a fraction of a word row's size
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Taste slider", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Taste slider", message)
 
 
 def install(patcher, values, key):
@@ -95,7 +95,7 @@ def install(patcher, values, key):
             captured[NAME] = pooled
         if "dir" not in live and (row is not None or not similar):
             live["dir"], how = direction(taste.rows(KIND), pooled, similar)
-            log.once(f"{ID}:state", log.INFO, "FunPack Taste slider", f"key {taste.key!r}: {how}")
+            log.once(f"{ID}:state", log.INFO, "FunUI Taste slider", f"key {taste.key!r}: {how}")
         base = executor(x, t, *args, **kwargs)
         amount = eta * step.gate
         d = live.get("dir")

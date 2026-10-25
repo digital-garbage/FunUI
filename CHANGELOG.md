@@ -6,6 +6,18 @@
 
 - **PTD few-step** (Settings > Engine > Sampling, MiniMax H3 only): renders in the 4 to 8 hops of a PTD adapter file from `ComfyUI/models/ptd` instead of a long schedule, with no CFG. Reads the EPFL fl2va and taobao-content-ai Ref2VA releases, as bf16 or int8, on the full or pruned base; ordinary LoRAs stack with it. The chosen sampler, steps and scheduler are replaced while it is on. Ported from ComfyUI-PTD-Compact (Nynxz). Not yet run on a real H3.
 
+## [5.0.3] "Classy Chopper" - 2026-10-25
+
+### Changed
+
+- **FunPack is now FunUI.** It outgrew "pack": it is a full interface. New logo, a wink `;)`, before the name in the top-left corner and in Settings > About. Node ids, log lines and docs follow the new name (`FunUISampler`, `FunUI/Loaders` and so on). The 5.x codename is now "Classy Chopper".
+- **The app is served at `/fun/`** instead of `/funpack/`. The old address redirects.
+- Repository moved to `digital-garbage/FunUI`; GitHub redirects the old address, so existing clones keep updating.
+
+### Migrated on load
+
+- Projects, imported workflows and stored settings that carry old `FunPack…` names are renamed as they are read. Browser settings (wheel, welcome, timeline peek, model list) are carried over once. Nodes already placed in ComfyUI's own graph under the old `FunPack…` ids need adding again.
+
 ## [5.0.2] - 2026-10-22
 
 ### Changed

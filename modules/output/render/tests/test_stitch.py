@@ -177,7 +177,7 @@ def test_export_one_clip_trims_and_several_hard_cut(comfy):
     assert probe(comfy.temp / one["media"]["filename"])[0] == pytest.approx(1.0, abs=0.15)
     two = stitch.concat([{"filename": "a.mp4", "in": 0, "dur": 1.0}, {"filename": "a.mp4", "in": 1.0, "dur": 1.0}])
     assert two["clips"] == 2 and probe(comfy.temp / two["media"]["filename"])[0] == pytest.approx(2.0, abs=0.2)
-    assert not [p for p in os.listdir(comfy.temp) if p.startswith(("funpack_seg_", "funpack_concat_"))]
+    assert not [p for p in os.listdir(comfy.temp) if p.startswith(("funui_seg_", "funui_concat_"))]
     with pytest.raises(stitch.RenderError):
         stitch.concat([])
 

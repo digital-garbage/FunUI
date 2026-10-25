@@ -56,9 +56,9 @@ def test_simple_at_four_steps_is_inert_and_longer_schedules_are_not():
 
 def _load(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"taste": {"key": "fox"}, "decisiveness": {"enabled": True, **values}}
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, settings).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]
     return wrap, outer, status
@@ -128,9 +128,9 @@ def test_a_schedule_too_short_to_feel_it_says_so_and_teaches_nothing(tiny_h3):
 def test_learning_without_a_taste_key_is_off_and_says_so(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from core import log
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     log.new_run()
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"decisiveness": {"enabled": True}}).result
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"decisiveness": {"enabled": True}}).result
     assert any("needs a Taste key" in e["message"] for e in log.history())
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
 

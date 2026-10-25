@@ -212,23 +212,23 @@ def node(comfyui):
 
 def test_the_node_passes_through_when_off_and_never_touches_the_model(node):
     clip = FakeClip()
-    out = node.FunPackEnhancePrompt.execute(clip, "a fox", enabled=False)
+    out = node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=False)
     assert tuple(out.args) == ("a fox", "off") and clip.seen == {}
     assert node.RUNS[-1]["after"] == "a fox", "the Enhance tab still shows the final prompt"
 
 
 def test_the_node_enhances_records_the_run_and_warns_on_failure(node, caplog):
-    out = node.FunPackEnhancePrompt.execute(FakeClip("A red fox."), "a fox", enabled=True, seed=3)
+    out = node.FunUIEnhancePrompt.execute(FakeClip("A red fox."), "a fox", enabled=True, seed=3)
     assert out.args[0] == "A red fox." and node.RUNS[-1]["after"] == "A red fox."
     from core import log
     log._reset()
-    bad = node.FunPackEnhancePrompt.execute(FakeClip(fail=RuntimeError("x")), "a fox", enabled=True)
+    bad = node.FunUIEnhancePrompt.execute(FakeClip(fail=RuntimeError("x")), "a fox", enabled=True)
     assert bad.args[0] == "a fox" and node.RUNS[-1]["ok"] is False
     assert any("original prompt" in r["message"] for r in log.history())
 
 
 def test_seed_zero_is_never_cached_a_set_seed_is(node):
-    f = node.FunPackEnhancePrompt.fingerprint_inputs
+    f = node.FunUIEnhancePrompt.fingerprint_inputs
     assert isinstance(f(seed=0, enabled=True), float)
     assert f(seed=7, enabled=True) == "" and f(seed=0, enabled=False) == ""
 
@@ -267,14 +267,14 @@ def test_a_picked_encoder_that_will_not_load_keeps_the_prompt_and_says_why(monke
     def boom(file, family):
         raise RuntimeError("no such family")
     monkeypatch.setattr(nodes, "_own_encoder", boom)
-    out = nodes.FunPackEnhancePrompt.execute(clip=object(), text="a fox", enabled=True, encoder_file="x.gguf")
+    out = nodes.FunUIEnhancePrompt.execute(clip=object(), text="a fox", enabled=True, encoder_file="x.gguf")
     assert out.args[0] == "a fox" and out.args[1] == "encoder failed"
     assert "x.gguf" in nodes.RUNS[-1]["status"] and not nodes.RUNS[-1]["ok"]
 
 
 def test_a_gone_encoder_file_is_text_the_graph_does_not_refuse(comfyui):
     from modules.conditioning.prompt_enhancer import nodes
-    schema = nodes.FunPackEnhancePrompt.define_schema()
+    schema = nodes.FunUIEnhancePrompt.define_schema()
     for name in ("encoder_file", "encoder_family"):
         inp = next(i for i in schema.inputs if i.id == name)
         assert inp.get_io_type() == "STRING"            # a list would refuse a vanished file even with Enhance off

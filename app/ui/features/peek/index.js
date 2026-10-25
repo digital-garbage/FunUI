@@ -2,7 +2,7 @@
 // A preference of this screen, kept in this browser.
 import { composer as c } from "../../composer/composer.js";
 
-const KEY = "funpack_timeline_peek";
+const KEY = "funui_timeline_peek";
 
 export default {
   id: "peek",

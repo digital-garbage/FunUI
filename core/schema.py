@@ -164,7 +164,7 @@ def validate_nodes(value: Any, module_id: str) -> list:
 
     Checked structurally, not by isinstance against `io.ComfyNode`, so core stays
     importable without ComfyUI -- the same property that lets the whole suite run
-    outside it. The ComfyUI-specific checks (a FunPack-prefixed node_id, and no
+    outside it. The ComfyUI-specific checks (a FunUI-prefixed node_id, and no
     two modules claiming one id) happen in `core.nodes`, where ComfyUI exists.
     """
     if value is None:
@@ -183,7 +183,7 @@ def validate_nodes(value: Any, module_id: str) -> list:
             if not callable(getattr(node, method, None)):
                 raise SchemaError(
                     f"module {module_id!r}'s node {node.__name__} has no {method}(). "
-                    f"A FunPack node is a comfy_api io.ComfyNode subclass."
+                    f"A FunUI node is a comfy_api io.ComfyNode subclass."
                 )
     return list(value)
 
@@ -269,7 +269,7 @@ def check_values(spec, values: Any, keep_bad: bool = False) -> Tuple[Dict[str, A
             # A key nobody declares is a leftover (a setting that was removed or renamed) or a typo. Refusing the run would
             # break every project saved before the change, so it is skipped -- and said, once per run.
             from . import log
-            log.once(f"stale_setting:{spec.id}.{key}", log.WARNING, "FunPack settings",
+            log.once(f"stale_setting:{spec.id}.{key}", log.WARNING, "FunUI settings",
                      f"{spec.id}: saved setting {key!r} ignored: this module has no such setting")
             continue
         problem = _value_problem(declared, key, value, spec.id)

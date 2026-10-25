@@ -90,7 +90,7 @@ def embedded_prompt(path) -> str:
     if graph is None:
         return ""
     nodes = [(i, n) for i, n in graph.items() if isinstance(n, dict) and isinstance((n.get("inputs") or {}).get("text"), str)]
-    for wanted in ("FunPackEnhancePrompt",):
+    for wanted in ("FunUIEnhancePrompt",):
         for _, n in nodes:
             if n.get("class_type") == wanted and n["inputs"]["text"].strip():
                 return " ".join(n["inputs"]["text"].split())

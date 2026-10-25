@@ -60,8 +60,8 @@ test("a malformed queue entry is skipped rather than crashing the load", async (
 test("where a run belongs travels with it, when it said so at queue time", async () => {
   const found = await queuedFor("me", {
     fetch: answering({
-      queue_running: [[1, "mine", {}, { client_id: "me", funpack_scene_id: "s1",
-                                        funpack_project_id: "p1" }, []]],
+      queue_running: [[1, "mine", {}, { client_id: "me", funui_scene_id: "s1",
+                                        funui_project_id: "p1" }, []]],
       queue_pending: [],
     }),
   });
@@ -75,9 +75,9 @@ test("a run covering more than one scene carries the whole list, not just the fi
   // field's own comment in client.js for why sceneId alone is not enough).
   const found = await queuedFor("me", {
     fetch: answering({
-      queue_running: [[1, "mine", {}, { client_id: "me", funpack_scene_id: "s1",
-                                        funpack_scene_ids: ["s1", "s2", "s3"],
-                                        funpack_project_id: "p1" }, []]],
+      queue_running: [[1, "mine", {}, { client_id: "me", funui_scene_id: "s1",
+                                        funui_scene_ids: ["s1", "s2", "s3"],
+                                        funui_project_id: "p1" }, []]],
       queue_pending: [],
     }),
   });
@@ -118,13 +118,13 @@ test("onFound hands back the extra_data of a match, without changing what this r
   const found = [];
   const promptId = await finishedFor("me", ["mine"], {
     fetch: async () => ({ ok: true, status: 200, json: async () => ({
-      mine: { prompt: [1, "mine", {}, { client_id: "me", funpack_scene_id: "s1",
-                                        funpack_project_id: "p1" }, []] },
+      mine: { prompt: [1, "mine", {}, { client_id: "me", funui_scene_id: "s1",
+                                        funui_project_id: "p1" }, []] },
     }) }),
     onFound: (extra) => found.push(extra),
   });
   assert.equal(promptId, "mine");
-  assert.deepEqual(found, [{ client_id: "me", funpack_scene_id: "s1", funpack_project_id: "p1" }]);
+  assert.deepEqual(found, [{ client_id: "me", funui_scene_id: "s1", funui_project_id: "p1" }]);
 });
 
 test("onFound is never called when nothing matches", async () => {

@@ -10,9 +10,9 @@ def _needs_comfy(comfyui):
 
 
 def _load(tiny, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"attention_temperature": {"enabled": True, **values}}
-    return FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    return FunUILoadModifiers.execute(tiny.patcher, settings).result
 
 
 def test_it_changes_the_output(tiny_h3):
@@ -48,7 +48,7 @@ def test_blocks_outside_the_list_see_the_original_query(tiny_h3):
     low = tiny_h3.patcher.clone()
     dit_hooks.add_attention_override(low, "test.spy", spy_under)
     from modules.sampling import attention_temperature as m
-    m.install(low, {"enabled": True, "amount": 1.0, "blocks": "3"}, key="funpack.attention_temperature")
+    m.install(low, {"enabled": True, "amount": 1.0, "blocks": "3"}, key="funui.attention_temperature")
     tiny_h3.run(low)
     # call order: refiner, blocks 0..3 -> only the last is halved
     ratios = [u / s for u, s in zip(under, seen)]
@@ -56,8 +56,8 @@ def test_blocks_outside_the_list_see_the_original_query(tiny_h3):
 
 
 def test_off_or_zero_installs_nothing(tiny_h3):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    _p, status = FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    _p, status = FunUILoadModifiers.execute(
         tiny_h3.patcher, {"attention_temperature": {"enabled": True, "amount": 0.0}}).result
     assert "attention_temperature" not in status.splitlines()[0]
 
@@ -69,7 +69,7 @@ def test_a_block_list_with_nothing_usable_is_refused_not_silently_inert(tiny_h3)
 
 def test_loading_twice_does_not_double_the_effect(tiny_h3):
     once, _ = _load(tiny_h3, amount=-0.5, blocks="1")
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    twice, status = FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    twice, status = FunUILoadModifiers.execute(
         once, {"attention_temperature": {"enabled": True, "amount": -0.5, "blocks": "1"}}).result
     assert torch.allclose(tiny_h3.run(once)[0], tiny_h3.run(twice)[0])

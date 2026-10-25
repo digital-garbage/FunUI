@@ -94,7 +94,7 @@ def install(patcher, values, key):
         named = streams.model_args(args, kwargs)
         to = named.get("transformer_options")
         if (to or {}).get("context_window") is not None:
-            log.once(f"{ID}:windows", log.ALERT, "FunPack Momentum",
+            log.once(f"{ID}:windows", log.ALERT, "FunUI Momentum",
                      "off this run: it cannot follow clips cut into context windows (the windows move "
                      "every step, so there is no steady direction to average)")
             return executor(x, t, *args, **kwargs)
@@ -107,7 +107,7 @@ def install(patcher, values, key):
             state["index"][tuple(int(v) for v in ((to or {}).get("cond_or_uncond") or ()))] = now
             if now == was:                               # the same step twice: a second-order corrector call
                 state["multi"] = True
-                log.once(f"{ID}:multi", log.ALERT, "FunPack Momentum",
+                log.once(f"{ID}:multi", log.ALERT, "FunUI Momentum",
                          "off for the rest of this run: the model is called more than once per step "
                          "(a second-order sampler); use euler-style sampling")
             if state["multi"]:
@@ -124,7 +124,7 @@ def install(patcher, values, key):
         state["last"][which] = (index, sigma)
         seen_out, seen_in = streams.video_of(out, named), streams.video_of(step.x, named)
         if seen_out is None or seen_in is None:
-            log.once(f"{ID}:layout", log.ALERT, "FunPack Momentum",
+            log.once(f"{ID}:layout", log.ALERT, "FunUI Momentum",
                      "off this run: could not find the picture in this model's latent")
             return out
         video, rebuild = seen_out

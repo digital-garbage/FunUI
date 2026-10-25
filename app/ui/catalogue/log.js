@@ -15,7 +15,7 @@ const TONE = { Info: "neutral", Alert: "info", Warning: "warn", Critical: "dange
 let filter = null;
 
 async function load() {
-  const url = "/funpack/api/log/funpack" + (filter ? `?level=${encodeURIComponent(filter)}` : "");
+  const url = "/fun/api/log/fun" + (filter ? `?level=${encodeURIComponent(filter)}` : "");
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url} answered ${response.status}`);
   return response.json();
@@ -38,7 +38,7 @@ function render(data) {
   const items = data.records.map((record, i) => ({
     id: `r${i}`,
     label: record.message,
-    hint: `${record.level} · ${record.source || "FunPack"}`,
+    hint: `${record.level} · ${record.source || "FunUI"}`,
   }));
 
   root.replaceChildren(composer.panel.default({

@@ -12,7 +12,7 @@ needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg
 
 @pytest.fixture
 def comfy(tmp_path, monkeypatch):
-    """ComfyUI's output and temp folders, plus FunPack's own stores, all under tmp_path."""
+    """ComfyUI's output and temp folders, plus FunUI's own stores, all under tmp_path."""
     from modules.output.render import files
     out, temp = tmp_path / "output", tmp_path / "temp"
     out.mkdir(), temp.mkdir()

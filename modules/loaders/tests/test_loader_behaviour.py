@@ -27,7 +27,7 @@ def test_empty_encoder_slots_are_skipped_not_looked_up(monkeypatch):
     monkeypatch.setattr(folder_paths, "get_folder_paths", lambda kind: [])
     monkeypatch.setattr(comfy.sd, "load_clip", lambda **kw: object())
 
-    nodes.FunPackCLIPLoader.execute(
+    nodes.FunUICLIPLoader.execute(
         clip_name1="encoder.safetensors", type="ltxv",
         clip_name2="", clip_name3=None, clip_name4="")
 
@@ -48,7 +48,7 @@ def test_encoder_slots_load_in_slot_order(monkeypatch):
                         lambda **kw: seen.update(kw) or object())
 
     # Deliberately out of order in the call, which is how kwargs can arrive.
-    nodes.FunPackCLIPLoader.execute(
+    nodes.FunUICLIPLoader.execute(
         clip_name3="third.safetensors", clip_name2="second.safetensors",
         clip_name1="first.safetensors", type="ltxv")
 
@@ -69,13 +69,13 @@ def test_an_unrecognised_encoder_fails_here_not_at_encode_time(monkeypatch):
     monkeypatch.setattr(comfy.sd, "load_clip", lambda **kw: None)
 
     with pytest.raises(RuntimeError, match="Could not load a text encoder"):
-        nodes.FunPackCLIPLoader.execute(clip_name1="wrong.safetensors", type="ltxv")
+        nodes.FunUICLIPLoader.execute(clip_name1="wrong.safetensors", type="ltxv")
 
 
 def test_no_encoder_at_all_is_refused(monkeypatch):
     from modules.loaders.clip import nodes
     with pytest.raises(RuntimeError, match="at least one"):
-        nodes.FunPackCLIPLoader.execute(clip_name1="", type="ltxv")
+        nodes.FunUICLIPLoader.execute(clip_name1="", type="ltxv")
 
 
 def test_a_lora_at_zero_strength_passes_the_originals_through(monkeypatch):
@@ -90,7 +90,7 @@ def test_a_lora_at_zero_strength_passes_the_originals_through(monkeypatch):
     monkeypatch.setattr(comfy.sd, "load_lora_for_models", _explode)
 
     model, clip = object(), object()
-    out = nodes.FunPackLoraLoader.execute(
+    out = nodes.FunUILoraLoader.execute(
         model=model, lora_name="x.safetensors", strength_model=0.0,
         clip=clip, strength_clip=0.0)
 
@@ -116,7 +116,7 @@ def test_a_model_only_lora_still_applies_at_zero_clip_strength(monkeypatch):
     monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {"fake": 1})
     monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"w": object()}, "as-is", 0))
-    out = nodes.FunPackLoraLoader.execute(model=M(), lora_name="x.safetensors", strength_model=0.8, clip=None)
+    out = nodes.FunUILoraLoader.execute(model=M(), lora_name="x.safetensors", strength_model=0.8, clip=None)
     assert added == {"n": 1, "s": 0.8}
     assert "1 weights" in out.result[2]
 
@@ -164,7 +164,7 @@ def test_a_lora_that_matches_nothing_is_not_applied_and_says_so(monkeypatch):
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {})
     monkeypatch.setattr(nodes, "match", lambda m, c, l: ({}, "as-is", 0))
     model = object()
-    out = nodes.FunPackLoraLoader.execute(model=model, lora_name="x.safetensors", strength_model=1.0, clip=None)
+    out = nodes.FunUILoraLoader.execute(model=model, lora_name="x.safetensors", strength_model=1.0, clip=None)
     assert out.result[0] is model and "matched nothing" in out.result[2]
 
 
@@ -211,7 +211,7 @@ def test_an_unknown_encoder_family_is_refused_not_silently_downgraded(monkeypatc
     reports success. A family mismatch here reads as an unrelated fault."""
     from modules.loaders.clip import nodes
     with pytest.raises(RuntimeError, match="no encoder family"):
-        nodes.FunPackCLIPLoader.execute(clip_name1="e.safetensors", type="not_a_family")
+        nodes.FunUICLIPLoader.execute(clip_name1="e.safetensors", type="not_a_family")
 
 
 def test_changing_the_process_wide_fp16_flag_is_never_silent(monkeypatch):
@@ -269,7 +269,7 @@ def test_a_gguf_model_name_is_routed_through_gguf_support(monkeypatch):
                         lambda sd, model_options, metadata: object() if sd == {"w": 1}
                         and model_options.get("custom_operations") == "ops" else None)
 
-    out = nodes.FunPackDiffusionModelLoader.execute(
+    out = nodes.FunUIDiffusionModelLoader.execute(
         model_name="model-Q4_K_M.gguf", weight_dtype="default",
         compute_dtype="default", attention="default")
 
@@ -293,7 +293,7 @@ def test_a_safetensors_named_file_that_is_actually_gguf_is_still_routed(monkeypa
     monkeypatch.setattr(comfy.sd, "load_diffusion_model_state_dict",
                         lambda sd, model_options, metadata: object())
 
-    out = nodes.FunPackDiffusionModelLoader.execute(
+    out = nodes.FunUIDiffusionModelLoader.execute(
         model_name="model.safetensors", weight_dtype="default",
         compute_dtype="default", attention="default")
 
@@ -318,7 +318,7 @@ def test_an_ordinary_safetensors_model_never_touches_gguf_support(monkeypatch):
     monkeypatch.setattr(comfy.sd, "load_diffusion_model_state_dict",
                         lambda sd, model_options, metadata: object())
 
-    nodes.FunPackDiffusionModelLoader.execute(
+    nodes.FunUIDiffusionModelLoader.execute(
         model_name="model.safetensors", weight_dtype="default",
         compute_dtype="default", attention="default")
 
@@ -336,7 +336,7 @@ def test_a_gguf_text_encoder_is_routed_through_gguf_support(monkeypatch):
     monkeypatch.setattr(comfy.sd, "load_text_encoder_state_dicts",
                         lambda state_dicts, **kw: object() if state_dicts == [{"w": 1}] else None)
 
-    out = nodes.FunPackCLIPLoader.execute(clip_name1="encoder-Q5_K.gguf", type="ltxv")
+    out = nodes.FunUICLIPLoader.execute(clip_name1="encoder-Q5_K.gguf", type="ltxv")
 
     assert out.result[0] is not None
     assert "gguf: quantized" in out.result[1]
@@ -361,7 +361,7 @@ def test_a_gguf_encoder_alongside_a_plain_connector_loads_both(monkeypatch):
     monkeypatch.setattr(comfy.sd, "load_text_encoder_state_dicts",
                         lambda state_dicts, **kw: seen.update(sd=state_dicts) or object())
 
-    nodes.FunPackCLIPLoader.execute(
+    nodes.FunUICLIPLoader.execute(
         clip_name1="encoder-Q5_K.gguf", clip_name2="connector.safetensors", type="ltxv")
 
     assert seen["sd"] == [{"gguf": 1}, {"plain": 1}]
@@ -378,13 +378,13 @@ def test_a_gguf_encoder_that_vanished_since_being_listed_is_refused_by_name(monk
     monkeypatch.setattr(gguf_support, "gguf_path", lambda folder, name: None)
 
     with pytest.raises(RuntimeError, match="encoder-Q5_K.gguf.*no longer where it was listed"):
-        nodes.FunPackCLIPLoader.execute(clip_name1="encoder-Q5_K.gguf", type="ltxv")
+        nodes.FunUICLIPLoader.execute(clip_name1="encoder-Q5_K.gguf", type="ltxv")
 
 
 def test_no_lora_picked_passes_the_originals_through_without_reading_a_file():
     from modules.loaders.lora import nodes
     model, clip = object(), object()
-    out = nodes.FunPackLoraLoader.execute(model=model, lora_name="None", strength_model=1.0, clip=clip)
+    out = nodes.FunUILoraLoader.execute(model=model, lora_name="None", strength_model=1.0, clip=clip)
     assert out.result[0] is model and out.result[1] is clip
 
 

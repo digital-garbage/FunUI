@@ -2,7 +2,7 @@
 ComfyUI graph, the way a person would load it and run it?
 
 Registers ComfyUI's own extra nodes (MiniMaxH3SigmaShift, MiniMaxH3Reference-
-ToVideo, CreateVideo, SaveVideo all live in comfy_extras), FunPack's own nodes
+ToVideo, CreateVideo, SaveVideo all live in comfy_extras), FunUI's own nodes
 the way ComfyUI itself loads a pack, and the installed KJNodes pack (for
 ImageTransformKJ) -- then runs the exact preset through core/graph.py's real
 build(), the same function a queued run is checked with.

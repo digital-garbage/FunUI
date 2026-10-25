@@ -29,15 +29,15 @@ def vae_files():
     return folder_paths.get_filename_list("vae")
 
 
-class FunPackVAELoader(io.ComfyNode):
+class FunUIVAELoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
             # Frozen once shipped: this string is stored as `class_type` in every
             # saved workflow, so changing it silently breaks them.
-            node_id="FunPackVAELoader",
-            display_name="FunPack VAE Loader",
-            category="FunPack/Loaders",
+            node_id="FunUIVAELoader",
+            display_name="FunUI VAE Loader",
+            category="FunUI/Loaders",
             description="Load a VAE with an explicit compute dtype.",
             inputs=[
                 io.Combo.Input("vae_name", options=vae_files()),
@@ -56,5 +56,5 @@ class FunPackVAELoader(io.ComfyNode):
         state_dict = comfy.utils.load_torch_file(path)
         vae = comfy.sd.VAE(sd=state_dict, dtype=DTYPES[dtype])
         vae.throw_exception_if_invalid()
-        log.info("FunPack VAE Loader", f"{vae_name} loaded as {dtype}")
+        log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
         return io.NodeOutput(vae, f"{vae_name} loaded as {dtype}")

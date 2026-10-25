@@ -4,7 +4,7 @@ from comfy_api.latest import io
 from ..._core import log, patching
 from . import patch, projector
 
-KEY = "funpack_identity"
+KEY = "funui_identity"
 
 
 def _projector_choices():
@@ -22,13 +22,13 @@ def _video_part(latent):
     return samples
 
 
-class FunPackIdentityTransfer(io.ComfyNode):
+class FunUIIdentityTransfer(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackIdentityTransfer",
-            display_name="FunPack Identity Transfer",
-            category="FunPack/Conditioning",
+            node_id="FunUIIdentityTransfer",
+            display_name="FunUI Identity Transfer",
+            category="FunUI/Conditioning",
             description="Carry a reference face into an LTX clip (Best-FaceID style): the reference goes in "
                         "as separate tokens the model attends to, plus optional ArcFace text tokens. "
                         "With no image wired, everything passes through untouched.",
@@ -97,7 +97,7 @@ class FunPackIdentityTransfer(io.ComfyNode):
                     negative = projector.append_context_tokens(negative, neg)
                     notes.append(f"ArcFace tokens appended (strength {id_strength:g})")
             except ImportError as exc:
-                log.once("identity_transfer:insightface", log.ALERT, "FunPack Identity Transfer",
+                log.once("identity_transfer:insightface", log.ALERT, "FunUI Identity Transfer",
                          f"ArcFace needs insightface ({exc}); `pip install insightface`. Overlap tokens only.")
                 notes.append("insightface is not installed: overlap tokens only")
         return io.NodeOutput(patched, positive, negative, "; ".join(notes))

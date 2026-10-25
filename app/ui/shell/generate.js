@@ -33,7 +33,7 @@ export function createGenerate({ pipeline }) {
     slots: () => pendingSlots || pipeline.slots(),     // the pipeline as it was at the click, when the caller froze it
     inputs: async () => pendingInputs || {},
     extra: () => (ranForProject && ranFor
-      ? { funpack_scene_id: ranFor, funpack_scene_ids: ranForList, funpack_project_id: ranForProject } : null),
+      ? { funui_scene_id: ranFor, funui_scene_ids: ranForList, funui_project_id: ranForProject } : null),
     onAdopt: (sceneId, projectId, sceneIds) => {
       ranFor = sceneId; ranForProject = projectId;
       ranForList = (sceneIds && sceneIds.length) ? sceneIds : (sceneId ? [sceneId] : []);

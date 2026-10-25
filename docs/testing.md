@@ -75,7 +75,7 @@ See [Adding an element](ui-kit-reference.md#adding-an-element). The registry-wid
 python tools/devserver.py 8199
 ```
 
-Open `http://localhost:8199/funpack/`. The real routes are served and nothing is queued, so Generate says there is no queue. Set `COMFYUI_ROOT`, or most modules will be absent. The catalogue pages are in [UI kit reference](ui-kit-reference.md#the-catalogue). Check any visual change in dark and light and at a narrow width.
+Open `http://localhost:8199/fun/`. The real routes are served and nothing is queued, so Generate says there is no queue. Set `COMFYUI_ROOT`, or most modules will be absent. The catalogue pages are in [UI kit reference](ui-kit-reference.md#the-catalogue). Check any visual change in dark and light and at a narrow width.
 
 ## How to write a test that proves something
 

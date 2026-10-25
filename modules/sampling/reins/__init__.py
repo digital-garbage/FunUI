@@ -50,7 +50,7 @@ KIND = "reins"
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Taste steering (REINS)", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Taste steering (REINS)", message)
 
 
 def install(patcher, values, key):
@@ -72,7 +72,7 @@ def install(patcher, values, key):
     def fresh():
         live["dirs"], summary = taste.directions(KIND, steer, strength)
         cast.clear()
-        log.once(f"{ID}:state", log.INFO, "FunPack Taste steering (REINS)", summary)
+        log.once(f"{ID}:state", log.INFO, "FunUI Taste steering (REINS)", summary)
 
     captured = taste.collect(patcher, key, KIND, fresh=fresh)
     spans = {}

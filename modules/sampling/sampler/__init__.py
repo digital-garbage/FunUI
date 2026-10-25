@@ -1,6 +1,6 @@
 """The sampler. A node-only module."""
 
-from .nodes import ACCEPTS, FunPackSampler
+from .nodes import ACCEPTS, FunUISampler
 
 ID = "sampling_sampler"
 TITLE = "Sampler"
@@ -8,4 +8,4 @@ STAGE = "sampling"
 CATEGORY = "sampling"
 STATUS = "proven"
 
-NODES = [FunPackSampler]
+NODES = [FunUISampler]

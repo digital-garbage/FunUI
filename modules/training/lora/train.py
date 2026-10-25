@@ -102,7 +102,7 @@ def _cached(kind, parts, make, torch):
         torch.save(value, tmp)
         tmp.replace(path)
     except Exception as exc:                               # noqa: BLE001 -- the cache is only a speed-up
-        log.warning("FunPack LoRA training", f"could not keep {kind} in the cache: {exc}")
+        log.warning("FunUI LoRA training", f"could not keep {kind} in the cache: {exc}")
     return value, False
 
 
@@ -206,12 +206,12 @@ def _run(model, clip, vae, audio_vae, set_name: str, cfg: dict, prompt_id: str =
         if problems and not items:
             raise ValueError("; ".join(problems))
         if problems:
-            log.warning("FunPack LoRA training", f"left out of the run: {'; '.join(problems[:5])}{' ...' if len(problems) > 5 else ''}")
+            log.warning("FunUI LoRA training", f"left out of the run: {'; '.join(problems[:5])}{' ...' if len(problems) > 5 else ''}")
         if adapt is None and getattr(model, "cached_patcher_init", None) is None:
-            raise ValueError("this model was loaded in a way the trainer cannot copy; load it with the FunPack Diffusion Model Loader from a plain file")
+            raise ValueError("this model was loaded in a way the trainer cannot copy; load it with the FunUI Diffusion Model Loader from a plain file")
         batch = cfg["batch_size"]
         if adapt and batch > adapt.get("batch_limit", batch):
-            log.warning("FunPack LoRA training", f"{adapt['name']} trains one sample at a time; batch size {batch} is lowered to {adapt['batch_limit']}")
+            log.warning("FunUI LoRA training", f"{adapt['name']} trains one sample at a time; batch size {batch} is lowered to {adapt['batch_limit']}")
             batch = adapt["batch_limit"]
         jobs.say(f"Reading {len(items)} items")
         step = (adapt or {}).get("step") or 64
@@ -243,7 +243,7 @@ def _run(model, clip, vae, audio_vae, set_name: str, cfg: dict, prompt_id: str =
                 videos.append(latent.clone())
                 sounds.append(None if sound is None else sound.clone())
                 conds.append(cond)
-        log.info("FunPack LoRA training", f"prepared {len(items)} items, {hits} entirely from the cache")
+        log.info("FunUI LoRA training", f"prepared {len(items)} items, {hits} entirely from the cache")
         videos, sounds, conds = _normal(videos), _normal(sounds), _normal(conds)         # made in inference mode: copies a backward pass can use
         if adapt and adapt.get("pack") and audio_vae is not None and all(s is not None for s in sounds):
             latents = adapt["pack"](videos, sounds)
@@ -267,12 +267,12 @@ def _run(model, clip, vae, audio_vae, set_name: str, cfg: dict, prompt_id: str =
         if adapt and adapt.get("lora_targets"):
             def keep(state, step):                        # a copy of the LoRA so far, in the loras folder, never over an earlier file
                 name = _save(state, f"{cfg['name']}_step{step}", folder_paths, safetensors.torch, set_name, cfg)
-                log.info("FunPack LoRA training", f"saved {name} at step {step}")
+                log.info("FunUI LoRA training", f"saved {name} at step {step}")
             lora, paused = loop.train(model, payload, conds, cfg, adapt, nt, mm, torch, watch, shim, resume, run_id, keep)       # our own loop, ComfyUI carries the batches
             if paused:
                 preview = _save(lora, f"{cfg['name']}_preview", folder_paths, safetensors.torch, set_name, cfg, keep=True)
                 jobs.pause(paused.reason, paused.step, preview)
-                log.info("FunPack LoRA training", f"paused at step {paused.step} ({paused.reason}); the LoRA so far is {preview}")
+                log.info("FunUI LoRA training", f"paused at step {paused.step} ({paused.reason}); the LoRA so far is {preview}")
                 return ""
         else:
             losses = _loss_hook(nt, cfg["steps"] * cfg["grad_accumulation"])
@@ -357,7 +357,7 @@ def _fit_frames(cfg, adapt, items):
     fit = adapt["fit"](shortest) if adapt.get("fit") else shortest
     if fit < 1:
         raise ValueError(f"the shortest clip has only {shortest} frames at {rate:g} fps: too short to train on")
-    log.warning("FunPack LoRA training", f"the shortest clip gives {shortest} frames at {rate:g} fps, so every clip is read for {fit} frames and not {wanted}")
+    log.warning("FunUI LoRA training", f"the shortest clip gives {shortest} frames at {rate:g} fps, so every clip is read for {fit} frames and not {wanted}")
     return {**cfg, "frames": fit}
 
 
@@ -371,9 +371,9 @@ def _sizes(payload, conds):
     try:
         first = payload[0]["samples"] if isinstance(payload[0], dict) else payload[0]
         text = conds[0][0] if isinstance(conds[0], (list, tuple)) else conds[0]
-        log.info("FunPack LoRA training", f"{len(conds)} text(s); first latent {shape(first)}, first text {shape(text)}")
+        log.info("FunUI LoRA training", f"{len(conds)} text(s); first latent {shape(first)}, first text {shape(text)}")
     except Exception as exc:                              # noqa: BLE001 -- a report must never stop a run
-        log.info("FunPack LoRA training", f"sizes: not readable ({type(exc).__name__})")
+        log.info("FunUI LoRA training", f"sizes: not readable ({type(exc).__name__})")
 
 
 def _card(when, mm, torch):
@@ -385,7 +385,7 @@ def _card(when, mm, torch):
         line = f"card {when}: tensors {torch.cuda.memory_allocated(device) / gib:.1f} GiB, free {mm.get_free_memory(device) / gib:.1f} GiB, loaded models: {loaded}"
         jobs.trail(line)
     except Exception as exc:                              # noqa: BLE001 -- a report must never stop a run
-        log.info("FunPack LoRA training", f"card {when}: not readable ({type(exc).__name__})")
+        log.info("FunUI LoRA training", f"card {when}: not readable ({type(exc).__name__})")
 
 
 class _watch:
@@ -466,7 +466,7 @@ def _swapper(adapt, cfg, mm, torch):
     if count <= 0:
         return None
     if not (adapt and adapt.get("blocks")):
-        log.warning("FunPack LoRA training", "block swap is asked for, but this model has no block list to swap: the whole model stays on the card")
+        log.warning("FunUI LoRA training", "block swap is asked for, but this model has no block list to swap: the whole model stays on the card")
         return None
 
     def after(patchers):
@@ -474,10 +474,10 @@ def _swapper(adapt, cfg, mm, torch):
             blocks = adapt["blocks"](patcher.model.diffusion_model)
             done = swap.move(blocks, count, torch)
             if done["blocks"]:
-                log.info("FunPack LoRA training", f"block swap: {done['blocks']} of {len(blocks)} blocks ({done['bytes'] / 1024 ** 3:.1f} GiB) now wait in system memory")
+                log.info("FunUI LoRA training", f"block swap: {done['blocks']} of {len(blocks)} blocks ({done['bytes'] / 1024 ** 3:.1f} GiB) now wait in system memory")
                 _card("after block swap", mm, torch)
             elif not swap.still_away(blocks, count):
-                log.warning("FunPack LoRA training", "block swap: ComfyUI moved the weights back to the card")
+                log.warning("FunUI LoRA training", "block swap: ComfyUI moved the weights back to the card")
     return after
 
 
@@ -537,7 +537,7 @@ class _loss_hook:
 
 
 def _preview_name(name) -> str:
-    stem = "".join(c for c in f"{name}_preview" if c.isalnum() or c in "-_ .").strip() or "funpack_lora_preview"
+    stem = "".join(c for c in f"{name}_preview" if c.isalnum() or c in "-_ .").strip() or "funui_lora_preview"
     return f"{stem}.safetensors"
 
 
@@ -555,12 +555,12 @@ def _save(lora, name, folder_paths, safetensors_torch, set_name, cfg, keep=False
     """Into the first loras folder, as <name>.safetensors, or <name>_2 and so on rather than over an earlier one. `keep`: replace the file of that name (the preview)."""
     folder = Path(folder_paths.get_folder_paths("loras")[0])
     folder.mkdir(parents=True, exist_ok=True)
-    stem = "".join(c for c in name if c.isalnum() or c in "-_ .") .strip() or "funpack_lora"
+    stem = "".join(c for c in name if c.isalnum() or c in "-_ .") .strip() or "funui_lora"
     n, path = 1, folder / f"{stem}.safetensors"
     while path.exists() and not keep:
         n += 1
         path = folder / f"{stem}_{n}.safetensors"
-    meta = {"software": "ComfyUI-FunPack", "training_set": set_name, "algorithm": cfg["algorithm"], "rank": str(cfg["rank"]),
+    meta = {"software": "FunUI", "training_set": set_name, "algorithm": cfg["algorithm"], "rank": str(cfg["rank"]),
             "steps": str(cfg["steps"]), "trigger": cfg["trigger"]}
     safetensors_torch.save_file(lora, str(path), metadata=meta)
     return path.name

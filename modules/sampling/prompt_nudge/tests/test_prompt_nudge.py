@@ -33,8 +33,8 @@ def test_words_move_along_the_direction_by_a_share_of_their_own_size():
 
 def _load(tiny, **v):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, {
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, {
         "taste": {"key": "fox"}, "prompt_nudge": {"enabled": True, **v}}).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values():
@@ -87,8 +87,8 @@ def test_a_direction_from_another_text_width_is_said_not_silently_dropped(tiny_h
 
 def test_off_installs_nothing(tiny_h3):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {"prompt_nudge": {"enabled": False}}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"prompt_nudge": {"enabled": False}}).result
     assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
 
 

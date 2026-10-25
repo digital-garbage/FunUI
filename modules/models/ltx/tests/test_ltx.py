@@ -102,7 +102,7 @@ def test_decode_gives_a_picture_and_a_waveform(comfyui, monkeypatch):
 
 def test_the_empty_latent_node_passes_the_audio_vae_to_a_provider_that_asks_and_not_to_one_that_does_not(registered):
     from core import registry
-    from modules.latent.empty.nodes import FunPackEmptyLatent
+    from modules.latent.empty.nodes import FunUIEmptyLatent
     seen = {}
 
     def wants(model, width, height, length, batch_size, audio_vae=None, frame_rate=25.0):
@@ -118,7 +118,7 @@ def test_the_empty_latent_node_passes_the_audio_vae_to_a_provider_that_asks_and_
             return [(types.SimpleNamespace(id="x"), plain), (types.SimpleNamespace(id="y"), wants)]
     import unittest.mock as mock
     with mock.patch.object(registry, "current", lambda rescan=False: Reg()):
-        FunPackEmptyLatent.execute(object(), 64, 64, 1, 1, audio_vae="A", frame_rate=30.0)
+        FunUIEmptyLatent.execute(object(), 64, 64, 1, 1, audio_vae="A", frame_rate=30.0)
     assert seen == {"plain": True, "wants": ("A", 30.0)}
 
 

@@ -34,7 +34,7 @@ def test_the_wrapper_a_modifier_installs_is_executed_by_comfys_sampler_path(regi
     import comfy.sampler_helpers
     from comfy.model_patcher import ModelPatcher
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     fake, ModuleSpec = registry
     ran = []
@@ -55,7 +55,7 @@ def test_the_wrapper_a_modifier_installs_is_executed_by_comfys_sampler_path(regi
 
     patcher = ModelPatcher(Stub(), load_device=torch.device("cpu"),
                            offload_device=torch.device("cpu"))
-    patched, _status = FunPackLoadModifiers.execute(patcher).result
+    patched, _status = FunUILoadModifiers.execute(patcher).result
 
     # Exactly what CFGGuider.inner_sample does: the patcher's wrappers are merged
     # into model_options, then the sampler's own sample() is wrapped in them.
@@ -70,7 +70,7 @@ def test_the_wrapper_a_modifier_installs_is_executed_by_comfys_sampler_path(regi
         ext.get_all_wrappers(WrappersMP.SAMPLER_SAMPLE, model_options, is_model_options=True))
 
     assert executor.execute() == "sampled"
-    assert ran == ["funpack.m"], (
+    assert ran == ["funui.m"], (
         "the modifier was installed somewhere ComfyUI's sampling path does not read")
 
 
@@ -92,4 +92,4 @@ def test_an_unmodified_model_carries_none_of_our_wrappers(registry):
 
     installed = model_options["transformer_options"].get("wrappers", {}).get(
         WrappersMP.SAMPLER_SAMPLE, {})
-    assert not [k for k in installed if str(k).startswith("funpack.")]
+    assert not [k for k in installed if str(k).startswith("funui.")]

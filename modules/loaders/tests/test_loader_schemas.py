@@ -10,12 +10,12 @@ import pytest
 
 @pytest.fixture(scope="module")
 def schemas(comfyui):
-    from modules.loaders.clip.nodes import FunPackCLIPLoader
-    from modules.loaders.diffusion_model.nodes import FunPackDiffusionModelLoader
-    from modules.loaders.lora.nodes import FunPackLoraLoader
-    from modules.loaders.vae.nodes import FunPackVAELoader
-    return [FunPackCLIPLoader, FunPackDiffusionModelLoader,
-            FunPackLoraLoader, FunPackVAELoader]
+    from modules.loaders.clip.nodes import FunUICLIPLoader
+    from modules.loaders.diffusion_model.nodes import FunUIDiffusionModelLoader
+    from modules.loaders.lora.nodes import FunUILoraLoader
+    from modules.loaders.vae.nodes import FunUIVAELoader
+    return [FunUICLIPLoader, FunUIDiffusionModelLoader,
+            FunUILoraLoader, FunUIVAELoader]
 
 
 def test_a_file_picker_is_a_widget_not_a_socket(schemas):

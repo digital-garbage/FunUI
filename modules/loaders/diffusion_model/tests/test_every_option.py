@@ -53,8 +53,8 @@ def _importable():
 
 
 def test_every_dtype_and_attention_combination_loads(tiny_file, combo):
-    from modules.loaders.diffusion_model.nodes import FunPackDiffusionModelLoader
+    from modules.loaders.diffusion_model.nodes import FunUIDiffusionModelLoader
     weight, compute, attention = combo
-    model, status = FunPackDiffusionModelLoader.execute(tiny_file, weight, compute, attention).result
+    model, status = FunUIDiffusionModelLoader.execute(tiny_file, weight, compute, attention).result
     assert type(model.model).__name__ == "MiniMaxH3"
     assert weight in status

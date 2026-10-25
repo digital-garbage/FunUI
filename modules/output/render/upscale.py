@@ -17,7 +17,7 @@ from ..._core import addons
 
 CHUNK = 8                # frames per upscale call, at most
 CHUNK_PIXELS = 2_000_000   # ...and at most this many input pixels per call: a big upscale of 1080p is gigabytes per frame
-SUBFOLDER = "funpack_upscaled"
+SUBFOLDER = "funui_upscaled"
 
 
 def probe(path):
@@ -130,13 +130,13 @@ except Exception:                                      # noqa: BLE001 -- tests w
     io = None
 
 if io is not None:
-    class FunPackUpscaleVideo(io.ComfyNode):
+    class FunUIUpscaleVideo(io.ComfyNode):
         @classmethod
         def define_schema(cls) -> io.Schema:
             return io.Schema(
-                node_id="FunPackUpscaleVideo",
-                display_name="FunPack Upscale Video",
-                category="FunPack/Output",
+                node_id="FunUIUpscaleVideo",
+                display_name="FunUI Upscale Video",
+                category="FunUI/Output",
                 description="Upscale a finished video file with an upscale model or NVIDIA RTX Super Resolution; keeps its fps and sound.",
                 inputs=[
                     io.String.Input("filename", default=""),
@@ -171,6 +171,6 @@ if io is not None:
             name = free_name(out_dir, filename, tag)
             frames = upscale_file(src, os.path.join(out_dir, name), fn, mm.throw_exception_if_processing_interrupted)
             from ..._core import log
-            log.info("FunPack Upscale", f"{filename} with {tag}: {frames} frames -> {SUBFOLDER}/{name}")
+            log.info("FunUI Upscale", f"{filename} with {tag}: {frames} frames -> {SUBFOLDER}/{name}")
             return io.NodeOutput(ui={"videos": [{"filename": name, "subfolder": SUBFOLDER,
                                                  "type": "output", "format": "video/h264-mp4"}]})

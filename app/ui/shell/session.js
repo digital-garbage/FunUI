@@ -222,10 +222,10 @@ export async function reattach(run, id, { queuedFor, finishedFor, onAdopt } = {}
     let meta = null;
     const finished = await finishedFor(id, seen, { onFound: (extra) => { meta = extra; } });
     if (finished && run.state.phase === "idle") {
-      const sceneId = (meta && meta.funpack_scene_id) || null;
-      const projectId = (meta && meta.funpack_project_id) || null;
-      const sceneIds = (meta && Array.isArray(meta.funpack_scene_ids) && meta.funpack_scene_ids.length)
-        ? meta.funpack_scene_ids : (sceneId ? [sceneId] : []);
+      const sceneId = (meta && meta.funui_scene_id) || null;
+      const projectId = (meta && meta.funui_project_id) || null;
+      const sceneIds = (meta && Array.isArray(meta.funui_scene_ids) && meta.funui_scene_ids.length)
+        ? meta.funui_scene_ids : (sceneId ? [sceneId] : []);
       if (onAdopt) onAdopt(sceneId, projectId, sceneIds);
       run.adopt(finished);
       return { promptId: finished, sceneId, projectId };

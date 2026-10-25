@@ -46,7 +46,7 @@ NAME = "first"
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Seed search", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Seed search", message)
 
 
 def install(patcher, values, key):
@@ -63,7 +63,7 @@ def install(patcher, values, key):
         live["judge"] = taste.judge(KIND, NAME)
         liked, disliked = taste.counts(KIND, NAME)
         if live["judge"] is None:
-            log.once(f"{ID}:state", log.INFO, "FunPack Seed search",
+            log.once(f"{ID}:state", log.INFO, "FunUI Seed search",
                      f"key {taste.key!r}: learning ({liked} liked / {disliked} disliked; "
                      "searches from 10 rated clips with both kinds)")
 
@@ -123,7 +123,7 @@ def install(patcher, values, key):
                 return noise
             scored.append((judge.score(split[0]), k, candidate))
         score, k, best = max(scored, key=lambda s: s[0])
-        log.info("FunPack Seed search",
+        log.info("FunUI Seed search",
                  ("kept your seed" if k == 0 else f"switched to candidate {k + 1}")
                  + f" of {count} (scores {', '.join(f'{s:.3f}' for s, _k, _c in scored)})")
         return best

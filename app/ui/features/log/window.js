@@ -37,7 +37,7 @@ export function mount({ dom, poll = EVERY, setFooter = () => {}, close = () => {
   async function refresh() {
     if (selecting()) return;         // never redraw under a drag
     try {
-      const res = await fetch("/funpack/api/log?limit=600", { cache: "no-store" });
+      const res = await fetch("/fun/api/log?limit=600", { cache: "no-store" });
       const payload = await res.json().catch(() => ({}));
       const lines = payload.lines || [];
       const text = lines.join("\n") || payload.detail || "Nothing in the log yet.";

@@ -65,7 +65,7 @@ _DESC = 512
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack DynaShift", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI DynaShift", message)
 
 
 def _pooled(cond):
@@ -181,7 +181,7 @@ def install(patcher, values, key):
                     and len(bank.negatives) >= MIN_FOR_PULL
                     else "no pull yet (needs 2 liked + 2 disliked)")
             summary = f"{len(bank.negatives)} disliked, {len(bank.positives)} liked banked; {pull}"
-        log.once(f"{ID}:state", log.INFO, "FunPack DynaShift", f"key {taste.key!r}: {summary}")
+        log.once(f"{ID}:state", log.INFO, "FunUI DynaShift", f"key {taste.key!r}: {summary}")
 
     captured = taste.collect(patcher, key, KIND, keep=4 * BANK, fresh=fresh)
     steer = input_steer.Steer("DynaShift")

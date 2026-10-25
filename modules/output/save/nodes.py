@@ -64,7 +64,7 @@ def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="
     a GPU attempt that fails leaves no half file and falls back to CPU H.264 with a Log alert saying why."""
     if audio is not None and not bool(audio["waveform"].isfinite().all()):      # NaN/Inf sound (typically the model loaded in fp16): AAC refuses it, so the video is kept without it
         audio = None
-        log.alert("FunPack Save Video", "The audio contains NaN/Inf values, so you are most likely using the wrong precision for this model (fp16?). The audio has been removed; the video was saved without it.")
+        log.alert("FunUI Save Video", "The audio contains NaN/Inf values, so you are most likely using the wrong precision for this model (fp16?). The audio has been removed; the video was saved without it.")
     gpu = NVENC[codec]
     why = None
     if encoder != "cpu":
@@ -80,23 +80,23 @@ def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="
                 why = f"the GPU encoder (NVENC) could not start: {exc}{_HINT}"
     _write(path, frames, fps, audio, metadata, X264)
     if why:                                                    # the video is saved either way; never lose a generation to the encoder
-        log.once("save_nvenc", log.ALERT, "FunPack Save Video", f"{why}. Saved as H.264 on the CPU instead.")
+        log.once("save_nvenc", log.ALERT, "FunUI Save Video", f"{why}. Saved as H.264 on the CPU instead.")
     return "H.264 on libx264 (CPU, all cores)"
 
 
-class FunPackSaveVideo(io.ComfyNode):
+class FunUISaveVideo(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackSaveVideo",
-            display_name="FunPack Save Video",
-            category="FunPack/Output",
+            node_id="FunUISaveVideo",
+            display_name="FunUI Save Video",
+            category="FunUI/Output",
             description="Save as MP4: on the GPU's encoder (H.264 or H.265) when there is one, otherwise H.264 on every CPU core.",
             inputs=[
                 io.Image.Input("images"),
                 io.Audio.Input("audio", optional=True),
                 io.Float.Input("fps", default=24.0, min=1.0, max=240.0, step=0.01),
-                io.String.Input("filename_prefix", default="FunPack"),
+                io.String.Input("filename_prefix", default="FunUI"),
                 io.Combo.Input("encoder", options=list(ENCODERS), default="auto", optional=True,
                                tooltip="auto and gpu: the GPU encoder (NVENC) when it works, otherwise H.264 on the CPU so the video is still saved. cpu: H.264 (libx264) on every core."),
                 io.Combo.Input("codec", options=list(CODECS), default="h264", optional=True,
@@ -108,7 +108,7 @@ class FunPackSaveVideo(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, fps=24.0, filename_prefix="FunPack", audio=None, encoder="auto", codec="h264") -> io.NodeOutput:
+    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264") -> io.NodeOutput:
         frames = (images * 255).clamp(0, 255).byte().cpu().numpy()
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
@@ -119,5 +119,5 @@ class FunPackSaveVideo(io.ComfyNode):
         file = f"{filename}_{counter:05}_.mp4"
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec)
-        log.info("FunPack Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}")
+        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}")
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

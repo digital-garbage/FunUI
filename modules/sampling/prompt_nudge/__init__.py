@@ -47,7 +47,7 @@ SETTINGS = {
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Taste prompt nudge", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Taste prompt nudge", message)
 
 
 def nudged(c, words, d, amount, width=None):
@@ -103,7 +103,7 @@ def install(patcher, values, key):
             captured[NAME] = c[row][words].float().mean(0).detach()
         if "dir" not in live and (row is not None or not similar):     # "similar" needs the positive prompt
             live["dir"], how = direction(taste.rows(KIND), c[row or 0][words].float().mean(0), similar)
-            log.once(f"{ID}:state", log.INFO, "FunPack Taste prompt nudge", f"key {taste.key!r}: {how}")
+            log.once(f"{ID}:state", log.INFO, "FunUI Taste prompt nudge", f"key {taste.key!r}: {how}")
         if "dir" not in live:
             return executor(x, t, *args, **kwargs)
         amount = strength * dit_hooks.late_half(to)

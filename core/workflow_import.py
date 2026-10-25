@@ -14,7 +14,7 @@ Pure data in, data out. `schemas` is core.graph.Schemas (what each node's inputs
 import copy
 from typing import Any, Dict, List, Tuple
 
-from . import comfy_types
+from . import comfy_types, legacy
 from .graph import is_link
 
 SKIP = {"Note", "MarkdownNote"}
@@ -393,7 +393,7 @@ def bind(slots: List[dict], schemas, notes: List[str] = None) -> Tuple[List[dict
             if any(is_link(v) and v == [s["id"], 1] for o in slots for v in o["inputs"].values()):
                 continue                                      # its mask is used: leave it as it is
             notes.append(f"LoadImage #{s['id'][1:]} now takes the scene's start picture; the file it named is not kept. With no picture on the scene it cannot run.")
-            s["node"], s["inputs"] = "FunPackLoadMedia", {"media_id": ""}
+            s["node"], s["inputs"] = "FunUILoadMedia", {"media_id": ""}
             give("image", s, "media_id", {"at": "assets.source_image"})
     return slots, bound
 
@@ -401,6 +401,7 @@ def bind(slots: List[dict], schemas, notes: List[str] = None) -> Tuple[List[dict
 def convert(workflow: Any, schemas) -> dict:
     """{"slots", "bound", "notes"} for a workflow in either export format."""
     notes: List[str] = []
+    workflow = legacy.data(workflow)             # nodes saved before the FunPack -> FunUI rename
     api = is_api(workflow)
     if api:
         slots = _from_api(workflow, notes)

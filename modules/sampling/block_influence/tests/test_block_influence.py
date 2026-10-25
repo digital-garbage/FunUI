@@ -21,9 +21,9 @@ def root(tmp_path, monkeypatch):
 
 
 def _load(tiny, key="fox"):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"taste": {"key": key}} if key else {}
-    return FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    return FunUILoadModifiers.execute(tiny.patcher, settings).result
 
 
 def test_switched_off_it_stores_nothing_changes_nothing_and_says_so(tiny_h3):
@@ -99,7 +99,7 @@ def test_a_discarded_candidate_is_not_measured(tiny_h3):
     from modules.system.taste import store
     patched, _ = _load(tiny_h3)
     measure.set_enabled(True)
-    patched.model_options.setdefault("transformer_options", {})["funpack_probe"] = True
+    patched.model_options.setdefault("transformer_options", {})["funui_probe"] = True
     tiny_h3.sample(patched)
     assert not (store.ROOT / "fox" / "block_influence.pending.pt").exists()
 

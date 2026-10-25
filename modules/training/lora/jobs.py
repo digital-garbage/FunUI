@@ -43,7 +43,7 @@ def trail(message: str) -> None:
             rss = f" [process {int(f.read().split()[1]) * 4096 / 1024 ** 3:.1f} GiB in memory]"
     except OSError:
         pass
-    log.info("FunPack LoRA training", message + rss)
+    log.info("FunUI LoRA training", message + rss)
 
 
 def begin(set_name: str, name: str, total: int, settings: dict, prompt_id: str = "", resume: dict | None = None) -> str:

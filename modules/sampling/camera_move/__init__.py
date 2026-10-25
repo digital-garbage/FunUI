@@ -85,7 +85,7 @@ SETTINGS = {
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunPack Camera move", message)
+    log.once(f"{ID}:{message}", level, "FunUI Camera move", message)
 
 
 def finite(v, default, lo, hi):
@@ -193,7 +193,7 @@ def install(patcher, values, key):
         out = executor(model_wrap, sigmas, extra_args, callback, noise,
                        latent_image, denoise_mask, disable_pbar)
         if live["moved"] and not live["multi"]:
-            log.once(f"{ID}:result", log.INFO, "FunPack Camera move",
+            log.once(f"{ID}:result", log.INFO, "FunUI Camera move",
                      f"Active | {move.describe()}, from step {move.step}; moved {live['moved']} call(s)")
         return out
 

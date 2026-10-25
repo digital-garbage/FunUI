@@ -56,11 +56,11 @@ def test_nothing_banked_at_this_resolution_changes_nothing():
 
 def test_it_banks_the_last_step_and_steers_once_rated(tiny_h3, monkeypatch):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     from modules.system.taste import store
 
     def load():
-        patched, status = FunPackLoadModifiers.execute(tiny_h3.patcher, {
+        patched, status = FunUILoadModifiers.execute(tiny_h3.patcher, {
             "taste": {"key": "fox"}, "dynashift": {"enabled": True, "strength": 1.0}}).result
         wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
         outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]

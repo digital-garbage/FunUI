@@ -57,7 +57,7 @@ export function build(root) {
   const frame = composer.frame.app({ header, main });
   root.append(frame.node);
   // v4's draggable splitters: three 7px bars that set the zone sizes; sizes are remembered.
-  const KEY = "funpack_layout", css = document.documentElement.style;
+  const KEY = "funui_layout", css = document.documentElement.style;
   const size = { "--media-w": [160, 600], "--properties-w": [200, 700], "--timeline-h": [200, 700] };
   const saved = (() => {
     try {

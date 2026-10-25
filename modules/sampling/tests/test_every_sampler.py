@@ -1,6 +1,6 @@
 """Every sampler and scheduler the Sampler window offers, on a real (tiny) model class.
 
-The picker lists whatever ComfyUI registers plus FunPack's own, so what is on offer is read at run time, and each
+The picker lists whatever ComfyUI registers plus FunUI's own, so what is on offer is read at run time, and each
 name must reach a finished, finite latent. The model is ComfyUI's own `model_base.MiniMaxH3` at a few thousand
 parameters: it carries the real sampling object, packing and wrappers, which a bare diffusion module does not.
 Random weights say nothing about quality; they prove the path runs end to end.
@@ -49,11 +49,11 @@ def _finite(out):
 
 
 def _run(model, **kw):
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
     cond, latent = _inputs()
     args = dict(seed=1, steps=3, cfg=1.0, sampler_name="euler", scheduler="normal", denoise=1.0)
     args.update(kw)
-    return FunPackSampler.execute(model, cond, cond, latent, **args)
+    return FunUISampler.execute(model, cond, cond, latent, **args)
 
 
 def pytest_generate_tests(metafunc):
@@ -68,7 +68,7 @@ def _safe(kind):
         import comfy.samplers  # noqa: F401
     except Exception:                                    # noqa: BLE001 -- no ComfyUI here: the fixture skips the test
         return ["euler"]
-    from modules.sampling import sampler as _  # noqa: F401  (FunPack's own samplers register when their module loads)
+    from modules.sampling import sampler as _  # noqa: F401  (FunUI's own samplers register when their module loads)
     return _names(kind)
 
 
@@ -86,4 +86,4 @@ def test_guidance_with_a_negative_and_a_partial_denoise_and_a_typed_schedule_run
     assert _finite(_run(model, denoise=0.5, steps=4))
     sigmas = torch.tensor([0.4, 0.3, 0.2, 0.1, 0.0])
     assert _finite(_run(model, sigmas=sigmas))
-    assert "dflow_ord1" in comfy.samplers.SAMPLER_NAMES, "FunPack's own samplers were not offered"
+    assert "dflow_ord1" in comfy.samplers.SAMPLER_NAMES, "FunUI's own samplers were not offered"

@@ -26,7 +26,7 @@ import torch.nn.functional as F
 
 from . import schedule
 
-_FORWARD = ContextVar("funpack_ptd_forward", default=None)
+_FORWARD = ContextVar("funui_ptd_forward", default=None)
 _LOCKS = weakref.WeakKeyDictionary()
 _LOCKS_GUARD = threading.Lock()
 
@@ -139,7 +139,7 @@ class Controller:
         self.hops = adapter.hops
         self.grid = torch.tensor(adapter.grid, dtype=torch.float64)
         self._lock = _model_lock(native)
-        self._hop = ContextVar(f"funpack_ptd_hop_{id(self)}", default=None)
+        self._hop = ContextVar(f"funui_ptd_hop_{id(self)}", default=None)
         self.fuse_blocks = False
         self.allocation_compiler = True
 
@@ -376,9 +376,9 @@ def attach(patcher, controller, key, tag):
     patcher.add_object_patch("diffusion_model.preprocess_text_embeds", tag(raw_text, key))
     previous = patcher.model_options.get("model_function_wrapper")
     wrapper = tag(ModelCall(controller, previous), key)
-    wrapper._funpack_prev = previous
+    wrapper._funui_prev = previous
     patcher.set_model_unet_function_wrapper(wrapper)
     patcher.model_options[CONTROLLER_KEY] = tag(controller, key)
 
 
-CONTROLLER_KEY = "funpack_ptd_controller"
+CONTROLLER_KEY = "funui_ptd_controller"

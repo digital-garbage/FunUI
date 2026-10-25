@@ -8,7 +8,7 @@ import { offer } from "../../shell/actions.js";
 import { names } from "../../shell/bin.js";
 
 const MAX_TAKES = 24;
-const expand = (body) => fetch("/funpack/api/prompt/expand", { method: "POST", headers: { "Content-Type": "application/json" },
+const expand = (body) => fetch("/fun/api/prompt/expand", { method: "POST", headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ ...body, seed: Math.floor(Math.random() * 2 ** 31) || 1 }) }).then((r) => (r.ok ? r.json() : null));
 
 /** The render a scene gets from its unit's one clip: a cut half plays from where its half begins. */
@@ -145,7 +145,7 @@ export default {
       if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { error: "A run is already going: the preview waits for it." };
       if (!p.project) return { error: "Open a project first: the preview uses its settings." };
       const frozen = structuredClone(app.pipeline.slots() || []);
-      const slot = frozen.find((s) => s.node === "FunPackLoraLoader" && !s.bypassed) || frozen.find((s) => s.node === "FunPackLoraLoader");
+      const slot = frozen.find((s) => s.node === "FunUILoraLoader" && !s.bypassed) || frozen.find((s) => s.node === "FunUILoraLoader");
       if (!slot) return { error: "This pipeline has no LoRA loader to try the LoRA in. Add one in Models & Pipeline." };
       slot.bypassed = false;
       slot.inputs = { ...slot.inputs, lora_name: lora, strength_model: strength };

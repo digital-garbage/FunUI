@@ -3,7 +3,7 @@
 Core's SaveVideo encodes on one CPU thread; on a rental that was most of the time after decoding.
 """
 
-from .nodes import FunPackSaveVideo
+from .nodes import FunUISaveVideo
 
 ID = "output_save"
 TITLE = "Save video"
@@ -11,7 +11,7 @@ STAGE = "post"
 CATEGORY = "post"
 STATUS = "proven"
 
-NODES = [FunPackSaveVideo]
+NODES = [FunUISaveVideo]
 
 
 def _link(v):
@@ -19,7 +19,7 @@ def _link(v):
 
 
 def upgrade(slots, outputs):
-    """Pipelines saved before this node hold core's CreateVideo -> SaveVideo: one FunPack Save Video instead.
+    """Pipelines saved before this node hold core's CreateVideo -> SaveVideo: one FunUI Save Video instead.
     A SaveVideo left with no feed takes the one picture source nothing else reads (its sound too).
     `outputs(node)` -> that node's output types. -> the slots, changed or not."""
     slots = [dict(s) for s in slots]
@@ -31,7 +31,7 @@ def upgrade(slots, outputs):
             continue
         feed = (s.get("inputs") or {}).get("video")
         src = by_id.get(feed[0]) if _link(feed) else None
-        new = {"filename_prefix": (s.get("inputs") or {}).get("filename_prefix", "FunPack")}
+        new = {"filename_prefix": (s.get("inputs") or {}).get("filename_prefix", "FunUI")}
         roles = s.get("roles")
         if src is not None and src["node"] == "CreateVideo":
             new.update({k: v for k, v in (src.get("inputs") or {}).items() if k in ("images", "audio", "fps")})
@@ -48,7 +48,7 @@ def upgrade(slots, outputs):
                 new["audio"] = [loose[0]["id"], kinds.index("AUDIO")]
         else:
             continue
-        s.update(node="FunPackSaveVideo", inputs=new)
+        s.update(node="FunUISaveVideo", inputs=new)
         if roles:
             s["roles"] = roles
     return [s for s in slots if s["id"] not in drop]

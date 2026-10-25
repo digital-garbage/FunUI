@@ -25,7 +25,7 @@ including someone else's hook we chained through.
 
 from . import patching
 
-PREV = "_funpack_prev"
+PREV = "_funui_prev"
 BLOCK = "double_block"
 
 
@@ -72,12 +72,12 @@ def add_block_hook(patcher, key: str, index: int, hook) -> None:
     inner = dit.get(slot)
 
     def below(extra):
-        # `funpack_below` tells a hook that REPLACES the block (rather than
+        # `funui_below` tells a hook that REPLACES the block (rather than
         # calling original_block) that doing so would skip someone's hook.
         if inner is None:
-            return {**extra, "funpack_below": False}
+            return {**extra, "funui_below": False}
         original = extra["original_block"]
-        return {**extra, "funpack_below": True,
+        return {**extra, "funui_below": True,
                 "original_block": lambda a: inner(a, {**extra, "original_block": original})}
 
     def neutral(args, extra):
@@ -174,15 +174,15 @@ def current_step(transformer_options):
     return int(hit[0]), int(sched.shape[0]) - 1
 
 
-PROBE = "funpack_probe"
+PROBE = "funui_probe"
 # Set on late-branch guidance's weakened copy (which also carries PROBE). Hooks that must not
 # run on it, or must tell it from a probe, read this.
-WEAK_BRANCH = "funpack_weak_branch"
+WEAK_BRANCH = "funui_weak_branch"
 
 
 # Set by a wrapper that moves the latent's frame of reference (camera move) on the first call
 # it moves: an edit filed in the old frame must not be added to this call's input.
-FRAME_CHANGE = "funpack_frame_change"
+FRAME_CHANGE = "funui_frame_change"
 
 
 def weak_branch(transformer_options) -> bool:
@@ -270,7 +270,7 @@ def without_compiler(patcher, key: str) -> None:
     for the one sampling call is enough and the next run keeps the compiler.
 
     Attached to the MODEL as an OUTER_SAMPLE wrapper, so it holds for any
-    sampler, not only FunPack's.
+    sampler, not only FunUI's.
     """
     from comfy.patcher_extension import WrappersMP
 

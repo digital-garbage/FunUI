@@ -12,7 +12,7 @@ nothing is loaded; the published SLA files contain only ordinary LoRA tensors.
 
 Ported from ComfyUI-H3-SLA-Attention (MIT; refreshed against its 2026-09-21 version),
 whose kernel and block map are vendored from LightX2V (Apache-2.0) — see sla_kernel.py /
-sla_block_map.py for the change lists. What is FunPack's here: this file, the H3 model
+sla_block_map.py for the change lists. What is FunUI's here: this file, the H3 model
 check, and the loader wiring, so turning it on is picking a value in the diffusion model
 loader rather than adding and wiring a node.
 
@@ -240,20 +240,20 @@ def _summarise(state, cfg):
     """One line per sampling run. Never one per block — there are 50 of those."""
     if state["calls"] == 0:
         logging.warning(
-            "[FunPack SLA] installed but never invoked — attention was NOT sparsified "
+            "[FunUI SLA] installed but never invoked — attention was NOT sparsified "
             "(%d dense fall-throughs). Check that the MODEL reaching the sampler is the "
             "one this loader produced.", state["dense"])
         return
     real = 1.0 - (state["kept"] / state["blocks"]) if state["blocks"] else 0.0
     logging.info(
-        "[FunPack SLA] %s | %d calls | S=%d | blocks %d/%d kept (%.1f%% sparse, asked %.0f%%) "
+        "[FunUI SLA] %s | %d calls | S=%d | blocks %d/%d kept (%.1f%% sparse, asked %.0f%%) "
         "| %d pinned | %d dense fall-throughs | displaced %s",
         cfg["engine"], state["calls"], state["seq"], state["kept"], state["blocks"], real * 100.0,
         cfg["sparsity_ratio"] * 100.0, state["pinned"], state["dense"], state["backend"] or "?")
-    logging.info("[FunPack SLA] full attention on %s of %d", f"steps {_runs(state['dense_at'])}"
+    logging.info("[FunUI SLA] full attention on %s of %d", f"steps {_runs(state['dense_at'])}"
                  if state["dense_at"] else "no step", state["n"])
     if state["failed"] is not None:
-        logging.warning("[FunPack SLA] kernel fell back to dense at least once: %s",
+        logging.warning("[FunUI SLA] kernel fell back to dense at least once: %s",
                         state["failed"])
 
 
@@ -359,7 +359,7 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
             or q.shape[-1] != _H3_HEAD_DIM
             or q.dtype not in ok_dtypes
             or q.shape[2] < cfg["min_seq_len"]
-            or to.get("_funpack_sla_dense", False)
+            or to.get("_funui_sla_dense", False)
         ):
             return dense()
 
@@ -375,7 +375,7 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
             # norm+RoPE), and assuming they match failed every call into dense.
             qb, kb, vb = (t if t.is_contiguous() else t.contiguous() for t in (x.transpose(1, 2) for x in (q, k, v)))
 
-            video, keep, refs = to.get("_funpack_sla_spans") or (0, (), ())
+            video, keep, refs = to.get("_funui_sla_spans") or (0, (), ())
             keep = tuple(keep if cfg["protect_audio"] else ()) + tuple(refs if heavy else ())
 
             if cfg["engine"] == "comfy_kitchen":
@@ -418,7 +418,7 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
                 state["failed"] = "%s: %s" % (exc.__class__.__name__, exc)
                 # Warning, not debug: a silent fall to dense is close enough to sparse speed
                 # to go unnoticed from timing alone.
-                logging.warning("[FunPack SLA] %s kernel failed, dense from here this run: %s",
+                logging.warning("[FunUI SLA] %s kernel failed, dense from here this run: %s",
                                 cfg["engine"], state["failed"], exc_info=True)
             return dense()
 
@@ -466,11 +466,11 @@ def make_wrapper(state, cfg):
         # The layout lives on the payload, which never reaches the attention call site,
         # so the wrapper is the only place it can be picked up.
         video, keep, refs = spans(minimax_payload)
-        to["_funpack_sla_spans"] = (video, tuple(keep), tuple(refs))
-        to["_funpack_sla_dense"] = bool(
+        to["_funui_sla_spans"] = (video, tuple(keep), tuple(refs))
+        to["_funui_sla_dense"] = bool(
             (last > 0 and state["step"] > n_steps - last) or (state["step"] - 1) in dense_steps)
         state["n"] = n_steps
-        if to["_funpack_sla_dense"] and counted:
+        if to["_funui_sla_dense"] and counted:
             state["dense_at"].add(state["step"])
 
         # Forward minimax_payload only when H3 actually supplied one: every other
@@ -564,7 +564,7 @@ def install_sla(model, sparsity_ratio=None, block_size=None, min_seq_len=None,
     to = patched.model_options.get("transformer_options", {}).copy()
     to["optimized_attention_override"] = make_override(state, cfg, dense_fn=dense_fn, dense_label=dense_label)
     patched.model_options["transformer_options"] = to
-    patched.add_wrapper_with_key("diffusion_model", "funpack_sla_state", make_wrapper(state, cfg))
+    patched.add_wrapper_with_key("diffusion_model", "funui_sla_state", make_wrapper(state, cfg))
 
     blk = cfg["block_size"] if cfg["engine"] == "triton" else 64
     how = f"tau={cfg['tau']:.2f}" if cfg["method"] == "sol-attn" else f"sparsity={cfg['sparsity_ratio']:.2f}"

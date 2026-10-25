@@ -61,7 +61,7 @@ export default {
 
     const peek = (item) => {
       const s = item.src;
-      const src = s.kind === "bin" ? `/funpack/api/media/${encodeURIComponent(s.id)}/file` : `/view?filename=${encodeURIComponent(s.filename)}&subfolder=${encodeURIComponent(s.subfolder || "")}&type=${encodeURIComponent(s.type || "output")}`;
+      const src = s.kind === "bin" ? `/fun/api/media/${encodeURIComponent(s.id)}/file` : `/view?filename=${encodeURIComponent(s.filename)}&subfolder=${encodeURIComponent(s.subfolder || "")}&type=${encodeURIComponent(s.type || "output")}`;
       const viewer = c.viewer.media({ src, kind: item.media_kind === "video" ? "video" : "image" });
       const m = c.modal.generic({ title: item.name || "Preview", body: viewer, onClose: () => viewer.destroy && viewer.destroy() });
       return m;

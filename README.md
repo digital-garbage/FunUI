@@ -1,6 +1,6 @@
-# ComfyUI-FunPack v5 "Cunning Cranberry"
+# FunUI v5 "Classy Chopper"
 
-**FunPack v5 is here. It is a browser studio for video inside ComfyUI: a timeline with one clip per scene, a Composer for your prompts, pipeline cards instead of graphs, and modules that learn from your ratings - all on the regular ComfyUI backend.**
+**FunUI v5 is here. It is a browser studio for video inside ComfyUI: a timeline with one clip per scene, a Composer for your prompts, pipeline cards instead of graphs, and modules that learn from your ratings - all on the regular ComfyUI backend.**
 
 <p align="left">
   <a href="https://ko-fi.com/M4M61MBGIT"><img src="https://img.shields.io/badge/Support%20me%20on%20Ko--fi-FF5E5B?style=for-the-badge&amp;logo=kofi&amp;logoColor=white" alt="Ko-fi" height="36"></a>&nbsp;
@@ -9,14 +9,14 @@
 </p>
 
 > [!IMPORTANT]
-> FunPack is an open-source hobby project maintained by single person, available to you for zero cost. It means resources such as time and money are limited, and there is no "QA team" to review every single feature and report every bug.
+> FunUI is an open-source hobby project maintained by single person, available to you for zero cost. It means resources such as time and money are limited, and there is no "QA team" to review every single feature and report every bug.
 > If you discover a bug or wish to suggest a new feature, feel free to open a new issue in this repo's Issues.
 
-<p align="center"><img src="docs/images/studio.jpg" alt="FunPack studio: preview, scene settings and a six-clip timeline" width="900"></p>
+<p align="center"><img src="docs/images/studio.jpg" alt="FunUI studio: preview, scene settings and a six-clip timeline" width="900"></p>
 
 ## What v5 is
 
-A rewrite from scratch, not an update of 4.x. Every feature is a module that announces itself, so nothing can be forgotten in the UI, no wire can be missed, and a module that fails to load is simply left out while the run carries on. Open it at `/funpack/` in your browser.
+A rewrite from scratch, not an update of 4.x. Every feature is a module that announces itself, so nothing can be forgotten in the UI, no wire can be missed, and a module that fails to load is simply left out while the run carries on. Open it at `/fun/` in your browser.
 
 - **Timeline studio**: one clip per scene, media bin, preview, takes, rating, Export, Render, a project wizard and a guided tour.
 - **Composer**: write the story in one box, with a cut word, templates, `$variables` and shortcuts.
@@ -46,7 +46,7 @@ The Project Setup Wizard picks your look, names the project and loads the pipeli
 
 ### Pipeline as cards, not a graph
 
-Pick a file in each card, swap or add nodes, import a ComfyUI workflow. FunPack says when every slot is filled and names the first thing missing when it is not.
+Pick a file in each card, swap or add nodes, import a ComfyUI workflow. FunUI says when every slot is filled and names the first thing missing when it is not.
 
 <p align="center"><img src="docs/images/pipeline.jpg" alt="Models and Pipeline" width="900"></p>
 
@@ -91,19 +91,19 @@ Teach the model your style from your own media and results you rated. Pick the d
 
 With git, inside your `ComfyUI/custom_nodes` directory:
 
-`git clone https://github.com/digital-garbage/ComfyUI-FunPack`
+`git clone https://github.com/digital-garbage/FunUI`
 
-`comfy-cli` (`comfy node install ComfyUI-FunPack`) and ComfyUI-Manager install what is published on Comfy Registry. They give you 5.0 only once it is published there: check Settings > About FunPack after installing.
+`comfy-cli` (`comfy node install FunUI`) and ComfyUI-Manager install FunUI from Comfy Registry. Check Settings > About FunUI after installing to see which version you have.
 
 ## Dependencies
 
-FunPack includes a [`requirements.txt`](requirements.txt) file for its Python dependencies.
+FunUI includes a [`requirements.txt`](requirements.txt) file for its Python dependencies.
 
 Install them with:
 
 `pip install -r requirements.txt`
 
-FunPack uses your existing ComfyUI/PyTorch install.
+FunUI uses your existing ComfyUI/PyTorch install.
 
 ## Models
 
@@ -113,15 +113,15 @@ FunPack uses your existing ComfyUI/PyTorch install.
 
 ## Documentation
 
-Start with [How to start generating with FunPack](docs/how-to-start.md). The app also has a guided tour: Help -> Start tour.
+Start with [How to start generating with FunUI](docs/how-to-start.md). The app also has a guided tour: Help -> Start tour.
 
-Writing a module or a UI feature? Start with [Developing FunPack](docs/README.md).
+Writing a module or a UI feature? Start with [Developing FunUI](docs/README.md).
 
 Version history is available in [CHANGELOG.md](CHANGELOG.md).
 
-## Classic FunPack (4.x)
+## Classic FunUI (4.x)
 
-FunPack 4 was a different app: Cutting Room, with Easy Gen as its simple mode, and no modules. It is no longer developed, but it is kept for anyone who prefers it: `git clone -b v4-classic https://github.com/digital-garbage/ComfyUI-FunPack`, or browse the [`v4-classic`](https://github.com/digital-garbage/ComfyUI-FunPack/tree/v4-classic) branch.
+FunUI 4 was a different app: Cutting Room, with Easy Gen as its simple mode, and no modules. It is no longer developed, but it is kept for anyone who prefers it: `git clone -b v4-classic https://github.com/digital-garbage/FunUI`, or browse the [`v4-classic`](https://github.com/digital-garbage/FunUI/tree/v4-classic) branch.
 
 ## Feedback
 
@@ -129,14 +129,14 @@ If you have suggestions, questions, or ideas for new features, feel free to open
 
 ## Intent
 
-FunPack is provided under GNU General Public License V3, which gives you broad rights to use, modify and distribute the original/modified version of it as long as the original license text is included. FunPack places no limitations on types of content you can generate by using it, meaning both SFW and NSFW content are fine as long as you don't violate your local laws. GPLv3 does not grant you rights for such violations.
+FunUI is provided under GNU General Public License V3, which gives you broad rights to use, modify and distribute the original/modified version of it as long as the original license text is included. FunUI places no limitations on types of content you can generate by using it, meaning both SFW and NSFW content are fine as long as you don't violate your local laws. GPLv3 does not grant you rights for such violations.
 
-However, I do not endorse using FunPack and/or demonstrating it alongside morally and legally questionable/prohibited content, including:
+However, I do not endorse using FunUI and/or demonstrating it alongside morally and legally questionable/prohibited content, including:
 - Non-consensual explicit depiction of a real person;
 - Explicit depiction of minors;
 - Depiction of violence and gore targeted at a real person.
 
-I do not provide support to users who use FunPack in such cases, and in case I detect it, any support will be immediately ceased.
+I do not provide support to users who use FunUI in such cases, and in case I detect it, any support will be immediately ceased.
 
 Thanks for understanding.
 
@@ -150,14 +150,14 @@ I express my deepest gratitude to:
 - Team Cursor and Composer model;
 - DeepSeek team and model;
 - Google and Gemini;
-- Lightricks and the LTX-Video model; FunPack's identity-transfer phase tag is a port of `ltx_core` (Apache-2.0);
+- Lightricks and the LTX-Video model; FunUI's identity-transfer phase tag is a port of `ltx_core` (Apache-2.0);
 - [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) — the LTX nodes used by the LTX pipeline presets;
 - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) — utility nodes used by the H3 pipeline presets;
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) — reads quantized `.gguf` encoders when it is installed;
 - ComfyUI-H3-SLA-Attention (MIT) — the SLA block-sparse attention for MiniMax H3 is ported from it, and its kernel and block map come from [LightX2V](https://github.com/ModelTC/LightX2V) (Apache-2.0);
 - ComfyUI-MiniMaxH3_LatentUpscaler by Tr1dae — the tiled H3 decode and the X2 Detail VAE output handling are ported from its "VAE Decode (fast)";
 - the authors of the papers behind the sampling modules: ALG (arXiv 2506.08456), FreeSliders (2511.00103), Decisiveness (2510.01184), momentum (2602.20360), "Pulling The REINS" (2606.17257) and STAS (2603.17825);
-- [OpenCut](https://github.com/opencut-app/opencut-classic) — the in-browser non-linear video editor whose UI and interaction patterns inspired FunPack's timeline studio;
+- [OpenCut](https://github.com/opencut-app/opencut-classic) — the in-browser non-linear video editor whose UI and interaction patterns inspired FunUI's timeline studio;
 - [Inter](https://github.com/rsms/inter) and IBM Plex Mono — the fonts of the app (SIL Open Font License; copies in `app/assets/fonts`);
 - [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) by kohya-ss (Apache-2.0) — the LoRA training add-on's loop (which layers get a LoRA, per-block checkpointing, noise sampling and loss weighting, optimizer and learning rate) and its block swap (a number of transformer blocks kept in system memory) follow its MiniMax H3 training recipe;
 - PTD few-step support for MiniMax H3 is ported from [ComfyUI-PTD-Compact](https://github.com/Nynxz/ComfyUI-PTD-Compact) by Nynxz (Apache-2.0), which builds on [ComfyUI-PTD](https://github.com/vita-epfl/PTD-inference) by EPFL VITA Lab (Apache-2.0; paper "Parametric Trajectory Distillation for Few-Step Video Generation", arXiv 2610.11498) and on ComfyUI-MiniMaxH3-PTD by taobao-content-ai (Apache-2.0); licence notice in `modules/sampling/ptd`;

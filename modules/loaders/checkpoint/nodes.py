@@ -1,6 +1,6 @@
 """One file holding a model, its text encoder and its VAE.
 
-The split loaders are right for the families FunPack targets -- LTX and H3 ship
+The split loaders are right for the families FunUI targets -- LTX and H3 ship
 the diffusion model, the encoders and the VAEs separately, and pairing them is
 the user's choice. The SD family does not: one checkpoint carries all three, and
 without this there is no way to load one at all.
@@ -16,13 +16,13 @@ from comfy_api.latest import io
 from ..._core import log
 
 
-class FunPackCheckpointLoader(io.ComfyNode):
+class FunUICheckpointLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackCheckpointLoader",
-            display_name="FunPack Checkpoint Loader",
-            category="FunPack/Loaders",
+            node_id="FunUICheckpointLoader",
+            display_name="FunUI Checkpoint Loader",
+            category="FunUI/Loaders",
             description="Load a model, text encoder and VAE from one checkpoint file.",
             inputs=[
                 io.Combo.Input("ckpt_name", options=folder_paths.get_filename_list("checkpoints")),
@@ -48,11 +48,11 @@ class FunPackCheckpointLoader(io.ComfyNode):
         no_vae = vae is None or getattr(vae, "first_stage_model", True) is None
         missing = [name for name, gone in (("clip", clip is None), ("vae", no_vae)) if gone]
         if missing:
-            log.warning("FunPack Checkpoint Loader",
+            log.warning("FunUI Checkpoint Loader",
                         f"{ckpt_name} has no {' or '.join(missing)}; those outputs are empty "
                         f"and whatever reads them will fail")
         kind = type(getattr(model, "model", model)).__name__
-        log.info("FunPack Checkpoint Loader", f"{ckpt_name} loaded as {kind}")
+        log.info("FunUI Checkpoint Loader", f"{ckpt_name} loaded as {kind}")
 
         return io.NodeOutput(model, clip, vae,
                              f"{ckpt_name} loaded as {kind}"

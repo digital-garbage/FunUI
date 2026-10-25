@@ -85,21 +85,21 @@ def frames_for(length: int) -> int:
 
 UNTESTED = ("LTX support is UNTESTED: it has never been run on a real LTX model and nobody plans to test it soon. "
             "You are free to try it. If something breaks, please report it at "
-            "https://github.com/digital-garbage/ComfyUI-FunPack/issues")
+            "https://github.com/digital-garbage/FunUI/issues")
 
 
 def empty_latent(model, width, height, length, batch_size=1, audio_vae=None, frame_rate=25.0):
     """The joint latent, or None when this is not an LTX audio+video model."""
     if not is_ltx(model):
         return None
-    log.once("ltx_untested", log.ALERT, "FunPack LTX", UNTESTED)
+    log.once("ltx_untested", log.ALERT, "FunUI LTX", UNTESTED)
     if audio_vae is None:
         raise RuntimeError(
             "this model makes sound with the picture and sizes it from the audio VAE: wire the audio "
             "VAE into the empty latent (a video-only latent would give a silent clip)")
 
     if width % VIDEO_SPATIAL_RATIO or height % VIDEO_SPATIAL_RATIO:
-        log.once(f"ltx_size:{width}x{height}", log.ALERT, "FunPack LTX",
+        log.once(f"ltx_size:{width}x{height}", log.ALERT, "FunUI LTX",
                  f"{width}x{height} is not a multiple of {VIDEO_SPATIAL_RATIO}: the video comes out "
                  f"{width // VIDEO_SPATIAL_RATIO * VIDEO_SPATIAL_RATIO}x{height // VIDEO_SPATIAL_RATIO * VIDEO_SPATIAL_RATIO}")
     frames = frames_for(length)
@@ -134,7 +134,7 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
         try:
             images = vae_tiles.tiled_decode(vae, video_latent, tile_size)
         except Exception as exc:                             # noqa: BLE001
-            log.once(f"ltx_decode_tiles:{type(exc).__name__}", log.ALERT, "FunPack LTX decode",
+            log.once(f"ltx_decode_tiles:{type(exc).__name__}", log.ALERT, "FunUI LTX decode",
                      f"the tiled decode failed ({type(exc).__name__}: {exc}); decoded in one piece instead")
             images = vae.decode(video_latent)
     else:

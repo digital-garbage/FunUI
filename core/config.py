@@ -7,18 +7,19 @@ ROOT = Path(__file__).resolve().parent.parent
 APP_DIR = ROOT / "app"
 MODULES_DIR = ROOT / "modules"
 
-UI_PREFIX = "/funpack"
+UI_PREFIX = "/fun"
+LEGACY_PREFIX = "/funpack"     # where the app lived before 5.0.3; only redirects
 
 # Extension allowlist for the served app. modules/ is never served: a module is
 # Python and a settings declaration, and draws nothing.
 APP_EXTS = frozenset({".js", ".css", ".html", ".woff2", ".svg"})
 
 # Where projects are kept. Inside the pack rather than ComfyUI's output tree: a
-# project is FunPack's own state, and clearing outputs must not take a user's
+# project is FunUI's own state, and clearing outputs must not take a user's
 # edits with it.
 PROJECTS_DIR = ROOT / "projects"
 
-# Uploaded media (reference images, imported clips) -- FunPack's own state for
+# Uploaded media (reference images, imported clips) -- FunUI's own state for
 # the same reason PROJECTS_DIR is: clearing ComfyUI's output tree must not take
 # something the user deliberately imported with it.
 MEDIA_DIR = ROOT / "media"

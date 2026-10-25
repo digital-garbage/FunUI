@@ -5,8 +5,8 @@
 // the user sees would be whichever was written last. The app asks, and gets
 // either a prompt or the reasons there is not one.
 
-const ENDPOINT = "/funpack/api/pipeline";
-const NODES = "/funpack/api/nodes";
+const ENDPOINT = "/fun/api/pipeline";
+const NODES = "/fun/api/nodes";
 
 /**
  * check({slots, values}) -> { slots, refused, incomplete, notes, queueable, prompt }

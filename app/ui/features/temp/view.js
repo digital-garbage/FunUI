@@ -38,7 +38,7 @@ export function mount({ dom, setFooter, close }) {
   }
 
   async function erase(f) {
-    const res = await fetch("/funpack/api/temp/delete", { method: "POST", headers: { "Content-Type": "application/json" },
+    const res = await fetch("/fun/api/temp/delete", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ where, filename: f.filename, subfolder: f.subfolder || "" }) });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.deleted) throw new Error(out.detail || `HTTP ${res.status}`);
@@ -88,7 +88,7 @@ export function mount({ dom, setFooter, close }) {
     looking = null; selecting = false; picked.clear();
     content.set([composer.hint.default({ text: "Looking…" })]);
     try {
-      payload = await (await fetch(`/funpack/api/temp?where=${where}`, { cache: "no-store" })).json();
+      payload = await (await fetch(`/fun/api/temp?where=${where}`, { cache: "no-store" })).json();
     } catch (err) {
       payload = {};
       content.set([composer.banner.danger({ text: `Could not read the folder: ${err.message}` })]);

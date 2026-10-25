@@ -12,7 +12,7 @@ export function createMaintenance({ api, flush }) {
     let gs;
     try { gs = await api.gitFull(); } catch (err) { return tell(err.message), null; }
     if (!gs || !gs.ok) return tell((gs && gs.detail) || "Git is not available for this install."), null;
-    if (needClean && gs.dirty) return tell("Local changes in the FunPack folder: commit or stash them first."), null;
+    if (needClean && gs.dirty) return tell("Local changes in the FunUI folder: commit or stash them first."), null;
     return gs;
   }
   const ask = (title, message) => c.modal.dialogue({ title, message, confirmLabel: "Go ahead" }).result;
@@ -38,7 +38,7 @@ export function createMaintenance({ api, flush }) {
         return c.modal.dialogue({ title: "Not restarted", message: `${res.blocked || (said ? said(res) : "Nothing changed.")} ${res.blocked ? "Restart ComfyUI yourself when the generation has finished." : ""}`.trim(), confirmLabel: "OK", cancelLabel: "Close" }).result;
       }
       const bad = res && res.requirements && res.requirements.ran && !res.requirements.ok;
-      if (bad) { await c.modal.dialogue({ title: "Dependencies failed", message: `${res.requirements.detail || ""}\n\nFunPack was updated, but installing its dependencies failed: it may not load until they are installed by hand. ComfyUI will restart now.`, confirmLabel: "Restart", cancelLabel: "Restart" }).result; }
+      if (bad) { await c.modal.dialogue({ title: "Dependencies failed", message: `${res.requirements.detail || ""}\n\nFunUI was updated, but installing its dependencies failed: it may not load until they are installed by hand. ComfyUI will restart now.`, confirmLabel: "Restart", cancelLabel: "Restart" }).result; }
       const line = said ? said(res) : message;
       card.setText(/Restarting ComfyUI/.test(line) ? line : `${line}\nRestarting ComfyUI…`);
     } catch (err) {
@@ -70,7 +70,7 @@ export function createMaintenance({ api, flush }) {
       const branch = gs.branch || "dev";
       // Local changes stop the code from moving, not the packages: the requirements check still runs, on its own.
       if (gs.dirty) {
-        if (!(await ask("Check requirements", "FunPack has local changes, so the code cannot be updated. Check this install's requirements and install any that are missing?"))) return;
+        if (!(await ask("Check requirements", "FunUI has local changes, so the code cannot be updated. Check this install's requirements and install any that are missing?"))) return;
         return run("Checking requirements…", () => api.requirements(), (r) => deps({ requirements: r }));
       }
       if (!(await ask("Update", `Pull the latest "${branch}" from origin, check requirements and install any that are missing, then restart ComfyUI. If a generation is running, the restart waits until you press Restart after it finishes.${gs.behind > 0 ? ` ${gs.behind} commit(s) available.` : ""}`))) return;
@@ -84,7 +84,7 @@ export function createMaintenance({ api, flush }) {
     async switchBranch() {
       const gs = await status(true); if (!gs) return;
       if (!(gs.branches || []).length) return tell("No git branches found.");
-      const branch = await c.modal.choice({ title: "Switch FunPack branch", items: gs.branches.map((b) => ({ id: b, label: b, hint: b === gs.branch ? "current" : "" })) }).result;
+      const branch = await c.modal.choice({ title: "Switch FunUI branch", items: gs.branches.map((b) => ({ id: b, label: b, hint: b === gs.branch ? "current" : "" })) }).result;
       if (!branch || branch === gs.branch) return;
       if (!(await ask("Switch branch", `Switch to "${branch}", pull from origin, and restart ComfyUI. If a generation is running, the restart waits until you press Restart after it finishes.`))) return;
       return run(`Switching to ${branch}…`, () => api.git("checkout", { branch }), (r) => `On ${branch}${r.updated ? ` (${r.before} → ${r.after})` : ", already up to date"}.${deps(r)}`);

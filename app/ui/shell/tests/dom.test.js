@@ -48,8 +48,8 @@ test("a download is a click on a link with the file's name", () => {
   const dom = createDom(), seen = [];
   const click = window.HTMLAnchorElement.prototype.click;
   window.HTMLAnchorElement.prototype.click = function () { seen.push([this.getAttribute("href"), this.download]); };
-  try { dom.download("/funpack/api/x", "x.json"); } finally { window.HTMLAnchorElement.prototype.click = click; }
-  assert.deepEqual(seen, [["/funpack/api/x", "x.json"]]);
+  try { dom.download("/fun/api/x", "x.json"); } finally { window.HTMLAnchorElement.prototype.click = click; }
+  assert.deepEqual(seen, [["/fun/api/x", "x.json"]]);
 });
 
 test("a file chooser that is cancelled gives null, and one that is answered gives the file", async () => {

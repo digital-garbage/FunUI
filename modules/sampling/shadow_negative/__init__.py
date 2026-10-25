@@ -83,7 +83,7 @@ SETTINGS = {
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Shadow negative", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Shadow negative", message)
 
 
 def _negative_of(guider):
@@ -138,7 +138,7 @@ def install(patcher, values, key):
 
     def make(block):
         def hook(args, extra):
-            if state.negative is None or (compose and extra["funpack_below"]) \
+            if state.negative is None or (compose and extra["funui_below"]) \
                     or not in_window(args):
                 return extra["original_block"](args)
             out, why = shadow.forward(state, block, args)

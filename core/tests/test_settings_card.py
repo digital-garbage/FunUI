@@ -6,7 +6,7 @@ someone typed it, and a value that is a list (a LoRA stack, say) must come
 out as rows rather than as a wall of JSON.
 
 Ported from v4's movie_editor/tests/test_settings_card.py, cut down the same
-way core/settings_card.py itself was: no FunPackStudio/Chain-Sampler shape to
+way core/settings_card.py itself was: no FunUIStudio/Chain-Sampler shape to
 test here, since v5's pipeline has no such nodes -- every slot is walked the
 same generic way, so there is one section kind, not several.
 """
@@ -33,7 +33,7 @@ def test_full_filenames_are_not_abbreviated():
     """A truncated checkpoint name is the one thing that makes the card useless."""
     name = "MiniMax-H3-fl2va-bf16-Q6_K-a-really-long-name.gguf"
     rep = sc.collect(
-        [{"id": "model", "node": "FunPackDiffusionModelLoader",
+        [{"id": "model", "node": "FunUIDiffusionModelLoader",
           "inputs": {"model_name": name, "attention": "sage3"}}], HOST)
     assert _rows(rep, "model")["model_name"] == name
 
@@ -54,12 +54,12 @@ def test_a_cpu_only_box_says_so_rather_than_showing_nothing():
 
 
 def test_lists_come_out_as_rows_and_settings():
-    """A funpack_list widget's value is one JSON string. Printing it raw would
+    """A funui_list widget's value is one JSON string. Printing it raw would
     technically be complete and practically unreadable."""
     rows = json.dumps([{"lora": "h3_turbo.safetensors", "strength": 1.0, "on": True},
                        {"lora": "style.safetensors", "strength": 0.65, "on": False}])
     rep = sc.collect(
-        [{"id": "l", "node": "FunPackLoraLoader", "inputs": {"lora_list": rows}}], HOST)
+        [{"id": "l", "node": "FunUILoraLoader", "inputs": {"lora_list": rows}}], HOST)
     text = " ".join(v for _, v in rep["sections"][0]["rows"])
     assert "h3_turbo.safetensors" in text and "strength=1.0" in text
     assert "style.safetensors" in text and "strength=0.65" in text
@@ -144,7 +144,7 @@ def test_a_pipeline_with_an_unreasonable_slot_count_is_capped_not_rendered_whole
     assert "omitted" in rep["sections"][-1]["rows"][0][1]
 
 
-def test_a_funpack_list_with_an_unreasonable_row_count_is_capped():
+def test_a_funui_list_with_an_unreasonable_row_count_is_capped():
     import json
     rows = json.dumps([{"i": i} for i in range(5000)])
     rep = sc.collect([{"id": "l", "node": "X", "inputs": {"lora_list": rows}}], HOST)
@@ -152,9 +152,9 @@ def test_a_funpack_list_with_an_unreasonable_row_count_is_capped():
     assert "more rows omitted" in text
 
 
-def test_many_funpack_lists_on_one_slot_still_respect_the_card_wide_cap():
+def test_many_funui_lists_on_one_slot_still_respect_the_card_wide_cap():
     """extensive_testing round 2: the per-card check used to fire once per
-    SLOT, so one slot with many funpack_list inputs -- each individually
+    SLOT, so one slot with many funui_list inputs -- each individually
     capped at _MAX_ROWS by _rows_from_list -- blew the card-wide budget by a
     large multiple before the next slot's check ever ran. 50 inputs x 2000
     rows each used to produce 100,050 total rows from a single slot."""
@@ -184,7 +184,7 @@ def test_render_png_stays_fast_even_when_both_caps_are_individually_honored():
     assert len(png) < 5_000_000
 
 
-def test_a_funpack_list_row_with_many_keys_does_not_blow_up_the_embed():
+def test_a_funui_list_row_with_many_keys_does_not_blow_up_the_embed():
     """extensive_testing round 3: _short() bounded each KEY's value but not
     the JOINED row -- a dict with 150 keys x 400-char values produced one
     row string with no cap of its own. Row count and per-key length both
@@ -224,7 +224,7 @@ def test_many_empty_input_slots_with_huge_ids_do_not_blow_up_the_embed():
     assert len(png) < 5_000_000
 
     from PIL import Image
-    embedded = Image.open(__import__("io").BytesIO(png)).text["funpack_settings"]
+    embedded = Image.open(__import__("io").BytesIO(png)).text["funui_settings"]
     assert len(embedded) < 2_000_000
 
 
@@ -238,9 +238,9 @@ def test_a_huge_input_name_is_capped_not_embedded_whole():
     assert len(key) < 500
 
 
-def test_a_huge_funpack_list_dict_key_is_capped_not_just_its_value():
+def test_a_huge_funui_list_dict_key_is_capped_not_just_its_value():
     """Same gap, one level deeper: _rows_from_list joins `f"{k}={_short(v)}"`
-    per dict key in a funpack_list row -- _short() bounded v but not k, so a
+    per dict key in a funui_list row -- _short() bounded v but not k, so a
     huge key still got fully materialized into the join before the final
     _short() on the joined string ever ran."""
     rows = json.dumps([{("k" * 500_000): "v"}])
@@ -287,7 +287,7 @@ def test_render_png_stays_fast_when_one_slot_has_many_large_lists():
 
 def test_render_png_produces_a_real_png_with_the_report_embedded():
     rep = sc.collect(
-        [{"id": "model", "node": "FunPackDiffusionModelLoader",
+        [{"id": "model", "node": "FunUIDiffusionModelLoader",
           "inputs": {"model_name": "h3.safetensors"}}], HOST, project_name="My project")
     png = sc.render_png(rep, "dark")
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
@@ -295,7 +295,7 @@ def test_render_png_produces_a_real_png_with_the_report_embedded():
     from PIL import Image
     img = Image.open(__import__("io").BytesIO(png))
     assert img.format == "PNG"
-    embedded = json.loads(img.text["funpack_settings"])
+    embedded = json.loads(img.text["funui_settings"])
     assert embedded["project"] == "My project"
     assert embedded["sections"][0]["rows"] == [("model_name", "h3.safetensors")] or \
         embedded["sections"][0]["rows"] == [["model_name", "h3.safetensors"]]

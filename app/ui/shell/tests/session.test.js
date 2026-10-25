@@ -212,7 +212,7 @@ test("which scene/project a run belongs to travels with it, for both halves", as
   const finished = await reattach(run2, "me", {
     queuedFor: async () => null,
     finishedFor: async (_id, _seen, { onFound } = {}) => {
-      if (onFound) onFound({ client_id: "me", funpack_scene_id: "s2", funpack_project_id: "p2" });
+      if (onFound) onFound({ client_id: "me", funui_scene_id: "s2", funui_project_id: "p2" });
       return "f1";
     },
   });
@@ -256,15 +256,15 @@ test("onAdopt's third argument carries every scene a multi-scene run covers", as
   assert.deepEqual(got, { sceneId: "s1", projectId: "p1", sceneIds: ["s1", "s2", "s3"] });
 
   // The finished-run path recovers it from the raw extra_data finishedFor
-  // hands back through onFound, the same way it already reads funpack_scene_id.
+  // hands back through onFound, the same way it already reads funui_scene_id.
   const run2 = fakeRun();
   run2.seen = () => ["f1"];
   let got2 = null;
   await reattach(run2, "me", {
     queuedFor: async () => null,
     finishedFor: async (_id, _seen, { onFound } = {}) => {
-      if (onFound) onFound({ client_id: "me", funpack_scene_id: "s2",
-                             funpack_scene_ids: ["s2", "s4"], funpack_project_id: "p2" });
+      if (onFound) onFound({ client_id: "me", funui_scene_id: "s2",
+                             funui_scene_ids: ["s2", "s4"], funui_project_id: "p2" });
       return "f1";
     },
     onAdopt: (sceneId, projectId, sceneIds) => { got2 = { sceneId, projectId, sceneIds }; },

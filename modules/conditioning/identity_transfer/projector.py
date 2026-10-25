@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from safetensors.torch import load_file
 
-_USE_GPU = os.environ.get("FUNPACK_ARCFACE_GPU", "0") == "1"
+_USE_GPU = os.environ.get("FUNUI_ARCFACE_GPU", "0") == "1"
 _FACE_APP = None
 
 

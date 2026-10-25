@@ -6,7 +6,7 @@ because it hooked an API the model does not consult. So these drive the override
 exactly the way `wrap_attn` does, with H3's real argument shape, and assert which
 path fired.
 
-Ported from FunPack v4's own suite, itself ported from ComfyUI-H3-SLA-Attention
+Ported from FunUI v4's own suite, itself ported from ComfyUI-H3-SLA-Attention
 (MIT). The CUDA half is skipped without a GPU; everything else runs anywhere
 torch imports.
 """
@@ -116,7 +116,7 @@ def _run(wrapper, n_steps, payload=None):
     seen = []
 
     def Ex(*a, **kw):
-        seen.append(kw["transformer_options"]["_funpack_sla_dense"])
+        seen.append(kw["transformer_options"]["_funui_sla_dense"])
         return None
 
     to = {"sample_sigmas": [0.0] * (n_steps + 1)}
@@ -155,7 +155,7 @@ def test_the_protected_spans_are_read_from_the_packed_layout():
     to = {"sample_sigmas": [0.0] * 5}
     w(lambda *a, **kw: None, None, None, None, transformer_options=to,
       minimax_payload={"layout": layout, "text_token_tags": tags})
-    video, keep, refs = to["_funpack_sla_spans"]
+    video, keep, refs = to["_funui_sla_spans"]
     assert video == 800
     assert keep == ((0, 3), (6, 10), (300, 400), (500, 520), (520, 800))
     assert refs == ((3, 6), (10, 300), (400, 500))
@@ -241,7 +241,7 @@ def test_sla_refuses_a_model_that_is_not_h3_and_says_so():
 
 def test_a_same_named_class_from_a_different_module_is_not_treated_as_h3():
     """A bare class-name match would treat any unrelated MiniMaxH3Model -- built by a
-    different custom node, or a future FunPack model reusing the name by accident --
+    different custom node, or a future FunUI model reusing the name by accident --
     as the real thing, and sparsify it at H3's ratio with H3's prefix-pinning logic
     on a model that was never validated for either. The qualified check requires the
     DEFINING module too, not just the name."""
@@ -373,14 +373,14 @@ def test_a_throwaway_call_is_not_a_step_so_the_dense_window_stays_on_the_real_la
     real, weak = [], []
 
     def Ex(*a, **kw):
-        (weak if kw["transformer_options"].get("funpack_probe") else real).append(
-            kw["transformer_options"]["_funpack_sla_dense"])
+        (weak if kw["transformer_options"].get("funui_probe") else real).append(
+            kw["transformer_options"]["_funui_sla_dense"])
         return None
 
     for i in range(4):
         w(Ex, None, None, None, transformer_options={"sample_sigmas": [0.0] * 5}, minimax_payload=None)
         if i < 3:
-            w(Ex, None, None, None, transformer_options={"sample_sigmas": [0.0] * 5, "funpack_probe": True},
+            w(Ex, None, None, None, transformer_options={"sample_sigmas": [0.0] * 5, "funui_probe": True},
               minimax_payload=None)
     assert real == [False, False, False, True]
 
@@ -434,7 +434,7 @@ def test_the_comfy_kitchen_engine_puts_scattered_protected_blocks_first(monkeypa
     state = sla.new_state()
     ov = sla.make_override(state, _cfg(engine="comfy_kitchen", min_seq_len=0))
     for keep in (((0, 64), (256, 320)), ((64, 192),)):
-        _call(ov, q, k, k.clone(), transformer_options={"_funpack_sla_spans": (320, keep, ())})
+        _call(ov, q, k, k.clone(), transformer_options={"_funui_sla_spans": (320, keep, ())})
     first, second = calls
     assert first[1] == [0, 2] and first[0][:128:64] == [0.0, 256.0] and first[2:] == (0.1, False)
     assert second[1] == [1, 3] and second[0][64] == 64.0             # one run: used where it is, no copy
@@ -448,7 +448,7 @@ def test_dense_steps_follow_the_schedule_through_a_cancel_and_a_two_call_sampler
     state = sla.new_state()
     w = sla.make_wrapper(state, _cfg(dense_steps=frozenset({0, 1})))
     seen = []
-    ex = lambda *a, **kw: seen.append(kw["transformer_options"]["_funpack_sla_dense"])
+    ex = lambda *a, **kw: seen.append(kw["transformer_options"]["_funui_sla_dense"])
     call = lambda s: w(ex, None, None, None, transformer_options={"sample_sigmas": sched, "sigmas": torch.tensor([s])})
     for s in (1.0, 0.8, 0.6):           # cancelled after three steps
         call(s)
@@ -466,7 +466,7 @@ def test_sol_attn_routes_by_threshold_and_vsa_hands_over_to_comfyui(monkeypatch)
     state = sla.new_state()
     ov = sla.make_override(state, _cfg(engine="comfy_kitchen", method="sol-attn", tau=1.7, min_seq_len=0))
     q = torch.zeros(1, H, 128, D, dtype=torch.bfloat16)
-    _call(ov, q, q.clone(), q.clone(), transformer_options={"_funpack_sla_spans": (64, ((0, 64),), ())})
+    _call(ov, q, q.clone(), q.clone(), transformer_options={"_funui_sla_spans": (64, ((0, 64),), ())})
     assert calls[0]["tau"] == 1.7 and "topk_ratio" not in calls[0]
 
     monkeypatch.setattr(sla, "sla_available", lambda: True)
@@ -496,8 +496,8 @@ def test_sol_attn_routes_by_threshold_and_vsa_hands_over_to_comfyui(monkeypatch)
 def test_the_loader_draws_each_sla_field_only_in_its_mode():
     """'All values are fucked up': every SLA field was drawn whatever the method, sparsity beside
     sol-attn's own threshold."""
-    from modules.loaders.diffusion_model.nodes import FunPackDiffusionModelLoader as L
-    rules = {i.id: {c["input"]: c["when"] for c in (i.extra_dict or {}).get("funpack_shows", [])}
+    from modules.loaders.diffusion_model.nodes import FunUIDiffusionModelLoader as L
+    rules = {i.id: {c["input"]: c["when"] for c in (i.extra_dict or {}).get("funui_shows", [])}
              for i in L.define_schema().inputs}
     assert rules["sla_sparsity"]["sla_method"] == ["sla", "vsa"] and rules["sla_tau"]["sla_method"] == ["sol-attn"]
     assert rules["sla_block_size"]["sla_engine"] == ["triton"] and rules["sla_tail"]["sla_engine"] == ["comfy_kitchen"]
@@ -506,7 +506,7 @@ def test_the_loader_draws_each_sla_field_only_in_its_mode():
 
 
 def test_the_loaders_fields_are_listed_in_reading_order():
-    from modules.loaders.diffusion_model.nodes import FunPackDiffusionModelLoader as L
+    from modules.loaders.diffusion_model.nodes import FunUIDiffusionModelLoader as L
     named = [i.id for i in L.define_schema().inputs]
     assert sorted(L.WIDGET_ORDER) == sorted(named)            # every field placed, none invented
 
@@ -532,7 +532,7 @@ def test_k_in_another_layout_than_q_still_reaches_the_kernel_contiguous(monkeypa
     ov = sla.make_override(state, _cfg(engine="comfy_kitchen", min_seq_len=0))
     q = torch.zeros(1, 128, H, D, dtype=torch.bfloat16).transpose(1, 2)          # H3's own: contiguous once turned back
     k = torch.zeros(1, H, 128, D, dtype=torch.bfloat16)                          # another layout
-    _call(ov, q, k, k.clone(), transformer_options={"_funpack_sla_spans": (0, (), ())})
+    _call(ov, q, k, k.clone(), transformer_options={"_funui_sla_spans": (0, (), ())})
     assert seen == [(True, True, True)] and state["failed"] is None
 
 

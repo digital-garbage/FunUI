@@ -13,7 +13,7 @@ from core import projects  # noqa: E402
 from modules.output.render import files, serving  # noqa: E402
 from modules.output.render.tests.clips import comfy, make_clip, needs_ffmpeg, probe  # noqa: E402,F401
 
-BASE = "/funpack/api/m/render"
+BASE = "/fun/api/m/render"
 
 
 def get(port, path, method="GET", headers=None):

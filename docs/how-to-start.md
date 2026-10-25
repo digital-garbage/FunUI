@@ -1,4 +1,4 @@
-# How to start generating with FunPack
+# How to start generating with FunUI
 
 This is the short path from "installed" to "first clip". It does not explain every node or loader: the app does that where you use them (hover a control, read its hint).
 
@@ -6,15 +6,15 @@ This is the short path from "installed" to "first clip". It does not explain eve
 
 With git, inside `ComfyUI/custom_nodes`:
 
-`git clone https://github.com/digital-garbage/ComfyUI-FunPack`
+`git clone https://github.com/digital-garbage/FunUI`
 
-For the classic 4.x add `-b v4-classic`. `comfy node install ComfyUI-FunPack` and ComfyUI-Manager install what is published on Comfy Registry, which is 5.0 only once it is published there; check Settings ▸ About FunPack after installing.
+For the classic 4.x add `-b v4-classic`. `comfy node install FunUI` and ComfyUI-Manager install what is published on Comfy Registry, which is 5.0 only once it is published there; check Settings ▸ About FunUI after installing.
 
-Then `pip install -r requirements.txt` in the same Python environment ComfyUI uses, and restart ComfyUI. FunPack uses your existing ComfyUI and PyTorch. If pip wants to upgrade a package ComfyUI compiles against (torch, numpy, transformers, comfy-kitchen), read what it will change first: FunPack's own updater only installs what is missing and reports the rest.
+Then `pip install -r requirements.txt` in the same Python environment ComfyUI uses, and restart ComfyUI. FunUI uses your existing ComfyUI and PyTorch. If pip wants to upgrade a package ComfyUI compiles against (torch, numpy, transformers, comfy-kitchen), read what it will change first: FunUI's own updater only installs what is missing and reports the rest.
 
-## 2. Open FunPack
+## 2. Open FunUI
 
-Start ComfyUI as usual and open `/funpack/` on the same address, for example `http://127.0.0.1:8188/funpack/`. The chip at the top right says whether ComfyUI is live.
+Start ComfyUI as usual and open `/fun/` on the same address, for example `http://127.0.0.1:8188/fun/`. The chip at the top right says whether ComfyUI is live.
 
 ## 3. Make a project
 
@@ -22,9 +22,9 @@ Start ComfyUI as usual and open `/funpack/` on the same address, for example `ht
 
 | Model | State |
 |---|---|
-| MiniMax H3 | The model FunPack is built and tested around. |
+| MiniMax H3 | The model FunUI is built and tested around. |
 | Stable Diffusion 1.5 | Experimental. |
-| LTX 2.x (UNTESTED) | **UNTESTED.** Never run on a real LTX model, and nobody plans to test it soon. You are free to try it; if something breaks, please report it in [Issues](https://github.com/digital-garbage/ComfyUI-FunPack/issues). |
+| LTX 2.x (UNTESTED) | **UNTESTED.** Never run on a real LTX model, and nobody plans to test it soon. You are free to try it; if something breaks, please report it in [Issues](https://github.com/digital-garbage/FunUI/issues). |
 
 ## 4. Pick your files
 
@@ -35,7 +35,7 @@ The model's pipeline starts empty: it needs your files.
 
 Put model files where ComfyUI expects them (`models/diffusion_models`, `models/text_encoders`, `models/vae`, `models/loras`). 
 
-`.gguf` text encoders need the ComfyUI-GGUF node pack (FunPack does not install it) and work only for architectures it understands; otherwise they are refused with a message (Gemma 4 `.gguf` is one such case). Use the `.safetensors` file of the same model. A diffusion-model `.gguf` also loads without the pack, but is expanded to full size in memory.
+`.gguf` text encoders need the ComfyUI-GGUF node pack (FunUI does not install it) and work only for architectures it understands; otherwise they are refused with a message (Gemma 4 `.gguf` is one such case). Use the `.safetensors` file of the same model. A diffusion-model `.gguf` also loads without the pack, but is expanded to full size in memory.
 
 ## 5. Write the story
 
@@ -65,7 +65,7 @@ Rate a result with **Rate scene…** (liked, disliked, bad image, bad compositio
 
 - Nothing happens: check the ComfyUI chip and the Log window.
 - Wrong look: Settings ▸ Appearance. Lost a layout: View ▸ Reset Layout. Lost a project: File ▸ Open recent.
-- A bug or a missing feature: please open an [issue](https://github.com/digital-garbage/ComfyUI-FunPack/issues).
+- A bug or a missing feature: please open an [issue](https://github.com/digital-garbage/FunUI/issues).
 
 ## Known limits in 5.0
 

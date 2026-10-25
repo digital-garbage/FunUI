@@ -46,7 +46,7 @@ SETTINGS = {
 
 # Carried on the per-block copy of transformer_options, so an attention call knows
 # it belongs to a named block without any shared flag that could leak.
-_SCOPE = "funpack_attention_temperature"
+_SCOPE = "funui_attention_temperature"
 
 
 def install(patcher, values, key):
@@ -57,7 +57,7 @@ def install(patcher, values, key):
         return None
     blocks, problems = dit_hooks.parse_blocks(values.get("blocks"), dit_hooks.block_count(patcher))
     for problem in problems:
-        log.once(f"{ID}:{problem}", log.ALERT, "FunPack Randomizer", f"ignored {problem}")
+        log.once(f"{ID}:{problem}", log.ALERT, "FunUI Randomizer", f"ignored {problem}")
     if not blocks:
         raise ValueError(f"no usable blocks in {values.get('blocks')!r}, so nothing would change")
 

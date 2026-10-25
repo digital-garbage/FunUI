@@ -2,7 +2,7 @@
 // click it again, press ✕ or Esc and the cut is back. Nothing in the project changes.
 import { composer as c } from "../../composer/composer.js";
 
-const url = (id) => `/funpack/api/media/${encodeURIComponent(id)}/file`;
+const url = (id) => `/fun/api/media/${encodeURIComponent(id)}/file`;
 
 export default {
   id: "media-peek",

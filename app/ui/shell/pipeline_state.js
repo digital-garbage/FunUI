@@ -31,8 +31,8 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
   // meant to be fed from -- nothing else in this app currently resolves
   // "the file the pipeline's model loader points at" from raw slots.
   const MODEL_FILE_INPUT = {
-    FunPackCheckpointLoader: "ckpt_name",
-    FunPackDiffusionModelLoader: "model_name",
+    FunUICheckpointLoader: "ckpt_name",
+    FunUIDiffusionModelLoader: "model_name",
   };
 
   function currentModelFile(pipelineSlots) {
@@ -289,7 +289,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
         try {
           fresh = await refreshManifest();
         } catch (e) {
-          console.warn(`[FunPack] could not refresh modules for the new model: ${e && e.message ? e.message : e}`);
+          console.warn(`[FunUI] could not refresh modules for the new model: ${e && e.message ? e.message : e}`);
         }
         if (fresh && mine === epoch) _changed("edit");        // again once a new model's modules are known: a listener sees those
       } catch (e) {

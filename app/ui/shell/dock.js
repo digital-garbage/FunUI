@@ -1,6 +1,6 @@
 // The dock: which of Assets, Preview, Properties are showing. Kept in this browser, written onto the page as
 // `fp-hide-<zone>` classes where the stylesheet reads them.
-const KEY = "funpack_dock", ZONES = ["assets", "preview", "properties"];
+const KEY = "funui_dock", ZONES = ["assets", "preview", "properties"];
 
 export function createDock(root = document.documentElement) {
   const heard = new Set();

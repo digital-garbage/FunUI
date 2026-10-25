@@ -35,33 +35,33 @@ STATUS = "proven"
 # Slot ids are stable: they are how an override says which slot it means, and
 # they end up as node ids in the queued prompt.
 DEFAULT = [
-    {"id": "model", "group": "Loaders", "node": "FunPackDiffusionModelLoader", "inputs": {
+    {"id": "model", "group": "Loaders", "node": "FunUIDiffusionModelLoader", "inputs": {
         "weight_dtype": "default", "compute_dtype": "default", "attention": "default"}},
-    {"id": "clip", "group": "Loaders", "node": "FunPackCLIPLoader", "inputs": {"type": "stable_diffusion"}},
-    {"id": "vae", "group": "Loaders", "node": "FunPackVAELoader", "inputs": {"dtype": "bfloat16"}},
+    {"id": "clip", "group": "Loaders", "node": "FunUICLIPLoader", "inputs": {"type": "stable_diffusion"}},
+    {"id": "vae", "group": "Loaders", "node": "FunUIVAELoader", "inputs": {"dtype": "bfloat16"}},
 
     {"id": "positive", "group": "Preparation", "node": "CLIPTextEncode",
      "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"}],
      "inputs": {"clip": ["clip", 0], "text": ""}},
     {"id": "negative", "group": "Preparation", "node": "CLIPTextEncode",
-     # A project-level field, not a per-run one: most FunPack pipelines run at
+     # A project-level field, not a per-run one: most FunUI pipelines run at
      # CFG 1, where a negative prompt does nothing, so it does not belong beside
      # the prompt every Generate reads.
      "roles": [{"at": "project.negative", "input": "text", "label": "Negative prompt"}],
      "inputs": {"clip": ["clip", 0], "text": ""}},
 
-    {"id": "latent", "group": "Preparation", "node": "FunPackEmptyLatent",
+    {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
      "roles": [{"at": "project.video", "input": "width", "label": "Width"},
                {"at": "project.video", "input": "height", "label": "Height"},
                {"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
      "inputs": {
         "model": ["model", 0], "width": 512, "height": 512, "length": 1, "batch_size": 1}},
 
-    {"id": "settings", "group": "Preparation", "node": "FunPackModifierSettings", "inputs": {"settings": "{}"}},
-    {"id": "modifiers", "group": "Preparation", "node": "FunPackLoadModifiers", "inputs": {
+    {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
+    {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers", "inputs": {
         "model": ["model", 0], "settings": ["settings", 0]}},
 
-    {"id": "sampler", "group": "Sampling", "node": "FunPackSampler",
+    {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
      # The three dials that get reached for constantly. v4 buried them several
      # clicks deep in Engine Settings; here they are on the main window because
      # the slot says they belong there.
@@ -75,11 +75,11 @@ DEFAULT = [
         "seed": 0, "steps": 20, "cfg": 7.0,
         "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
 
-    {"id": "decode", "group": "Render", "node": "FunPackDecode", "inputs": {
+    {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
         "samples": ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0]}},
 
     {"id": "save", "group": "Render", "node": "SaveImage", "inputs": {
-        "images": ["decode", 0], "filename_prefix": "FunPack"}},
+        "images": ["decode", 0], "filename_prefix": "FunUI"}},
 ]
 
 

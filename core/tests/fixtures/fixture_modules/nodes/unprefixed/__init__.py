@@ -1,4 +1,4 @@
-"""Claims a node_id outside FunPack's namespace, where it could shadow anyone."""
+"""Claims a node_id outside FunUI's namespace, where it could shadow anyone."""
 
 from ..good import GoodNode
 

@@ -57,9 +57,9 @@ def test_api_export_works_and_a_load_image_becomes_the_start_picture():
            "2": {"class_type": "ImageScale", "inputs": {"image": ["1", 0], "width": 512}}}
     out = wi.convert(api, S)
     by = {s["id"]: s for s in out["slots"]}
-    assert by["w1"]["node"] == "FunPackLoadMedia" and by["w1"]["roles"][0]["at"] == "assets.source_image"
+    assert by["w1"]["node"] == "FunUILoadMedia" and by["w1"]["roles"][0]["at"] == "assets.source_image"
     assert by["w2"]["inputs"]["image"] == ["w1", 0]
-    assert out["bound"]["image"] == ["FunPackLoadMedia #1.media_id"] and any("start picture" in n for n in out["notes"])
+    assert out["bound"]["image"] == ["FunUILoadMedia #1.media_id"] and any("start picture" in n for n in out["notes"])
 
 
 def test_a_load_image_whose_mask_is_used_is_left_alone():

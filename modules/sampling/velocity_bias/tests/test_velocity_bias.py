@@ -58,8 +58,8 @@ def test_the_rotation_keeps_the_size_is_capped_and_fades():
 
 def _load(tiny, **v):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, {
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, {
         "taste": {"key": "fox"}, "velocity_bias": {"enabled": True, **v}}).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]

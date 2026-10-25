@@ -10,7 +10,7 @@
 // edit per keystroke and each is a PUT of the whole project; without this the
 // server answers them out of order and an older body lands last.
 
-const BASE = "/funpack/api/projects";
+const BASE = "/fun/api/projects";
 
 /**
  * A scene id the server will keep.

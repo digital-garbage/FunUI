@@ -35,9 +35,9 @@ def _model_file_choices():
 def shows(*conditions):
     """Draw an input only while each (other input, values) holds: SLA's fields belong to one method
     or engine each, and a field that does nothing in the mode picked is noise. Read by core/widgets."""
-    return {"funpack_shows": [{"input": name, "when": list(values)} for name, values in conditions]}
+    return {"funui_shows": [{"input": name, "when": list(values)} for name, values in conditions]}
 
-class FunPackDiffusionModelLoader(io.ComfyNode):
+class FunUIDiffusionModelLoader(io.ComfyNode):
     # How the form lists them (core/widgets): the file, how it is stored and computed, attention, then SLA in the
     # order its choices narrow it. Not the schema's order, which saved canvas workflows read by position.
     WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "compute_dtype", "fp16_accumulation", "attention",
@@ -48,9 +48,9 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackDiffusionModelLoader",
-            display_name="FunPack Diffusion Model Loader",
-            category="FunPack/Loaders",
+            node_id="FunUIDiffusionModelLoader",
+            display_name="FunUI Diffusion Model Loader",
+            category="FunUI/Loaders",
             description="Load a diffusion model, choosing precision and attention backend.",
             inputs=[
                 io.Combo.Input("model_name", options=_model_file_choices()),
@@ -130,7 +130,7 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
                                tooltip="What runs the sparse calls. comfy_kitchen: ComfyUI's compiled "
                                        "int8 sol_attn (needs comfy-kitchen 0.2.32+; the Triton kernel "
                                        "runs instead where it is missing, and the status says so). "
-                                       "triton: FunPack's own kernel, the only one with block size and "
+                                       "triton: FunUI's own kernel, the only one with block size and "
                                        "stabilize motion."),
                 io.String.Input("sla_dense_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn"])), default=sla_attention.SLA_DEFAULTS["dense_steps"],
                                 optional=True,
@@ -186,7 +186,7 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
                 sla_engine: str = None, sla_dense_steps: str = None, sla_references: str = None,
                 sla_tail: bool = None, sla_stabilize_motion: bool = None,
                 sla_method: str = None, sla_tau: float = None) -> io.NodeOutput:
-        notes = [f"FunPack Diffusion Model Loader | {model_name}"]
+        notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
         if fp16_accumulation and accumulation is None:
@@ -235,7 +235,7 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
         stored = None if gguf else stored_weights(state_dict)
         slow = slow_int8_build() if stored and "int8" in stored else None
         if slow:
-            log.alert("FunPack Diffusion Model Loader", slow)
+            log.alert("FunUI Diffusion Model Loader", slow)
             notes.append(slow)
         model = comfy.sd.load_diffusion_model_state_dict(
             state_dict, model_options=model_options, metadata=metadata)
@@ -250,11 +250,11 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
             model.cached_patcher_init = (comfy.sd.load_diffusion_model, (path, model_options))
 
         for line in unsupported_dtypes(model, weight_dtype, compute_dtype):
-            log.alert("FunPack Diffusion Model Loader", f"{line}; expect noise or broken sound. Set it to default.")
+            log.alert("FunUI Diffusion Model Loader", f"{line}; expect noise or broken sound. Set it to default.")
             notes.append(line)
         mixed = fp32_over_bf16(weight_dtype, compute_dtype, stored)
         if mixed:
-            log.alert("FunPack Diffusion Model Loader", mixed)
+            log.alert("FunUI Diffusion Model Loader", mixed)
             notes.append(mixed)
         dtype = dtype_of(compute_dtype)
         if dtype is not None and hasattr(model, "set_model_compute_dtype"):
@@ -307,7 +307,7 @@ class FunPackDiffusionModelLoader(io.ComfyNode):
         # The file's own storage, not the widget: an int8 file loaded at "bf16" still runs int8.
         weights = weight_dtype if not stored else (
             stored if weight_dtype in ("default", stored) else f"{stored} in file ({weight_dtype} asked)")
-        log.info("FunPack Diffusion Model Loader",
+        log.info("FunUI Diffusion Model Loader",
                  f"{model_name} loaded as {kind}, weights "
                  f"{weights}, compute {compute_dtype}, attention "
                  f"{applied_attention}")

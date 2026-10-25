@@ -31,7 +31,7 @@ def move(blocks, count: int, torch) -> dict:
     chosen = list(blocks)[max(0, len(blocks) - count):] if count > 0 else []
     moved, size, pin = 0, 0, True
     for block in chosen:
-        if getattr(block, "_funpack_swapped", False):
+        if getattr(block, "_funui_swapped", False):
             continue
         for module in block.modules():
             if hasattr(module, "comfy_cast_weights"):
@@ -46,7 +46,7 @@ def move(blocks, count: int, torch) -> dict:
                 if buf.device.type != "cpu":
                     size += buf.numel() * buf.element_size()
                     module._buffers[name] = _host(buf, pin)
-        block._funpack_swapped = True
+        block._funui_swapped = True
         moved += 1
     if moved and torch.cuda.is_available():
         torch.cuda.empty_cache()

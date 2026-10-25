@@ -1,5 +1,5 @@
 // Dragging a media-bin tile onto something. The bin says what it carries; whoever owns a drop target says what that means.
-export const MEDIA_DRAG = "application/funpack-media";
+export const MEDIA_DRAG = "application/fun-media";
 
 // Drop targets by name, so a feature never writes a kit class. A raw selector still works (tests use one).
 const TARGETS = { "lane:video": ".cx-nle-lane.cx-nle-lane-video", "lane:audio": ".cx-nle-lane.cx-nle-lane-audio", "lane:overlay": ".cx-nle-lane.cx-nle-lane-overlay" };

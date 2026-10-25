@@ -79,7 +79,7 @@ def _install_alg(**values):
 
     settings = {"enabled": True, "strength": 4.0, "until_sigma": 0.6}
     settings.update(values)
-    note = alg.install(Patcher(), settings, key="funpack.alg")
+    note = alg.install(Patcher(), settings, key="funui.alg")
     return captured.get("wrapper"), note, captured.get("kind"), WrappersMP
 
 

@@ -99,12 +99,12 @@ def test_the_routes_list_and_switch(comfyui, here):
 
     async def go():
         app, table = web.Application(), web.RouteTableDef()
-        routes.register(table, prefix="/funpack")
+        routes.register(table, prefix="/fun")
         app.add_routes(table)
         async with TestClient(TestServer(app)) as client:
-            got = await (await client.get("/funpack/api/addons")).json()
-            bad = await client.post("/funpack/api/addons", json={"id": "camera", "enabled": "yes"})
-            ok = await (await client.post("/funpack/api/addons", json={"id": "camera", "enabled": True})).json()
+            got = await (await client.get("/fun/api/addons")).json()
+            bad = await client.post("/fun/api/addons", json={"id": "camera", "enabled": "yes"})
+            ok = await (await client.post("/fun/api/addons", json={"id": "camera", "enabled": True})).json()
             return got, bad.status, ok
     got, bad, ok = asyncio.run(go())
     assert {a["id"] for a in got["addons"]} == {"nvidia_vsr", "camera", "lora_training"}

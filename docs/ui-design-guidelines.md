@@ -1,6 +1,6 @@
 # UI design guidelines
 
-How FunPack looks and behaves, and why. Read this before you add a screen, a setting or a kit element. For the element list see [UI kit reference](ui-kit-reference.md). For where a feature plugs in see [Writing a UI feature](writing-a-ui-feature.md).
+How FunUI looks and behaves, and why. Read this before you add a screen, a setting or a kit element. For the element list see [UI kit reference](ui-kit-reference.md). For where a feature plugs in see [Writing a UI feature](writing-a-ui-feature.md).
 
 ## Principles
 
@@ -59,7 +59,7 @@ Never carry meaning by colour alone. A chip says its state in words, an error ha
 
 ### Themes
 
-`shell/theme.js` sets `data-theme` (`dark` or `light`) on `<html>`. The choice behind it is `data-theme-pref` (`auto`, `dark`, `light`) and is stored in `localStorage` under `funpack_theme`. `auto` follows the system and is resolved before first paint so there is no wrong-theme flash.
+`shell/theme.js` sets `data-theme` (`dark` or `light`) on `<html>`. The choice behind it is `data-theme-pref` (`auto`, `dark`, `light`) and is stored in `localStorage` under `funui_theme`. `auto` follows the system and is resolved before first paint so there is no wrong-theme flash.
 
 - Token values are scoped to any `[data-theme]` element, so a single pane can show the other theme (the catalogue does this).
 - Test every new element in both themes in the catalogue.

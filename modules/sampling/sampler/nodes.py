@@ -74,28 +74,28 @@ def _first_step_clock(model):
 
     try:
         clone = model.clone()
-        clone.add_wrapper_with_key(WrappersMP.PREPARE_SAMPLING, "funpack.clock", prepare)
-        clone.add_wrapper_with_key(WrappersMP.APPLY_MODEL, "funpack.clock", apply_model)
+        clone.add_wrapper_with_key(WrappersMP.PREPARE_SAMPLING, "funui.clock", prepare)
+        clone.add_wrapper_with_key(WrappersMP.APPLY_MODEL, "funui.clock", apply_model)
     except Exception:                      # noqa: BLE001 -- a clock must never stop a run
         return model, lambda: None
 
     def report():
         if not {"prepared", "first", "first_done"} <= t.keys():
             return
-        log.info("FunPack Timing", f"before step 1: model prepared in {t['prepared'] - t['start']:.1f}s, "
+        log.info("FunUI Timing", f"before step 1: model prepared in {t['prepared'] - t['start']:.1f}s, "
                  f"then {t['first'] - t['prepared']:.1f}s of setup before the first forward pass, "
                  f"which took {t['first_done'] - t['first']:.1f}s")
     return clone, report
 
 
-class FunPackSampler(io.ComfyNode):
+class FunUISampler(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         samplers, schedulers = sampler_names(), scheduler_names()
         return io.Schema(
-            node_id="FunPackSampler",
-            display_name="FunPack Sampler",
-            category="FunPack/Sampling",
+            node_id="FunUISampler",
+            display_name="FunUI Sampler",
+            category="FunUI/Sampling",
             description="Sample a latent with a chosen algorithm and schedule.",
             inputs=[
                 io.Model.Input("model"),
@@ -114,7 +114,7 @@ class FunPackSampler(io.ComfyNode):
                 io.Float.Input("denoise", default=1.0, min=0.0, max=1.0, step=0.01,
                                optional=True,
                                tooltip="Below 1 starts partway through the schedule."),
-                io.Custom("FUNPACK_SETTINGS").Input("settings", optional=True),
+                io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
                 io.Sigmas.Input("sigmas", optional=True,
                                 tooltip="A schedule to run exactly as written. When wired, "
                                         "steps, scheduler and denoise are not used. For a "
@@ -133,7 +133,7 @@ class FunPackSampler(io.ComfyNode):
                 settings=None, sigmas=None) -> io.NodeOutput:
         if settings is not None and not isinstance(settings, dict):
             raise RuntimeError(
-                f"FunPack Sampler: settings must be an object keyed by module id, "
+                f"FunUI Sampler: settings must be an object keyed by module id, "
                 f"got {type(settings).__name__}.")
 
         from comfy_extras.nodes_custom_sampler import Noise_RandomNoise
@@ -147,9 +147,9 @@ class FunPackSampler(io.ComfyNode):
         # its cache -- so it is emptied here rather than trusted to be fresh.
         # Otherwise a modifier dropped in one generation stays dropped in every
         # later one, with nothing said.
-        dropped = getattr(model, "model_options", {}).get("funpack_dropped")
+        dropped = getattr(model, "model_options", {}).get("funui_dropped")
         if dropped is None:
-            dropped = getattr(model, "funpack_dropped", None)
+            dropped = getattr(model, "funui_dropped", None)
         if dropped is None:
             dropped = patching.Dropped()
         dropped.clear()
@@ -167,10 +167,10 @@ class FunPackSampler(io.ComfyNode):
         wired = sigmas is not None
         if wired:
             if sigmas.numel() < 2:
-                raise RuntimeError("FunPack Sampler: the wired schedule needs at least two "
+                raise RuntimeError("FunUI Sampler: the wired schedule needs at least two "
                                    "values (a start and an end).")
             if bool((sigmas[1:] > sigmas[:-1]).any()):
-                raise RuntimeError("FunPack Sampler: the wired schedule must run high to low.")
+                raise RuntimeError("FunUI Sampler: the wired schedule must run high to low.")
         else:
             sigmas = cls._sigmas(model, scheduler, steps, denoise)
         sampler = comfy.samplers.sampler_object(sampler_name)
@@ -202,7 +202,7 @@ class FunPackSampler(io.ComfyNode):
             # Said, then re-raised. Cancelling is a normal thing to do and the
             # log should show it happening rather than a run simply stopping --
             # but it is not ours to absorb: ComfyUI ends the queue item.
-            log.alert("FunPack Sampler", f"{run} was cancelled part way through")
+            log.alert("FunUI Sampler", f"{run} was cancelled part way through")
             raise
         # Back to the device every other sampler returns on. Leaving it on the
         # GPU works until something downstream is on the CPU, and then it is a
@@ -219,7 +219,7 @@ class FunPackSampler(io.ComfyNode):
         schedule = f"wired schedule from {float(sigmas[0]):.3g}" if wired else scheduler
         headline = (f"{run}: {sampler_name} / {schedule}, {len(sigmas) - 1} step(s), "
                     f"cfg {cfg}")
-        log.info("FunPack Sampler", headline)
+        log.info("FunUI Sampler", headline)
         return io.NodeOutput(out, "\n".join([headline, *notes]))
 
     # --- the parts, kept separate so each is testable on its own -----------
@@ -268,7 +268,7 @@ class FunPackSampler(io.ComfyNode):
                 spec, (settings or {}).get(spec.id), keep_bad=guards_off)
             values[spec.id] = clean
             problems.extend(said)
-        schema_mod.refuse_or_warn(problems, "FunPack Sampler", guards_off=guards_off)
+        schema_mod.refuse_or_warn(problems, "FunUI Sampler", guards_off=guards_off)
 
         chain, notes = chain_mod.build(ordered, values, ACCEPTS, dropped)
         for spec in incompatible:
@@ -286,7 +286,7 @@ class FunPackSampler(io.ComfyNode):
         """
         inner = getattr(sampler, "sampler_function", None)
         if inner is None:
-            log.alert("FunPack Sampler",
+            log.alert("FunUI Sampler",
                       f"{type(sampler).__name__} has no loop to attach to, so "
                       f"{', '.join(chain.ids)} will not run this time")
             return sampler
@@ -315,7 +315,7 @@ class FunPackSampler(io.ComfyNode):
             return inner(Watched(), x, step_sigmas, extra_args=extra_args,
                          callback=callback, disable=disable, **options)
 
-        with_modifiers.__name__ = getattr(inner, "__name__", "sampler") + "_funpack"
+        with_modifiers.__name__ = getattr(inner, "__name__", "sampler") + "_funui"
         return comfy.samplers.KSAMPLER(
             with_modifiers,
             extra_options=getattr(sampler, "extra_options", {}),

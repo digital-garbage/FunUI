@@ -35,8 +35,8 @@ def registry(monkeypatch):
 
 
 def _run(text):
-    from modules.sampling.modifiers.nodes import FunPackModifierSettings
-    return FunPackModifierSettings.execute(text).result
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
+    return FunUIModifierSettings.execute(text).result
 
 
 def test_a_valid_payload_comes_back_merged_over_the_defaults(registry):
@@ -130,21 +130,21 @@ def test_a_bad_payload_is_refused_before_anything_runs(registry):
     """ComfyUI calls validate_inputs inside validate_prompt, before any node
     executes: a wrong VALUE is found before the checkpoint loads, not after
     (on a rented GPU that is the cost the guard exists to avoid)."""
-    from modules.sampling.modifiers.nodes import FunPackModifierSettings
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
 
-    said = FunPackModifierSettings.validate_inputs('{"alg": {"enabled": "yes please"}}')
+    said = FunUIModifierSettings.validate_inputs('{"alg": {"enabled": "yes please"}}')
     assert said is not True
-    assert FunPackModifierSettings.validate_inputs('{"ghost": {"x": 1}}') is True      # a name nobody has is skipped, not refused
+    assert FunUIModifierSettings.validate_inputs('{"ghost": {"x": 1}}') is True      # a name nobody has is skipped, not refused
 
 
 def test_a_good_payload_passes_validation(registry):
-    from modules.sampling.modifiers.nodes import FunPackModifierSettings
-    assert FunPackModifierSettings.validate_inputs('{"alg": {"enabled": true}}') is True
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
+    assert FunUIModifierSettings.validate_inputs('{"alg": {"enabled": true}}') is True
 
 
 def test_an_empty_payload_passes_validation(registry):
-    from modules.sampling.modifiers.nodes import FunPackModifierSettings
-    assert FunPackModifierSettings.validate_inputs("") is True
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
+    assert FunUIModifierSettings.validate_inputs("") is True
 
 
 @pytest.mark.parametrize("payload,expected", [
@@ -156,9 +156,9 @@ def test_an_empty_payload_passes_validation(registry):
 def test_validation_catches_the_same_things_execution_would(registry, payload, expected):
     """The two doors must agree. A payload the queue accepts and execution
     rejects is worse than either alone."""
-    from modules.sampling.modifiers.nodes import FunPackModifierSettings
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
 
-    said = FunPackModifierSettings.validate_inputs(payload)
+    said = FunUIModifierSettings.validate_inputs(payload)
     assert said is not True and expected in said
 
     with pytest.raises(RuntimeError):

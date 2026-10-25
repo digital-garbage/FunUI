@@ -1,5 +1,5 @@
 // The server's routes, one line each. An error carries the sentence the server gave, not a bare status.
-const BASE = "/funpack";
+const BASE = "/fun";
 const TRAIN = "/api/m/training_lora";
 
 function why(res, payload) {
@@ -131,7 +131,7 @@ export const api = {
   upscaleModels: () => call("GET", "/api/m/render/upscale_models"),
   /** The upscale is an ordinary ComfyUI job: queued on /prompt, read back from /history. -> the prompt id. */
   async queueUpscale(media, model, rtx) {
-    const graph = { 1: { class_type: "FunPackUpscaleVideo", inputs: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output", upscale_model: model, ...(rtx ? { rtx_options: JSON.stringify(rtx) } : {}) } } };
+    const graph = { 1: { class_type: "FunUIUpscaleVideo", inputs: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output", upscale_model: model, ...(rtx ? { rtx_options: JSON.stringify(rtx) } : {}) } } };
     const res = await fetch("/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: graph }) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.prompt_id) {
@@ -144,7 +144,7 @@ export const api = {
   async projectQueued(projectId) {
     try {
       const q = await (await fetch("/queue", { signal: AbortSignal.timeout(5000) })).json();      // a stalled server: not a hang
-      return [...(q.queue_running || []), ...(q.queue_pending || [])].some((r) => (r[3] || {}).funpack_project_id === projectId);
+      return [...(q.queue_running || []), ...(q.queue_pending || [])].some((r) => (r[3] || {}).funui_project_id === projectId);
     } catch { return false; }
   },
   /** null while it is queued or running, else {videos} | {error} | {gone} | {retry} (a dropped reply is not a failed job). */

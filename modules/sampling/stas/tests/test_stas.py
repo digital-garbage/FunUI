@@ -43,9 +43,9 @@ def test_steering_sets_the_chosen_cells_to_alpha_times_the_peak_keeping_their_si
 
 def _load(tiny, **values):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     settings = {"taste": {"key": "fox"}, "stas": {"enabled": True, "block": 1, **values}}
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, settings).result
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, settings).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws]
     return patched, wrap, outer, status
@@ -72,7 +72,7 @@ def _block_output(tiny, patched, block):
     """What block `block` hands on, read by a hook installed outside STAS's."""
     from core import dit_hooks
     seen = []
-    dit_hooks.add_block_hook(patched, "funpack.spy", block,
+    dit_hooks.add_block_hook(patched, "funui.spy", block,
                              lambda args, extra: (seen.append(extra["original_block"](args)["img"].clone()),
                                                   {"img": seen[-1]})[1])
     return seen
@@ -113,7 +113,7 @@ def test_learned_mode_banks_alpha_when_it_steered(tiny_h3, monkeypatch):
 
 def test_a_block_outside_the_model_is_refused_and_said(tiny_h3):
     from core import log
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     log.new_run()
-    FunPackLoadModifiers.execute(tiny_h3.patcher, {"taste": {"key": "fox"}, "stas": {"enabled": True, "block": 40}})
+    FunUILoadModifiers.execute(tiny_h3.patcher, {"taste": {"key": "fox"}, "stas": {"enabled": True, "block": 40}})
     assert any("not a block of this model" in e["message"] for e in log.history())

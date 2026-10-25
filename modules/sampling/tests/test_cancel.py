@@ -45,7 +45,7 @@ def test_a_cancel_reaches_the_top_and_is_not_absorbed(patcher, registry):
     it passes through. If that ever changed, stop would stop nothing."""
     from comfy.model_management import InterruptProcessingException
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     def install(target, values, key):
         def cancels(args):
@@ -54,7 +54,7 @@ def test_a_cancel_reaches_the_top_and_is_not_absorbed(patcher, registry):
         return "on"
 
     registry.specs["m"] = _spec("m", install)
-    patched, _ = FunPackLoadModifiers.execute(patcher).result
+    patched, _ = FunUILoadModifiers.execute(patcher).result
     hook = patched.model_options["sampler_pre_cfg_function"][0]
 
     with pytest.raises(InterruptProcessingException):
@@ -66,7 +66,7 @@ def test_a_cancelled_run_leaves_nothing_on_the_shared_model(patcher, registry):
     clone is what makes this true, and a cancel must not change that."""
     from comfy.model_management import InterruptProcessingException
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
 
     def install(target, values, key):
         target.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, key,
@@ -76,7 +76,7 @@ def test_a_cancelled_run_leaves_nothing_on_the_shared_model(patcher, registry):
     registry.specs["m"] = _spec("m", install)
 
     for _ in range(5):
-        patched, _ = FunPackLoadModifiers.execute(patcher).result
+        patched, _ = FunUILoadModifiers.execute(patcher).result
         try:
             raise InterruptProcessingException()      # cancelled mid-run
         except InterruptProcessingException:
@@ -97,12 +97,12 @@ def test_a_cancel_does_not_mark_a_modifier_as_dropped(patcher, registry):
     def cancels(args):
         raise InterruptProcessingException()
 
-    guarded = patching.guard(cancels, "funpack.m",
+    guarded = patching.guard(cancels, "funui.m",
                              lambda args: args["conds_out"], dropped)
     with pytest.raises(InterruptProcessingException):
         guarded({"conds_out": "x"})
 
-    assert "funpack.m" not in dropped and not dropped
+    assert "funui.m" not in dropped and not dropped
 
 
 def test_the_next_run_starts_with_a_clean_record(patcher, registry):
@@ -110,16 +110,16 @@ def test_the_next_run_starts_with_a_clean_record(patcher, registry):
     cache -- so a run cancelled after a modifier failed must not leave that
     modifier disabled for the next one."""
     from core import patching
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     dropped = patching.Dropped()
-    dropped.record("funpack.m", RuntimeError("failed last time"))
-    patcher.funpack_dropped = dropped
+    dropped.record("funui.m", RuntimeError("failed last time"))
+    patcher.funui_dropped = dropped
 
     # What the sampler does at the start of every generation.
-    found = getattr(patcher, "funpack_dropped", None)
+    found = getattr(patcher, "funui_dropped", None)
     found.clear()
-    assert "funpack.m" not in found
+    assert "funui.m" not in found
 
 
 def test_alg_puts_the_sharp_anchor_back_when_a_run_is_cancelled():
@@ -145,7 +145,7 @@ def test_alg_puts_the_sharp_anchor_back_when_a_run_is_cancelled():
             captured["wrapper"] = wrapper
 
     alg.install(Patcher(), {"enabled": True, "strength": 4.0, "until_sigma": 0.6},
-                key="funpack.alg")
+                key="funui.alg")
 
     class Guider:
         def __init__(self):

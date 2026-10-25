@@ -36,13 +36,13 @@ def _encode(clip, text):
 
 
 def _apply(tiny, raw):
-    from modules.conditioning.prompt_markup.nodes import (FunPackApplyPromptMarkup,
-                                                          FunPackPromptMarkup)
-    clean, markup, _ = FunPackPromptMarkup.execute(raw).result
+    from modules.conditioning.prompt_markup.nodes import (FunUIApplyPromptMarkup,
+                                                          FunUIPromptMarkup)
+    clean, markup, _ = FunUIPromptMarkup.execute(raw).result
     clip = FakeH3Clip()
     positive = _encode(clip, clean)
     tiny.context = positive[0][0]
-    model, pos, status = FunPackApplyPromptMarkup.execute(
+    model, pos, status = FunUIApplyPromptMarkup.execute(
         tiny.patcher, clip, positive, {"samples": tiny.video}, markup).result
     return model, pos, status, positive
 
@@ -68,8 +68,8 @@ def _spy_masks(tiny, model):
 
 
 def test_the_node_strips_markup_and_reports_it():
-    from modules.conditioning.prompt_markup.nodes import FunPackPromptMarkup
-    clean, markup, status = FunPackPromptMarkup.execute("a (red:1.5) car [sits|runs]").result
+    from modules.conditioning.prompt_markup.nodes import FunUIPromptMarkup
+    clean, markup, status = FunUIPromptMarkup.execute("a (red:1.5) car [sits|runs]").result
     assert clean == "a red car sits"
     assert status == "1 weighted, 1 blended"
 
@@ -124,15 +124,15 @@ def test_a_blend_moves_only_the_prompt_rows_and_zero_strength_moves_nothing(tiny
 
 
 def test_an_encoder_no_model_module_knows_is_refused_out_loud(tiny_h3):
-    from modules.conditioning.prompt_markup.nodes import (FunPackApplyPromptMarkup,
-                                                          FunPackPromptMarkup)
-    _clean, markup, _ = FunPackPromptMarkup.execute("a (red:2) car").result
+    from modules.conditioning.prompt_markup.nodes import (FunUIApplyPromptMarkup,
+                                                          FunUIPromptMarkup)
+    _clean, markup, _ = FunUIPromptMarkup.execute("a (red:2) car").result
 
     class OtherClip:
         tokenizer = object()
 
     positive = [[torch.zeros(1, 4, 48), {}]]
-    model, pos, status = FunPackApplyPromptMarkup.execute(
+    model, pos, status = FunUIApplyPromptMarkup.execute(
         tiny_h3.patcher, OtherClip(), positive, {"samples": tiny_h3.video}, markup).result
     assert status.startswith("not applied") and pos is positive
 

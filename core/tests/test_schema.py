@@ -257,7 +257,7 @@ def test_the_manifest_names_a_modules_nodes_by_id(comfyui):
     from modules.conditioning import shot_camera
     from core import routes
     found = next(m for m in routes.manifest()["modules"] if m["id"] == shot_camera.ID)
-    assert found["nodes"] == ["FunPackShotCamera"]
+    assert found["nodes"] == ["FunUIShotCamera"]
 
 
 def test_a_node_whose_schema_fails_does_not_take_the_module_list_down():
@@ -316,7 +316,7 @@ def test_uses_when_must_name_a_declared_setting():
 
 def test_the_manifest_names_where_settings_live(comfyui):
     from core import routes
-    assert {"node": "FunPackModifierSettings", "input": "settings"} in routes.manifest()["sinks"]
+    assert {"node": "FunUIModifierSettings", "input": "settings"} in routes.manifest()["sinks"]
 
 
 def test_a_condition_on_a_choice_must_name_one_of_its_options():

@@ -13,9 +13,9 @@ TripleCLIPLoader use. Two alternatives were tried and rejected:
   Combo template becomes a row of SOCKETS instead of dropdowns -- the file picker
   stops being a picker. Every core usage of autogrow is a connection type (Image,
   Audio, Splat), never a Combo.
-* **v4's `funpack_list`**, a JSON array in a STRING widget, needed a hand-written
+* **v4's `funui_list`**, a JSON array in a STRING widget, needed a hand-written
   canvas widget to draw it, and without one it renders as raw JSON. The file it
-  documented (`web/funpack_list.js`) did not even exist, so on the stock canvas
+  documented (`web/funui_list.js`) did not even exist, so on the stock canvas
   the list was raw JSON in v4 too.
 
 The cost of numbered slots is a fixed ceiling. Four is above anything shipping
@@ -48,7 +48,7 @@ def encoder_files():
     return list(folder_paths.get_filename_list("text_encoders")) + ggufs
 
 
-class FunPackCLIPLoader(io.ComfyNode):
+class FunUICLIPLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         types = clip_types()
@@ -67,9 +67,9 @@ class FunPackCLIPLoader(io.ComfyNode):
         ]
 
         return io.Schema(
-            node_id="FunPackCLIPLoader",
-            display_name="FunPack CLIP Loader",
-            category="FunPack/Loaders",
+            node_id="FunUICLIPLoader",
+            display_name="FunUI CLIP Loader",
+            category="FunUI/Loaders",
             description="Load one or more text encoder files into a single CLIP.",
             inputs=[
                 *slots,
@@ -94,7 +94,7 @@ class FunPackCLIPLoader(io.ComfyNode):
         names = [clip_name1] + [slots.get(f"clip_name{n}") for n in range(2, MAX_ENCODERS + 1)]
         names = [name for name in names if name]
         if not names:
-            raise RuntimeError("FunPack CLIP Loader: pick at least one text encoder file.")
+            raise RuntimeError("FunUI CLIP Loader: pick at least one text encoder file.")
 
         # Refuse rather than repair. Falling back to STABLE_DIFFUSION loads the
         # encoder against the wrong family and reports success, and a family
@@ -105,7 +105,7 @@ class FunPackCLIPLoader(io.ComfyNode):
         if clip_type is None:
             known = ", ".join(sorted(t.name.lower() for t in comfy.sd.CLIPType))
             raise RuntimeError(
-                f"FunPack CLIP Loader: this ComfyUI has no encoder family {type!r}. "
+                f"FunUI CLIP Loader: this ComfyUI has no encoder family {type!r}. "
                 f"Known families: {known}.")
         model_options = {}
         if device == "cpu":
@@ -168,9 +168,9 @@ class FunPackCLIPLoader(io.ComfyNode):
             raise RuntimeError(
                 f"Could not load a text encoder from {', '.join(names)} as type {type!r}.")
 
-        log.info("FunPack CLIP Loader",
+        log.info("FunUI CLIP Loader",
                  f"{len(names)} encoder file(s) loaded as type {type}, device {device}: "
                  + ", ".join(names))
         listing = "\n".join(f"  {i + 1}. {name}" for i, name in enumerate(names))
         listing += "".join(f"\n  {gn}" for gn in gguf_notes)
-        return io.NodeOutput(clip, f"FunPack CLIP Loader | type={type} device={device}\n{listing}")
+        return io.NodeOutput(clip, f"FunUI CLIP Loader | type={type} device={device}\n{listing}")

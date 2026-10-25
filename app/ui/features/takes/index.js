@@ -27,7 +27,7 @@ export default {
         if (list.length < 2 || at < 0) return [];
         const go = (d) => () => { p.edit((x) => stepTake(x, x.scenes.find((s) => s.id === sc.id), d)); };
         const mark = (r) => (/^(10|[6-9])$/.test(String(r)) ? "★" : r ? "✕" : "");
-        const still = (t) => `/funpack/api/m/render/poster?filename=${encodeURIComponent(t.media.filename)}&subfolder=${encodeURIComponent(t.media.subfolder || "")}&type=${encodeURIComponent(t.media.type || "output")}`;
+        const still = (t) => `/fun/api/m/render/poster?filename=${encodeURIComponent(t.media.filename)}&subfolder=${encodeURIComponent(t.media.subfolder || "")}&type=${encodeURIComponent(t.media.type || "output")}`;
         const items = list.map((t, i) => ({ id: String(i), label: `Take ${i + 1}`, thumb: still(t), icon: "▶", badge: mark(i === at ? takesOf(pr, sc).head.rating : t.rating) || undefined }));
         return [c.label.section({ text: "Takes" }),
           c.gallery.adaptive({ id: "takes", items, selection: [String(at)], cols: 3, empty: "", onActivate: (it) => p.edit((x) => pickTake(x, x.scenes.find((s) => s.id === sc.id), Number(it.id))) }),

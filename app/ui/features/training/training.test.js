@@ -28,7 +28,7 @@ function fake({ enabled = true } = {}) {
     trainAutotagState: async () => ({ state: "idle" }),
     trainRun: async () => ({ ...run }),
     trainRuns: async () => [],
-    trainPlan: async (set, slots, settings) => { calls.push(["plan", set, settings]); return { prompt: { 1: { class_type: "FunPackTrainLora", inputs: {} } }, problems: [] }; },
+    trainPlan: async (set, slots, settings) => { calls.push(["plan", set, settings]); return { prompt: { 1: { class_type: "FunUITrainLora", inputs: {} } }, problems: [] }; },
     queueGraph: async (g) => { calls.push(["queue", g]); return "pid"; },
     trainStop: async () => { calls.push(["stop"]); return { stopped: true }; },
     media: async () => ({ media: [{ id: "bbbbbbbbbbbb", name: "a.png", kind: "image" }, { id: "dddddddddddd", name: "s.wav", kind: "audio" }] }),

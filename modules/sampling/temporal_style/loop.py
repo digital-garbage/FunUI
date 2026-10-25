@@ -209,7 +209,7 @@ def make_loop_temporal_wrapper(old_wrapper):
         if not state["logged"]:
             state["logged"] = True
             tail_note = f", {v_tail} guide frame(s) pinned" if v_tail else ""
-            log.once("temporal_style:loop", log.INFO, "FunPack Temporal style", f"loop: Mobius latent roll active (T={t_content}{tail_note})")
+            log.once("temporal_style:loop", log.INFO, "FunUI Temporal style", f"loop: Mobius latent roll active (T={t_content}{tail_note})")
         # A roll or unroll that fails is not caught here: the guard records it, drops the loop for the
         # run and reruns the call without it. The model's own errors pass through the same guard.
         new_c = dict(c)

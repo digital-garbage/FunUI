@@ -19,13 +19,13 @@ def upscaler_files():
         return []
 
 
-class FunPackLatentUpscalerLoader(io.ComfyNode):
+class FunUILatentUpscalerLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackLatentUpscalerLoader",
-            display_name="FunPack Load Latent Upscaler",
-            category="FunPack/Latent",
+            node_id="FunUILatentUpscalerLoader",
+            display_name="FunUI Load Latent Upscaler",
+            category="FunUI/Latent",
             description="Load a latent upscaler, including ones ComfyUI's own loader does not know.",
             inputs=[io.Combo.Input("upscaler_name", options=upscaler_files())],
             outputs=[io.LatentUpscaleModel.Output(display_name="upscaler")],
@@ -38,9 +38,9 @@ class FunPackLatentUpscalerLoader(io.ComfyNode):
         for spec, provider in registry_mod.current().providers("latent_upscaler"):
             model = provider(sd)
             if model is not None:
-                log.info("FunPack Latent Upscaler", f"{upscaler_name}: {spec.title} upscaler")
+                log.info("FunUI Latent Upscaler", f"{upscaler_name}: {spec.title} upscaler")
                 return io.NodeOutput(model)
-        newer = ("It looks like the newer attention-based H3 upscaler, which FunPack cannot build yet: "
+        newer = ("It looks like the newer attention-based H3 upscaler, which FunUI cannot build yet: "
                  "use an older convolution-based H3 upscaler. ") if any(str(k).startswith("base.") for k in sd) else ""
         raise RuntimeError(
             f"{upscaler_name} is not an upscaler any installed model module can load. {newer}"
@@ -74,11 +74,11 @@ def downscale_to(video, h, w):
 
 def run_upscaler(upscaler, video, scale):
     module = getattr(upscaler, "model", upscaler)
-    upscale = getattr(module, "funpack_latent_upscale", None)
+    upscale = getattr(module, "funui_latent_upscale", None)
     if not callable(upscale):
         raise RuntimeError(
             "this upscaler does not say how to run itself on a latent (no "
-            "funpack_latent_upscale). ComfyUI's LTXV Latent Upsampler node runs Lightricks' one.")
+            "funui_latent_upscale). ComfyUI's LTXV Latent Upsampler node runs Lightricks' one.")
     device = comfy.model_management.get_torch_device()
     offload = comfy.model_management.unet_offload_device()
     dtype = next(module.parameters()).dtype
@@ -102,13 +102,13 @@ def rescale(conditioning, h, w):
     return conditioning, 0
 
 
-class FunPackLatentResample(io.ComfyNode):
+class FunUILatentResample(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackLatentResample",
-            display_name="FunPack Latent Resample",
-            category="FunPack/Latent",
+            node_id="FunUILatentResample",
+            display_name="FunUI Latent Resample",
+            category="FunUI/Latent",
             description="Between two passes: sharpen the latent, or upscale it and "
                         "keep the conditioning valid at the new size.",
             inputs=[

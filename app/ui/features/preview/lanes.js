@@ -1,7 +1,7 @@
 // The audio lanes on the monitor: each lane's sound plays while the playhead is inside it and the monitor is playing.
 
 const view = (m) => `/view?filename=${encodeURIComponent(m.filename || "")}&subfolder=${encodeURIComponent(m.subfolder || "")}&type=${encodeURIComponent(m.type || "output")}`;
-const bin = (id) => `/funpack/api/media/${encodeURIComponent(id)}/file`;
+const bin = (id) => `/fun/api/media/${encodeURIComponent(id)}/file`;
 
 /** Where a lane's sound comes from, and which part of it plays: {url, from, dur} or null. */
 export function laneSource(t, open) {

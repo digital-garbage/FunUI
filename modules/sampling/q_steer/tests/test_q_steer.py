@@ -16,8 +16,8 @@ def root(tmp_path, monkeypatch):
 
 
 def _load(tiny, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    return FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    return FunUILoadModifiers.execute(
         tiny.patcher, {"taste": {"key": "fox"}, "q_steer": {"enabled": True, **values}}).result
 
 

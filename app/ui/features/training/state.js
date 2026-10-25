@@ -1,7 +1,7 @@
 // What the Training window shares between its steps: which set is open, the set itself, and saving it.
 // A caption edited on screen is the truth: the server's copy follows a moment later, and tagger results are merged in by the window, not written behind its back.
 
-const TRAIN = "/funpack/api/m/training_lora";
+const TRAIN = "/fun/api/m/training_lora";
 const SAVE_AFTER = 600;
 
 export const LABEL_WORDS = { own: "Your media", liked: "Liked", disliked: "Disliked", bad_composition: "Bad composition", bad_image: "Bad image" };
@@ -10,9 +10,9 @@ export const LABEL_TONES = { own: "neutral", liked: "good", disliked: "bad", bad
 /** A picture to show for an item: the bin's thumbnail, or the output file's still. */
 export function stillOf(item) {
   const s = item.src;
-  if (s.kind === "bin") return `/funpack/api/media/${encodeURIComponent(s.id)}/thumb`;
+  if (s.kind === "bin") return `/fun/api/media/${encodeURIComponent(s.id)}/thumb`;
   const q = `filename=${encodeURIComponent(s.filename)}&subfolder=${encodeURIComponent(s.subfolder || "")}&type=${encodeURIComponent(s.type || "output")}`;
-  return item.media_kind === "video" ? `/funpack/api/m/render/poster?${q}` : `/view?${q}`;
+  return item.media_kind === "video" ? `/fun/api/m/render/poster?${q}` : `/view?${q}`;
 }
 
 /** The key a source has on the server (store.src_key). */

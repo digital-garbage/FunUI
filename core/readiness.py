@@ -66,7 +66,7 @@ def machine(disk_free_gb=None) -> List[dict]:
         elif kind == "cpu":
             out.append(row("warn", "ComfyUI runs on the CPU: generating is very slow, and only small models fit."))
         elif kind != "cuda":
-            out.append(row("warn", f"ComfyUI generates on a '{kind}' device, which FunPack is not tested on: expect slow runs, and some features may fail."))
+            out.append(row("warn", f"ComfyUI generates on a '{kind}' device, which FunUI is not tested on: expect slow runs, and some features may fail."))
         else:
             props = torch.cuda.get_device_properties(gpu_index())
             out.append(row("ok", f"{props.name}, {props.total_memory / 1024 ** 3:.0f} GB, sm_{props.major}{props.minor}"))
@@ -103,13 +103,13 @@ def pipelines(presets: Iterable[dict], installed: Callable[[str], bool], optiona
         gone = sorted({s["node"] for s in preset.get("slots", []) if not installed(s["node"])})
         skippable = [n for n in gone if n in optional]                # the run drops these and says so
         missing = [n for n in gone if n not in optional]
-        ours = [n for n in missing if n.startswith("FunPack")]          # this pack's own nodes: their module did not load
+        ours = [n for n in missing if n.startswith("FunUI")]          # this pack's own nodes: their module did not load
         theirs = [n for n in missing if n not in ours]
         title = preset.get("title") or preset.get("id")
         if theirs:
             out.append(row("warn", f"“{title}” needs nodes that are not installed: {', '.join(theirs)}. Install the pack that provides them (Settings ▸ Custom Nodes)."))
         if ours:
-            out.append(row("warn", f"“{title}” needs FunPack's own {', '.join(ours)}, but it is not available (its module did not load, or the node was rejected). The Log says why."))
+            out.append(row("warn", f"“{title}” needs FunUI's own {', '.join(ours)}, but it is not available (its module did not load, or the node was rejected). The Log says why."))
         if skippable:
             out.append(row("ok", f"“{title}” runs without {', '.join(skippable)}: its node is not available, and the run says so."))
     return out or [row("ok", "Every starting point's nodes are installed")]

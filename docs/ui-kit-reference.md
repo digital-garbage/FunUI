@@ -211,7 +211,7 @@ Used by elements. A feature does not import them. They exist in `composer/intern
 
 ## The catalogue
 
-Open `/funpack/app/ui/catalogue/` with the devserver running (`python tools/devserver.py 8199`).
+Open `/fun/app/ui/catalogue/` with the devserver running (`python tools/devserver.py 8199`).
 
 | Page | Shows |
 |---|---|

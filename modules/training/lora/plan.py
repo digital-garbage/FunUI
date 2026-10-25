@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..._core import graph
 
-NODE = "FunPackTrainLora"
+NODE = "FunUITrainLora"
 WANTED = (("model", "MODEL"), ("clip", "CLIP"), ("vae", "VAE"), ("audio_vae", "VAE"))
 
 
@@ -51,7 +51,7 @@ def _model_file(slot):
     """The file and dtypes a plain diffusion model loader slot names, or {} when the slot is anything else."""
     given = slot.get("inputs") or {}
     name = given.get("model_name")
-    if slot.get("node") != "FunPackDiffusionModelLoader" or not isinstance(name, str) or not name or name == "None":
+    if slot.get("node") != "FunUIDiffusionModelLoader" or not isinstance(name, str) or not name or name == "None":
         return {}
     return {"model_name": name, "weight_dtype": given.get("weight_dtype", "default"), "compute_dtype": given.get("compute_dtype", "default")}
 

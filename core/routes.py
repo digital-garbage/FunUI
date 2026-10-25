@@ -201,7 +201,7 @@ def manifest(traits=None):
 
 
 def register(routes, prefix=None):
-    """Attach FunPack's routes to an aiohttp route table."""
+    """Attach FunUI's routes to an aiohttp route table."""
     P = config.UI_PREFIX if prefix is None else prefix
 
     # Serializes every git-mutating route (including the remote fetch inside
@@ -810,7 +810,7 @@ def register(routes, prefix=None):
             return web.json_response(await asyncio.to_thread(action, *args))
         except nodes_manager.CustomNodeError as exc:
             # Refusals name the pack and what to do: not a name, not installed,
-            # not inside custom_nodes, or FunPack itself.
+            # not inside custom_nodes, or FunUI itself.
             return web.json_response({"detail": str(exc)}, status=400)
         except Exception as exc:  # noqa: BLE001
             log.broke("node packs", exc, doing=getattr(action, "__name__", "pack"))
@@ -971,7 +971,7 @@ def register(routes, prefix=None):
         return web.json_response(
             found.to_dict(),
             headers={"Content-Disposition":
-                     f'attachment; filename="{safe or found.id}.funpack_project.json"'})
+                     f'attachment; filename="{safe or found.id}.funui_project.json"'})
 
     # ── media ─────────────────────────────────────────────────────────────
     # Files the user brought IN, as opposed to something a run produced. A
@@ -1035,7 +1035,7 @@ def register(routes, prefix=None):
             # "Save video as" names the file from this; the route itself ends in /file
             "Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
 
-    # Composer ▸ Files: FunPack's own library files on disk, to see and delete (v4 had it). Only these names: no path reaches here.
+    # Composer ▸ Files: FunUI's own library files on disk, to see and delete (v4 had it). Only these names: no path reaches here.
     library = lambda: {f.name: f for f in (config.SHORTCUTS_FILE, config.SHORTCUT_CATEGORIES_FILE, config.REVOLVER_FILE, config.MARKERS_FILE)}
 
     @routes.get(P + "/api/files")
@@ -1052,7 +1052,7 @@ def register(routes, prefix=None):
     async def _file_delete(req):
         f = library().get(req.match_info["name"])
         if f is None:
-            return web.json_response({"why": "not a FunPack library file"}, status=404)
+            return web.json_response({"why": "not a FunUI library file"}, status=404)
         f.unlink(missing_ok=True)
         return await _files(req)
 
@@ -1152,7 +1152,7 @@ def register(routes, prefix=None):
     async def _shortcuts_export(_req):
         return web.Response(
             text=json.dumps(shortcuts_mod.export_payload(), indent=2), content_type="application/json",
-            headers={"Content-Disposition": 'attachment; filename="funpack_shortcuts.json"'})
+            headers={"Content-Disposition": 'attachment; filename="funui_shortcuts.json"'})
 
     @routes.post(P + "/api/shortcuts/import")
     async def _shortcuts_import(req):
@@ -1237,7 +1237,7 @@ def register(routes, prefix=None):
         )
         return web.json_response({"text": expanded})
 
-    @routes.get(P + "/api/log/funpack")
+    @routes.get(P + "/api/log/fun")
     async def _log(req):
         level = req.query.get("level") or None
         try:
@@ -1260,6 +1260,13 @@ def register(routes, prefix=None):
     async def _index_bare(_req):
         raise web.HTTPFound(P + "/")
 
+    if prefix is None:
+        # Bookmarks from before the rename (FunPack lived at /funpack/).
+        @routes.get(config.LEGACY_PREFIX)
+        @routes.get(config.LEGACY_PREFIX + "/")
+        async def _legacy_index(_req):
+            raise web.HTTPFound(P + "/")
+
     return routes
 
 
@@ -1276,6 +1283,6 @@ if web is not None and PromptServer is not None:
         log.info("routes", f"serving the app at {config.UI_PREFIX}/")
     try:
         from . import node_timing
-        node_timing.install(PromptServer.instance)       # "FunPack Timing" log line: where each run's time went
+        node_timing.install(PromptServer.instance)       # "FunUI Timing" log line: where each run's time went
     except Exception as exc:  # noqa: BLE001
         log.failed("node timing", exc)

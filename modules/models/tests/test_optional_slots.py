@@ -29,8 +29,8 @@ def _presets():
 
 
 #: Nodes that come from one module go missing together.
-TOGETHER = {"FunPackPromptMarkup": {"FunPackPromptMarkup", "FunPackApplyPromptMarkup"},
-            "FunPackApplyPromptMarkup": {"FunPackPromptMarkup", "FunPackApplyPromptMarkup"}}
+TOGETHER = {"FunUIPromptMarkup": {"FunUIPromptMarkup", "FunUIApplyPromptMarkup"},
+            "FunUIApplyPromptMarkup": {"FunUIPromptMarkup", "FunUIApplyPromptMarkup"}}
 
 
 def _table():
@@ -46,8 +46,8 @@ def _cases():
 
 def test_the_seven_optional_node_classes_are_declared():
     nodes = {s["node"] for p in _presets() for s in p["slots"] if s["node"] in _table()}
-    assert nodes == {"FunPackEnhancePrompt", "FunPackShotCamera", "FunPackPromptMarkup", "FunPackApplyPromptMarkup",
-                     "FunPackNegativeErase", "FunPackCutOpening", "FunPackIdentityTransfer"}
+    assert nodes == {"FunUIEnhancePrompt", "FunUIShotCamera", "FunUIPromptMarkup", "FunUIApplyPromptMarkup",
+                     "FunUINegativeErase", "FunUICutOpening", "FunUIIdentityTransfer"}
 
 
 @pytest.mark.parametrize("preset_id,slot_id", _cases())
@@ -74,7 +74,7 @@ def test_the_enhance_slots_typed_text_reaches_the_encoder_when_it_is_skipped(reg
         if s["id"] == "enhance":
             s["inputs"] = dict(s["inputs"], text="a cat on a roof")
     real = graph.from_comfyui()
-    hidden = graph.Schemas(lambda name: None if name in ("FunPackEnhancePrompt", "FunPackShotCamera", "FunPackPromptMarkup", "FunPackApplyPromptMarkup") else real.of(name))
+    hidden = graph.Schemas(lambda name: None if name in ("FunUIEnhancePrompt", "FunUIShotCamera", "FunUIPromptMarkup", "FunUIApplyPromptMarkup") else real.of(name))
     prompt, _problems = graph.build(slots, hidden, _table())
     assert prompt["r2v"]["inputs"]["prompt"] == "a cat on a roof"
 
@@ -85,13 +85,13 @@ def test_a_pipeline_saved_without_any_marker_is_covered_too(registered):
     from modules.models.minimax_h3.pipeline import presets
     slots = [{k: v for k, v in s.items() if k != "optional"} for s in presets()[0]["slots"]]
     real = graph.from_comfyui()
-    hidden = graph.Schemas(lambda name: None if name == "FunPackCutOpening" else real.of(name))
+    hidden = graph.Schemas(lambda name: None if name == "FunUICutOpening" else real.of(name))
     _p, problems = graph.build(slots, hidden, _table())
-    assert not [p for p in problems if "FunPackCutOpening" in p]
+    assert not [p for p in problems if "FunUICutOpening" in p]
     _p, without_table = graph.build(slots, hidden)
-    assert any("FunPackCutOpening" in p for p in without_table)
+    assert any("FunUICutOpening" in p for p in without_table)
 
 
 def test_the_route_helper_collects_the_tables_of_the_loaded_modules(registered):
     from core import routes
-    assert "FunPackCutOpening" in routes.optional_nodes() and "FunPackIdentityTransfer" in routes.optional_nodes()
+    assert "FunUICutOpening" in routes.optional_nodes() and "FunUIIdentityTransfer" in routes.optional_nodes()

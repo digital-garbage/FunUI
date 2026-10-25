@@ -331,7 +331,7 @@ test("an edited default stays a layer: the default's new values still fill in, a
   assert.strictEqual(PS.whole(), false);
 });
 
-const withCheckpoint = (PS) => { lastApi.pipeline = async () => ({ slots: [{ id: "model", node: "FunPackCheckpointLoader", inputs: { ckpt_name: "a" } }], incomplete: [], refused: [], queueable: true }); return PS; };
+const withCheckpoint = (PS) => { lastApi.pipeline = async () => ({ slots: [{ id: "model", node: "FunUICheckpointLoader", inputs: { ckpt_name: "a" } }], incomplete: [], refused: [], queueable: true }); return PS; };
 
 test("a module's settings count only when something would read them: its own node, or a user of what it serves that is on", async () => {
   const learner = (mode, enabled = true) => ({ id: "learner", settings: { enabled: { type: "bool", default: enabled }, mode: { type: "enum", default: mode } }, uses: ["taste_store"], uses_when: { mode: "learned" } });
@@ -342,7 +342,7 @@ test("a module's settings count only when something would read them: its own nod
   const always = { ...learner("manual"), uses_when: {} };                                   // a manual mode that still reads the store (shot memory)
   assert.deepStrictEqual(await check([cam, taste, always]), [false, true]);
   assert.deepStrictEqual(await check([cam, taste, learner("learned", false)]), [false, false]);
-  assert.deepStrictEqual(await check([{ ...cam, nodes: ["FunPackCheckpointLoader"] }, taste]), [true, false]);
+  assert.deepStrictEqual(await check([{ ...cam, nodes: ["FunUICheckpointLoader"] }, taste]), [true, false]);
 });
 
 test("a file picked in a save is announced after its modules are known", async () => {
@@ -409,7 +409,7 @@ test("a new project made while another project's pipeline goes in inherits it, n
 });
 
 test("a modifier's settings count only when the pipeline has both the settings node and the loader that installs it", async () => {
-  const loader = { id: "mods", nodes: ["FunPackModifierSettings", "FunPackLoadModifiers"], uses: ["modifier"] };
+  const loader = { id: "mods", nodes: ["FunUIModifierSettings", "FunUILoadModifiers"], uses: ["modifier"] };
   const sharpen = { id: "sharpen", serves: ["modifier"], settings: { amount: { default: 0.5 } } };
   const learner = { id: "q", serves: ["modifier"], uses: ["taste_store"], settings: { enabled: { type: "bool", default: true } } };
   const taste = { id: "taste", serves: ["modifier", "taste_store"], settings: { key: { default: "" } } };
@@ -421,10 +421,10 @@ test("a modifier's settings count only when the pipeline has both the settings n
     const by = PS.modulesById();
     return [PS.useful(by.sharpen), PS.useful(by.taste)];
   };
-  assert.deepStrictEqual(await check(["FunPackModifierSettings", "FunPackLoadModifiers"]), [true, true]);
-  assert.deepStrictEqual(await check(["FunPackModifierSettings"]), [false, false]);           // loader removed: nothing installs them, so no learner reads taste
+  assert.deepStrictEqual(await check(["FunUIModifierSettings", "FunUILoadModifiers"]), [true, true]);
+  assert.deepStrictEqual(await check(["FunUIModifierSettings"]), [false, false]);           // loader removed: nothing installs them, so no learner reads taste
   assert.deepStrictEqual(await check(["CheckpointLoaderSimple", "KSampler"]), [false, false]); // a plain imported workflow
-  assert.deepStrictEqual(await check(["FunPackModifierSettings", "FunPackLoadModifiers"], [loader, sharpen, taste]), [true, false]);   // the key installed, but no learner reads it
+  assert.deepStrictEqual(await check(["FunUIModifierSettings", "FunUILoadModifiers"], [loader, sharpen, taste]), [true, false]);   // the key installed, but no learner reads it
 });
 
 test("a project retried after the first load failed goes in, and nothing waits forever", async () => {
@@ -442,10 +442,10 @@ test("a project retried after the first load failed goes in, and nothing waits f
 });
 
 test("with every enhancement disabled, the modules kept underneath still count, so the Modules page can list them", async () => {
-  const loader = { id: "mods", nodes: ["FunPackModifierSettings", "FunPackLoadModifiers"], uses: ["modifier"] };
+  const loader = { id: "mods", nodes: ["FunUIModifierSettings", "FunUILoadModifiers"], uses: ["modifier"] };
   const sharpen = { id: "sharpen", serves: ["modifier"], settings: { amount: { default: 0.5 } } };
   const PS = load([]);
-  lastApi.pipeline = async () => ({ slots: [{ id: "a", node: "FunPackModifierSettings", inputs: {} }, { id: "b", node: "FunPackLoadModifiers", inputs: {} }], incomplete: [], refused: [], queueable: true });
+  lastApi.pipeline = async () => ({ slots: [{ id: "a", node: "FunUIModifierSettings", inputs: {} }, { id: "b", node: "FunUILoadModifiers", inputs: {} }], incomplete: [], refused: [], queueable: true });
   lastApi.modules = async () => ({ modules: [loader, sharpen], control: {} });
   await PS.ensureLoaded();
   await PS.setAllOff(true);

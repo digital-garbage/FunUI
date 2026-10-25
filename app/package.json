@@ -1,5 +1,5 @@
 {
-  "name": "funpack-app",
+  "name": "funui-app",
   "private": true,
   "type": "module",
   "description": "Dev-only. Users never run npm: the app is served as plain ES modules with no build step.",

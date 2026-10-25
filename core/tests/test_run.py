@@ -51,7 +51,7 @@ def test_the_sampler_starts_a_run_every_time_not_only_the_first(comfyui, monkeyp
     when only the seed changes, so the run id froze at the first one."""
     import torch
     from core import registry as registry_mod
-    from modules.sampling.sampler.nodes import FunPackSampler
+    from modules.sampling.sampler.nodes import FunUISampler
 
     monkeypatch.setattr(registry_mod, "current", lambda rescan=False: registry_mod.Registry())
 
@@ -72,8 +72,8 @@ def test_a_dropped_record_does_not_survive_into_the_next_generation():
     """The record travels on the model, and ComfyUI may hand the same model back
     from its cache. A modifier that failed last time deserves this time."""
     dropped = patching.Dropped()
-    dropped.record("funpack.m", RuntimeError("boom"))
-    assert "funpack.m" in dropped
+    dropped.record("funui.m", RuntimeError("boom"))
+    assert "funui.m" in dropped
 
     dropped.clear()
-    assert "funpack.m" not in dropped and not dropped
+    assert "funui.m" not in dropped and not dropped

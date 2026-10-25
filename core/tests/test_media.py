@@ -149,7 +149,7 @@ def server(store):
 
     app = aioweb.Application()
     table = aioweb.RouteTableDef()
-    routes.register(table, prefix="/funpack")
+    routes.register(table, prefix="/fun")
     app.add_routes(table)
 
     holder = {"ready": threading.Event()}
@@ -199,13 +199,13 @@ def _request(port, method, path, body=None, raw=None, content_type="application/
 
 
 def _upload(port, filename, data, field="file"):
-    boundary = "----funpacktestboundary"
+    boundary = "----funuitestboundary"
     body = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="{field}"; filename="{filename}"\r\n'
         f"Content-Type: application/octet-stream\r\n\r\n"
     ).encode() + data + f"\r\n--{boundary}--\r\n".encode()
-    return _request(port, "POST", "/funpack/api/media", raw=body,
+    return _request(port, "POST", "/fun/api/media", raw=body,
                      content_type=f"multipart/form-data; boundary={boundary}")
 
 
@@ -215,32 +215,32 @@ def test_upload_list_file_delete(server):
     assert len(resp["media"]) == 1
     mid = resp["media"][0]["id"]
 
-    status, listed = _request(server, "GET", "/funpack/api/media")
+    status, listed = _request(server, "GET", "/fun/api/media")
     assert status == 200 and [it["id"] for it in listed["media"]] == [mid]
 
-    status, body = _request(server, "GET", f"/funpack/api/media/{mid}/file")
+    status, body = _request(server, "GET", f"/fun/api/media/{mid}/file")
     assert status == 200 and body["raw"] == b"fake png bytes"
     assert "filename*=UTF-8''ref.png" in body["head"], "Save as names it after the upload, not 'file'"
 
-    assert _request(server, "DELETE", f"/funpack/api/media/{mid}")[0] == 200
-    assert _request(server, "GET", f"/funpack/api/media/{mid}/file")[0] == 404
+    assert _request(server, "DELETE", f"/fun/api/media/{mid}")[0] == 200
+    assert _request(server, "GET", f"/fun/api/media/{mid}/file")[0] == 404
 
 
 def test_a_disallowed_extension_is_refused_over_http(server):
     status, resp = _upload(server, "payload.exe", b"MZ")
     assert status == 400
     assert "problems" in resp
-    assert _request(server, "GET", "/funpack/api/media")[1]["media"] == []
+    assert _request(server, "GET", "/fun/api/media")[1]["media"] == []
 
 
 def test_a_non_multipart_body_is_refused(server):
-    status, resp = _request(server, "POST", "/funpack/api/media", {"not": "multipart"})
+    status, resp = _request(server, "POST", "/fun/api/media", {"not": "multipart"})
     assert status == 400
 
 
 def test_media_for_a_bad_id_is_a_404(server):
-    assert _request(server, "GET", "/funpack/api/media/../../etc/passwd/file")[0] in (400, 404)
-    assert _request(server, "DELETE", "/funpack/api/media/0123456789ab")[0] == 404
+    assert _request(server, "GET", "/fun/api/media/../../etc/passwd/file")[0] in (400, 404)
+    assert _request(server, "DELETE", "/fun/api/media/0123456789ab")[0] == 404
 
 
 # ── names and thumbnails ──────────────────────────────────────────────────
@@ -302,15 +302,15 @@ def test_rename_and_thumb_over_http(server):
     buf = io.BytesIO()
     Image.new("RGB", (64, 64)).save(buf, "PNG")
     mid = _upload(server, "p.png", buf.getvalue())[1]["media"][0]["id"]
-    status, body = _request(server, "PATCH", f"/funpack/api/media/{mid}", {"name": "renamed"})
+    status, body = _request(server, "PATCH", f"/fun/api/media/{mid}", {"name": "renamed"})
     assert status == 200 and body["media"]["name"] == "renamed"
-    assert _request(server, "PATCH", f"/funpack/api/media/{mid}", {"name": ""})[0] == 400
-    assert _request(server, "PATCH", "/funpack/api/media/aaaaaaaaaaaa", {"name": "x"})[0] == 404
-    status, body = _request(server, "PATCH", f"/funpack/api/media/{mid}", {"subject": "the woman"})
+    assert _request(server, "PATCH", f"/fun/api/media/{mid}", {"name": ""})[0] == 400
+    assert _request(server, "PATCH", "/fun/api/media/aaaaaaaaaaaa", {"name": "x"})[0] == 404
+    status, body = _request(server, "PATCH", f"/fun/api/media/{mid}", {"subject": "the woman"})
     assert status == 200 and body["media"]["subject"] == "the woman" and body["media"]["name"] == "renamed"
-    status, jpg = _request(server, "GET", f"/funpack/api/media/{mid}/thumb")
+    status, jpg = _request(server, "GET", f"/fun/api/media/{mid}/thumb")
     assert status == 200 and jpg["raw"][:2] == b"\xff\xd8"
-    assert _request(server, "GET", "/funpack/api/media/aaaaaaaaaaaa/thumb")[0] == 404
+    assert _request(server, "GET", "/fun/api/media/aaaaaaaaaaaa/thumb")[0] == 404
 
 
 def test_a_photo_thumbnail_is_turned_upright_like_the_browser_shows_it(store):
@@ -343,11 +343,11 @@ def test_the_files_tab_lists_and_deletes_library_files_and_nothing_else(server, 
                        ("REVOLVER_FILE", "shortcut_revolver.json"), ("MARKERS_FILE", "markers.json")):
         monkeypatch.setattr(config, attr, tmp_path / name)          # never the real library
     config.MARKERS_FILE.write_text('{"words": []}')
-    status, body = _request(server, "GET", "/funpack/api/files")
+    status, body = _request(server, "GET", "/fun/api/files")
     assert status == 200 and {"name": "markers.json", "size": 13} in body["files"]
-    assert _request(server, "DELETE", "/funpack/api/files/index.json")[0] == 404          # the media index is not one of them
-    assert _request(server, "DELETE", "/funpack/api/files/..%2Fshortcuts.json")[0] == 404
-    status, body = _request(server, "DELETE", "/funpack/api/files/markers.json")
+    assert _request(server, "DELETE", "/fun/api/files/index.json")[0] == 404          # the media index is not one of them
+    assert _request(server, "DELETE", "/fun/api/files/..%2Fshortcuts.json")[0] == 404
+    status, body = _request(server, "DELETE", "/fun/api/files/markers.json")
     assert status == 200 and not config.MARKERS_FILE.exists()
     assert all(f["name"] != "markers.json" for f in body["files"])
 

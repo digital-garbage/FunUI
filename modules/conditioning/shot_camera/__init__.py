@@ -19,7 +19,7 @@ Deterministic: the same prompt gives the same shots; "Variation" re-rolls. Ratin
 """
 
 from . import memory
-from .nodes import FunPackShotCamera
+from .nodes import FunUIShotCamera
 
 ID = "conditioning_shot_camera"
 TITLE = "Shot camera"
@@ -28,7 +28,7 @@ STAGE = "conditioning"
 CATEGORY = "conditioning"
 STATUS = "experimental"
 
-NODES = [FunPackShotCamera]
+NODES = [FunUIShotCamera]
 
 SETTINGS = {
     "camera_moves": {"type": "bool", "default": False, "label": "Camera moves",

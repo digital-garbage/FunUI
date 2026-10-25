@@ -21,8 +21,8 @@ PHRASES = {"base": 0, "cond_len": 5, "spans": [(1, 3), (3, 5)]}
 
 def _load(tiny, settings=None):
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    patched, status = FunPackLoadModifiers.execute(tiny.patcher, settings or {}).result
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, status = FunUILoadModifiers.execute(tiny.patcher, settings or {}).result
     wraps = [w for ws in patched.wrappers.get(WrappersMP.APPLY_MODEL, {}).values() for w in ws]
     outer = [w for ws in patched.wrappers.get(WrappersMP.OUTER_SAMPLE, {}).values() for w in ws]
     return patched, (wraps[-1] if wraps else None), outer
@@ -35,7 +35,7 @@ def _executor(tiny, patched, log):
         to = dict(transformer_options or {})
         log.append(to)
         video, audio = tiny.run(patched, sigma=float(t.max()),
-                                options={k: v for k, v in to.items() if k == "funpack_probe"})
+                                options={k: v for k, v in to.items() if k == "funui_probe"})
         return packed_av(video, audio)[0]
     return executor
 
@@ -69,12 +69,12 @@ def test_recording_measures_each_phrase_per_block_and_returns_the_untouched_answ
     from modules.sampling.phrase_probe import measure
     patched, _none, outer = _load(tiny_h3)
     base_outs, _ = _go(tiny_h3, patched, lambda ex, *a, **k: ex(*a, **k), outer,
-                       {"funpack_markup_phrases": PHRASES})
+                       {"funui_markup_phrases": PHRASES})
     measure.set_enabled(True)
     patched, wrap, outer = _load(tiny_h3)
-    outs, seen = _go(tiny_h3, patched, wrap, outer, {"funpack_markup_phrases": PHRASES})
+    outs, seen = _go(tiny_h3, patched, wrap, outer, {"funui_markup_phrases": PHRASES})
     assert len(seen) == 2 * (1 + 2)                                  # 1 visible + 2 masked, per call
-    probes = [bool(t.get("funpack_probe")) for t in seen]
+    probes = [bool(t.get("funui_probe")) for t in seen]
     assert probes == [False, True, True] * 2                         # masked passes are flagged
     assert all(torch.equal(a, b) for a, b in zip(outs, base_outs))   # the clip is not changed
     res = measure.latest()
@@ -91,7 +91,7 @@ def test_no_phrase_text_is_ever_in_the_saved_file(tiny_h3):
     from modules.sampling.phrase_probe import measure
     measure.set_enabled(True)
     patched, wrap, outer = _load(tiny_h3)
-    _go(tiny_h3, patched, wrap, outer, {"funpack_markup_phrases": PHRASES})
+    _go(tiny_h3, patched, wrap, outer, {"funui_markup_phrases": PHRASES})
     keys = set(measure.latest()) | {k for p in measure.latest()["phrases"] for k in p}
     assert keys == {"when", "blocks", "model_calls", "phrases", "phrase", "tokens", "read", "response"}
 
@@ -113,7 +113,7 @@ def test_a_probe_call_from_another_feature_is_not_probed_again(tiny_h3):
     measure.set_enabled(True)
     patched, wrap, outer = _load(tiny_h3)
     _outs, seen = _go(tiny_h3, patched, wrap, outer,
-                      {"funpack_markup_phrases": PHRASES, "funpack_probe": True})
+                      {"funui_markup_phrases": PHRASES, "funui_probe": True})
     assert len(seen) == 2
 
 
@@ -127,13 +127,13 @@ def test_a_failing_masked_pass_costs_nothing(tiny_h3):
 
     def executor(x, t, *a, **kw):
         to = kw.get("transformer_options") or (a[3] if len(a) > 3 else {})
-        if (to or {}).get("funpack_probe"):
+        if (to or {}).get("funui_probe"):
             raise RuntimeError("masked pass broke")
         return good(x, t, *a, **kw)
     s = torch.tensor([1.0, 0.5, 0.0])
     out = _run(outer, lambda: wrap(executor, x0, torch.tensor([[1.0]]), None, None, None,
                                    {"sample_sigmas": s, "sigmas": s[0:1], "cond_or_uncond": [0],
-                                    "funpack_markup_phrases": PHRASES}, latent_shapes=shapes))
+                                    "funui_markup_phrases": PHRASES}, latent_shapes=shapes))
     assert out.shape == x0.shape
 
 
@@ -146,11 +146,11 @@ def test_phrases_are_placed_by_the_markup_nodes_published_spans():
 
 def test_the_switch_is_part_of_what_re_runs_the_modifiers_node(tiny_h3):
     """ComfyUI caches the node that installs modifiers: flipping the switch must change its fingerprint."""
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     from modules.sampling.phrase_probe import measure
-    off = FunPackLoadModifiers.fingerprint_inputs(model=None)
+    off = FunUILoadModifiers.fingerprint_inputs(model=None)
     measure.set_enabled(True)
-    assert FunPackLoadModifiers.fingerprint_inputs(model=None) != off
+    assert FunUILoadModifiers.fingerprint_inputs(model=None) != off
 
 
 def test_another_features_extra_forward_is_not_measured_as_the_picture(tiny_h3, tmp_path, monkeypatch):
@@ -167,7 +167,7 @@ def test_another_features_extra_forward_is_not_measured_as_the_picture(tiny_h3, 
         inner = real(state, block)
 
         def hook(args, extra):
-            seen.append((state.mode, bool((args.get("transformer_options") or {}).get("funpack_weak_branch"))))
+            seen.append((state.mode, bool((args.get("transformer_options") or {}).get("funui_weak_branch"))))
             return inner(args, extra)
         return hook
     monkeypatch.setattr(measure, "block_hook", spy)
@@ -175,7 +175,7 @@ def test_another_features_extra_forward_is_not_measured_as_the_picture(tiny_h3, 
     patched, _w, outer = _load(tiny_h3, {"taste": {"key": "fox"}, "late_branch": {
         "enabled": True, "block": 2, "mode": "manual", "strength": 1.0}})
     order = [k for k, ws in patched.wrappers[WrappersMP.APPLY_MODEL].items() for _ in ws]
-    assert order[-1] == "funpack.phrase_probe", order           # innermost: sees real forwards only
+    assert order[-1] == "funui.phrase_probe", order           # innermost: sees real forwards only
     from conftest import packed_av
     x0, shapes = packed_av(tiny_h3.video, tiny_h3.audio)
     chain = _executor(tiny_h3, patched, [])
@@ -185,5 +185,5 @@ def test_another_features_extra_forward_is_not_measured_as_the_picture(tiny_h3, 
     s = torch.tensor([1.0, 0.5, 0.0])
     _run(outer, lambda: [chain(x0, torch.tensor([[1.0, 0.5][i]]), None, None, None,
                                {"sample_sigmas": s, "sigmas": s[i:i + 1], "cond_or_uncond": [0],
-                                "funpack_markup_phrases": PHRASES}, latent_shapes=shapes) for i in range(2)])
+                                "funui_markup_phrases": PHRASES}, latent_shapes=shapes) for i in range(2)])
     assert seen and not any(weak for _mode, weak in seen)

@@ -39,9 +39,9 @@ export const packs = (app) => function mount() {
 
   function row(n) {
     const chk = checked[n.name], behind = chk && chk.checked && chk.behind > 0;
-    const bits = [n.is_funpack ? "FunPack itself" : null, n.git ? `${n.branch || "?"} · ${n.commit || "?"}` : "not a git checkout",
+    const bits = [n.is_funui ? "FunUI itself" : null, n.git ? `${n.branch || "?"} · ${n.commit || "?"}` : "not a git checkout",
       chk && chk.checked ? (behind ? `${chk.behind} behind` : chk.ahead > 0 ? `${chk.ahead} ahead of origin` : "up to date") : chk && chk.reason ? `not compared — ${chk.reason}` : null].filter(Boolean);
-    const acts = n.is_funpack ? c.text.sm({ text: "" }) : c.toolbar.default({ items: [
+    const acts = n.is_funui ? c.text.sm({ text: "" }) : c.toolbar.default({ items: [
       c.button.sm({ label: behind ? `Update (${chk.behind})` : "Update", tone: behind ? "primary" : "ghost", disabled: Boolean(busy) || !n.git, onClick: () => run(n.name, `Updating ${n.name}`, () => app.api.pack("update", { name: n.name })) }),
       c.button.sm({ label: "Remove", tone: "danger", disabled: Boolean(busy), onClick: () => remove(n) })] });
     return c.settingsRow.default({ label: n.name, hint: bits.join(" — "), control: acts });

@@ -15,7 +15,7 @@ Whether a given text encoder writes sensible prose is an open question per model
 result: confirmed working on Gemma3-12B. v5 on a rental: works with Gemma 4 E4B (a real rewrite in 2.5 s); H3's own encoder writes no prose, so there the run keeps your prompt and says why. On H3, pick a chat encoder (Gemma 4) in Composer > Enhance > Encoder: verified end to end.
 """
 
-from .nodes import RUNS, FunPackEnhancePrompt
+from .nodes import RUNS, FunUIEnhancePrompt
 
 ID = "conditioning_prompt_enhancer"
 TITLE = "Prompt enhancer"
@@ -23,7 +23,7 @@ STAGE = "conditioning"
 CATEGORY = "conditioning"
 STATUS = "experimental"
 
-NODES = [FunPackEnhancePrompt]
+NODES = [FunUIEnhancePrompt]
 
 
 def routes(table, base, web):

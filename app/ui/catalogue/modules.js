@@ -23,7 +23,7 @@ async function start() {
     manifest = await fetchManifest();
   } catch (err) {
     root.replaceChildren(composer.emptyState.default({
-      icon: "▲", title: "Could not reach FunPack", hint: err.message,
+      icon: "▲", title: "Could not reach FunUI", hint: err.message,
     }).node);
     return;
   }

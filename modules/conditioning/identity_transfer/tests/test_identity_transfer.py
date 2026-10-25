@@ -3,7 +3,7 @@ import torch
 
 from core import patching
 
-KEY = "funpack_identity"
+KEY = "funui_identity"
 
 
 def _run(tiny, patched):
@@ -65,14 +65,14 @@ def test_a_failing_stage_is_said_and_the_run_goes_on_without_the_reference(tiny_
 
 
 def test_the_node_passes_everything_through_with_no_image(tiny_ltx):
-    from modules.conditioning.identity_transfer.nodes import FunPackIdentityTransfer
+    from modules.conditioning.identity_transfer.nodes import FunUIIdentityTransfer
     pos, neg = [[torch.zeros(1, 2, 3), {}]], [[torch.zeros(1, 2, 3), {}]]
-    out = FunPackIdentityTransfer.execute(tiny_ltx.patcher, None, pos, neg, {"samples": tiny_ltx.video}).result
+    out = FunUIIdentityTransfer.execute(tiny_ltx.patcher, None, pos, neg, {"samples": tiny_ltx.video}).result
     assert out[1] is pos and out[2] is neg and "untouched" in out[3] and not out[0].object_patches
 
 
 def test_the_node_encodes_the_reference_at_the_latent_size_and_patches(tiny_ltx):
-    from modules.conditioning.identity_transfer.nodes import FunPackIdentityTransfer
+    from modules.conditioning.identity_transfer.nodes import FunUIIdentityTransfer
     seen = {}
 
     class Vae:
@@ -84,7 +84,7 @@ def test_the_node_encodes_the_reference_at_the_latent_size_and_patches(tiny_ltx)
 
     image = torch.rand(1, 100, 80, 3)
     pos, neg = [[torch.zeros(1, 2, 3), {}]], [[torch.zeros(1, 2, 3), {}]]
-    patched, p, n, status = FunPackIdentityTransfer.execute(
+    patched, p, n, status = FunUIIdentityTransfer.execute(
         tiny_ltx.patcher, Vae(), pos, neg, {"samples": tiny_ltx.video}, image=image).result
     assert seen["shape"] == (1, 64, 64, 3)               # latent 2x2 at /32
     assert "reference tokens appended (source phase 2)" in status and len(patched.object_patches) == 4

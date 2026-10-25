@@ -169,9 +169,9 @@ def test_a_node_that_will_not_rewrite_does_not_invalidate_what_comes_after_it(mo
     import math
     shots = "[Shot 1] A woman walks.\n[Shot 2] She sits."
     monkeypatch.setattr(nodes, "_values", lambda settings: dict(settings or {}))
-    assert nodes.FunPackShotCamera.fingerprint_inputs(text=shots, settings={}) == ""
-    assert nodes.FunPackShotCamera.fingerprint_inputs(text="no shots here", settings={"camera_moves": True}) == ""
-    assert math.isnan(nodes.FunPackShotCamera.fingerprint_inputs(text=shots, settings={"camera_moves": True}))
+    assert nodes.FunUIShotCamera.fingerprint_inputs(text=shots, settings={}) == ""
+    assert nodes.FunUIShotCamera.fingerprint_inputs(text="no shots here", settings={"camera_moves": True}) == ""
+    assert math.isnan(nodes.FunUIShotCamera.fingerprint_inputs(text=shots, settings={"camera_moves": True}))
 
 
 def test_camera_switch_turns_off_the_camera_rewrites_and_only_those(tmp_path, monkeypatch):
@@ -189,7 +189,7 @@ def test_camera_switch_turns_off_the_camera_rewrites_and_only_those(tmp_path, mo
     off = nodes._values({**on, "_off": {"camera": True}})
     assert all(off[k] is False for k in nodes.CAMERA_SWITCHES) and all(off[k] == 0.0 for k in nodes.CAMERA_CHANCES)
     assert off["detail_notes"] is True and off["detail_notes_chance"] == 1.0          # not camera work: kept
-    assert nodes.FunPackShotCamera.execute(text, 124, 24.0, settings={nodes.ID: {k: True for k in nodes.CAMERA_SWITCHES}, "_off": {"camera": True}}).args[0] == text
+    assert nodes.FunUIShotCamera.execute(text, 124, 24.0, settings={nodes.ID: {k: True for k in nodes.CAMERA_SWITCHES}, "_off": {"camera": True}}).args[0] == text
     # Flag off, or only "camera": false: the camera works as before.
     assert nodes._values({**on, "_off": {"camera": False}}) == nodes._values(on)
     # Every camera key is a real setting, and nothing outside the list is touched.

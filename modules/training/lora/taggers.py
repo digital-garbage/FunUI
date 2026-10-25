@@ -14,7 +14,7 @@ import urllib.request
 
 from ..._core import config, log
 
-SOURCE = "FunPack LoRA training"
+SOURCE = "FunUI LoRA training"
 FILES = ("model.onnx", "selected_tags.csv")
 HOST = "https://huggingface.co"
 _REPO = re.compile(r"\A[A-Za-z0-9][\w.\-]{0,95}/[A-Za-z0-9][\w.\-]{0,95}\Z")
@@ -67,7 +67,7 @@ def listing() -> list[dict]:
 
 def _fetch(url: str, dest, progress) -> None:
     """Stream a URL to a file through a .part name, so a cut connection leaves nothing that looks finished."""
-    req = urllib.request.Request(url, headers={"User-Agent": "FunPack"})
+    req = urllib.request.Request(url, headers={"User-Agent": "FunUI"})
     part = dest.with_name(dest.name + ".part")
     with urllib.request.urlopen(req, timeout=60) as res, open(part, "wb") as out:
         total = int(res.headers.get("Content-Length") or 0)
@@ -111,7 +111,7 @@ def download(tagger_id: str, fetch=None) -> bool:
             _state[tagger_id] = {"state": "error", "done": 0, "total": 0, "error": f"{type(exc).__name__}: {exc}"}
             log.warning(SOURCE, f"tagger {spec['title']} could not be downloaded: {exc}")
 
-    threading.Thread(target=work, name=f"funpack-tagger-{tagger_id}", daemon=True).start()
+    threading.Thread(target=work, name=f"funui-tagger-{tagger_id}", daemon=True).start()
     return True
 
 
@@ -216,7 +216,7 @@ def autotag(tagger_id: str, targets, options: dict, load) -> bool:
             job.update(state="error", error=str(exc))
             log.warning(SOURCE, f"tagging stopped: {exc}")
 
-    threading.Thread(target=work, name="funpack-autotag", daemon=True).start()
+    threading.Thread(target=work, name="funui-autotag", daemon=True).start()
     return True
 
 

@@ -9,7 +9,7 @@ another box.
 
 Ported from v4's `movie_editor/backend/settings_card.py`, cut down hard: v4's
 version spent most of its length (`_OWNED_BY`, `_EDITOR_DEFAULTS`,
-`_pass_rows`, `_sampling_sections`, `_node_inputs`) describing FunPackStudio
+`_pass_rows`, `_sampling_sections`, `_node_inputs`) describing FunUIStudio
 and the LTX-AV Scene Chain Sampler's own hardcoded knob tables -- neither
 node exists in v5's module-driven pipeline, so none of that has anything to
 describe here. What is genuinely generic -- walking a slot's real inputs,
@@ -22,7 +22,7 @@ Two decisions worth knowing, both v4's:
   sitting behind the socket would be a confident lie. Wired inputs are named
   as wired instead of being dropped, because "this slot has a VAE input" is
   part of the answer.
-* **The JSON is embedded in the PNG's tEXt chunk** under `funpack_settings`,
+* **The JSON is embedded in the PNG's tEXt chunk** under `funui_settings`,
   so the picture is also machine-readable. Nothing reads it back yet; it
   costs a few hundred bytes and it is the difference between a screenshot
   and a record.
@@ -92,7 +92,7 @@ def _cap(value):
 
 
 def _rows_from_list(value):
-    """A funpack_list widget's JSON array as [(label, value)], or None if it isn't one.
+    """A funui_list widget's JSON array as [(label, value)], or None if it isn't one.
 
     Detected by content rather than by asking object_info: the value has to
     be parsed to be printed anyway, and a card that needs a live ComfyUI to
@@ -158,7 +158,7 @@ def collect(slots: list, host: dict, *, project_name=None, render=None) -> dict:
     `slots` is the live pipeline exactly as `GET /api/pipeline`/`PS.slots()`
     hand it around: `{id, node, group, inputs, roles?}` per slot, a wired
     input arriving as `[source_slot_id, output_index]` (`core.graph.is_link`)
-    rather than a scalar. No FunPackStudio/Chain-Sampler shape to adapt --
+    rather than a scalar. No FunUIStudio/Chain-Sampler shape to adapt --
     v5's pipeline has no such nodes, so every slot is walked the same way.
     """
     by_id = {s.get("id"): s for s in (slots or []) if isinstance(s, dict)}
@@ -194,7 +194,7 @@ def collect(slots: list, host: dict, *, project_name=None, render=None) -> dict:
         title = f"{group} · {slot_id}" if group else str(slot_id or node or "node")
         rows = []
         # extensive_testing round 2: this check used to run once per SLOT, so
-        # one slot with many funpack_list inputs (each individually capped at
+        # one slot with many funui_list inputs (each individually capped at
         # _MAX_ROWS by _rows_from_list) could blow the card-wide budget by a
         # large multiple before the *next* slot's check ever fired. Checking
         # the running budget per INPUT closes that.
@@ -335,7 +335,7 @@ def render_png(report: dict, theme: str = "dark") -> bytes:
         text = str(text)
         return text[:_HEAD_DRAW_CHARS] + "…" if len(text) > _HEAD_DRAW_CHARS else text
 
-    blocks = [("title", _draw_cap(report.get("project") or "FunPack pipeline"))]
+    blocks = [("title", _draw_cap(report.get("project") or "FunUI pipeline"))]
     sub = report.get("generated")
     if sub:
         blocks.append(("sub", sub))
@@ -412,11 +412,11 @@ def render_png(report: dict, theme: str = "dark") -> bytes:
     y += 16
     d.line([(PAD, y), (WIDTH - PAD, y)], fill=pal["line"], width=1)
     y += 12
-    d.text((PAD, y), "FunPack", font=f_foot, fill=pal["faint"])
+    d.text((PAD, y), "FunUI", font=f_foot, fill=pal["faint"])
 
     meta = PngInfo()
     try:
-        meta.add_text("funpack_settings", json.dumps(report, ensure_ascii=False))
+        meta.add_text("funui_settings", json.dumps(report, ensure_ascii=False))
     except Exception:
         pass
     buf = io.BytesIO()

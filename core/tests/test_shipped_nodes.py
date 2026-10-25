@@ -1,4 +1,4 @@
-"""The nodes FunPack actually ships, checked against ComfyUI itself.
+"""The nodes FunUI actually ships, checked against ComfyUI itself.
 
 Needs a ComfyUI source tree, because a node's schema is only meaningful in terms
 of comfy_api's own types. Skipped where there is none.
@@ -43,51 +43,51 @@ def test_every_shipped_node_is_a_real_comfy_node(shipped, comfyui):
 # breaks graphs that already exist, so this test is meant to FAIL on a rename and
 # make that a decision rather than an accident.
 FROZEN = {
-    "FunPackCheckpointLoader": ["ckpt_name"],
-    "FunPackCLIPLoader": [
+    "FunUICheckpointLoader": ["ckpt_name"],
+    "FunUICLIPLoader": [
         "clip_name1", "clip_name2", "clip_name3", "clip_name4", "type", "device",
     ],
-    "FunPackSampler": [
+    "FunUISampler": [
         "model", "positive", "negative", "latent", "seed", "steps", "cfg",
         "sampler_name", "scheduler", "denoise", "settings", "sigmas",
     ],
-    "FunPackLoadModifiers": ["model", "settings"],
-    "FunPackLatentUpscalerLoader": ["upscaler_name"],
-    "FunPackCutOpening": ["images", "frames", "fps", "audio"],
-    "FunPackSaveVideo": ["images", "audio", "fps", "filename_prefix", "encoder", "codec"],
-    "FunPackPromptMarkup": ["text"],
-    "FunPackNegativeErase": ["positive", "negative", "strength", "mode", "keep_size"],
-    "FunPackShotCamera": ["text", "settings", "length", "frame_rate", "project"],
-    "FunPackEnhancePrompt": [
+    "FunUILoadModifiers": ["model", "settings"],
+    "FunUILatentUpscalerLoader": ["upscaler_name"],
+    "FunUICutOpening": ["images", "frames", "fps", "audio"],
+    "FunUISaveVideo": ["images", "audio", "fps", "filename_prefix", "encoder", "codec"],
+    "FunUIPromptMarkup": ["text"],
+    "FunUINegativeErase": ["positive", "negative", "strength", "mode", "keep_size"],
+    "FunUIShotCamera": ["text", "settings", "length", "frame_rate", "project"],
+    "FunUIEnhancePrompt": [
         "clip", "text", "enabled", "instructions", "max_length", "greedy", "temperature", "top_p",
         "top_k", "min_p", "repetition_penalty", "presence_penalty", "seed", "thinking", "encoder_file", "encoder_family", "image", "use_image",
         "shortcuts", "lorebooks", "reference_intro", "chat",
     ],
-    "FunPackApplyPromptMarkup": ["model", "clip", "positive", "latent", "markup"],
-    "FunPackLatentResample": ["latent", "upscaler", "operation", "scale", "positive", "negative"],
-    "FunPackModifierSettings": ["settings"],
-    "FunPackIdentityTransfer": ["model", "vae", "positive", "negative", "latent", "image", "identity_projector",
+    "FunUIApplyPromptMarkup": ["model", "clip", "positive", "latent", "markup"],
+    "FunUILatentResample": ["latent", "upscaler", "operation", "scale", "positive", "negative"],
+    "FunUIModifierSettings": ["settings"],
+    "FunUIIdentityTransfer": ["model", "vae", "positive", "negative", "latent", "image", "identity_projector",
                                 "source_id", "phase_scale", "id_strength", "arcface_mode"],
-    "FunPackDecode": ["samples", "vae", "model", "audio_vae", "tile_size"],
-    "FunPackUpscaleVideo": ["filename", "subfolder", "type", "upscale_model", "rtx_options"],
-    "FunPackTrainLora": [
+    "FunUIDecode": ["samples", "vae", "model", "audio_vae", "tile_size"],
+    "FunUIUpscaleVideo": ["filename", "subfolder", "type", "upscale_model", "rtx_options"],
+    "FunUITrainLora": [
         "model", "clip", "vae", "audio_vae", "set_name", "name", "use", "steps", "learning_rate", "rank", "algorithm",
         "optimizer", "loss", "batch_size", "grad_accumulation", "resolution", "aspect_buckets", "frames", "fps", "start",
         "trigger", "seed", "training_dtype", "lora_dtype", "gradient_checkpointing", "offloading", "bypass",
         "model_name", "weight_dtype", "compute_dtype", "postfix", "swap_blocks", "preview_every", "save_every", "resume",
     ],
-    "FunPackEmptyLatent": ["model", "width", "height", "length", "batch_size", "audio_vae", "frame_rate"],
-    "FunPackDiffusionModelLoader": [
+    "FunUIEmptyLatent": ["model", "width", "height", "length", "batch_size", "audio_vae", "frame_rate"],
+    "FunUIDiffusionModelLoader": [
         "model_name", "weight_dtype", "compute_dtype", "attention", "fp16_accumulation",
         "sla", "sla_sparsity", "sla_block_size", "sla_protect_audio", "sla_min_seq_len",
         "sla_dense_last_steps", "int8_convrot", "sla_engine", "sla_dense_steps", "sla_references",
         "sla_tail", "sla_stabilize_motion", "sla_method", "sla_tau",
     ],
-    "FunPackLoraLoader": [
+    "FunUILoraLoader": [
         "model", "lora_name", "strength_model", "clip", "strength_clip",
     ],
-    "FunPackVAELoader": ["vae_name", "dtype"],
-    "FunPackLoadMedia": ["media_id", "blank_width", "blank_height", "full"],
+    "FunUIVAELoader": ["vae_name", "dtype"],
+    "FunUILoadMedia": ["media_id", "blank_width", "blank_height", "full"],
 }
 
 

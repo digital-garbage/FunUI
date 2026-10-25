@@ -105,7 +105,7 @@ class Schemas:
 
 
 def from_comfyui() -> Schemas:
-    """Schemas read from whatever ComfyUI has registered, FunPack's and everyone
+    """Schemas read from whatever ComfyUI has registered, FunUI's and everyone
     else's alike -- a slot may point at any node, not only ours."""
     def lookup(class_type: str) -> Optional[dict]:
         import nodes as comfy_nodes
@@ -326,7 +326,7 @@ def bypass_missing(slots: Sequence[dict], schemas: Optional[Schemas] = None,
     for slot_id in list(gone):
         bad = _optional_problems(gone[slot_id]["optional"], slot_id)
         if bad:
-            log.once(f"bad_optional:{gone[slot_id]['node']}", log.WARNING, "FunPack pipeline",
+            log.once(f"bad_optional:{gone[slot_id]['node']}", log.WARNING, "FunUI pipeline",
                      f"{gone[slot_id]['node']} cannot be skipped, so the run refuses it: {bad[0]}")
             del gone[slot_id]
 

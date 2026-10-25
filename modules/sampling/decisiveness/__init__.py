@@ -77,7 +77,7 @@ def _k_of(level):
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunPack Decisiveness", message)
+    log.once(f"{ID}:{message}", level, "FunUI Decisiveness", message)
 
 
 def factor(sigma, k, s=S):
@@ -137,7 +137,7 @@ def install(patcher, values, key):
         live.update(checked=False, acts=False, steps=0, rows=None if manual else taste.rows(KIND, blind_to="image"))
         live["k"] = _k_of(float(values.get("level", 0.0))) if manual else 1.0
         if manual:
-            log.once(f"{ID}:state", log.INFO, "FunPack Decisiveness", f"manual k {live['k']:.3f}")
+            log.once(f"{ID}:state", log.INFO, "FunUI Decisiveness", f"manual k {live['k']:.3f}")
 
     def choose(steps):
         """Learned k for a schedule of this length. Ratings from another length are left out:
@@ -146,7 +146,7 @@ def install(patcher, values, key):
                    if "logk" in r["rows"] and int(r["rows"].get("steps", steps)) == steps]
         centre = learned_logk(history)
         live["k"] = math.exp(min(max(centre + random.gauss(0.0, EXPLORE), -LOGK_MAX), LOGK_MAX))
-        log.once(f"{ID}:state", log.INFO, "FunPack Decisiveness",
+        log.once(f"{ID}:state", log.INFO, "FunUI Decisiveness",
                  f"key {taste.key!r}: learned k {math.exp(centre):.3f} from {len(history)} "
                  f"rating(s) at {steps} steps, trying {live['k']:.3f}")
 

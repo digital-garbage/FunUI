@@ -16,11 +16,11 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (v !== undefined && v !== null && v !== "") put(slot, role.input, v);
   }
   if (seed) for (const { slot, role } of rolesAt(slots, "generation.seed")) put(slot, role.input, seed());      // null: the seed node's own number runs
-  for (const slot of (slots || []).filter((s) => s.node === "FunPackShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
+  for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];
   if (source) put(source.slot, "media_id", project.generation_mode === "t2v" ? "" : scene.source_image || "");    // "from a prompt" starts every shot without a picture
   // A project saved before the preset said so still has this shape: a picture-resizing slot is enough to know a stand-in fits.
-  const resizer = (slots || []).find((s) => s.node === "ImageTransformKJ"), enhancer = (slots || []).find((s) => s.node === "FunPackEnhancePrompt");
+  const resizer = (slots || []).find((s) => s.node === "ImageTransformKJ"), enhancer = (slots || []).find((s) => s.node === "FunUIEnhancePrompt");
   const like = source && (source.role.blank_like || (resizer && { slot: resizer.id, width: "target_width", height: "target_height", ...(enhancer ? { unsend: { slot: enhancer.id, input: "use_image" } } : {}) }));
   if (like && !raw[source.slot.id].media_id) {          // text-only: a plain picture of the size the pipeline asks for stands in
     const target = (slots || []).find((s) => s.id === like.slot) || { inputs: {} };

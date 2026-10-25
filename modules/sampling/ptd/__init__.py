@@ -94,7 +94,7 @@ def _swap(controller):
 
     def run(executor, guider, sigmas, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar):
         if abs(float(getattr(guider, "cfg", 1.0)) - 1.0) > 1e-6:
-            log.once("ptd:cfg", log.ALERT, "FunPack PTD",
+            log.once("ptd:cfg", log.ALERT, "FunUI PTD",
                      f"CFG is {guider.cfg:g}: PTD was trained without guidance, so set CFG to 1")
         try:
             import latent_preview
@@ -108,7 +108,7 @@ def _swap(controller):
         options = extra_args.get("model_options", {}).get("transformer_options")
         if options is not None:
             options["sample_sigmas"] = grid
-        log.once("ptd:swap", log.INFO, "FunPack PTD",
+        log.once("ptd:swap", log.INFO, "FunUI PTD",
                  f"sampling {controller.hops} hops from {controller.adapter.label}; the chosen sampler and steps "
                  f"({len(sigmas) - 1}) are not used")
         return ptd.sample(guider, grid, extra_args, callback, noise, latent_image,

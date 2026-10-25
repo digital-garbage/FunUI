@@ -86,7 +86,7 @@ test("the negative prompt does not follow a switch to another project", async ()
     b: { id: "bbbbbbbbbbbb", name: "B", scenes: [{ id: "scene-b", text: "" }], negative: "", updated_at: 1 },
   };
   globalThis.fetch = async (path, opts = {}) => {
-    if (path === "/funpack/api/projects") {
+    if (path === "/fun/api/projects") {
       return { ok: true, status: 200, json: async () => ({ projects: [{ id: store.a.id }, { id: store.b.id }] }) };
     }
     const id = decodeURIComponent(String(path).split("/").pop());
@@ -168,7 +168,7 @@ test("a run's result still lands on its scene after the user opened a DIFFERENT 
   };
   const puts = [];
   globalThis.fetch = async (path, opts = {}) => {
-    if (path === "/funpack/api/projects") {
+    if (path === "/fun/api/projects") {
       return { ok: true, status: 200, json: async () => ({ projects: [{ id: store.a.id }, { id: store.b.id }] }) };
     }
     const id = decodeURIComponent(String(path).split("/").pop());
@@ -225,7 +225,7 @@ test("downloadUrl names the current project, and nothing when there is none", as
 
   server();                             // default project id abcdef012345
   await p.start();
-  assert.equal(p.downloadUrl(), "/funpack/api/projects/abcdef012345/download");
+  assert.equal(p.downloadUrl(), "/fun/api/projects/abcdef012345/download");
 });
 
 test("importing a project file opens whatever the server hands back, as its own project", async () => {
@@ -384,7 +384,7 @@ test("a superseded import deletes its own orphaned project instead of leaving it
   pending.B(); await second;
   pending.A(); await first;
 
-  assert.deepEqual(deleted, ["/funpack/api/projects/id-A"], "the superseded project was never cleaned up");
+  assert.deepEqual(deleted, ["/fun/api/projects/id-A"], "the superseded project was never cleaned up");
 });
 
 test("start() losing a race to a switch the user already made does not revert it", async () => {
@@ -393,7 +393,7 @@ test("start() losing a race to a switch the user already made does not revert it
   // gaps a user's click can finish inside of.
   let resolveList;
   globalThis.fetch = async (path, opts = {}) => {
-    if (path === "/funpack/api/projects" && opts.method === "GET") {
+    if (path === "/fun/api/projects" && opts.method === "GET") {
       return new Promise((resolve) => { resolveList = () => resolve(
         { ok: true, status: 200, json: async () => ({ projects: [] }) }); });
     }
@@ -425,7 +425,7 @@ test("an undo during an in-flight open supersedes it too, not just another switc
   };
   let resolveOpenB;
   globalThis.fetch = async (path, opts = {}) => {
-    if (path === "/funpack/api/projects" && opts.method === "GET") {
+    if (path === "/fun/api/projects" && opts.method === "GET") {
       return { ok: true, status: 200, json: async () => ({ projects: [{ id: store.a.id }] }) };
     }
     if (String(path).endsWith(store.b.id) && opts.method === "GET") {

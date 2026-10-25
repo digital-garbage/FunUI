@@ -85,7 +85,7 @@ def test_a_model_module_that_breaks_while_decoding(monkeypatch, comfyui):
             return torch.zeros(1, 8, 8, 3)
 
     with pytest.raises(RuntimeError, match="upside down"):
-        decode_mod.FunPackDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, Vae())
+        decode_mod.FunUIDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, Vae())
 
     assert any("failed while decoding" in m for m in _said()), _said()
     assert not any("did not load" in m for m in _said()), _said()

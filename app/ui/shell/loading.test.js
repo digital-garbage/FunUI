@@ -35,6 +35,6 @@ test("a kit that cannot draw the window does not stop the app", () => {
 
 test("a full address before the feature name is not shown", () => {
   const { c, log } = fake();
-  startLoading(c).progress({ n: 1, of: 2, path: "http://127.0.0.1:8188/funpack/app/ui/features/log/index.js" });
+  startLoading(c).progress({ n: 1, of: 2, path: "http://127.0.0.1:8188/fun/app/ui/features/log/index.js" });
   assert.match(log.text, /1 out of 2: log\. /);
 });

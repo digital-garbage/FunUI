@@ -54,7 +54,7 @@ def read_safetensors_keys(path: Path) -> Optional[List[str]]:
 
 
 def resolve_diffusion_model(filename: str) -> Optional[Path]:
-    """Where `filename` lives, across the folders a FunPack loader can
+    """Where `filename` lives, across the folders a FunUI loader can
     actually read a diffusion model from -- `modules/loaders/diffusion_model`
     offers files from "diffusion_models", `modules/loaders/checkpoint` from
     "checkpoints"; nothing in this app reads a model from a "unet" folder,

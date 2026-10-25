@@ -159,5 +159,5 @@ test("a hero, an inline progress and a settings row's hint can be changed after 
   const bar = c.progress.inline({ label: "Generating" });
   bar.setText("Step 1/2"); bar.setValue(50); bar.setHidden(true);
   assert.equal(bar.node.hidden, true); assert.match(bar.node.textContent, /Step 1\/2/);
-  assert.match(c.hero.default({ title: "FunPack 5", hint: "Cutting Room" }).node.textContent, /FunPack 5.*Cutting Room/);
+  assert.match(c.hero.default({ title: "FunUI 5", hint: "Cutting Room" }).node.textContent, /FunUI 5.*Cutting Room/);
 });

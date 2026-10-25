@@ -19,8 +19,8 @@ def clean():
 
 
 def test_the_shape_is_label_severity_source_message():
-    assert log.line("Warning", "FunPack LoRA Loader", "style.safetensors is empty") == (
-        "[Log] Warning: FunPack LoRA Loader | style.safetensors is empty")
+    assert log.line("Warning", "FunUI LoRA Loader", "style.safetensors is empty") == (
+        "[Log] Warning: FunUI LoRA Loader | style.safetensors is empty")
 
 
 def test_a_message_with_no_source_does_not_print_an_empty_one():
@@ -164,9 +164,9 @@ from core import backend_log  # noqa: E402
 
 _SESSION = [
     "got prompt",
-    "[Log] Info: FunPack Sampler | 4 steps, sage attention",
-    "[Log] Alert: FunPack Sampler | no image is connected, starting from noise",
-    "[Log] Warning: FunPack LoRA Loader | style.safetensors is empty",
+    "[Log] Info: FunUI Sampler | 4 steps, sage attention",
+    "[Log] Alert: FunUI Sampler | no image is connected, starting from noise",
+    "[Log] Warning: FunUI LoRA Loader | style.safetensors is empty",
     "[Log] Critical: torch | cannot allocate 14 GB",
     "Traceback (most recent call last):",
     '  File "x.py", line 3, in run',
@@ -188,7 +188,7 @@ def test_only_lines_that_need_a_look_are_coloured():
 
 
 def test_a_healthy_run_has_no_colour_at_all():
-    healthy = ["got prompt", "[Log] Info: FunPack Sampler | loaded", "Prompt executed in 3 seconds",
+    healthy = ["got prompt", "[Log] Info: FunUI Sampler | loaded", "Prompt executed in 3 seconds",
                "100%|##########| 4/4 [00:08<00:00]"]
     assert set(backend_log.tones(healthy)) == {"plain"}
 
@@ -205,7 +205,7 @@ def test_the_log_answer_carries_one_tone_per_line(monkeypatch):
 @pytest.mark.parametrize("level,painted", [
     (log.INFO, False), (log.ALERT, True), (log.WARNING, True), (log.CRITICAL, True)])
 def test_the_terminal_paints_only_alert_and_up(monkeypatch, level, painted):
-    monkeypatch.setenv("FUNPACK_LOG_COLOR", "1")
+    monkeypatch.setenv("FUNUI_LOG_COLOR", "1")
     out = log._paint(level, "text")
     assert (out != "text") is painted
     if painted:
@@ -213,11 +213,11 @@ def test_the_terminal_paints_only_alert_and_up(monkeypatch, level, painted):
 
 
 def test_no_colour_when_the_terminal_is_not_one_or_the_user_says_no(monkeypatch):
-    monkeypatch.delenv("FUNPACK_LOG_COLOR", raising=False)
+    monkeypatch.delenv("FUNUI_LOG_COLOR", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     assert log._paint(log.CRITICAL, "t") == "t"
     monkeypatch.delenv("NO_COLOR")
-    monkeypatch.setenv("FUNPACK_LOG_COLOR", "0")
+    monkeypatch.setenv("FUNUI_LOG_COLOR", "0")
     assert log._paint(log.CRITICAL, "t") == "t"
 
 

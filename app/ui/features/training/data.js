@@ -60,7 +60,7 @@ export function dataStep({ app, session, go, ui }) {
   const pickedNote = c.text.sm({ text: `${picked.size} picked` });
   const usable = ui.bin.filter((m) => m.kind === "image" || m.kind === "video");
   const binSrc = (m) => ({ kind: "bin", id: m.id });
-  const binItems = () => usable.map((m) => ({ id: m.id, label: m.name, thumb: `/funpack/api/media/${encodeURIComponent(m.id)}/thumb`, badge: m.kind === "video" ? clipWords(ui.clips[srcKey(binSrc(m))]) || m.kind : m.kind }));
+  const binItems = () => usable.map((m) => ({ id: m.id, label: m.name, thumb: `/fun/api/media/${encodeURIComponent(m.id)}/thumb`, badge: m.kind === "video" ? clipWords(ui.clips[srcKey(binSrc(m))]) || m.kind : m.kind }));
   const gallery = c.gallery.adaptive({ id: "training-bin", cols: 3, items: binItems(), selection: [...picked],
     empty: "Your Bin has no pictures or clips yet", onActivate: (item) => {
       if (picked.has(item.id)) picked.delete(item.id); else picked.add(item.id);

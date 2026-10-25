@@ -10,8 +10,8 @@ def _needs_comfy(comfyui):
 
 
 def _load(tiny, patcher=None, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    return FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    return FunUILoadModifiers.execute(
         patcher or tiny.patcher, {"block_repeat": {"enabled": True, **values}}).result
 
 

@@ -1,4 +1,4 @@
-// Refinement & Taste: the refinement keys FunPack has learned from your ratings. Keys are files: carry one to another machine
+// Refinement & Taste: the refinement keys FunUI has learned from your ratings. Keys are files: carry one to another machine
 // as a zip, or delete one to start that taste over.
 import { composer as c } from "../../composer/composer.js";
 

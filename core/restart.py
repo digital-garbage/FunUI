@@ -27,7 +27,7 @@ def restart() -> None:
             open(os.environ["__COMFY_CLI_SESSION__"] + ".reboot", "w").close()
         except Exception:
             pass
-        print("\n[FunPack] Restarting ComfyUI...\n", flush=True)
+        print("\n[FunUI] Restarting ComfyUI...\n", flush=True)
         os._exit(0)
     sys_argv = sys.argv.copy()
     if "--windows-standalone-build" in sys_argv:
@@ -39,5 +39,5 @@ def restart() -> None:
         cmds = ['"' + sys.executable + '"', '"' + sys_argv[0] + '"'] + sys_argv[1:]
     else:
         cmds = [sys.executable] + sys_argv
-    print(f"\n[FunPack] Restarting ComfyUI... {cmds}\n", flush=True)
+    print(f"\n[FunUI] Restarting ComfyUI... {cmds}\n", flush=True)
     os.execv(sys.executable, cmds)

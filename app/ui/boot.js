@@ -20,6 +20,14 @@ import paths from "./modules.js";
 import { composer as c } from "./composer/composer.js";
 import { startLoading } from "./shell/loading.js";
 
+// Browser settings saved under the old name (FunPack, before 5.0.3) are carried over once.
+try {
+  for (const key of ["wheel", "welcomed", "timeline_peek", "models_all"]) {
+    const old = localStorage.getItem(`funpack_${key}`);
+    if (old !== null && localStorage.getItem(`funui_${key}`) === null) localStorage.setItem(`funui_${key}`, old);
+  }
+} catch { /* private window: nothing to carry over */ }
+
 // First thing on screen, before the frame exists: the buttons arrive one by one and this says why.
 const loading = startLoading(c);
 
@@ -45,4 +53,4 @@ app.openSettings = (id) => settings.open(id);
 const result = await loadFeatures(paths, { app, onProgress: loading.progress }).finally(loading.done);
 settings.addButton();
 app.project.start().catch((err) => console.warn("could not open a project:", err.message));
-window.FunPackUI = { frame, settings, app, ...result };
+window.FunUI = { frame, settings, app, ...result };

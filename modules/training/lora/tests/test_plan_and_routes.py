@@ -12,11 +12,11 @@ def _needs_comfy(comfyui):
 
 def pipeline():
     return [
-        {"id": "model", "node": "FunPackDiffusionModelLoader", "group": "Loaders", "inputs": {"model_name": "x.safetensors"}},
-        {"id": "clip", "node": "FunPackCLIPLoader", "group": "Loaders", "inputs": {}},
-        {"id": "vae", "node": "FunPackVAELoader", "group": "Loaders", "inputs": {}},
-        {"id": "audio_vae", "node": "FunPackVAELoader", "group": "Loaders", "inputs": {}},
-        {"id": "lora", "node": "FunPackLoraLoader", "group": "Loaders", "inputs": {"model": ["model", 0]}},
+        {"id": "model", "node": "FunUIDiffusionModelLoader", "group": "Loaders", "inputs": {"model_name": "x.safetensors"}},
+        {"id": "clip", "node": "FunUICLIPLoader", "group": "Loaders", "inputs": {}},
+        {"id": "vae", "node": "FunUIVAELoader", "group": "Loaders", "inputs": {}},
+        {"id": "audio_vae", "node": "FunUIVAELoader", "group": "Loaders", "inputs": {}},
+        {"id": "lora", "node": "FunUILoraLoader", "group": "Loaders", "inputs": {"model": ["model", 0]}},
     ]
 
 
@@ -27,11 +27,11 @@ def test_the_trainer_is_fed_by_the_pipelines_loaders(monkeypatch):
 
     class Schemas:
         def outputs(self, node):
-            return {"FunPackDiffusionModelLoader": ["MODEL"], "FunPackCLIPLoader": ["CLIP", "STRING"], "FunPackVAELoader": ["VAE"],
-                    "FunPackLoraLoader": ["MODEL", "CLIP"]}[node]
+            return {"FunUIDiffusionModelLoader": ["MODEL"], "FunUICLIPLoader": ["CLIP", "STRING"], "FunUIVAELoader": ["VAE"],
+                    "FunUILoraLoader": ["MODEL", "CLIP"]}[node]
 
         def inputs(self, node):
-            return {"FunPackLoraLoader": {"model": "MODEL"}}.get(node, {})
+            return {"FunUILoraLoader": {"model": "MODEL"}}.get(node, {})
     built, problems = plan.assemble(pipeline(), "mine", {"steps": 10}, Schemas())
     assert problems == []
     inputs = built["train_lora"]["inputs"]
@@ -48,10 +48,10 @@ def test_a_model_slot_that_is_not_a_plain_loader_is_still_linked(monkeypatch):
     slots[0]["inputs"] = {}                                   # no file named: the loader node itself has to run
     class Schemas:
         def outputs(self, node):
-            return {"FunPackDiffusionModelLoader": ["MODEL"], "FunPackCLIPLoader": ["CLIP"], "FunPackVAELoader": ["VAE"], "FunPackLoraLoader": ["MODEL"]}[node]
+            return {"FunUIDiffusionModelLoader": ["MODEL"], "FunUICLIPLoader": ["CLIP"], "FunUIVAELoader": ["VAE"], "FunUILoraLoader": ["MODEL"]}[node]
 
         def inputs(self, node):
-            return {"FunPackLoraLoader": {"model": "MODEL"}}.get(node, {})
+            return {"FunUILoraLoader": {"model": "MODEL"}}.get(node, {})
     built, _ = plan.assemble(slots, "mine", {}, Schemas())
     assert built["train_lora"]["inputs"]["model"] == ["model", 0] and "model" in built
     assert "lora" not in built, "a patch on the model is not part of the training graph"
@@ -250,7 +250,7 @@ def test_a_file_added_without_words_gets_the_prompt_it_was_made_from(tmp_path, m
     from modules.training import lora
     from modules.training.lora import train
     info = PngImagePlugin.PngInfo()
-    info.add_text("prompt", json.dumps({"enhance": {"class_type": "FunPackEnhancePrompt", "inputs": {"text": "a  red fox,\nrunning", "enabled": True}},
+    info.add_text("prompt", json.dumps({"enhance": {"class_type": "FunUIEnhancePrompt", "inputs": {"text": "a  red fox,\nrunning", "enabled": True}},
                                          "negative": {"class_type": "CLIPTextEncode", "inputs": {"text": "ugly"}}}))
     Image.new("RGB", (4, 4)).save(tmp_path / "made_here.png", pnginfo=info)
     Image.new("RGB", (4, 4)).save(tmp_path / "plain.png")
@@ -283,10 +283,10 @@ def test_a_rated_result_is_captioned_from_its_own_file_and_an_older_rating_on_a_
     from modules.training import lora
     from modules.training.lora import train
     now = time.time() * 1000
-    _png_with_prompt(tmp_path / "now.png", ["a red fox runs through the snow"], "FunPackEnhancePrompt")
-    _png_with_prompt(tmp_path / "reused.png", ["a city street at night"], "FunPackEnhancePrompt")
+    _png_with_prompt(tmp_path / "now.png", ["a red fox runs through the snow"], "FunUIEnhancePrompt")
+    _png_with_prompt(tmp_path / "reused.png", ["a city street at night"], "FunUIEnhancePrompt")
     os.utime(tmp_path / "now.png", ((now - 60_000) / 1000,) * 2)
-    _png_with_prompt(tmp_path / "bare.png", [], "FunPackEnhancePrompt")
+    _png_with_prompt(tmp_path / "bare.png", [], "FunUIEnhancePrompt")
     os.utime(tmp_path / "bare.png", ((now - 60_000) / 1000,) * 2)
     doc = {"scenes": [{"id": "c", "rating": "10", "rated": {"text": "the project's words", "at": now}}, {"id": "a", "rating": "10", "rated": {"text": "something the project kept that is wrong", "at": now}},
                       {"id": "b", "rating": "10", "rated": {"text": "a red fox runs through the snow", "at": now - 86_400_000}}],
@@ -316,6 +316,6 @@ def test_a_rated_result_is_captioned_from_its_own_file_and_an_older_rating_on_a_
 
 
 def test_the_training_node_is_never_answered_from_comfys_cache():
-    from modules.training.lora.nodes import FunPackTrainLora
-    a, b = FunPackTrainLora.fingerprint_inputs(resume="r1"), FunPackTrainLora.fingerprint_inputs(resume="r1")
+    from modules.training.lora.nodes import FunUITrainLora
+    a, b = FunUITrainLora.fingerprint_inputs(resume="r1"), FunUITrainLora.fingerprint_inputs(resume="r1")
     assert a != b, "NaN never equals itself: ComfyUI runs the node again even with identical inputs"

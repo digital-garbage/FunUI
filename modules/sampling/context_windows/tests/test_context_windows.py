@@ -2,7 +2,7 @@ import pytest
 
 from core import patching
 
-KEY = "funpack.context_windows"
+KEY = "funui.context_windows"
 ON = {"enabled": True, "length": 145, "overlap": 40, "schedule": "standard_uniform", "fuse": "pyramid",
       "freenoise": True, "retain_first": False}
 

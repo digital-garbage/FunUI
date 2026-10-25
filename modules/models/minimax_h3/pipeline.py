@@ -19,9 +19,9 @@ true -- it fits the image's own aspect ratio into that budget's area, rather
 than using the image's raw size. Those two resulting ints feed
 MiniMaxH3ReferenceToVideo's width/height, and Reference-to-Video's own
 conditioning+latent feeds a plain sampler at CFG 1 (H3 wants no negative
-guidance) into FunPackDecode and a video/audio mux.
+guidance) into FunUIDecode and a video/audio mux.
 
-The image and each reference are FunPackLoadMedia nodes: fed by a `media_id`
+The image and each reference are FunUILoadMedia nodes: fed by a `media_id`
 this app sets from what is picked in the Media bin, at "assets.*" roles that
 mount no on-screen field of their own (nothing here `offer()`s an `assets.*`
 region) -- the same "a role naming a place nobody offers is simply not shown"
@@ -38,24 +38,24 @@ MAX_REFERENCES = 15
 
 def h3_reference_to_video():
     slots = [
-        {"id": "model", "group": "Loaders", "node": "FunPackDiffusionModelLoader", "inputs": {
+        {"id": "model", "group": "Loaders", "node": "FunUIDiffusionModelLoader", "inputs": {
             "weight_dtype": "default", "compute_dtype": "default", "attention": "default"}},
-        {"id": "clip", "group": "Loaders", "node": "FunPackCLIPLoader",
+        {"id": "clip", "group": "Loaders", "node": "FunUICLIPLoader",
          "inputs": {"type": "minimax"}},
-        {"id": "vae", "group": "Loaders", "node": "FunPackVAELoader",
+        {"id": "vae", "group": "Loaders", "node": "FunUIVAELoader",
          "inputs": {"dtype": "bfloat16"}},
-        {"id": "audio_vae", "group": "Loaders", "node": "FunPackVAELoader",
+        {"id": "audio_vae", "group": "Loaders", "node": "FunUIVAELoader",
          "inputs": {"dtype": "bfloat16"}},
 
         # Always present, does nothing until a LoRA is picked; chain more through Models & Pipeline.
-        {"id": "lora", "group": "Loaders", "node": "FunPackLoraLoader",
+        {"id": "lora", "group": "Loaders", "node": "FunUILoraLoader",
          "inputs": {"model": ["model", 0], "lora_name": "None", "strength_model": 1.0}},
         {"id": "shift", "group": "Sampling", "node": "MiniMaxH3SigmaShift",
          "roles": [{"at": "generation.model", "input": "shift_video", "label": "Video shift"},
                    {"at": "generation.model", "input": "shift_audio", "label": "Audio shift"}],
          "inputs": {"model": ["lora", 0], "shift_video": 12.0, "shift_audio": 3.0}},
 
-        {"id": "source_image", "group": "Reference media", "node": "FunPackLoadMedia",
+        {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
          # Unhosted: see the module docstring. boot.js finds this slot by this
          # role's name and sets `media_id` from the scene's own picked image,
          # the same way "generation.prompt" is found by name and set from the
@@ -89,16 +89,16 @@ def h3_reference_to_video():
         # runs. Before the markup node because a rewrite changes the words the
         # markup points at -- (word:1.5) typed with this on is sent to the model
         # as text, and the node says so.
-        {"id": "enhance", "group": "Preparation", "node": "FunPackEnhancePrompt",
+        {"id": "enhance", "group": "Preparation", "node": "FunUIEnhancePrompt",
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"},
                    {"at": "generation.prompt", "input": "enabled", "label": "Enhance prompt"}],
          "inputs": {"clip": ["clip", 0], "text": "", "enabled": False,
                     "image": ["source_image", 0]}},
         # Off by default (its own switches in Settings): writes cut times, views and camera moves into [Shot N] blocks.
-        {"id": "shot_camera", "group": "Preparation", "node": "FunPackShotCamera",
+        {"id": "shot_camera", "group": "Preparation", "node": "FunUIShotCamera",
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
          "inputs": {"text": ["enhance", 0], "settings": ["settings", 0], "length": 124, "frame_rate": 24.0}},
-        {"id": "markup", "group": "Preparation", "node": "FunPackPromptMarkup",
+        {"id": "markup", "group": "Preparation", "node": "FunUIPromptMarkup",
          "inputs": {"text": ["shot_camera", 0]}},
         {"id": "r2v", "group": "Preparation", "node": "MiniMaxH3ReferenceToVideo",
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
@@ -108,25 +108,25 @@ def h3_reference_to_video():
              "length": 124, "ref_image_size": "match"}},
         {"id": "negative", "group": "Preparation", "node": "CLIPTextEncode",
          # H3 samples at CFG 1, where a negative prompt does nothing -- wired
-         # only because FunPackSampler requires SOME conditioning here. The project's Negative
+         # only because FunUISampler requires SOME conditioning here. The project's Negative
          # prompt lands here so Shadow negative and Negative erase have words to work from.
          "roles": [{"at": "project.negative", "input": "text", "label": "Negative prompt"}],
          "inputs": {"clip": ["clip", 0], "text": ""}},
 
-        {"id": "settings", "group": "Preparation", "node": "FunPackModifierSettings", "inputs": {"settings": "{}"}},
-        {"id": "modifiers", "group": "Preparation", "node": "FunPackLoadModifiers", "inputs": {
+        {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
+        {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers", "inputs": {
             "model": ["shift", 0], "settings": ["settings", 0]}},
 
-        {"id": "markup_apply", "group": "Preparation", "node": "FunPackApplyPromptMarkup",
+        {"id": "markup_apply", "group": "Preparation", "node": "FunUIApplyPromptMarkup",
          "inputs": {"model": ["modifiers", 0], "clip": ["clip", 0], "positive": ["r2v", 0],
                     "latent": ["r2v", 1], "markup": ["markup", 1]}},
 
         # Strength 0 = untouched. Above it, the negative prompt (dead at CFG 1) is taken out of the words.
-        {"id": "erase", "group": "Preparation", "node": "FunPackNegativeErase",
+        {"id": "erase", "group": "Preparation", "node": "FunUINegativeErase",
          "inputs": {"positive": ["markup_apply", 1], "negative": ["negative", 0], "strength": 0.0,
                     "mode": "project", "keep_size": True}},
 
-        {"id": "sampler", "group": "Sampling", "node": "FunPackSampler",
+        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
          "roles": [{"at": "generation.sampling", "input": "steps", "label": "Steps"},
                    {"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
                    {"at": "generation.sampling", "input": "scheduler", "label": "Scheduler"},
@@ -137,19 +137,19 @@ def h3_reference_to_video():
              "seed": 0, "steps": 20, "cfg": 1.0,
              "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
 
-        {"id": "decode", "group": "Render", "node": "FunPackDecode", "inputs": {
+        {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
             "samples": ["sampler", 0], "vae": ["vae", 0], "model": ["shift", 0],
             "audio_vae": ["audio_vae", 0]}},
-        {"id": "cut", "group": "Render", "node": "FunPackCutOpening",
+        {"id": "cut", "group": "Render", "node": "FunUICutOpening",
          "roles": [{"at": "project.video", "input": "frames", "label": "Cut opening frames"}],
          "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "frames": 0, "fps": 24.0}},
-        {"id": "save", "group": "Render", "node": "FunPackSaveVideo", "inputs": {
-            "images": ["cut", 0], "audio": ["cut", 1], "fps": 24.0, "filename_prefix": "FunPack"}},
+        {"id": "save", "group": "Render", "node": "FunUISaveVideo", "inputs": {
+            "images": ["cut", 0], "audio": ["cut", 1], "fps": 24.0, "filename_prefix": "FunUI"}},
     ]
 
     for n in range(1, MAX_REFERENCES + 1):
         slots.append({
-            "id": f"ref_source_{n}", "group": "Reference media", "node": "FunPackLoadMedia",
+            "id": f"ref_source_{n}", "group": "Reference media", "node": "FunUILoadMedia",
             # `wireTo` is not read by core or by graph.py -- it is this
             # preset's own data, read by boot.js at queue time (see
             # queueInputs()'s handling of "assets.reference_N" there) to know
@@ -182,15 +182,15 @@ def h3_reference_to_video_second_pass():
             slot["inputs"]["samples"] = ["pass2", 0]
     at = next(i for i, s in enumerate(slots) if s["id"] == "decode")
     slots[at:at] = [
-        {"id": "upscaler", "group": "Second pass", "node": "FunPackLatentUpscalerLoader",
+        {"id": "upscaler", "group": "Second pass", "node": "FunUILatentUpscalerLoader",
          "inputs": {}},
-        {"id": "resample", "group": "Second pass", "node": "FunPackLatentResample",
+        {"id": "resample", "group": "Second pass", "node": "FunUILatentResample",
          "inputs": {"latent": ["sampler", 0], "upscaler": ["upscaler", 0],
                     "operation": "sharpen", "scale": 2.0,
                     "positive": ["erase", 0], "negative": ["negative", 0]}},
         {"id": "pass2_sigmas", "group": "Second pass", "node": "ManualSigmas",
          "inputs": {"sigmas": "0.4, 0.3, 0.2, 0.1, 0.0"}},
-        {"id": "pass2", "group": "Second pass", "node": "FunPackSampler",
+        {"id": "pass2", "group": "Second pass", "node": "FunUISampler",
          "roles": [{"at": "generation.seed", "input": "seed", "label": "Seed"}],
          "inputs": {
              "model": ["markup_apply", 0], "positive": ["resample", 1],
@@ -205,12 +205,12 @@ def h3_reference_to_video_second_pass():
 #: Nodes this pipeline can run without, and what to pass through when their module did not load:
 #: {node class: {"pass": {output index: input name}}}. Asked for by core (graph.bypass_missing), so saved pipelines get it too.
 OPTIONAL_NODES = {
-    "FunPackEnhancePrompt": {"pass": {"0": "text"}},
-    "FunPackShotCamera": {"pass": {"0": "text"}},
-    "FunPackPromptMarkup": {"pass": {"0": "text"}},
-    "FunPackApplyPromptMarkup": {"pass": {"0": "model", "1": "positive"}},
-    "FunPackNegativeErase": {"pass": {"0": "positive"}},
-    "FunPackCutOpening": {"pass": {"0": "images", "1": "audio"}},
+    "FunUIEnhancePrompt": {"pass": {"0": "text"}},
+    "FunUIShotCamera": {"pass": {"0": "text"}},
+    "FunUIPromptMarkup": {"pass": {"0": "text"}},
+    "FunUIApplyPromptMarkup": {"pass": {"0": "model", "1": "positive"}},
+    "FunUINegativeErase": {"pass": {"0": "positive"}},
+    "FunUICutOpening": {"pass": {"0": "images", "1": "audio"}},
 }
 
 

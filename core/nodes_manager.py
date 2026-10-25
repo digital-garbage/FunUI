@@ -1,19 +1,19 @@
 """Install, update and remove ComfyUI custom node packs.
 
-A small stand-in for ComfyUI-Manager's three operations, so FunPack users are not sent to
+A small stand-in for ComfyUI-Manager's three operations, so FunUI users are not sent to
 another UI to add the one pack a workflow needs: clone from a git URL, pull, delete.
 
 There is no registry and no curation here — the user supplies the URL. That keeps this
 honest about what it is (git, in a directory) rather than implying a vetted catalogue.
 
-Carried across from v4 with one change -- where FunPack's root is -- because the
+Carried across from v4 with one change -- where FunUI's root is -- because the
 delete is the whole risk in it and every rule below was written against a real
 way to get it wrong.
 
 **The delete is the whole risk in this file.** Everything that resolves a pack name goes
 through `node_dir`, which refuses anything that is not a direct child directory of
 `custom_nodes` — resolved, so a symlink cannot point the deletion somewhere else — and
-refuses FunPack itself. Nothing here interpolates into a shell.
+refuses FunUI itself. Nothing here interpolates into a shell.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-FUNPACK_ROOT = Path(__file__).resolve().parents[1]
+FUNUI_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CustomNodeError(RuntimeError):
@@ -34,7 +34,7 @@ class CustomNodeError(RuntimeError):
 def custom_nodes_root() -> Path:
     """The custom_nodes directory, or a refusal saying why it cannot be found.
 
-    ComfyUI's own paths are asked first. The fallback -- "FunPack lives inside
+    ComfyUI's own paths are asked first. The fallback -- "FunUI lives inside
     custom_nodes" -- is a reliable anchor in an INSTALL and a wrong one in a
     development checkout, where the parent is somebody's home directory. v4
     could rely on it because v4 only ever ran from inside custom_nodes.
@@ -50,12 +50,12 @@ def custom_nodes_root() -> Path:
             return base.resolve()
     except Exception:  # noqa: BLE001
         pass
-    parent = FUNPACK_ROOT.parent.resolve()
+    parent = FUNUI_ROOT.parent.resolve()
     if parent.name != "custom_nodes":
         raise CustomNodeError(
             f"Cannot tell where node packs live: ComfyUI's paths are not available and "
-            f"FunPack is at {FUNPACK_ROOT}, which is not inside a custom_nodes directory. "
-            f"Start FunPack from a ComfyUI install to manage node packs.")
+            f"FunUI is at {FUNUI_ROOT}, which is not inside a custom_nodes directory. "
+            f"Start FunUI from a ComfyUI install to manage node packs.")
     return parent
 
 
@@ -66,7 +66,7 @@ def node_dir(name: str) -> Path:
       * one path segment, so "../.." cannot climb out;
       * resolved, so a symlink cannot redirect it;
       * the resolved parent must BE custom_nodes, not merely start with it;
-      * never FunPack itself, which would delete the code doing the deleting.
+      * never FunUI itself, which would delete the code doing the deleting.
     """
     raw = str(name or "").strip()
     if not raw or raw in (".", ".."):
@@ -83,9 +83,9 @@ def node_dir(name: str) -> Path:
             f"{raw!r} does not resolve to a directory inside custom_nodes — refusing to touch it.")
     if not resolved.is_dir():
         raise CustomNodeError(f"{raw!r} is not a directory.")
-    if resolved == FUNPACK_ROOT:
+    if resolved == FUNUI_ROOT:
         raise CustomNodeError(
-            "That is FunPack itself. Use Settings ▸ Updates & ComfyUI, or remove it by hand.")
+            "That is FunUI itself. Use Settings ▸ Updates & ComfyUI, or remove it by hand.")
     return resolved
 
 
@@ -128,7 +128,7 @@ def list_nodes() -> dict:
         for entry in sorted(root.iterdir(), key=lambda e: e.name.lower()):
             if not _is_pack(entry):
                 continue
-            info = {"name": entry.name, "is_funpack": entry.resolve() == FUNPACK_ROOT}
+            info = {"name": entry.name, "is_funui": entry.resolve() == FUNUI_ROOT}
             info.update(_git_info(entry))
             out.append(info)
     return {"root": str(root), "nodes": out}

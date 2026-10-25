@@ -44,8 +44,8 @@ def _sample(tiny, patched, negative, **run):
 
 
 def _load(tiny, **values):
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
-    return FunPackLoadModifiers.execute(
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    return FunUILoadModifiers.execute(
         tiny.patcher, {"shadow_negative": {"enabled": True, "end": 1.0, **values}}).result
 
 
@@ -89,7 +89,7 @@ def test_compose_leaves_a_block_another_feature_holds(tiny_h3):
                              lambda a, e: (ran.append(1), e["original_block"](a))[1])
     from modules.sampling import shadow_negative as m
     note = m.install(held, {**{k: v["default"] for k, v in m.SETTINGS.items()},
-                            "enabled": True, "compose": True, "end": 1.0}, key="funpack.sn")
+                            "enabled": True, "compose": True, "end": 1.0}, key="funui.sn")
     assert "leaves block(s) 2" in note
     _sample(tiny_h3, held, torch.randn(1, 4, 48))
     assert ran == [1]

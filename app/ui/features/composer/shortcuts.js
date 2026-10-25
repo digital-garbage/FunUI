@@ -34,7 +34,7 @@ export function shortcuts(app, own) {
     const did = (p) => p.then(draw).catch((err) => tell(err.message));
     c.menu.dropdown({ anchor: anchor || app.dom.body, items: [{ id: "export", label: "Export all…" }, { id: "import", label: "Import…" }, { id: "category", label: "New category…" }, { separator: true }, { id: "clear", label: "Delete all", danger: true, disabled: !(lib.shortcuts || []).length }],
       onPick: async (id) => {
-        if (id === "export") return app.dom.download("/funpack/api/shortcuts/export", "funpack_shortcuts.json");
+        if (id === "export") return app.dom.download("/fun/api/shortcuts/export", "funui_shortcuts.json");
         if (id === "import") {
           const picked = async (file) => {
             if (!file) return;

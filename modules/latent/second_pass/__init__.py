@@ -2,7 +2,7 @@
 
 v4 built the second pass INTO its chain sampler: a toggle, a second schedule, a
 second sampler, an operation. In v5 a second pass is just graph: sampler ->
-FunPack Latent Resample -> a second FunPack Sampler with denoise below 1 (which
+FunUI Latent Resample -> a second FunUI Sampler with denoise below 1 (which
 re-noises the finished clip to where its schedule starts). Nothing here samples.
 
 What this module adds is the part the graph could not already do:
@@ -19,7 +19,7 @@ What this module adds is the part the graph could not already do:
 v4's user verdict: the H3 second pass WORKS (2026-09-20).
 """
 
-from .nodes import FunPackLatentResample, FunPackLatentUpscalerLoader
+from .nodes import FunUILatentResample, FunUILatentUpscalerLoader
 
 ID = "latent_second_pass"
 TITLE = "Second pass"
@@ -27,4 +27,4 @@ STAGE = "latent"
 CATEGORY = "sampling"
 STATUS = "proven"
 
-NODES = [FunPackLatentUpscalerLoader, FunPackLatentResample]
+NODES = [FunUILatentUpscalerLoader, FunUILatentResample]

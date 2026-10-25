@@ -114,7 +114,7 @@ def _mps():
 
 
 def _disk():
-    """Free space where FunPack lives -- the volume that fills up with renders."""
+    """Free space where FunUI lives -- the volume that fills up with renders."""
     try:
         usage = shutil.disk_usage(str(config.ROOT))
         return {"total_gb": _bytes_gb(usage.total), "free_gb": _bytes_gb(usage.free)}

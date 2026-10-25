@@ -1,4 +1,4 @@
-"""Git pull / branch switch for the FunPack repo (ComfyUI custom node root).
+"""Git pull / branch switch for the FunUI repo (ComfyUI custom node root).
 
 Carried across from v4 unchanged but for REPO_ROOT, and deliberately: this is
 the most-used feature in an experimental pack, it has been switching branches on
@@ -32,7 +32,7 @@ def _run_git(*args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]
     if not shutil.which("git"):
         raise GitUpdateError("git not found on PATH.")
     if not (REPO_ROOT / ".git").exists():
-        raise GitUpdateError("FunPack is not a git checkout (no .git directory).")
+        raise GitUpdateError("FunUI is not a git checkout (no .git directory).")
     proc = subprocess.run(
         ["git", *args],
         cwd=REPO_ROOT,
@@ -43,7 +43,7 @@ def _run_git(*args: str, timeout: int = 120) -> subprocess.CompletedProcess[str]
     return proc
 
 
-def funpack_version() -> str:
+def funui_version() -> str:
     """Custom-node version from pyproject.toml (shown in Settings ▸ About)."""
     try:
         text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -58,13 +58,13 @@ def funpack_version() -> str:
 CODENAMES = {
     "3": "Auspicious Asparagus",
     "4": "Blinding Blackout",
-    "5": "Cunning Cranberry",      # README on main: "FunPack v5.0 'Cunning Cranberry'"
+    "5": "Classy Chopper",
 }
 
 
-def funpack_codename(version: str = "") -> str:
+def funui_codename(version: str = "") -> str:
     """Codename for `version` (default: the installed one); "" when its major has none."""
-    major = (version or funpack_version()).split(".", 1)[0].strip()
+    major = (version or funui_version()).split(".", 1)[0].strip()
     return CODENAMES.get(major, "")
 
 
@@ -110,7 +110,7 @@ def _stash_if_dirty(context: str) -> str | None:
     # edit to a file already in the repo, and this message is the one place
     # that gets shown -- in the UI, and in `git stash list` for anyone who
     # goes looking on the command line instead.
-    message = f"FunPack: auto-stashed (incl. new files) before {context}"
+    message = f"FunUI: auto-stashed (incl. new files) before {context}"
     proc = _run_git("stash", "push", "-u", "-m", message)
     if proc.returncode != 0:
         raise GitUpdateError((proc.stderr or proc.stdout or "git stash failed").strip())
@@ -279,8 +279,8 @@ def status(*, remote: bool = True) -> dict:
         ahead, behind = _ahead_behind(branch) if fetch_ok else (0, 0)
         return {
             "ok": True,
-            "version": funpack_version(),
-            "codename": funpack_codename(),
+            "version": funui_version(),
+            "codename": funui_codename(),
             "branch": branch,
             "commit": commit,
             "dirty": dirty,
@@ -293,8 +293,8 @@ def status(*, remote: bool = True) -> dict:
             "rollback_target": rollback_target(),
         }
     except GitUpdateError as e:
-        return {"ok": False, "version": funpack_version(),
-                "codename": funpack_codename(), "detail": str(e)}
+        return {"ok": False, "version": funui_version(),
+                "codename": funui_codename(), "detail": str(e)}
 
 
 REQUIREMENTS = "requirements.txt"
@@ -303,7 +303,7 @@ REQUIREMENTS = "requirements.txt"
 def parse_requirement(line: str):
     """(name, specifier) for one requirements line, or None for a blank/comment.
 
-    Deliberately small: FunPack's requirements are plain names with at most a version floor.
+    Deliberately small: FunUI's requirements are plain names with at most a version floor.
     Anything with an environment marker or a URL is handed back name-only, which makes it
     "install if absent" and never a reason to touch what is already there.
     """
@@ -320,7 +320,7 @@ def parse_requirement(line: str):
 
 
 def _installed_version(name: str):
-    """Installed version of `name` in THIS interpreter, or None. FunPack runs inside ComfyUI,
+    """Installed version of `name` in THIS interpreter, or None. FunUI runs inside ComfyUI,
     so importlib.metadata already sees the right environment — no pip subprocess needed."""
     try:
         from importlib import metadata
@@ -406,13 +406,13 @@ def install_requirements(timeout: int = 900) -> dict:
     status = requirement_status()
     floor_note = ""
     if status["below_floor"]:
-        floor_note = ("Present but older than FunPack asks for, and LEFT ALONE — upgrading a "
+        floor_note = ("Present but older than FunUI asks for, and LEFT ALONE — upgrading a "
                       "package the rest of ComfyUI is built against is not something an "
                       "update should do behind you:\n"
                       + "\n".join(f"  {n}: have {h}, wants {sp}"
                                    for n, h, sp in status["below_floor"])
                       + f"\n\nTo do it yourself:\n  {sys.executable} -m pip install -r {req}")
-        print(f"[FunPack update] {floor_note}")
+        print(f"[FunUI update] {floor_note}")
     # The spaCy model is a package the metadata can see even when it does not load (a half-finished
     # install, a model built for another spaCy). Presence is judged by loading it, when spaCy is here.
     model_broken = ("en_core_web_sm" in status["present"] and _installed_version("spacy") is not None
@@ -491,7 +491,7 @@ def _install_each(status, constraints_path, before, floor_note, timeout, model_b
             failed.append(("en_core_web_sm (spacy download)", str(e)))
     changed = _pip_diff(before, _pip_freeze())
     if changed:
-        print("[FunPack update] pip changed these packages: " + ", ".join(changed))
+        print("[FunUI update] pip changed these packages: " + ", ".join(changed))
     if failed:
         return {"ran": True, "ok": False, "changed": changed,
                 "detail": ("Could not install: " + ", ".join(line for line, _ in failed) + ".\n"

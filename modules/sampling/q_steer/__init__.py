@@ -47,11 +47,11 @@ SETTINGS = {
 }
 
 KIND = "q_steer"
-_SCOPE = "funpack_q_steer"
+_SCOPE = "funui_q_steer"
 
 
 def _say(message):
-    log.once(f"{ID}:{message}", log.ALERT, "FunPack Taste attention", message)
+    log.once(f"{ID}:{message}", log.ALERT, "FunUI Taste attention", message)
 
 
 def install(patcher, values, key):
@@ -71,7 +71,7 @@ def install(patcher, values, key):
 
     def fresh():
         live["dirs"], summary = taste.directions(KIND, steer, strength)
-        log.once(f"{ID}:state", log.INFO, "FunPack Taste attention", summary)
+        log.once(f"{ID}:state", log.INFO, "FunUI Taste attention", summary)
 
     captured = taste.collect(patcher, key, KIND, fresh=fresh)
     layout = {}                                  # seq_len -> (lo, hi, rotate) | None

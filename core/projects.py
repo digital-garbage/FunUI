@@ -24,7 +24,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 
-from . import config, media
+from . import config, legacy, media
 
 #: A generated id, never a user-supplied name, is what reaches the filesystem.
 _ID = re.compile(r"\A[0-9a-f]{12}\Z")
@@ -414,8 +414,8 @@ class Project:
     #: The pre-roll marker between the anchor and the first scene, and the negative the editor edits.
     intro_transition: str = ""
     negative_prompt: str = ""
-    conditioning_slot: str = "funpack"
-    sampler_slot: str = "funpack"
+    conditioning_slot: str = "funui"
+    sampler_slot: str = "funui"
     #: "i2v" or "t2v": decides what is EXPECTED (an anchor picture), never what is allowed.
     generation_mode: str = "i2v"
     studio_inputs: dict = field(default_factory=dict)
@@ -451,7 +451,7 @@ class Project:
 
     @staticmethod
     def from_dict(d) -> "Project":
-        d = d if isinstance(d, dict) else {}
+        d = legacy.data(d) if isinstance(d, dict) else {}
         pid = d.get("id")
         raw = d.get("scenes")
         negative = d.get("negative")
@@ -484,8 +484,8 @@ class Project:
             max_scenes=_int(d.get("max_scenes"), 8, 1, 10 ** 4),
             intro_transition=_str(d.get("intro_transition"), "", 200),
             negative_prompt=_str(d.get("negative_prompt")),
-            conditioning_slot=_str(d.get("conditioning_slot"), "funpack", 120) or "funpack",
-            sampler_slot=_str(d.get("sampler_slot"), "funpack", 120) or "funpack",
+            conditioning_slot=_str(d.get("conditioning_slot"), "funui", 120) or "funui",
+            sampler_slot=_str(d.get("sampler_slot"), "funui", 120) or "funui",
             generation_mode="t2v" if d.get("generation_mode") == "t2v" else "i2v",
             studio_inputs=_blob(d.get("studio_inputs"), dict),
             sampler_inputs=_blob(d.get("sampler_inputs"), dict),

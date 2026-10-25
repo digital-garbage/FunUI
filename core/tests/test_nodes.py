@@ -42,7 +42,7 @@ def test_an_announced_node_is_collected(collected):
     assert _good() in nodes
 
 
-def test_a_node_outside_the_funpack_namespace_is_refused(collected):
+def test_a_node_outside_the_funui_namespace_is_refused(collected):
     _, (nodes, rejected) = collected
     # ComfyUI would let this silently replace core's own VAELoader.
     assert "VAELoader" not in _ids(nodes)
@@ -51,7 +51,7 @@ def test_a_node_outside_the_funpack_namespace_is_refused(collected):
 
 def test_two_modules_cannot_claim_one_node_id(collected):
     _, (nodes, rejected) = collected
-    assert _ids(nodes).count("FunPackGood") == 1
+    assert _ids(nodes).count("FunUIGood") == 1
     # And the one that survived is the first module to claim it, not whichever
     # happened to be reached last.
     assert _good() in nodes

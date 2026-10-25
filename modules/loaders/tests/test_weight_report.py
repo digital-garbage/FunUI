@@ -50,7 +50,7 @@ def _load(monkeypatch, sd, weight_dtype, slow=None):
     said = []
     monkeypatch.setattr(nodes.log, "info", lambda src, msg: said.append(("info", msg)))
     monkeypatch.setattr(nodes.log, "alert", lambda src, msg: said.append(("alert", msg)))
-    nodes.FunPackDiffusionModelLoader.execute(model_name="model.safetensors", weight_dtype=weight_dtype,
+    nodes.FunUIDiffusionModelLoader.execute(model_name="model.safetensors", weight_dtype=weight_dtype,
                                               compute_dtype="bf16", attention="default")
     return said
 

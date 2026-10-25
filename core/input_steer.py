@@ -89,7 +89,7 @@ class Steer:
         patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, outer)
 
     def _say(self, level, message, key):
-        log.once(f"input steer {self.what}:{key}:{self._runs}", level, f"FunPack {self.what}", message)
+        log.once(f"input steer {self.what}:{key}:{self._runs}", level, f"FunUI {self.what}", message)
 
     @staticmethod
     def _packed(x):

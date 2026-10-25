@@ -1,6 +1,6 @@
 // What the server says exists.
 
-const ENDPOINT = "/funpack/api/modules";
+const ENDPOINT = "/fun/api/modules";
 
 export async function fetchManifest(traits) {
   const url = traits ? `${ENDPOINT}?traits=${encodeURIComponent(traits.join(","))}` : ENDPOINT;

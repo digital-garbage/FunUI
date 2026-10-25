@@ -152,9 +152,9 @@ class _FakeOf:
 # provider directly, never the node that chooses between them.
 
 def test_execute_uses_the_real_registry_and_lets_h3_claim_its_own_latent():
-    from modules.latent.empty.nodes import FunPackEmptyLatent
+    from modules.latent.empty.nodes import FunUIEmptyLatent
 
-    out = FunPackEmptyLatent.execute(_H3Model(), width=1344, height=768, length=124)
+    out = FunUIEmptyLatent.execute(_H3Model(), width=1344, height=768, length=124)
     latent, status = out.result
 
     assert "model_minimax_h3" in status, f"H3 did not claim its latent: {status!r}"
@@ -163,9 +163,9 @@ def test_execute_uses_the_real_registry_and_lets_h3_claim_its_own_latent():
 
 
 def test_execute_derives_for_a_model_nothing_claims():
-    from modules.latent.empty.nodes import FunPackEmptyLatent
+    from modules.latent.empty.nodes import FunUIEmptyLatent
 
-    out = FunPackEmptyLatent.execute(_Model(_config_named("SDXL")), 512, 512, 1)
+    out = FunUIEmptyLatent.execute(_Model(_config_named("SDXL")), 512, 512, 1)
     latent, status = out.result
     assert "latent format" in status
     assert tuple(latent["samples"].shape) == (1, 4, 64, 64)
@@ -190,7 +190,7 @@ def test_a_provider_that_breaks_on_its_own_model_stops_the_node(monkeypatch):
     monkeypatch.setitem(spec.provides, "empty_latent", broken)
 
     with pytest.raises(RuntimeError, match="Refusing to substitute"):
-        nodes.FunPackEmptyLatent.execute(_H3Model(), width=1344, height=768, length=124)
+        nodes.FunUIEmptyLatent.execute(_H3Model(), width=1344, height=768, length=124)
 
 
 def test_the_derivation_really_is_wrong_for_h3(monkeypatch):
@@ -218,7 +218,7 @@ def test_the_derivation_really_is_wrong_for_h3(monkeypatch):
 
 def test_wan22_matches_what_comfys_own_node_produces():
     """Wan 2.2 changes both the channel count and the spatial ratio from 2.1,
-    and neither number appears anywhere in FunPack -- they are read off the
+    and neither number appears anywhere in FunUI -- they are read off the
     format. If the derivation were carrying its own copy, this is where it would
     disagree."""
     import torch
@@ -297,7 +297,7 @@ def test_a_claimant_that_breaks_is_not_reported_as_absent(monkeypatch, capsys):
     which is the whole reason this project separated the levels.
     """
     from core import log, registry as registry_mod
-    from modules.latent.empty.nodes import FunPackEmptyLatent
+    from modules.latent.empty.nodes import FunUIEmptyLatent
 
     class Spec:
         id = "pretend_model"
@@ -315,7 +315,7 @@ def test_a_claimant_that_breaks_is_not_reported_as_absent(monkeypatch, capsys):
     log._reset()
 
     with pytest.raises(RuntimeError, match="upside down"):
-        FunPackEmptyLatent.execute(_Model(_config_named("SDXL")), 512, 512, 1, 1)
+        FunUIEmptyLatent.execute(_Model(_config_named("SDXL")), 512, 512, 1, 1)
 
     said = log.history()
     assert said, "nothing was said about a provider that broke mid-build"

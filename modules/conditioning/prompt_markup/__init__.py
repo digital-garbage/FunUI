@@ -18,7 +18,7 @@ The weight is an attention BIAS, and SLA runs any biased call dense, so a run
 with weights or timed phrases runs dense attention.
 """
 
-from .nodes import FunPackApplyPromptMarkup, FunPackPromptMarkup
+from .nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup
 
 ID = "conditioning_prompt_markup"
 TITLE = "Prompt markup"
@@ -26,4 +26,4 @@ STAGE = "conditioning"
 CATEGORY = "conditioning"
 STATUS = "proven"
 
-NODES = [FunPackPromptMarkup, FunPackApplyPromptMarkup]
+NODES = [FunUIPromptMarkup, FunUIApplyPromptMarkup]

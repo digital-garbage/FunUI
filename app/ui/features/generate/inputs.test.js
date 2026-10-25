@@ -85,7 +85,7 @@ test("a fixed seed (seed: null) sends no seed: the seed node's own number runs",
 });
 
 test("the shot camera node is told which project this is, whatever roles the saved pipeline carries", async () => {
-  const slots = [{ id: "shot_camera", node: "FunPackShotCamera", roles: [] }];
+  const slots = [{ id: "shot_camera", node: "FunUIShotCamera", roles: [] }];
   const { inputs } = await buildInputs({ project: { id: "proj1", scenes: [], video: {} }, scene: { id: "s", text: "x", references: [] }, slots, expand: async ({ text }) => ({ text }) });
   assert.equal(inputs.shot_camera.project, "proj1");
 });
@@ -104,7 +104,7 @@ test("text-only: a slot that can stand in for the picture is told the size of th
 });
 
 test("text-only on a pipeline saved before the preset named a stand-in: the resizer slot is enough, no preset change needed", async () => {
-  const s = [{ id: "src", node: "FunPackLoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] }, { id: "e", node: "FunPackEnhancePrompt", inputs: { use_image: true } },
+  const s = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] }, { id: "e", node: "FunUIEnhancePrompt", inputs: { use_image: true } },
     { id: "t", node: "ImageTransformKJ", inputs: { target_width: 1344, target_height: 768 }, roles: [{ at: "project.video", input: "target_width" }] }];
   const { inputs } = await buildInputs({ project: { generation_mode: "t2v", video: { target_width: 640 } }, scene: {}, slots: s, expand: async () => null });
   assert.deepEqual(inputs.src, { media_id: "", blank_width: 640, blank_height: 768 });

@@ -2,7 +2,7 @@
 
 `ID` deliberately sorts AFTER `nodes_good`, because `collect()` resolves a
 duplicate in favour of whoever it reaches first. Without that, this fixture won
-the id and every test asserting "FunPackGood was collected" was satisfied by
+the id and every test asserting "FunUIGood was collected" was satisfied by
 this class instead of the real one -- a test passing for a reason it never named.
 """
 

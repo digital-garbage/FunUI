@@ -15,7 +15,7 @@ vietnamese are dropped. 133 KB total.
 
 The SIL Open Font License permits bundling and redistribution, including inside
 a GPL project, provided the licence travels with the fonts — which is why the
-three OFL texts sit beside them. The fonts are not covered by FunPack's GPL and
+three OFL texts sit beside them. The fonts are not covered by FunUI's GPL and
 are not modified.
 
 Faces are declared in `app/ui/composer/tokens/fonts.css`.

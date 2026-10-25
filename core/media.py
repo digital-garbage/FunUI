@@ -45,7 +45,7 @@ _AUDIO_EXT = frozenset({".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".opus"
 #: not on this list is rejected before it reaches a filename.
 ALLOWED_EXT = _IMAGE_EXT | _VIDEO_EXT | _AUDIO_EXT
 
-#: Matches ComfyUI's own --max-upload-size default (100MB): FunPack's routes
+#: Matches ComfyUI's own --max-upload-size default (100MB): FunUI's routes
 #: ride on ComfyUI's Application in production, which already refuses a bigger
 #: body before this ever runs. A larger number here would be a limit this
 #: store claims to enforce but never gets the chance to.
@@ -140,7 +140,7 @@ def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
         raise ValueError(f"that file is over the {limit // (1024 * 1024)}MB limit")
     ext = Path(orig_name or "").suffix.lower()
     if ext not in ALLOWED_EXT:
-        raise ValueError(f"{ext or 'that file type'} is not something FunPack imports")
+        raise ValueError(f"{ext or 'that file type'} is not something FunUI imports")
 
     mid = uuid.uuid4().hex[:12]
     filename = mid + ext

@@ -12,7 +12,7 @@ per-channel statistics -- H3's VAE statistics are a different thing.
 
 Reference implementation: LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler.
 Reconstructed rather than vendored -- that repository ships no licence. Ported
-from FunPack v4's h3_latent_upscaler.py.
+from FunUI v4's h3_latent_upscaler.py.
 """
 import torch
 import torch.nn as nn
@@ -145,7 +145,7 @@ class H3LatentResizer3D(nn.Module):
 
     # Marks this as an upscaler that owns its normalisation and takes a scale factor,
     # so the caller does not have to know which architecture it loaded.
-    def funpack_latent_upscale(self, x, scale=2.0):
+    def funui_latent_upscale(self, x, scale=2.0):
         mean = torch.tensor(LATENTS_MEAN, dtype=x.dtype, device=x.device).view(1, -1, 1, 1, 1)
         std = torch.tensor(LATENTS_STD, dtype=x.dtype, device=x.device).view(1, -1, 1, 1, 1)
         if mean.shape[1] != x.shape[1]:
@@ -215,7 +215,7 @@ def detect_config(sd):
 def load_upscaler(sd):
     """The `latent_upscaler` capability: a built upscaler, or None if this state
     dict is not this architecture. Returns an object with
-    `funpack_latent_upscale(x, scale)`, which is all a caller needs."""
+    `funui_latent_upscale(x, scale)`, which is all a caller needs."""
     if not is_h3_latent_upscaler(sd):
         return None
     return from_state_dict(sd)

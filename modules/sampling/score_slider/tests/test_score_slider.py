@@ -50,7 +50,7 @@ def test_similar_prompts_pick_their_own_direction():
 def test_late_steps_combine_three_passes_on_the_picture_words_only(tiny_h3):
     from conftest import packed_av, unpacked
     from comfy.patcher_extension import WrappersMP
-    from modules.sampling.modifiers.nodes import FunPackLoadModifiers
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
     from modules.system.taste import store
 
     dim = 8
@@ -60,7 +60,7 @@ def test_late_steps_combine_three_passes_on_the_picture_words_only(tiny_h3):
         store.capture("fox", "prompt_taste", {"pooled": liked if i % 2 else -liked}, prompt_id=f"t{i}")
         store.rate(f"t{i}", "liked" if i % 2 else "disliked")
 
-    patched, _ = FunPackLoadModifiers.execute(tiny_h3.patcher, {
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {
         "taste": {"key": "fox"}, "score_slider": {"enabled": True, "strength": 1.0}}).result
     wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
     for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values():
@@ -72,7 +72,7 @@ def test_late_steps_combine_three_passes_on_the_picture_words_only(tiny_h3):
 
     def executor(x, t, c_concat=None, c_crossattn=None, control=None, transformer_options=None, **kw):
         seen.append(c_crossattn.clone())
-        flags.append(bool((transformer_options or {}).get("funpack_probe")))
+        flags.append(bool((transformer_options or {}).get("funui_probe")))
         return packed_av(torch.full((1, 2, 1, 2, 2), float(c_crossattn[0, :, 0].sum())), audio)[0]
 
     c = torch.ones(1, 4, dim)

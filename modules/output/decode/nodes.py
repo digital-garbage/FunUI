@@ -1,6 +1,6 @@
 """Latent to pictures, and to sound where there is any.
 
-Writing the file is FunPack Save Video's job (core's SaveVideo encoded on one
+Writing the file is FunUI Save Video's job (core's SaveVideo encoded on one
 CPU thread); VHS is unnecessary either way.
 
 What core cannot generalise is the decode itself for a model whose latent is not
@@ -28,13 +28,13 @@ def _plain_decode(vae, latent, tile_size):
     return vae_tiles.tiled_decode(vae, latent, tile_size)
 
 
-class FunPackDecode(io.ComfyNode):
+class FunUIDecode(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="FunPackDecode",
-            display_name="FunPack Decode",
-            category="FunPack/Output",
+            node_id="FunUIDecode",
+            display_name="FunUI Decode",
+            category="FunUI/Output",
             description="Decode a latent to images, and to audio when the model has any.",
             inputs=[
                 io.Latent.Input("samples"),

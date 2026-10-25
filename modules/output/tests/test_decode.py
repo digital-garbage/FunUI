@@ -58,10 +58,10 @@ class _Vae:
 
 def test_a_single_tensor_latent_decodes_normally():
     import torch
-    from modules.output.decode.nodes import FunPackDecode
+    from modules.output.decode.nodes import FunUIDecode
 
     vae = _Vae()
-    out = FunPackDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, vae)
+    out = FunUIDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, vae)
     images, audio, status = out.result
 
     assert audio is None and "single latent" in status
@@ -71,10 +71,10 @@ def test_a_single_tensor_latent_decodes_normally():
 def test_a_batch_of_clips_becomes_one_strip_of_frames():
     """A 5-D decode is [B, T, H, W, C]; downstream wants frames."""
     import torch
-    from modules.output.decode.nodes import FunPackDecode
+    from modules.output.decode.nodes import FunUIDecode
 
     vae = _Vae(out=torch.zeros(2, 5, 8, 8, 3))
-    images, _audio, _status = FunPackDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, vae).result
+    images, _audio, _status = FunUIDecode.execute({"samples": torch.zeros(1, 4, 8, 8)}, vae).result
     assert images.shape == (10, 8, 8, 3)
 
 
@@ -89,7 +89,7 @@ def test_a_nested_latent_nobody_claims_is_refused_not_decoded_as_one_tensor(monk
     import torch
     from comfy.nested_tensor import NestedTensor
     from core import registry as registry_mod
-    from modules.output.decode.nodes import FunPackDecode
+    from modules.output.decode.nodes import FunUIDecode
 
     for spec in registry_mod.current().specs.values():
         if "decode" in spec.provides:
@@ -97,7 +97,7 @@ def test_a_nested_latent_nobody_claims_is_refused_not_decoded_as_one_tensor(monk
 
     nested = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 16)))
     with pytest.raises(RuntimeError, match="more than one part"):
-        FunPackDecode.execute({"samples": nested}, _Vae(), model=_h3_model())
+        FunUIDecode.execute({"samples": nested}, _Vae(), model=_h3_model())
 
 
 def test_h3_claims_a_nested_latent_and_uses_both_vaes(monkeypatch):
@@ -149,11 +149,11 @@ def test_h3_declines_when_the_model_is_not_wired_rather_than_guessing():
 def test_an_unrecognised_nested_latent_says_the_model_was_not_wired():
     import torch
     from comfy.nested_tensor import NestedTensor
-    from modules.output.decode.nodes import FunPackDecode
+    from modules.output.decode.nodes import FunUIDecode
 
     nested = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 16)))
     with pytest.raises(RuntimeError, match="model input is not wired"):
-        FunPackDecode.execute({"samples": nested}, _Vae())
+        FunUIDecode.execute({"samples": nested}, _Vae())
 
 
 def test_a_missing_audio_vae_is_named_rather_than_silently_silent():
@@ -172,7 +172,7 @@ def test_a_claiming_module_that_breaks_stops_the_decode(monkeypatch):
     import torch
     from comfy.nested_tensor import NestedTensor
     from core import registry as registry_mod
-    from modules.output.decode.nodes import FunPackDecode
+    from modules.output.decode.nodes import FunUIDecode
 
     def broken(latent, model=None, vae=None, audio_vae=None):
         if not getattr(latent, "is_nested", False):
@@ -184,7 +184,7 @@ def test_a_claiming_module_that_breaks_stops_the_decode(monkeypatch):
 
     nested = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 16)))
     with pytest.raises(RuntimeError, match="Refusing to decode"):
-        FunPackDecode.execute({"samples": nested}, _Vae())
+        FunUIDecode.execute({"samples": nested}, _Vae())
 
 
 def test_tiles_on_an_ordinary_vae_follow_comfyuis_own_tiled_decode():

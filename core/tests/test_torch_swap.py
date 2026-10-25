@@ -112,7 +112,7 @@ from core import routes  # noqa: E402
 
 def _finish(server):
     for _ in range(100):
-        _, state = _request(server["port"], "GET", "/funpack/api/torch/cuda13")
+        _, state = _request(server["port"], "GET", "/fun/api/torch/cuda13")
         if not state["running"]:
             return state
         time.sleep(0.05)
@@ -122,13 +122,13 @@ def _finish(server):
 def test_route_starts_a_job_and_restarts_only_after_an_install(server, monkeypatch):
     monkeypatch.setattr(routes, "_generation_running", lambda: False)
     monkeypatch.setattr(torch_swap, "swap", lambda: {"installed": False, "message": "download failed"})
-    status, body = _request(server["port"], "POST", "/funpack/api/torch/cuda13")
+    status, body = _request(server["port"], "POST", "/fun/api/torch/cuda13")
     assert status == 200 and body == {"started": True}, "answers at once: the download outlives one proxied request"
     state = _finish(server)
     assert state["result"]["restarting"] is False and state["result"]["message"] == "download failed"
     assert server["restarts"] == []
     monkeypatch.setattr(torch_swap, "swap", lambda: {"installed": True, "message": "ok"})
-    _request(server["port"], "POST", "/funpack/api/torch/cuda13")
+    _request(server["port"], "POST", "/fun/api/torch/cuda13")
     assert _finish(server)["result"]["restarting"] is True
 
 
@@ -137,8 +137,8 @@ def test_a_second_start_while_one_runs_is_refused(server, monkeypatch):
     gate = threading.Event()
     monkeypatch.setattr(routes, "_generation_running", lambda: False)
     monkeypatch.setattr(torch_swap, "swap", lambda: (gate.wait(5), {"installed": False, "message": "x"})[1])
-    _request(server["port"], "POST", "/funpack/api/torch/cuda13")
-    status, body = _request(server["port"], "POST", "/funpack/api/torch/cuda13")
+    _request(server["port"], "POST", "/fun/api/torch/cuda13")
+    status, body = _request(server["port"], "POST", "/fun/api/torch/cuda13")
     gate.set()
     assert status == 409 and "already running" in body["detail"]
     _finish(server)
@@ -147,7 +147,7 @@ def test_a_second_start_while_one_runs_is_refused(server, monkeypatch):
 def test_route_refuses_during_a_generation(server, monkeypatch):
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
     monkeypatch.setattr(torch_swap, "swap", lambda: (_ for _ in ()).throw(AssertionError("must not run")))
-    status, body = _request(server["port"], "POST", "/funpack/api/torch/cuda13")
+    status, body = _request(server["port"], "POST", "/fun/api/torch/cuda13")
     assert status == 409 and "generation" in body["detail"]
 
 

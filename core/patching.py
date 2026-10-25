@@ -18,7 +18,7 @@ and the day it falls behind is the day a hook stops being removable.
 
 from typing import Any
 
-TAG = "_funpack_key"
+TAG = "_funui_key"
 
 
 def tag(fn, key: str):
@@ -87,7 +87,7 @@ def _strip_options(options: dict, prefix: str) -> int:
             # back rather than dropping it, or stripping ours deletes someone
             # else's hook along with it.
             while callable(value) and _ours(value, prefix):
-                value = getattr(value, "_funpack_prev", None)
+                value = getattr(value, "_funui_prev", None)
                 removed += 1
             if value is None:
                 options.pop(name, None)
@@ -282,7 +282,7 @@ def guard_unet(fn, key: str, dropped: Dropped, prior=None):
 
 
 # The neutral result for each hook ComfyUI offers, by the method that installs
-# it. Core knows ComfyUI's own shapes here -- not FunPack's features -- because
+# it. Core knows ComfyUI's own shapes here -- not FunUI's features -- because
 # "what this hook returns when it does nothing" is a fact about ComfyUI.
 def _neutral_wrapper(executor, *args, **kwargs):
     return executor(*args, **kwargs)
@@ -371,7 +371,7 @@ def clone(model):
     """`model.clone()` that keeps the fault record a modifier node hung on it: ModelPatcher.clone()
     drops unknown attributes, and the sampler would then clear a record nobody else holds."""
     patched = model.clone()
-    record = getattr(model, "funpack_dropped", None)
+    record = getattr(model, "funui_dropped", None)
     if record is not None:
-        patched.funpack_dropped = record
+        patched.funui_dropped = record
     return patched

@@ -34,13 +34,12 @@
 .cx-code-warn { color: var(--warn); }
 .cx-code-error { color: var(--danger); }
 
-/* The one place the app names itself. The mark carries a little of its own
-   light, which is what stops a 5px dot reading as a bullet point. */
-.cx-brand { display: inline-flex; align-items: center; gap: var(--sp-4); }
+/* The one place the app names itself. The mark is a wink, set in the display
+   face and the accent colour, the same size as the name beside it. */
+.cx-brand { display: inline-flex; align-items: center; gap: var(--sp-3); }
 .cx-brand-mark {
-  inline-size: 12px; block-size: 12px; box-sizing: border-box; border-radius: var(--r-pill);
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 6px var(--accent-soft);
+  font-family: var(--font-display); font-weight: 800; line-height: 1;
+  font-size: var(--fs-3); letter-spacing: 0; color: var(--accent); white-space: nowrap;
 }
 .cx-brand-name {
   font-family: var(--font-display); font-weight: 800;

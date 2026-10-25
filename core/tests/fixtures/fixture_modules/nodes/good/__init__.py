@@ -2,7 +2,7 @@
 
 
 class _Schema:
-    node_id = "FunPackGood"
+    node_id = "FunUIGood"
     display_name = "Good"
 
 
