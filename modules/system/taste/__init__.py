@@ -169,6 +169,7 @@ KIND_INFO = {
     "first_step": ("First-step seed search", "Which seeds start well, learned from ratings"),
     "late_branch": ("Late-branch guidance", "Guidance applied late in the run, learned from ratings"),
     "velocity": ("Velocity bias", "Motion bias learned from ratings"),
+    "attention_bandit": ("Attention explorer", "Which attention changes per depth group were liked or disliked"),
     "x0_quarters": ("Early taste guidance", "Guidance from the first quarters of the run, learned from ratings"),
 }
 _KIND = re.compile(r"\A[a-z][a-z0-9_]{0,63}\Z")
