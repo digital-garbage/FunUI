@@ -121,7 +121,7 @@ Version history is available in [CHANGELOG.md](CHANGELOG.md).
 
 ## Classic FunUI (4.x)
 
-FunUI 4 was a different app: Cutting Room, with Easy Gen as its simple mode, and no modules. It is no longer developed, but it is kept for anyone who prefers it: `git clone -b v4-classic https://github.com/digital-garbage/FunUI`, or browse the [`v4-classic`](https://github.com/digital-garbage/FunUI/tree/v4-classic) branch.
+FunPack 4 was a different app: Cutting Room, with Easy Gen as its simple mode, and no modules. It is no longer developed, but it is kept for anyone who prefers it: `git clone -b v4-classic https://github.com/digital-garbage/FunUI`, or browse the [`v4-classic`](https://github.com/digital-garbage/FunUI/tree/v4-classic) branch.
 
 ## Feedback
 
