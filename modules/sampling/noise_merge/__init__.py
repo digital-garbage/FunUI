@@ -132,6 +132,10 @@ def install(patcher, values, key):
             if split_b is None:
                 return out
             video_b, rebuild_b = split_b
+            diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
+            log.info("FunUI Noise merging",
+                     f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
+                     f"merged at {strength:.2f}")
             if b_first:
                 return rebuild_a(merge(video_a, video_b, strength).to(video_a.dtype))
             return rebuild_b(merge(video_b, video_a, strength).to(video_b.dtype))
