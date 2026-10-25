@@ -120,3 +120,13 @@ def test_a_second_run_on_the_same_cached_model_still_makes_the_extra_pass(server
             hook.remove()
         counts.append((len(forwards), sum("second pass took" in e["message"] for e in log.history()) - before))
     assert counts == [(5, 1)] * 3, counts
+
+
+def test_merging_the_starting_noise_costs_no_extra_pass_and_changes_the_video(server, model):
+    values = dict(APP_VALUES, noise_merge={"enabled": True, "what": "noise", "strength": 0.5, "seed": 7})
+    off = dict(APP_VALUES, noise_merge={"enabled": False})
+    from core import log
+    status, merged = _sample(model, _saved_by_the_app(server, values))
+    assert any("starting noise mixed with the second seed's (7)" in e["message"] for e in log.history())
+    _s, plain = _sample(model, _saved_by_the_app(server, off))
+    assert "starting noise" in status and merged == plain

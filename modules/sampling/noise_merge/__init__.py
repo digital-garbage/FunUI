@@ -37,11 +37,20 @@ SETTINGS = {
         "label": "Noise merging",
         "hint": "At the steps below, answers the step twice with different noise and blends the two. Costs one extra pass per merged step.",
     },
+    "what": {
+        "type": "enum", "default": "answers", "options": [
+            {"value": "answers", "label": "Step answers"},
+            {"value": "noise", "label": "Starting noise"},
+        ],
+        "label": "Merge", "ui": "segmented",
+        "hint": "Step answers: at chosen steps the model answers twice and the two pictures are blended (one extra pass each). Starting noise: the run starts from your seed's noise mixed with the second seed's, at no extra cost.",
+        "when": {"enabled": True},
+    },
     "steps": {
         "type": "text", "default": "1",
         "label": "Steps",
         "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the schedule's end are ignored.",
-        "when": {"enabled": True},
+        "when": {"enabled": True, "what": "answers"},
     },
     "order": {
         "type": "enum", "default": "b_into_a", "options": [
@@ -50,24 +59,24 @@ SETTINGS = {
         ],
         "label": "Merge order", "ui": "segmented",
         "hint": "A is the picture your seed makes, B the same step on a second seed. The first named is blended in; the other is the base that keeps its overall look.",
-        "when": {"enabled": True},
+        "when": {"enabled": True, "what": "answers"},
     },
     "strength": {
         "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Merge strength", "ui": "slider",
-        "hint": "0 keeps the base picture untouched, 1 replaces it with the other.",
+        "hint": "0 keeps your own result untouched, 1 replaces it with the second seed's. For starting noise, 0.5 is an even mix.",
         "when": {"enabled": True},
     },
     "sound": {
         "type": "bool", "default": True,
         "label": "Merge sound too",
         "hint": "Blends the sound the same way as the picture. Off keeps only the base's own sound.",
-        "when": {"enabled": True},
+        "when": {"enabled": True, "what": "answers"},
     },
     "seed": {
         "type": "int", "default": -1, "min": -1, "max": 2147483647,
         "label": "Second seed",
-        "hint": "The noise for picture B. -1 picks a new one every run; a number gives the same B each time.",
+        "hint": "The noise for picture B (or the second noise). -1 picks a new one every run; a number gives the same B each time.",
         "when": {"enabled": True},
     },
 }
@@ -103,9 +112,41 @@ def _sound(packed, video):
     return packed[..., n:] if packed.shape[-1] > n else None
 
 
+def mix_noise(noise, other, strength):
+    """cos(t) noise + sin(t) other, t = strength * 90 degrees: two independent unit-variance noises
+    stay unit variance (a plain average would shrink to 71% at an even mix, and the model reads that as a calmer, blurrier start)."""
+    theta = strength * torch.pi / 2
+    return (torch.cos(torch.tensor(theta)) * noise + torch.sin(torch.tensor(theta)) * other).to(noise.dtype)
+
+
+def install_noise(patcher, values, key):
+    strength = float(values.get("strength", 0.5))
+    if strength <= 0.0:
+        _say("off: strength is 0")
+        return None
+    chosen = int(values.get("seed", -1))
+
+    def sampler_sample(executor, model_wrap, sigmas, extra_args, callback, noise,
+                       latent_image=None, denoise_mask=None, disable_pbar=False):
+        if not isinstance(noise, torch.Tensor):
+            _say("off this run: the starting noise is not a plain tensor")
+            return executor(model_wrap, sigmas, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar)
+        seed = chosen if chosen >= 0 else random.randrange(2 ** 31)
+        other = torch.randn(noise.shape, generator=torch.Generator().manual_seed(seed)).to(noise)
+        log.info("FunUI Noise merging", f"on: starting noise mixed with the second seed's ({seed}) at "
+                 f"strength {strength:.2f}, no extra pass")
+        return executor(model_wrap, sigmas, extra_args, callback, mix_noise(noise, other, strength),
+                        latent_image, denoise_mask, disable_pbar)
+
+    patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, key, sampler_sample)
+    return f"starting noise, strength {strength:.2f}, second seed {'random' if chosen < 0 else chosen}"
+
+
 def install(patcher, values, key):
     if not values.get("enabled"):
         return None
+    if values.get("what") == "noise":
+        return install_noise(patcher, values, key)
     wanted, problems = dit_hooks.parse_blocks(values.get("steps"), 100000)
     wanted = {i - 1 for i in wanted if i >= 1}
     for p in problems:

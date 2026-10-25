@@ -144,3 +144,11 @@ def test_sound_off_keeps_the_base_sound_untouched(tiny_h3):
     plain = unpacked(model(x0, None), shapes)
     got = unpacked(out, shapes)
     assert not torch.allclose(got[0], plain[0]) and torch.allclose(got[1], plain[1])
+
+
+def test_a_noise_mix_keeps_unit_variance_and_strength_extremes_pick_a_side():
+    from modules.sampling.noise_merge import mix_noise
+    a, b = torch.randn(1, 4, 3, 64, 64), torch.randn(1, 4, 3, 64, 64)
+    assert mix_noise(a, b, 0.5).std() == pytest.approx(1.0, abs=0.02)
+    assert torch.allclose(mix_noise(a, b, 0.0), a, atol=1e-6)
+    assert torch.allclose(mix_noise(a, b, 1.0), b, atol=1e-5)
