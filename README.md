@@ -1,4 +1,4 @@
-# FunUI v5
+# FunUI (formerly FunPack)
 
 **FunUI v5 is here. It is a browser studio for video inside ComfyUI: a timeline with one clip per scene, a Composer for your prompts, pipeline cards instead of graphs, and modules that learn from your ratings - all on the regular ComfyUI backend.**
 
