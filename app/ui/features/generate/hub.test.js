@@ -235,3 +235,23 @@ test("Quick A/B runs the picked scene with every enhancement off and the last ru
   await app.runner.quickAB();
   assert.equal(off, true);
 });
+
+test("Quick A/B ends with the clip from before and the new clip, labelled, side by side", async () => {
+  let n = 0;
+  const { app, doc } = rig("idle", { generate: async () => true });
+  Object.defineProperty(app.generate.run.state, "images", { get: () => [{ filename: `new${++n}.mp4` }] });
+  app.pipeline.allOff = () => false;
+  app.pipeline.setAllOff = async () => {};
+  app.selection.ids = ["a"];
+  app.lastRun.seed = 5;
+  doc.scene_renders = { a: { media: { filename: "old.mp4" }, promptId: "p0" } };
+  app.generate.run.state.promptId = "p1";
+  await app.runner.quickAB();
+  const vids = [...document.querySelectorAll(".cx-modal video")].map((v) => v.getAttribute("src"));
+  assert.equal(vids.length, 2);
+  assert.match(vids[0], /filename=old\.mp4/);
+  assert.match(vids[1], /filename=new\d\.mp4/);
+  const text = document.querySelector(".cx-modal").textContent;
+  assert.match(text, /Before/);
+  assert.match(text, /After: enhancements off, seed 5/);
+});

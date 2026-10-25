@@ -6,6 +6,7 @@ import { inPlace } from "../../shell/place.js";
 import { buildInputs, rolesAt } from "./inputs.js";
 import { offer } from "../../shell/actions.js";
 import { names } from "../../shell/bin.js";
+import { showCompare } from "./compare.js";
 
 const MAX_TAKES = 24;
 const expand = (body) => fetch("/fun/api/prompt/expand", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -148,12 +149,17 @@ export default {
       if (!p.project || !Number.isInteger(seed)) { tell("Quick A/B needs a run to compare with: generate once first."); return; }
       const units = unitsOf(pickedScenes());
       if (!units.length) return;
+      const headOf = (u) => { const g = p.project.scenes.filter((s) => genUnitId(s) === u); return g.find((s) => !(s.cut_offset_frames > 0)) || g[0]; };
+      const renderOf = (u) => { const h = headOf(u), r = h && (p.project.scene_renders || {})[h.id]; return r && r.media ? { media: r.media, key: r.promptId || r.media.filename } : null; };
+      const before = new Map(units.map((u) => [u, renderOf(u)]));
       const was = app.pipeline.allOff();
       let restored = was;
       const restore = async () => { if (!restored) { restored = true; await app.pipeline.setAllOff(false); } };      // as soon as ComfyUI has the run: later edits are the person's again
       try {
         if (!was) { restored = false; await app.pipeline.setAllOff(true); }
         await runUnits(units, 1, { seed, onQueued: restore });
+        const pairs = units.map((u) => [before.get(u), renderOf(u)]).filter(([b, a]) => b && a && b.key !== a.key).map(([b, a]) => ({ before: b.media, after: a.media }));
+        if (pairs.length) showCompare({ pairs, seed });
       } finally { await restore().catch(() => tell("Enhancements could not be switched back on: use Enable enhancements on the wheel.")); }
     };
     /** One run for the Training window: the pipeline as it is, its LoRA loader pointed at `lora`, the picked scene (else the first one) and the project's own settings.
