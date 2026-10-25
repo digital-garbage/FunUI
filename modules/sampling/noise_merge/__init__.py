@@ -16,6 +16,7 @@ learning feature records it.
 """
 
 import random
+import time
 
 import torch
 from comfy.patcher_extension import WrappersMP
@@ -135,7 +136,9 @@ def install(patcher, values, key):
             video_a, rebuild_a = split_a
             x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], where[0]).to(split_x[0].dtype))
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
+            began = time.perf_counter()
             out_b = executor(x_b, t, *args_b, **kwargs_b)
+            took = time.perf_counter() - began
             split_b = streams.video_of(out_b, named)
             if split_b is None:
                 return out
@@ -144,7 +147,7 @@ def install(patcher, values, key):
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
             log.info("FunUI Noise merging",
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
-                     f"merged at {strength:.2f}")
+                     f"merged at {strength:.2f}; the second pass took {took:.1f}s")
             if b_first:
                 return rebuild_a(merge(video_a, video_b, strength).to(video_a.dtype))
             return rebuild_b(merge(video_b, video_a, strength).to(video_b.dtype))
