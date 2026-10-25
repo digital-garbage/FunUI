@@ -108,7 +108,7 @@ def _swap(controller):
         options = extra_args.get("model_options", {}).get("transformer_options")
         if options is not None:
             options["sample_sigmas"] = grid
-        log.once("ptd:swap", log.INFO, "FunUI PTD",
+        log.once(f"ptd:swap:{controller.adapter.label}:{controller.hops}", log.INFO, "FunUI PTD",
                  f"sampling {controller.hops} hops from {controller.adapter.label}; the chosen sampler and steps "
                  f"({len(sigmas) - 1}) are not used")
         return ptd.sample(guider, grid, extra_args, callback, noise, latent_image,
