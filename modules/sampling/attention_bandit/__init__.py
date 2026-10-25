@@ -124,6 +124,13 @@ def learned_spread(rows, signature):
     return m
 
 
+def tally(rows):
+    """'N rated runs: L liked, D disliked' over everything this key holds for this kind."""
+    liked = sum(1 for r in rows if r["reward"] > 0)
+    disliked = sum(1 for r in rows if r["reward"] < 0)
+    return f"{len(rows)} rated runs ({liked} liked, {disliked} disliked)"
+
+
 def describe(groups, picks, spread):
     """Which blocks went sharper or looser, exactly; groups left as is are not mentioned."""
     moved = {}
@@ -193,7 +200,7 @@ def install(patcher, values, key):
         captured.update({"arms": torch.tensor(picks), "sig": torch.tensor(signature),
                          "spread": torch.tensor(float(spread))})
         log.once(f"{ID}:run", log.INFO, "FunUI Attention explorer",
-                 f"key {taste.key!r}: {describe(groups, picks, spread)}")
+                 f"key {taste.key!r}, {tally(rows)}: {describe(groups, picks, spread)}")
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS, fresh=fresh)
 

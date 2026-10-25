@@ -153,3 +153,10 @@ def test_a_rating_changes_the_taste_cache_key_so_the_same_seed_runs_again(tiny_h
     _run(_outer(patched), lambda: tiny_h3.run(patched))
     store.rate("run-2", "liked")
     assert cache_key() != first
+
+
+def test_the_log_counts_rated_runs():
+    from modules.sampling.attention_bandit import tally
+    rows = [_row(1.0, [1], [1, 0, 0]), _row(-1.0, [1], [1, 0, 0]), _row(-1.0, [1], [1, 0, 0])]
+    assert tally(rows) == "3 rated runs (1 liked, 2 disliked)"
+    assert tally([]) == "0 rated runs (0 liked, 0 disliked)"
