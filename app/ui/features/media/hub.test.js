@@ -145,7 +145,7 @@ test("pinning the first reference repaints its tile even though no number moves;
 
 test("the bin's view and sort are kept with the project and come back on the next start", async () => {
   const store = {};
-  const project = { selected: null, pref: (k, d) => (k in store ? store[k] : d), setPref: (k, v) => { store[k] = v; } };
+  const project = { project: { id: "p1" }, selected: null, pref: (k, d) => (k in store ? store[k] : d), setPref: (k, v) => { store[k] = v; } };
   const api = { media: async () => ({ media: [{ id: "m1", name: "cat.png", kind: "image" }] }) };
   const mount = async () => {
     const host = document.createElement("div");
@@ -163,4 +163,19 @@ test("the bin's view and sort are kept with the project and come back on the nex
   store.media_show = { sort: "bogus", view: "list", cols: "9" };
   host = await mount();
   assert.equal(host.querySelector("select").value, "name", "an unknown saved choice falls back");
+});
+
+test("a project that opens after the bin still gets its saved view and sort", async () => {
+  const store = { media_show: { sort: "added", view: "list", cols: "2" } };
+  const project = { project: null, selected: null, pref: (k, d) => (project.project && k in store ? store[k] : d), setPref: (k, v) => { store[k] = v; } };
+  const api = { media: async () => ({ media: [{ id: "m1", name: "cat.png", kind: "image" }] }) };
+  let fire;
+  const host = document.createElement("div");
+  hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: (cb) => { fire = cb; return () => {}; } } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(host.querySelector("select").value, "name");
+  project.project = { id: "p1" };                        // the project arrives
+  fire();
+  assert.equal(host.querySelector("select").value, "added");
+  assert.equal([...host.querySelectorAll(".cx-segment.cx-on")].map((b) => b.textContent).join(), "All,List,2×");
 });

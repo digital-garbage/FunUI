@@ -26,9 +26,9 @@ function newId() {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function json(method, path, body) {
+async function json(method, path, body, keepalive) {
   const res = await fetch(path, {
-    method,
+    method, keepalive,
     headers: body === undefined ? {} : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -44,7 +44,7 @@ export const list = () => json("GET", BASE).then((d) => d.projects || []);
 export const create = (name) => json("POST", BASE, { name });
 export const read = (id) => json("GET", `${BASE}/${encodeURIComponent(id)}`);
 export const remove = (id) => json("DELETE", `${BASE}/${encodeURIComponent(id)}`);
-const put = (project) => json("PUT", `${BASE}/${encodeURIComponent(project.id)}`, project);
+const put = (project, keepalive) => json("PUT", `${BASE}/${encodeURIComponent(project.id)}`, project, keepalive);
 
 /**
  * createProject({ onChange, onError }) -> the live project.
@@ -160,7 +160,7 @@ export function createProject({ onChange, onError, onOpen, keepConsistent, befor
     timer = setTimeout(tick, (every > 0 ? every : 3) * 1000);
   }
 
-  async function flush(target = project) {
+  async function flush(target = project, leaving = false) {
     if (timer) { clearTimeout(timer); timer = null; }
     if (!target || !dirty) return saving;           // nothing new to write, but one on its way is waited for
     // One PUT at a time. Two overlapping writes of a whole project can land in
@@ -169,7 +169,7 @@ export function createProject({ onChange, onError, onOpen, keepConsistent, befor
     if (saving) { await saving.catch(() => {}); if (!dirty) return saving; }      // another flush wrote it meanwhile: wait for that write
     dirty = false;
     const body = { ...target };
-    saving = put(body).then((saved) => {
+    saving = put(body, leaving).then((saved) => {
       // Only the fields the server owns are taken back: replacing the whole
       // project would overwrite whatever was typed while the PUT was in flight.
       if (target && saved && target.id === saved.id) target.updated_at = saved.updated_at;
@@ -533,6 +533,8 @@ export function createProject({ onChange, onError, onOpen, keepConsistent, befor
     get canRedo() { return Boolean(project) && future.length > 0; },
 
     flush,
+    /** The page is going away (reload, close): write what the autosave timer has not yet, in a request that outlives the page. */
+    leave() { if (dirty && project) flush(project, true); },
     get unsaved() { return dirty; },
   };
 }

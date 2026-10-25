@@ -53,4 +53,6 @@ app.openSettings = (id) => settings.open(id);
 const result = await loadFeatures(paths, { app, onProgress: loading.progress }).finally(loading.done);
 settings.addButton();
 app.project.start().catch((err) => console.warn("could not open a project:", err.message));
+app.dom.onWindow("pagehide", () => project.leave());
+app.dom.onPage("visibilitychange", () => { if (document.visibilityState === "hidden") project.leave(); });
 window.FunUI = { frame, settings, app, ...result };

@@ -692,3 +692,20 @@ test("loading a project file clears its references and pins; restarting or openi
   assert.ok(sent.length > 0 && Object.keys(sent[sent.length - 1].fixed_references).length === 0 && sent[sent.length - 1].scenes[0].references.length === 0, "the cleared state is saved, not only shown");
   assert.deepEqual([loaded.fixed_references, loaded.scenes[0].references], [{}, []], "a project file brings no media");
 });
+
+test("leaving the page writes an edit the autosave timer has not reached, in a request that outlives the page", async () => {
+  const { sent } = server();
+  const keep = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (path, opts = {}) => { if (opts.method === "PUT") keep.push(opts.keepalive); return real(path, opts); };
+  const p = createProject({});
+  await p.start();
+  p.setPref("media_show", { sort: "added", view: "list", cols: "0" });       // within the autosave delay
+  assert.equal(sent.length, 0);
+  p.leave();
+  await p.flush();
+  assert.deepEqual(sent.at(-1).editor_settings.media_show.sort, "added");
+  assert.deepEqual(keep, [true]);
+  p.leave();                                                                  // nothing new: no second write
+  assert.equal(keep.length, 1);
+});

@@ -22,9 +22,9 @@ export default {
     const DENSITY = [{ value: "0", label: "Auto" }, ...[1, 2, 3, 4].map((n) => ({ value: String(n), label: `${n}×` }))];
     const show = { filter: "all", sort: "name", view: "adaptive", cols: "0" };
     // How the bin is laid out is remembered with the project (a rental's browser starts empty), checked against what is offered.
+    // The project may open after the bin does, so it is read whenever a different project shows up, not once at setup.
     const KEPT = { sort: SORTS, view: VIEWS, cols: DENSITY };
-    const kept = p.pref ? p.pref("media_show", null) : null;
-    if (kept && typeof kept === "object") for (const k in KEPT) if (KEPT[k].some((o) => o.value === kept[k])) show[k] = kept[k];
+    let adopted = null;
     const remember = () => { if (p.setPref) p.setPref("media_show", { sort: show.sort, view: show.view, cols: show.cols }); };
 
     let selecting = false;
@@ -104,7 +104,7 @@ export default {
         note.setText("");
       } });
     const seg = (label, options, key) => c.segmented.sm({ label, options, value: show[key], onChange: (v) => { show[key] = v; remember(); draw(true); } });
-    const tileSize = seg("Tile size", DENSITY, "cols");       // only the grid has columns
+    const tileSize = seg("Tile size", DENSITY, "cols"), view = seg("View", VIEWS, "view");       // only the grid has columns
     const sort = c.select.sm({ label: "Sort", options: SORTS, value: show.sort, onChange: (v) => { show.sort = v; remember(); draw(true); } });
     const selectBtn = c.button.sm({ label: "Select", tone: "ghost", title: "Pick several files, then delete them together", onClick: () => { selecting = !selecting; chosen.clear(); draw(true); } });
     const bulk = c.button.sm({ label: "Delete (0)", tone: "danger", onClick: async () => {
@@ -112,13 +112,23 @@ export default {
       if (!ids.length || !(await c.modal.dialogue({ title: "Delete media", message: `Delete ${ids.length} file${ids.length > 1 ? "s" : ""} from the bin for good? Scenes in other projects that use them will lose them too.`, tone: "danger", confirmLabel: "Delete" }).result)) return;
       await gone(ids);
     } });
+    const controls = { sort, view: view, cols: tileSize };
     bulk.node.hidden = true;
     const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in the selected scene", onClick: () => p.selected && p.setScene(p.selected.id, "references", []) });
     host.append(c.toolbar.default({ items: [c.text.sm({ text: "Media" })], trailing: [clearRefs, selectBtn, bulk] }).node, drop.node, note.node, seg("Show", FILTERS, "filter").node, sort.node,
-      seg("View", VIEWS, "view").node, tileSize.node, shelf.node);
+      view.node, tileSize.node, shelf.node);
 
     let drawn = "";
+    function adopt() {
+      const id = p.project ? p.project.id : null;
+      if (!id || id === adopted) return false;
+      adopted = id;
+      const kept = p.pref ? p.pref("media_show", null) : null;
+      if (kept && typeof kept === "object") for (const k in KEPT) if (KEPT[k].some((o) => o.value === kept[k])) { show[k] = kept[k]; controls[k].setValue(kept[k]); }
+      return true;
+    }
     function draw(force) {
+      if (adopt()) force = true;
       const sc = p.selected, plan = sc ? sceneReferences(sc, (p.project || {}).fixed_references) : { ids: [], pins: {} }, refs = plan.ids, nums = referenceNumbers(refs, plan.pins);
       const key = `${(sc || {}).source_image}|${refs}|${nums}|${JSON.stringify(plan.pins)}|${items.map((m) => m.id)}|${selecting}|${[...chosen]}|${show.filter}`;
       if (!force && key === drawn) return;           // typing elsewhere must not rebuild the thumbnails
