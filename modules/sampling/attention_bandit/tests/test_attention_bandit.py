@@ -136,3 +136,19 @@ def test_no_taste_key_installs_nothing_and_says_so(tiny_h3):
 def test_a_block_list_with_nothing_usable_is_refused(tiny_h3):
     _p, status = _load(tiny_h3, blocks="40-49")
     assert "attention_bandit: failed to install" in status
+
+
+def test_a_rating_changes_the_cache_key_so_the_same_seed_runs_again(tiny_h3, monkeypatch):
+    from modules.sampling import attention_bandit as m
+    from modules.system.taste import store
+    patched, _ = _load(tiny_h3, blocks="0-3")
+    assert m.cache_key() == ""
+    monkeypatch.setattr(m, "draw", lambda table, rng=random: [0] * len(table))
+    _run(_outer(patched), lambda: tiny_h3.run(patched))
+    store.rate("run-1", "liked")
+    first = m.cache_key()
+    assert first
+    monkeypatch.setattr(store, "current_prompt_id", lambda: "run-2")
+    _run(_outer(patched), lambda: tiny_h3.run(patched))
+    store.rate("run-2", "liked")
+    assert m.cache_key() != first

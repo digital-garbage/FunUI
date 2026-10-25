@@ -219,4 +219,16 @@ def install(patcher, values, key):
     return f"{len(groups)} depth groups over {len(blocks)} blocks, {size}"
 
 
-PROVIDES = {"modifier": install}
+def cache_key():
+    """Changes whenever a rating reaches this kind. ComfyUI skips a graph whose inputs did not
+    change, and a rating is not an input: the same seed rated and sent again would run nothing."""
+    try:
+        ask = registry.current().ask
+        key = ask("taste_latest_key")
+        stat = ask("taste_kind", key, KIND).path().stat() if key else None
+        return f"{stat.st_mtime_ns}:{stat.st_size}" if stat else ""
+    except Exception:                                 # noqa: BLE001 -- a fingerprint must never fail a run
+        return ""
+
+
+PROVIDES = {"modifier": install, "cache_key": cache_key}
