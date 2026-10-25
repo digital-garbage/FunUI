@@ -12,6 +12,7 @@ COMFYUI_ROOT=/path/to/ComfyUI python -m pytest
 - `pyproject.toml` sets `--import-mode=importlib` and `testpaths = ["core/tests", "modules"]`. The root `__init__.py` is ComfyUI's entry point and cannot be imported on its own, which is why the mode matters.
 - Tests sit beside what they test: `core/tests/` and `modules/<group>/<name>/tests/`.
 - `COMFYUI_ROOT` points at a ComfyUI checkout (it must contain `comfy/supported_models.py`). Without it, the default is `~/Documents/ComfyUI`. With none found, tests that need ComfyUI skip, and a module that imports `comfy` at load is simply absent.
+- On a machine with no GPU (a cloud session), `sh tools/test_env.sh` sets all of this up (CPU torch, pytest, a ComfyUI checkout) and prints the exact command; `tools/cpuforce.py` is the plugin that forces the CPU. Run it once in the environment's setup script and a session starts ready to test.
 - ComfyUI needs `torch`. A CPU build is enough for the tests. If torch complains about CUDA, force the CPU device for the test run rather than editing a test.
 - Tests that need `aiohttp` skip themselves with `importorskip` when it is missing.
 

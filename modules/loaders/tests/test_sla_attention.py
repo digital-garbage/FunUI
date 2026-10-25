@@ -262,7 +262,7 @@ def test_sla_reports_when_the_machine_cannot_run_it():
 
 def test_the_defaults_are_the_validated_ones():
     """0.90 / 64 / protect on: the settings the port was measured at."""
-    assert sla.SLA_DEFAULTS == {"sparsity_ratio": 0.90, "block_size": 64,
+    assert sla.SLA_DEFAULTS == {"sparsity_ratio": 0.90, "sparsity_start": 0.0, "block_size": 64,
                                 "min_seq_len": 8192, "dense_last_steps": 0,
                                 "protect_audio": True, "enabled": True,
                                 "engine": "comfy_kitchen", "dense_steps": "1", "method": "sla", "tau": 1.3,
@@ -546,3 +546,22 @@ def test_the_torch_pool_averages_real_rows_only_so_light_runs_without_triton():
         assert torch.allclose(pooled[0, h, 0], (x[0, 0, h] + x[0, 1, h]) / 2)
         assert torch.allclose(pooled[0, h, 1], (x[0, 2, h] + x[0, 3, h]) / 2)
         assert torch.allclose(pooled[0, h, 2], x[0, 4, h])                       # the short block: its one real row
+
+
+def test_sparsity_rises_from_the_start_value_to_the_set_one_and_zero_means_fixed():
+    """GSRS: skip fewer blocks early, more late. 0 (the default) must leave the old fixed share untouched."""
+    cfg = _cfg(sparsity_ratio=0.9, sparsity_start=0.7)
+    assert [round(sla.step_sparsity(cfg, i, 4), 3) for i in (1, 2, 3, 4)] == [0.7, 0.767, 0.833, 0.9]
+    assert [sla.step_sparsity(_cfg(sparsity_ratio=0.9), i, 4) for i in (1, 2, 3, 4)] == [0.9] * 4
+    assert sla.step_sparsity(_cfg(sparsity_ratio=0.9, sparsity_start=0.95), 1, 4) == 0.9     # a start above the end is no ramp
+    assert sla.step_sparsity(cfg, 1, 1) == 0.9                                              # one step: nothing to ramp over
+
+
+def test_install_drops_the_ramp_for_methods_that_do_not_use_a_fixed_share(monkeypatch):
+    monkeypatch.setattr(sla, "sla_available", lambda: True)
+    monkeypatch.setattr(sla, "ck_available", lambda: True)
+    model = _Patcher("MiniMaxH3Model")
+    _, note, ok = sla.install_sla(model, sparsity_start=0.7, method="sla", engine="triton")
+    assert ok and "sparsity=0.70 rising to 0.90" in note
+    _, note, ok = sla.install_sla(model, sparsity_start=0.7, method="sol-attn")
+    assert ok and "rising" not in note

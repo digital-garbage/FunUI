@@ -41,7 +41,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
     # How the form lists them (core/widgets): the file, how it is stored and computed, attention, then SLA in the
     # order its choices narrow it. Not the schema's order, which saved canvas workflows read by position.
     WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "compute_dtype", "fp16_accumulation", "attention",
-                    "sla", "sla_method", "sla_engine", "sla_sparsity", "sla_tau", "sla_block_size",
+                    "sla", "sla_method", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
                     "sla_dense_steps", "sla_dense_last_steps", "sla_min_seq_len", "sla_protect_audio",
                     "sla_references", "sla_tail", "sla_stabilize_motion")
 
@@ -170,6 +170,14 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                step=0.05, optional=True,
                                tooltip="sol-attn only: higher skips more. About 1.0 keeps ~16% of key "
                                        "blocks exact, 1.5 ~7%, 2.0 ~3%."),
+                # Added after everything: saved workflows store widget values by position.
+                io.Float.Input("sla_sparsity_start", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"])), default=sla_attention.SLA_DEFAULTS["sparsity_start"],
+                              min=0.0, max=0.95, step=0.05, optional=True,
+                              tooltip="Skip fewer blocks early and more late: the share rises in a straight "
+                                      "line from this value on the first step to sla_sparsity on the last "
+                                      "(attention concentrates as denoising goes, GSRS, arXiv 2610.21129). "
+                                      "0 is off: one fixed share all run. Untested on H3; a try is 0.70 "
+                                      "with sla_sparsity 0.90. Early steps cost more time than late ones."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
@@ -185,7 +193,8 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 sla_dense_last_steps: int = None, int8_convrot: bool = False,
                 sla_engine: str = None, sla_dense_steps: str = None, sla_references: str = None,
                 sla_tail: bool = None, sla_stabilize_motion: bool = None,
-                sla_method: str = None, sla_tau: float = None) -> io.NodeOutput:
+                sla_method: str = None, sla_tau: float = None,
+                sla_sparsity_start: float = None) -> io.NodeOutput:
         notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
@@ -282,7 +291,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
         if sla:
             model, sla_note, installed = sla_attention.install_sla(
                 model,
-                sparsity_ratio=sla_sparsity, block_size=sla_block_size,
+                sparsity_ratio=sla_sparsity, sparsity_start=sla_sparsity_start, block_size=sla_block_size,
                 min_seq_len=sla_min_seq_len, dense_last_steps=sla_dense_last_steps,
                 protect_audio=sla_protect_audio,
                 dense_fn=override, dense_label=attention,

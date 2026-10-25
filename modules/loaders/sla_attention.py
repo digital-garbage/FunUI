@@ -50,6 +50,7 @@ _H3_MODEL_CLASS = "comfy.ldm.minimax.model.MiniMaxH3Model"
 # 3.7x the attention throughput of stock ComfyUI at sparsity 0.90 / block 64.
 SLA_DEFAULTS = {
     "sparsity_ratio": 0.90,
+    "sparsity_start": 0.0,
     "block_size": 64,
     "min_seq_len": 8192,
     "dense_last_steps": 0,
@@ -229,11 +230,22 @@ def new_state():
         "layer": 0,        # this step's call count: the Nth call is the same layer every step
         "history": {},     # layer -> last step's choices, for stabilize_motion
         "order": None,     # comfy_kitchen: (S, protected spans, key order, sink blocks), same every layer
+        "sparsity": None,  # this step's share of blocks skipped (step_sparsity), set by the wrapper
         "last": None,      # last step index read from the schedule
         "dense_at": set(), # steps (counted from 1) that ran at full attention this run
         "n": 0,            # this run's step count
         "summed": False,   # this run's summary is logged
     }
+
+
+def step_sparsity(cfg, step, n_steps):
+    """The share of key blocks skipped on `step` (counted from 1). Falls back to the one fixed value; with a
+    start below it, rises in a straight line from the start (first step) to `sparsity_ratio` (last), the way
+    attention concentrates as denoising goes (GSRS, arXiv 2610.21129: dense early, sparser late)."""
+    end, start = cfg["sparsity_ratio"], cfg["sparsity_start"]
+    if not 0.0 < start < end or n_steps < 2:
+        return end
+    return start + (end - start) * min(1.0, max(0.0, (step - 1) / (n_steps - 1)))
 
 
 def _summarise(state, cfg):
@@ -245,11 +257,13 @@ def _summarise(state, cfg):
             "one this loader produced.", state["dense"])
         return
     real = 1.0 - (state["kept"] / state["blocks"]) if state["blocks"] else 0.0
+    ramp = step_sparsity(cfg, 1, 2) != cfg["sparsity_ratio"]
     logging.info(
-        "[FunUI SLA] %s | %d calls | S=%d | blocks %d/%d kept (%.1f%% sparse, asked %.0f%%) "
+        "[FunUI SLA] %s | %d calls | S=%d | blocks %d/%d kept in the last step (%.1f%% sparse, asked %s) "
         "| %d pinned | %d dense fall-throughs | displaced %s",
         cfg["engine"], state["calls"], state["seq"], state["kept"], state["blocks"], real * 100.0,
-        cfg["sparsity_ratio"] * 100.0, state["pinned"], state["dense"], state["backend"] or "?")
+        f"{cfg['sparsity_start'] * 100.0:.0f}% rising to {cfg['sparsity_ratio'] * 100.0:.0f}%" if ramp
+        else f"{cfg['sparsity_ratio'] * 100.0:.0f}%", state["pinned"], state["dense"], state["backend"] or "?")
     logging.info("[FunUI SLA] full attention on %s of %d", f"steps {_runs(state['dense_at'])}"
                  if state["dense_at"] else "no step", state["n"])
     if state["failed"] is not None:
@@ -268,7 +282,7 @@ def _mean_pool_torch(x, blk):
     return x.reshape(B, H, -1, blk, D).sum(dim=3) / counts      # the last, short block averages its real rows only
 
 
-def _ck_attention(state, cfg, qb, kb, vb, keep, refs, scale):
+def _ck_attention(state, cfg, qb, kb, vb, keep, refs, scale, topk_ratio):
     """comfy_kitchen's sol_attn: one 64-token key-block range (`sink_blocks`) is always exact. Attention
     does not care about key order, so when the protected blocks are not one run, K and V are put in an
     order where they are -- a copy per call, needed only then. -> (output, blocks, pinned)."""
@@ -311,7 +325,7 @@ def _ck_attention(state, cfg, qb, kb, vb, keep, refs, scale):
         out = ck.sol_attn(q, k, v, tau=cfg["tau"], scale=scale, sink_blocks=sink, sink_q=[0, 0])
     else:
         out = ck.sol_attn(q, k, v, scale=scale, sink_blocks=sink, sink_q=[0, 0],
-                          topk_ratio=1.0 - cfg["sparsity_ratio"], tail=cfg["tail"])
+                          topk_ratio=topk_ratio, tail=cfg["tail"])
     return (out.to(qb.dtype) if cast else out), nk, sink[1] - sink[0]
 
 
@@ -326,7 +340,6 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
     """
     torch = _torch()
     ok_dtypes = (torch.bfloat16, torch.float16)
-    topk_ratio = 1.0 - cfg["sparsity_ratio"]
     blkq = cfg["block_size"]
     # BLKK=64 is not a typo. On sm_120 the 128x128 tile needs 160 KB of shared memory
     # against a ~99 KB limit and cannot launch at all; 128x64 both fits and measured
@@ -365,6 +378,7 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
 
         try:
             B, H, S, D = q.shape
+            topk_ratio = 1.0 - (cfg["sparsity_ratio"] if state["sparsity"] is None else state["sparsity"])
             layer = state["layer"]
             state["layer"] = layer + 1
 
@@ -379,7 +393,7 @@ def make_override(state, cfg, dense_fn=None, dense_label=None):
             keep = tuple(keep if cfg["protect_audio"] else ()) + tuple(refs if heavy else ())
 
             if cfg["engine"] == "comfy_kitchen":
-                out, blocks, pinned = _ck_attention(state, cfg, qb, kb, vb, keep, refs, D ** -0.5)
+                out, blocks, pinned = _ck_attention(state, cfg, qb, kb, vb, keep, refs, D ** -0.5, topk_ratio)
                 kept = max(1, round(topk_ratio * blocks)) + pinned
             else:
                 try:
@@ -470,6 +484,7 @@ def make_wrapper(state, cfg):
         to["_funui_sla_dense"] = bool(
             (last > 0 and state["step"] > n_steps - last) or (state["step"] - 1) in dense_steps)
         state["n"] = n_steps
+        state["sparsity"] = step_sparsity(cfg, state["step"], n_steps)
         if to["_funui_sla_dense"] and counted:
             state["dense_at"].add(state["step"])
 
@@ -494,7 +509,7 @@ def make_wrapper(state, cfg):
     return wrapper
 
 
-def install_sla(model, sparsity_ratio=None, block_size=None, min_seq_len=None,
+def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None, min_seq_len=None,
                 dense_last_steps=None, protect_audio=None, enabled=None,
                 dense_fn=None, dense_label=None, engine=None, dense_steps=None,
                 references=None, tail=None, stabilize_motion=None, method=None, tau=None):
@@ -507,7 +522,7 @@ def install_sla(model, sparsity_ratio=None, block_size=None, min_seq_len=None,
     `installed` is False whenever SLA did not take, so the caller can fall back to
     installing the chosen backend on its own rather than leaving the model with nothing.
     """
-    given = dict(sparsity_ratio=sparsity_ratio, block_size=block_size, min_seq_len=min_seq_len,
+    given = dict(sparsity_ratio=sparsity_ratio, sparsity_start=sparsity_start, block_size=block_size, min_seq_len=min_seq_len,
                  dense_last_steps=dense_last_steps, protect_audio=protect_audio, enabled=enabled,
                  engine=engine, dense_steps=dense_steps, references=references, tail=tail,
                  stabilize_motion=stabilize_motion, method=method, tau=tau)
@@ -528,11 +543,13 @@ def install_sla(model, sparsity_ratio=None, block_size=None, min_seq_len=None,
         cfg["method"] = SLA_DEFAULTS["method"]
     if cfg["method"] == "vsa":
         return _install_vsa(model, cfg, dense_fn, dense_label)
-    cfg.update(sparsity_ratio=float(cfg["sparsity_ratio"]), block_size=int(cfg["block_size"]),
+    cfg.update(sparsity_ratio=float(cfg["sparsity_ratio"]), sparsity_start=float(cfg["sparsity_start"]), block_size=int(cfg["block_size"]),
                min_seq_len=int(cfg["min_seq_len"]), dense_last_steps=int(cfg["dense_last_steps"]),
                protect_audio=bool(cfg["protect_audio"]), tail=bool(cfg["tail"]),
                stabilize_motion=bool(cfg["stabilize_motion"]),
                references=cfg["references"] if cfg["references"] in REFERENCES else "off")
+    if cfg["method"] != "sla":
+        cfg["sparsity_start"] = 0.0         # a rising share is the fixed-share method's; sol-attn routes by threshold
     if cfg["engine"] not in ENGINES:
         cfg["engine"] = SLA_DEFAULTS["engine"]
     if cfg["engine"] == "comfy_kitchen" and not ck_ok:
@@ -568,6 +585,8 @@ def install_sla(model, sparsity_ratio=None, block_size=None, min_seq_len=None,
 
     blk = cfg["block_size"] if cfg["engine"] == "triton" else 64
     how = f"tau={cfg['tau']:.2f}" if cfg["method"] == "sol-attn" else f"sparsity={cfg['sparsity_ratio']:.2f}"
+    if cfg["method"] == "sla" and step_sparsity(cfg, 1, 2) != cfg["sparsity_ratio"]:
+        how = f"sparsity={cfg['sparsity_start']:.2f} rising to {cfg['sparsity_ratio']:.2f}"
     return patched, (f"SLA on | {cfg['method']} on {cfg['engine']} | {how} BLK={blk} "
                      f"min_seq_len={cfg['min_seq_len']} dense_last_steps={cfg['dense_last_steps']} "
                      f"full attention on steps {_runs(i + 1 for i in cfg['dense_steps']) or 'none'} and the last {cfg['dense_last_steps']} protect_audio={cfg['protect_audio']} "
