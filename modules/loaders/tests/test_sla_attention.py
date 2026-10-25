@@ -500,6 +500,7 @@ def test_the_loader_draws_each_sla_field_only_in_its_mode():
     rules = {i.id: {c["input"]: c["when"] for c in (i.extra_dict or {}).get("funui_shows", [])}
              for i in L.define_schema().inputs}
     assert rules["sla_sparsity"]["sla_method"] == ["sla", "vsa"] and rules["sla_tau"]["sla_method"] == ["sol-attn"]
+    assert rules["sla_sparsity_start"]["sla_method"] == ["sla"]       # the rising share is the fixed-share method's
     assert rules["sla_block_size"]["sla_engine"] == ["triton"] and rules["sla_tail"]["sla_engine"] == ["comfy_kitchen"]
     assert all(r.get("sla") == [True] for name, r in rules.items() if name.startswith("sla_"))
     assert rules["sla"] == {} and rules["int8_convrot"] == {}
