@@ -4,7 +4,7 @@
 
 ### Added (experimental)
 
-- **SLA rising sparsity** (diffusion model loader, `sla_sparsity_start`): skip fewer attention blocks on early steps and more on late ones, in a straight line up to `sla_sparsity`. Off at 0. Untested on H3. Idea from GSRS (arXiv 2610.21129); only the schedule is taken, not its other parts.
+- **SLA rising sparsity** (diffusion model loader, `sla_sparsity_start`): skip fewer attention blocks on early steps and more on late ones, in a straight line up to `sla_sparsity`. Off at 0. One real H3 render (4 steps, 0.70 to 0.90): quality held, perhaps slightly better. Idea from GSRS (arXiv 2610.21129); only the schedule is taken, not its other parts.
 
 ## [5.0.3] "Classy Chopper" - 2026-10-25
 

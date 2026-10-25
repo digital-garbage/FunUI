@@ -176,7 +176,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                               tooltip="Skip fewer blocks early and more late: the share rises in a straight "
                                       "line from this value on the first step to sla_sparsity on the last "
                                       "(attention concentrates as denoising goes, GSRS, arXiv 2610.21129). "
-                                      "0 is off: one fixed share all run. Untested on H3; a try is 0.70 "
+                                      "0 is off: one fixed share all run. One H3 render: quality held, perhaps a little better. Try 0.70 "
                                       "with sla_sparsity 0.90. Early steps cost more time than late ones."),
             ],
             outputs=[
