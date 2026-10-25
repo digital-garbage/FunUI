@@ -1,4 +1,4 @@
-# FunUI v5 "Classy Chopper"
+# FunUI v5
 
 **FunUI v5 is here. It is a browser studio for video inside ComfyUI: a timeline with one clip per scene, a Composer for your prompts, pipeline cards instead of graphs, and modules that learn from your ratings - all on the regular ComfyUI backend.**
 
@@ -144,6 +144,7 @@ Thanks for understanding.
 
 I express my deepest gratitude to:
 
+- ComfyUI and its whole community;
 - OpenAI and ChatGPT Codex;
 - xAI and Grok Build;
 - Anthropic and Claude Code;
@@ -161,7 +162,6 @@ I express my deepest gratitude to:
 - [Inter](https://github.com/rsms/inter) and IBM Plex Mono — the fonts of the app (SIL Open Font License; copies in `app/assets/fonts`);
 - [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) by kohya-ss (Apache-2.0) — the LoRA training add-on's loop (which layers get a LoRA, per-block checkpointing, noise sampling and loss weighting, optimizer and learning rate) and its block swap (a number of transformer blocks kept in system memory) follow its MiniMax H3 training recipe;
 - PTD few-step support for MiniMax H3 is ported from [ComfyUI-PTD-Compact](https://github.com/Nynxz/ComfyUI-PTD-Compact) by Nynxz (Apache-2.0), which builds on [ComfyUI-PTD](https://github.com/vita-epfl/PTD-inference) by EPFL VITA Lab (Apache-2.0; paper "Parametric Trajectory Distillation for Few-Step Video Generation", arXiv 2610.11498) and on ComfyUI-MiniMaxH3-PTD by taobao-content-ai (Apache-2.0); licence notice in `modules/sampling/ptd`;
-- ComfyUI and its whole community.
 
 Without all of you, this project would've been impossible.
 
