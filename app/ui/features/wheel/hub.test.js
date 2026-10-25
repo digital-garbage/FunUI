@@ -81,3 +81,22 @@ test("the wheel offers Clear references and the guidance switch, both opt-in, an
     assert.ok(!find("clear-refs").when(), "nothing to clear without references");
   } finally { off(); }
 });
+
+test("Quick A/B is an opt-in wheel action, offered only once there is a seed to reuse, and starts the run", async () => {
+  server();
+  localStorage.clear();
+  const project = createProject({});
+  await project.start();
+  let ran = 0;
+  const app = { dom: createDom(), project, pipeline: { allOff: () => false, setAllOff: async () => {} }, actions: [], editorSettings: [], lastRun: { n: 0 }, runner: { quickAB: async () => { ran += 1; } } };
+  const off = hub.setup({ host: document.createElement("div"), app });
+  try {
+    const a = app.actions.find((x) => x.id === "quick-ab");
+    assert.ok(a && a.optIn && a.label === "Quick A/B");
+    assert.ok(!a.when(), "hidden until a run has made a seed");
+    app.lastRun.seed = 7;
+    assert.ok(a.when());
+    await a.run();
+    assert.equal(ran, 1);
+  } finally { off(); }
+});

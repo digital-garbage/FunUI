@@ -210,3 +210,28 @@ test("with New seed every Generate off, the seed node's own number runs, and the
   await app.runner.units(["a"], 1);
   assert.notEqual(sent[1].s.seed, undefined, "the default draws a fresh one");
 });
+
+test("Quick A/B runs the picked scene with every enhancement off and the last run's seed, then puts the enhancements back", async () => {
+  const sent = [];
+  let off = false;
+  const { app, doc } = rig("idle", { generate: async ({ inputs }) => { sent.push({ inputs, off }); return true; } });
+  app.pipeline.allOff = () => off;
+  app.pipeline.setAllOff = async (on) => { off = on; };
+  app.selection.ids = ["a"];
+  await app.runner.quickAB();
+  assert.equal(sent.length, 0, "no earlier run, nothing to compare with");
+  assert.match(document.body.textContent, /generate once first/);
+  app.lastRun.seed = 1234;
+  doc.editor_settings = {};                                   // the default: a fresh seed every Generate, which Quick A/B must override
+  await app.runner.quickAB();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].off, true, "enhancements were off while the run was queued");
+  assert.equal(sent[0].inputs.s.seed, 1234);
+  assert.equal(off, false, "and are on again afterwards");
+  assert.equal(app.lastRun.seed, 1234);
+  await app.runner.units(["a"], 1);
+  assert.notEqual(sent[1].inputs.s.seed, 1234, "the next ordinary Generate is fresh again");
+  off = true;                                                 // already plain: stays plain
+  await app.runner.quickAB();
+  assert.equal(off, true);
+});

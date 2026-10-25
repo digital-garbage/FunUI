@@ -51,7 +51,8 @@ export default {
     }).catch(() => tell("The result could not be saved to its project.")); };
 
     // `times` > 1: the same shots again, only the seed differing (the prompt's random picks are drawn once), so the takes can be compared.
-    async function runUnits(units, times = 1) {
+    // `once`: for a single run only - {seed} uses that seed on every seed input; onQueued runs once ComfyUI has taken (or refused) the run.
+    async function runUnits(units, times = 1, once = {}) {
       if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }
       busy = true; stopped = false; draw();
       const pid = p.project.id;
@@ -97,7 +98,7 @@ export default {
           if (group.every((s) => s.excluded) || !isGenerative(root)) continue;                  // all left out, or not made by the model
           // The unit is made once at the length of its clips together (each cut adds one shared frame).
           const frames = group.reduce((t, s) => t + effFrames(s, snap), 0) - (group.length - 1);
-          const { inputs, unwired, left, noPrompt, notes } = await buildInputs({ project: snap, scene: root, slots: frozen, expand: same, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, ...(fixedSeed ? { seed: null } : {}), prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
+          const { inputs, unwired, left, noPrompt, notes } = await buildInputs({ project: snap, scene: root, slots: frozen, expand: same, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, ...(Number.isInteger(once.seed) ? { seed: () => once.seed } : fixedSeed ? { seed: null } : {}), prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
           app.lastRun.typed = (root.text || "").trim();        // what a Chat comment made now would be about
           const seeded = rolesAt(frozen, "generation.seed")[0];
           if (seeded) app.lastRun.seed = (inputs[seeded.slot.id] || {})[seeded.role.input] ?? (seeded.slot.inputs || {})[seeded.role.input];      // shown in ⏱ Sampler, to keep a liked one
@@ -113,6 +114,7 @@ export default {
           current = snap.scenes.findIndex((s) => s.id === root.id) + 1;
           const queued = await g.generate({ sceneId: root.id, projectId: pid, inputs, slots: frozen });
           current = 0;
+          if (once.onQueued) await once.onQueued();
           if (!queued) {
             done.cancel();
             const n = snap.scenes.findIndex((s) => s.id === root.id) + 1;          // which clip: in a run of several, the toast alone does not say
@@ -139,6 +141,21 @@ export default {
       } finally { busy = false; draw(); }
     }
     app.runner.units = (units, times) => runUnits(units, times);
+    /** Quick A/B: the picked scene(s) once more with every enhancement off and the last run's seed, so the two clips differ only by the enhancements. Nothing stays changed afterwards. */
+    app.runner.quickAB = async () => {
+      const seed = app.lastRun && app.lastRun.seed;
+      if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }
+      if (!p.project || !Number.isInteger(seed)) { tell("Quick A/B needs a run to compare with: generate once first."); return; }
+      const units = unitsOf(pickedScenes());
+      if (!units.length) return;
+      const was = app.pipeline.allOff();
+      let restored = was;
+      const restore = async () => { if (!restored) { restored = true; await app.pipeline.setAllOff(false); } };      // as soon as ComfyUI has the run: later edits are the person's again
+      try {
+        if (!was) { restored = false; await app.pipeline.setAllOff(true); }
+        await runUnits(units, 1, { seed, onQueued: restore });
+      } finally { await restore().catch(() => tell("Enhancements could not be switched back on: use Enable enhancements on the wheel.")); }
+    };
     /** One run for the Training window: the pipeline as it is, its LoRA loader pointed at `lora`, the picked scene (else the first one) and the project's own settings.
      *  Nothing is put on the timeline; resolves to {image} or {error}. */
     app.runner.preview = async ({ lora, strength = 1 }) => {
