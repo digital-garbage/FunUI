@@ -133,3 +133,14 @@ def test_the_sound_is_merged_too(tiny_h3):
     plain = unpacked(model(x0, None), shapes)
     got = unpacked(out, shapes)
     assert not torch.allclose(got[0], plain[0]) and not torch.allclose(got[1], plain[1])
+
+
+def test_sound_off_keeps_the_base_sound_untouched(tiny_h3):
+    from conftest import unpacked
+    x0, shapes = _packed()
+    model = lambda x, *a, **k: x * 0.5 + 0.3 * x0
+    wrap, _ = _load(tiny_h3, steps="1", strength=0.7, sound=False)
+    out = wrap(model, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes)
+    plain = unpacked(model(x0, None), shapes)
+    got = unpacked(out, shapes)
+    assert not torch.allclose(got[0], plain[0]) and torch.allclose(got[1], plain[1])

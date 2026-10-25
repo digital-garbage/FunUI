@@ -58,6 +58,12 @@ SETTINGS = {
         "hint": "0 keeps the base picture untouched, 1 replaces it with the other.",
         "when": {"enabled": True},
     },
+    "sound": {
+        "type": "bool", "default": True,
+        "label": "Merge sound too",
+        "hint": "Blends the sound the same way as the picture. Off keeps only the base's own sound.",
+        "when": {"enabled": True},
+    },
     "seed": {
         "type": "int", "default": -1, "min": -1, "max": 2147483647,
         "label": "Second seed",
@@ -109,6 +115,7 @@ def install(patcher, values, key):
         _say("off: " + ("no valid steps named" if not wanted else "strength is 0"))
         return None
     b_first = values.get("order", "b_into_a") == "b_into_a"
+    with_sound = bool(values.get("sound", True))
     chosen = int(values.get("seed", -1))
     live = {"seed": max(chosen, 0), "merged": 0}
 
@@ -145,7 +152,7 @@ def install(patcher, values, key):
             tail_a = _sound(out, video_a)
             gen_step = where[0]
             x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], gen_step).to(split_x[0].dtype))
-            if tail_a is not None:
+            if tail_a is not None and with_sound:
                 n = x_b.shape[-1] - tail_a.shape[-1]
                 x_b = torch.cat([x_b[..., :n], renoise(tail_a.detach(), sigma, live["seed"] + 1, gen_step)], dim=-1)
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
@@ -161,14 +168,14 @@ def install(patcher, values, key):
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
             log.info("FunUI Noise merging",
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
-                     f"merged at {strength:.2f}{' (picture and sound)' if tail_a is not None else ''}; "
+                     f"merged at {strength:.2f}{' (picture and sound)' if tail_a is not None and with_sound else ''}; "
                      f"the second pass took {took:.1f}s")
             if b_first:
                 base, other, base_tail, other_tail, rebuild = video_a, video_b, tail_a, tail_b, rebuild_a
             else:
                 base, other, base_tail, other_tail, rebuild = video_b, video_a, tail_b, tail_a, rebuild_b
             merged = rebuild(merge(base, other, strength).to(base.dtype))
-            if base_tail is not None and other_tail is not None:
+            if with_sound and base_tail is not None and other_tail is not None:
                 n = merged.shape[-1] - base_tail.shape[-1]
                 merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
             return merged
