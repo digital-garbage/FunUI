@@ -38,7 +38,7 @@ FunPack is available on Comfy Registry and can be installed in any of these ways
    `comfy node install FunUI`
 2. With git, inside your `ComfyUI/custom_nodes` directory:
    `git clone -b v4-classic https://github.com/digital-garbage/FunUI`
-   (`comfy-cli` and ComfyUI-Manager install the latest published release, which is v5 once it is published; use git with `-b v4-classic` for this classic version.)
+   (`comfy-cli` and ComfyUI-Manager install the latest published release, which is v5; use git with `-b v4-classic` for this classic version.)
 3. With ComfyUI-Manager:
    Open `Custom Nodes Manager`, search for `FunUI`, and click `Install`.
 
