@@ -127,3 +127,15 @@ def test_lora_training_starts_on_when_its_package_is_already_there(here):
     assert next(a["state"] for a in addons.listing() if a["id"] == "lora_training") == "installed"
     addons.set_wanted("lora_training", False)
     assert not addons.enabled("lora_training")
+
+
+def test_the_camera_add_on_pins_the_preshed_that_can_load_spacy_models():
+    camera = next(a for a in addons.ADDONS if a["id"] == "camera")
+    assert addons.PRESHED_PIN in camera["requires"]
+
+
+def test_preshed_3_0_14_is_flagged_and_older_is_not(monkeypatch):
+    from importlib import metadata
+    for have, bad in (("3.0.14", True), ("3.0.13", False), ("3.1.0", True)):
+        monkeypatch.setattr(metadata, "version", lambda _n, have=have: have)
+        assert addons.preshed_broken() is bad

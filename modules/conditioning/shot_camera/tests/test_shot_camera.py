@@ -479,3 +479,22 @@ def test_a_lone_shot_can_take_a_view_but_shot_one_of_several_still_cannot():
     assert sc.view_options("[Shot 1] A cat sits.")[0]["shot"] == 1
     _o, several = sc.add_shot_views("[Shot 1] A.\n[Shot 2] B.", seed=1, chance=1.0)
     assert [a["shot"] for a in several] == [2]
+
+
+def test_a_model_that_overflows_on_load_is_named_as_the_preshed_problem_not_a_missing_model(monkeypatch):
+    """preshed 3.0.14 raises OverflowError inside spacy.load; the old text blamed a missing model."""
+    import sys
+    import types
+    said = []
+    monkeypatch.setattr(sc, "_nlp", None)
+    monkeypatch.setattr(sc, "_tried", False)
+    monkeypatch.setattr(sc.addons, "enabled", lambda _id: True)
+    monkeypatch.setattr(sc.addons, "preshed_broken", lambda: True)
+    monkeypatch.setattr(sc, "_say", lambda what, error, effect: said.append((type(error).__name__, effect)))
+    fake = types.ModuleType("spacy")
+    def _load(_name):
+        raise OverflowError("Python int too large to convert to C ssize_t")
+    fake.load = _load
+    monkeypatch.setitem(sys.modules, "spacy", fake)
+    assert sc._spacy() is None
+    assert said[0][0] == "OverflowError" and "preshed" in said[0][1] and "model missing" not in said[0][1]

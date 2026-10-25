@@ -26,6 +26,10 @@ _lock = threading.Lock()
 _SPACY_MODEL = ("en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/"
                 "en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl")
 
+# preshed 3.0.14 breaks spaCy's model loading (OverflowError: Python int too large to convert to C
+# ssize_t, in Tokenizer.from_disk) on Python 3.13; 3.0.13 loads fine.
+PRESHED_PIN = "preshed<3.0.14"
+
 
 def _nvidia_gpu() -> bool:
     """nvidia-vfx ships wheels for x86-64 Linux and Windows only, and needs a CUDA card."""
@@ -44,7 +48,7 @@ ADDONS = (
      "requires": ("nvidia-vfx>=0.2",), "modules": ("nvvfx",), "offered": _nvidia_gpu},
     {"id": "camera", "title": "Automatic camera and focus",
      "hint": "Lets Shot camera aim camera moves, cuts, transitions and focus at the right things in your prompts, using spaCy.",
-     "requires": ("spacy>=3.8,<3.9", _SPACY_MODEL), "modules": ("spacy", "en_core_web_sm"), "offered": lambda: True},
+     "requires": ("spacy>=3.8,<3.9", PRESHED_PIN, _SPACY_MODEL), "modules": ("spacy", "en_core_web_sm"), "offered": lambda: True},
     {"id": "lora_training", "title": "LoRA training",
      "hint": "Train your own LoRA from your media and rated results, with a tag editor and automatic tagging (onnxruntime). Training runs on ComfyUI's own trainer.",
      "requires": ("onnxruntime>=1.17",), "modules": ("onnxruntime",), "offered": lambda: True},
@@ -118,10 +122,41 @@ def set_wanted(addon_id: str, on: bool) -> bool:
     return True
 
 
+def preshed_broken() -> bool:
+    """True when the installed preshed is the release that cannot load spaCy models."""
+    try:
+        from importlib import metadata
+        v = tuple(int(x) for x in metadata.version("preshed").split(".")[:3])
+    except Exception:  # noqa: BLE001
+        return False
+    return v >= (3, 0, 14)
+
+
+def repair_spacy() -> bool:
+    """Downgrade preshed when spaCy is here with the broken one. Only a restart makes the running
+    process see it (the compiled module is already loaded), so the log says so."""
+    if not (importlib.util.find_spec("spacy") and preshed_broken()):
+        return False
+    import subprocess
+    try:
+        proc = subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", PRESHED_PIN],
+                              capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.alert("add-ons", f"spaCy needs `pip install \"{PRESHED_PIN}\"` and the automatic try failed: {exc}")
+        return False
+    if proc.returncode != 0:
+        log.alert("add-ons", f"spaCy needs `pip install \"{PRESHED_PIN}\"` and pip failed: {(proc.stderr or proc.stdout)[-300:]}")
+        return False
+    log.info("add-ons", "spaCy could not load its model with preshed 3.0.14; installed an older preshed. Restart ComfyUI once.")
+    return True
+
+
 def install_wanted() -> None:
     """At ComfyUI start: install what is wanted and missing. Never raises, and never retries a failure
     on its own (a broken install would add minutes to every start); toggling the add-on retries."""
     try:
+        if "camera" in _wanted(_read()):
+            repair_spacy()
         with _lock:
             data = _read() or {}
             failed = dict(data.get("failed") or {})

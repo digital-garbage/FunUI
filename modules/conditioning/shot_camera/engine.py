@@ -103,8 +103,14 @@ def _spacy():
             import spacy
             _nlp = spacy.load("en_core_web_sm")
         except Exception as e:  # noqa: BLE001
-            fix = ("spacy not installed, run `pip install spacy`" if isinstance(e, ImportError)
-                   else "model missing, run `python -m spacy download en_core_web_sm`")
+            if isinstance(e, ImportError):
+                fix = "spacy not installed, run `pip install spacy`"
+            elif isinstance(e, OverflowError) and addons.preshed_broken():
+                fix = f"the installed preshed breaks spaCy's model loading, run `pip install \"{addons.PRESHED_PIN}\"` and restart ComfyUI"
+            elif isinstance(e, OSError):
+                fix = "model missing, run `python -m spacy download en_core_web_sm`"
+            else:
+                fix = "spaCy could not load its model (see the error above)"
             _say("spaCy tagger", e, f"simple word rules used; {fix}")
     return _nlp
 
