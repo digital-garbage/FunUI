@@ -22,7 +22,7 @@ def test_a_run_is_split_by_node_and_logged_once_at_the_end():
     assert seen == ["status"], "messages still go out"
 
 
-def test_a_sampler_reports_its_first_steps_apart_from_the_rest():
+def test_a_sampler_reports_step_one_from_the_node_start_and_every_later_step():
     log._reset()
     obs = node_timing.observe
     obs("execution_start", {"prompt_id": "p"}, now=0.0)
@@ -31,5 +31,5 @@ def test_a_sampler_reports_its_first_steps_apart_from_the_rest():
         obs("progress", {"prompt_id": "p", "value": i + 1, "max": 4}, now=at)
     obs("execution_success", {"prompt_id": "p"}, now=38.0)
     lines = [r["message"] for r in log.history() if r["source"] == "FunUI Timing"]
-    assert lines[0] == "sampler: step 1 done 30.0s after the node started, step 2 took 2.0s, the 2 after that average 2.0s"
+    assert lines[0] == "sampler: step 1 done 30.0s after the node started; step 2 2.0s, step 3 2.0s, step 4 2.0s"
     assert len(lines) == 2, "the per-node total still follows"

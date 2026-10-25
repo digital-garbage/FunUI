@@ -44,14 +44,12 @@ def observe(event, data, now=None):
 
 def _steps(run, now):
     """The sampler's own step times, once its node is over: how long until step 1 was done (loading and
-    first-call setup included), how long step 2 took, and what the later steps average."""
+    first-call setup included), then how long each later step took."""
     marks, run["marks"] = run.get("marks") or [], []
     if len(marks) < STEPS:
         return
-    first, second = marks[0] - run["at"], marks[1] - marks[0]
-    rest = (marks[-1] - marks[1]) / (len(marks) - 2)
-    log.info("FunUI Timing", f"{run['node']}: step 1 done {first:.1f}s after the node started, step 2 took "
-             f"{second:.1f}s, the {len(marks) - 2} after that average {rest:.1f}s")
+    later = ", ".join(f"step {i + 1} {marks[i] - marks[i - 1]:.1f}s" for i in range(1, len(marks)))
+    log.info("FunUI Timing", f"{run['node']}: step 1 done {marks[0] - run['at']:.1f}s after the node started; {later}")
 
 
 def install(server):
