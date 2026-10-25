@@ -67,6 +67,12 @@ SETTINGS = {
         "hint": "0 keeps your own result untouched, 1 replaces it with the second seed's. For starting noise, 0.5 is an even mix.",
         "when": {"enabled": True},
     },
+    "fresh": {
+        "type": "float", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05,
+        "label": "Second pass new noise", "ui": "slider",
+        "hint": "How much of the step's own noise the second pass swaps for the second seed's. 1 swaps all of it; lower keeps more of your own noise, so B stays closer to A. 0 gives B = A and the merge changes nothing.",
+        "when": {"enabled": True, "what": "answers"},
+    },
     "sound": {
         "type": "bool", "default": True,
         "label": "Merge sound too",
@@ -97,11 +103,18 @@ def merge(base, other, strength):
     return ((mixed.float() - mean) * (base_std / mixed_std) + mean).to(base.dtype)
 
 
-def renoise(x0, sigma, seed, step):
-    """A rectified-flow input at `sigma` for picture x0 with fresh noise: (1 - sigma) x0 + sigma noise."""
+def second_input(x, a, sigma, seed, step, fresh):
+    """The input for picture B. Rectified flow: x = (1 - sigma) picture + sigma noise. A's answer is the picture;
+    the noise is the step's own noise (what is left of x once A's picture is taken out) turned `fresh` of the
+    way toward the second seed's noise, at unit variance. fresh 1 is all second-seed noise, 0 hands back x."""
+    if sigma < 1e-4:
+        return x
+    own = (x.float() - (1.0 - sigma) * a.float()) / sigma
     gen = torch.Generator().manual_seed(int(seed) + 7919 * int(step))
-    noise = torch.randn(x0.shape, generator=gen).to(device=x0.device, dtype=x0.dtype)
-    return (1.0 - sigma) * x0 + sigma * noise
+    other = torch.randn(x.shape, generator=gen).to(device=x.device)
+    theta = fresh * torch.pi / 2
+    noise = float(torch.cos(torch.tensor(theta))) * own + float(torch.sin(torch.tensor(theta))) * other
+    return ((1.0 - sigma) * a.float() + sigma * noise).to(x.dtype)
 
 
 def _sound(packed, video):
@@ -157,6 +170,7 @@ def install(patcher, values, key):
         return None
     b_first = values.get("order", "b_into_a") == "b_into_a"
     with_sound = bool(values.get("sound", True))
+    fresh = float(values.get("fresh", 1.0))
     chosen = int(values.get("seed", -1))
     live = {"seed": max(chosen, 0), "merged": 0}
 
@@ -192,10 +206,11 @@ def install(patcher, values, key):
             video_a, rebuild_a = split_a
             tail_a = _sound(out, video_a)
             gen_step = where[0]
-            x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], gen_step).to(split_x[0].dtype))
+            x_b = split_x[1](second_input(split_x[0], video_a.detach(), sigma, live["seed"], gen_step, fresh))
             if tail_a is not None and with_sound:
                 n = x_b.shape[-1] - tail_a.shape[-1]
-                x_b = torch.cat([x_b[..., :n], renoise(tail_a.detach(), sigma, live["seed"] + 1, gen_step)], dim=-1)
+                x_b = torch.cat([x_b[..., :n], second_input(x[..., n:], tail_a.detach(), sigma, live["seed"] + 1,
+                                                            gen_step, fresh)], dim=-1)
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
             began = time.perf_counter()
             out_b = executor(x_b, t, *args_b, **kwargs_b)

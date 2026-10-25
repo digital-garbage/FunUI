@@ -46,12 +46,19 @@ def merge_(*a):
     return merge(*a)
 
 
-def test_renoise_is_seeded_and_lands_on_the_step_noise_level():
-    from modules.sampling.noise_merge import renoise
-    x0 = torch.randn(1, 4, 3, 8, 8)
-    assert torch.equal(renoise(x0, 0.5, 1, 2), renoise(x0, 0.5, 1, 2))
-    assert not torch.equal(renoise(x0, 0.5, 1, 2), renoise(x0, 0.5, 2, 2))
-    assert torch.equal(renoise(x0, 0.0, 1, 2), x0)
+def test_the_second_input_keeps_the_step_noise_at_zero_and_is_all_second_seed_at_one():
+    from modules.sampling.noise_merge import second_input
+    a = torch.randn(1, 4, 3, 8, 8)
+    x = 0.4 * a + 0.6 * torch.randn(1, 4, 3, 8, 8)
+    assert torch.allclose(second_input(x, a, 0.6, 1, 2, 0.0), x, atol=1e-5)
+    full = second_input(x, a, 0.6, 1, 2, 1.0)
+    assert torch.equal(full, second_input(x, a, 0.6, 1, 2, 1.0))
+    assert not torch.equal(full, second_input(x, a, 0.6, 2, 2, 1.0))
+    gen = torch.Generator().manual_seed(1 + 7919 * 2)
+    assert torch.allclose(full, 0.4 * a + 0.6 * torch.randn(x.shape, generator=gen), atol=1e-4)
+    half = second_input(x, a, 0.6, 1, 2, 0.5)
+    assert not torch.allclose(half, x) and not torch.allclose(half, full)
+    assert torch.equal(second_input(x, a, 0.0, 1, 2, 1.0), x)
 
 
 def test_a_named_step_runs_the_model_twice_and_others_once(tiny_h3):
