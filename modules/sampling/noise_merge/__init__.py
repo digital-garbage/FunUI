@@ -11,6 +11,10 @@ seed (and so is the sound, when the model has it). The two are then mixed:
 "A into B" starts from B and lets A in. Two independent answers averaged lose contrast
 (the independent detail partly cancels), so the mix is rescaled to the base's own spread.
 
+"Second run" keeps a whole second video going beside yours: its first input is the second seed's noise and every
+later input is its own last answer re-noised, the way a few-step sampler chains its steps. At the named steps its
+answer is blended into yours the same way. It costs one extra pass at every step up to the last one named.
+
 Costs one extra model pass per merged step. The second pass is marked as a probe, so no
 learning feature records it.
 """
@@ -40,17 +44,18 @@ SETTINGS = {
     "what": {
         "type": "enum", "default": "answers", "options": [
             {"value": "answers", "label": "Step answers"},
+            {"value": "parallel", "label": "Second run"},
             {"value": "noise", "label": "Starting noise"},
         ],
         "label": "Merge", "ui": "segmented",
-        "hint": "Step answers: at chosen steps the model answers twice and the two pictures are blended (one extra pass each). Starting noise: the run starts from your seed's noise mixed with the second seed's, at no extra cost.",
+        "hint": "Step answers: at chosen steps the model answers twice and the two pictures are blended (one extra pass each). Second run: a whole second video is denoised alongside yours from the second seed, and at the steps you name its answer is blended into yours (one extra pass at every step up to the last named one; the overlap look). Starting noise: the run starts from your seed's noise mixed with the second seed's, at no extra cost.",
         "when": {"enabled": True},
     },
     "steps": {
         "type": "text", "default": "1",
         "label": "Steps",
-        "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the schedule's end are ignored.",
-        "when": {"enabled": True, "what": "answers"},
+        "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the schedule's end are ignored. For Second run these are the steps where the blend happens; the second run itself goes from step 1 to the last one named.",
+        "when": {"enabled": True, "what": ["answers", "parallel"]},
     },
     "order": {
         "type": "enum", "default": "b_into_a", "options": [
@@ -59,7 +64,7 @@ SETTINGS = {
         ],
         "label": "Merge order", "ui": "segmented",
         "hint": "A is the picture your seed makes, B the same step on a second seed. The first named is blended in; the other is the base that keeps its overall look.",
-        "when": {"enabled": True, "what": "answers"},
+        "when": {"enabled": True, "what": ["answers", "parallel"]},
     },
     "strength": {
         "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
@@ -77,7 +82,7 @@ SETTINGS = {
         "type": "bool", "default": True,
         "label": "Merge sound too",
         "hint": "Blends the sound the same way as the picture. Off keeps only the base's own sound.",
-        "when": {"enabled": True, "what": "answers"},
+        "when": {"enabled": True, "what": ["answers", "parallel"]},
     },
     "seed": {
         "type": "int", "default": -1, "min": -1, "max": 2147483647,
@@ -171,13 +176,15 @@ def install(patcher, values, key):
     b_first = values.get("order", "b_into_a") == "b_into_a"
     with_sound = bool(values.get("sound", True))
     fresh = float(values.get("fresh", 1.0))
+    parallel = values.get("what") == "parallel"
+    last = max(wanted)
     chosen = int(values.get("seed", -1))
-    live = {"seed": max(chosen, 0), "merged": 0}
+    live = {"seed": max(chosen, 0), "merged": 0, "prev": None}
 
     def start(executor, *args, **kwargs):
         live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
-        live["merged"] = 0
-        log.info("FunUI Noise merging", f"on: steps {values.get('steps')}, strength {strength:.2f}, "
+        live["merged"], live["prev"] = 0, None
+        log.info("FunUI Noise merging", f"on: {'second run, ' if parallel else ''}steps {values.get('steps')}, strength {strength:.2f}, "
                  f"second seed {live['seed']}")
         try:
             return executor(*args, **kwargs)
@@ -193,7 +200,7 @@ def install(patcher, values, key):
         to = named.get("transformer_options") or {}
         out = executor(x, t, *args, **kwargs)
         where = dit_hooks.current_step(to)
-        if where is None or dit_hooks.probing(to) or where[0] not in wanted:
+        if where is None or dit_hooks.probing(to) or where[0] > last or (where[0] not in wanted and not parallel):
             return out
         if any(int(i) != 0 for i in (to.get("cond_or_uncond") or [0])):
             return out                              # a negative-prompt call: guidance is for the prompt's picture
@@ -206,11 +213,21 @@ def install(patcher, values, key):
             video_a, rebuild_a = split_a
             tail_a = _sound(out, video_a)
             gen_step = where[0]
-            x_b = split_x[1](second_input(split_x[0], video_a.detach(), sigma, live["seed"], gen_step, fresh))
+            if parallel:
+                # The second run: each step's input is its own last answer (zero at the start) re-noised with the
+                # second seed's noise, the way a few-step sampler chains its steps.
+                prev = live["prev"] or (torch.zeros_like(video_a), torch.zeros_like(tail_a) if tail_a is not None else None)
+                if prev[0].shape != video_a.shape:
+                    _say("Inactive | the latent changed size during the run, so the second run was dropped")
+                    return out
+                base_v, base_t, mix = prev[0], prev[1], 1.0
+            else:
+                base_v, base_t, mix = video_a.detach(), tail_a, fresh
+            x_b = split_x[1](second_input(split_x[0], base_v, sigma, live["seed"], gen_step, mix))
             if tail_a is not None and with_sound:
                 n = x_b.shape[-1] - tail_a.shape[-1]
-                x_b = torch.cat([x_b[..., :n], second_input(x[..., n:], tail_a.detach(), sigma, live["seed"] + 1,
-                                                            gen_step, fresh)], dim=-1)
+                x_b = torch.cat([x_b[..., :n], second_input(x[..., n:], base_t.detach(), sigma, live["seed"] + 1,
+                                                            gen_step, mix)], dim=-1)
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
             began = time.perf_counter()
             out_b = executor(x_b, t, *args_b, **kwargs_b)
@@ -220,6 +237,10 @@ def install(patcher, values, key):
                 return out
             video_b, rebuild_b = split_b
             tail_b = _sound(out_b, video_b)
+            if parallel:
+                live["prev"] = (video_b.detach(), None if tail_b is None else tail_b.detach())
+                if gen_step not in wanted:
+                    return out
             live["merged"] += 1
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
             log.info("FunUI Noise merging",

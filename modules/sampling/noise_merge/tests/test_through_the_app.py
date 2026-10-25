@@ -130,3 +130,11 @@ def test_merging_the_starting_noise_costs_no_extra_pass_and_changes_the_video(se
     assert any("starting noise mixed with the second seed's (7)" in e["message"] for e in log.history())
     _s, plain = _sample(model, _saved_by_the_app(server, off))
     assert "starting noise" in status and merged == plain
+
+
+def test_a_second_run_through_the_h3_sampler_adds_one_pass_per_step_up_to_the_last_named(server, model):
+    values = dict(APP_VALUES, noise_merge={"enabled": True, "what": "parallel", "steps": "2-3", "strength": 0.5, "seed": 7})
+    off = dict(APP_VALUES, noise_merge={"enabled": False})
+    status, merged = _sample(model, _saved_by_the_app(server, values))
+    _s, plain = _sample(model, _saved_by_the_app(server, off))
+    assert merged == plain + 3

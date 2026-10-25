@@ -159,3 +159,23 @@ def test_a_noise_mix_keeps_unit_variance_and_strength_extremes_pick_a_side():
     assert mix_noise(a, b, 0.5).std() == pytest.approx(1.0, abs=0.02)
     assert torch.allclose(mix_noise(a, b, 0.0), a, atol=1e-6)
     assert torch.allclose(mix_noise(a, b, 1.0), b, atol=1e-5)
+
+
+def test_a_second_run_goes_from_step_one_to_the_last_named_step_and_blends_only_where_named(tiny_h3):
+    from core import log
+    wrap, status = _load(tiny_h3, what="parallel", steps="2-3", strength=0.5)
+    x0, shapes = _packed()
+    seen = []
+
+    def model(x, *a, **k):
+        seen.append((a[4].get("funui_probe"), x.clone()))
+        return x0 + 0.1 * x
+
+    log.new_run()
+    before = len([e for e in log.history() if "second pass took" in e["message"]])
+    for i in range(4):
+        wrap(model, x0.clone(), _sched()[i:i + 1], None, None, None, _to(i), latent_shapes=shapes)
+    probes = [x for flag, x in seen if flag]
+    assert len(seen) == 4 + 3 and len(probes) == 3            # B runs on steps 1, 2 and 3; step 4 is yours alone
+    assert len([e for e in log.history() if "second pass took" in e["message"]]) - before == 2
+    assert not torch.allclose(probes[0], probes[1])           # B's input moves on with its own answers
