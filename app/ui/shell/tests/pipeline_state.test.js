@@ -799,3 +799,17 @@ test("Disable camera prompt enhancement is its own flag: it leaves 'all' and the
   assert.strictEqual(PS.cameraOff(), false);
   assert.strictEqual(PS.isOff("alg"), true);
 });
+
+test("Disable all guidance enhancements is its own flag and keeps the other choices", async () => {
+  const posts = [];
+  const PS = load(posts);
+  await PS.ensureLoaded();
+  await PS.setOff("alg", true);
+  await PS.setGuidanceOff(true);
+  assert.strictEqual(PS.guidanceOff(), true);
+  assert.strictEqual(PS.allOff(), false);
+  assert.deepStrictEqual(posts.at(-1).values._off, { modules: ["alg"], guidance: true });
+  await PS.setGuidanceOff(false);
+  assert.strictEqual(PS.guidanceOff(), false);
+  assert.strictEqual(PS.isOff("alg"), true);
+});

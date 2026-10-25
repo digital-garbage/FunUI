@@ -159,3 +159,15 @@ def test_camera_switch_is_its_own_flag_and_leaves_all_enhancements_alone():
     assert control.bad_off({"camera": True}) is None and control.bad_off({"camera": "yes"})
     kept, _ = control.partition([spec("a")], {"_off": {"camera": True}})
     assert [s.id for s in kept] == ["a"]
+
+
+def test_guidance_switch_turns_off_guidance_modifiers_only(monkeypatch):
+    from core import registry
+    specs = {"g": types.SimpleNamespace(id="g", provides={"modifier": 1}, category="guidance"),
+             "s": types.SimpleNamespace(id="s", provides={"modifier": 1}, category="sampling"),
+             "l": types.SimpleNamespace(id="l", provides={}, category="guidance")}
+    monkeypatch.setattr(registry, "current", lambda rescan=False: types.SimpleNamespace(specs=specs))
+    assert control.guidance_off({"_off": {"guidance": True}}) and not control.guidance_off({"_off": {"guidance": 1}})
+    assert control.bad_off({"guidance": True}) is None and control.bad_off({"guidance": "yes"})
+    assert control.off_by_project({"_off": {"guidance": True}}) == {"g"}
+    assert control.off_by_project({"_off": {"guidance": False, "modules": ["s"]}}) == {"s"}

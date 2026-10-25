@@ -51,6 +51,13 @@ def camera_off(settings) -> bool:
     return isinstance(raw, dict) and raw.get("camera") is True
 
 
+def guidance_off(settings) -> bool:
+    """The project's "disable all guidance enhancements" switch: every modifier in the Guidance category sits out.
+    Per-module choices and values stay as they were, so switching it back restores them."""
+    raw = settings.get("_off") if isinstance(settings, dict) else None
+    return isinstance(raw, dict) and raw.get("guidance") is True
+
+
 def off_by_project(settings) -> set:
     """Module ids the project turned off, read from the settings payload."""
     raw = settings.get("_off") if isinstance(settings, dict) else None
@@ -59,6 +66,9 @@ def off_by_project(settings) -> set:
     if all_off(settings):
         from . import registry
         off |= {i for i, spec in registry.current().specs.items() if controllable(spec)}
+    elif guidance_off(settings):
+        from . import registry
+        off |= {i for i, spec in registry.current().specs.items() if controllable(spec) and getattr(spec, "category", "") == "guidance"}
     return off
 
 
@@ -67,8 +77,8 @@ def bad_off(raw) -> str | None:
     if raw is None:
         return None
     ids = raw.get("modules", []) if isinstance(raw, dict) else None          # either half may stand alone
-    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids) or not all(isinstance(raw.get(k, False), bool) for k in ("all", "camera")):
-        return '"_off" must be {"modules": ["module_id", ...], "all": true|false, "camera": true|false}'
+    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids) or not all(isinstance(raw.get(k, False), bool) for k in ("all", "camera", "guidance")):
+        return '"_off" must be {"modules": ["module_id", ...], "all": true|false, "camera": true|false, "guidance": true|false}'
     return None
 
 

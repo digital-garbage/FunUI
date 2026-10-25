@@ -54,3 +54,24 @@ test("the wheel's settings are saved with the project and come back on a fresh b
     assert.deepEqual(readPrefs({ project: fresh }), { shape: "full", side: "right", enabled: null });
   } finally { off(); }
 });
+
+test("the wheel offers Clear references and the guidance switch, both opt-in, and they act", async () => {
+  server();
+  localStorage.clear();
+  const project = createProject({});
+  await project.start();
+  let guidance = false;
+  const pipeline = { allOff: () => false, guidanceOff: () => guidance, setGuidanceOff: async (on) => { guidance = on; } };
+  const app = { dom: createDom(), project, pipeline, actions: [], editorSettings: [], openSettings: () => {} };
+  const off = hub.setup({ host: document.createElement("div"), app });
+  try {
+    const find = (id) => app.actions.find((a) => a.id === id);
+    assert.ok(find("guidance-off") && find("clear-refs"));
+    assert.equal(find("guidance-off").optIn, true);
+    assert.equal(find("guidance-off").label, "Disable all guidance enhancements");
+    await find("guidance-off").run();
+    assert.equal(guidance, true);
+    assert.equal(find("guidance-off").label, "Enable guidance enhancements");
+    assert.ok(!find("clear-refs").when(), "nothing to clear without references");
+  } finally { off(); }
+});

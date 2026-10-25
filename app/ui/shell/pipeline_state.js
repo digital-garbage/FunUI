@@ -372,6 +372,9 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
   // "Disable automatic camera prompt enhancement": Shot camera's rewrites only; every other enhancement stays as set.
   const cameraOff = (from) => Boolean((currentValues(from)._off || {}).camera);
   const setCameraOff = (on) => setModuleValue("_off", "camera", Boolean(on));
+  // "Disable all guidance enhancements": every module of the Guidance category sits out; their choices are kept underneath.
+  const guidanceOff = (from) => Boolean((currentValues(from)._off || {}).guidance);
+  const setGuidanceOff = (on) => setModuleValue("_off", "guidance", Boolean(on));
   // The screen is the truth: an edit is written into the live slots the moment it is made (the same blob the
   // server's place() writes), so a run started now reads what is shown without waiting for any round trip.
   function mirrorValues(values) {
@@ -737,7 +740,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
   return {
     ensureLoaded, reloadModules, save, edit, restore, snapshot, setGroup, setBypass, adopt, settled, readyToRun, subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); }, valuesAlreadyPlaced, currentValues, setModuleValue,
     modulesById: () => modulesById,
-    setEditGuard: (fn) => { editGuard = fn; }, adoptedOk: () => adoptedOk, unreachable: () => slots === null || unreachableLast, refusal: () => refusalLast, activeModules, useful, usefulness, isOff, setOff, allOff, setAllOff, cameraOff, setCameraOff, refreshControl, control: () => controlState,
+    setEditGuard: (fn) => { editGuard = fn; }, adoptedOk: () => adoptedOk, unreachable: () => slots === null || unreachableLast, refusal: () => refusalLast, activeModules, useful, usefulness, isOff, setOff, allOff, setAllOff, cameraOff, setCameraOff, guidanceOff, setGuidanceOff, refreshControl, control: () => controlState,
     removedIds: () => [...removed],
     whole: () => whole,
     unwiredMap: () => JSON.parse(JSON.stringify(unwired)),

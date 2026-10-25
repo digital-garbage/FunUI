@@ -2,6 +2,7 @@
 // reload, so edits are saved first and a card holds the screen until the server answers again.
 import { composer as c } from "../composer/composer.js";
 
+const BRANCH_NOTES = { main: "Most stable available version of FunUI", dev: "Test new experimental features before they appear on main", "v4-classic": "Old version of FunUI with non-modular backend" };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function createMaintenance({ api, flush }) {
@@ -84,7 +85,7 @@ export function createMaintenance({ api, flush }) {
     async switchBranch() {
       const gs = await status(true); if (!gs) return;
       if (!(gs.branches || []).length) return tell("No git branches found.");
-      const branch = await c.modal.choice({ title: "Switch FunUI branch", items: gs.branches.map((b) => ({ id: b, label: b, hint: b === gs.branch ? "current" : "" })) }).result;
+      const branch = await c.modal.choice({ title: "Switch FunUI branch", items: gs.branches.map((b) => ({ id: b, label: b, hint: [b === gs.branch ? "current" : "", BRANCH_NOTES[b]].filter(Boolean).join(" · ") })) }).result;
       if (!branch || branch === gs.branch) return;
       if (!(await ask("Switch branch", `Switch to "${branch}", pull from origin, and restart ComfyUI. If a generation is running, the restart waits until you press Restart after it finishes.`))) return;
       return run(`Switching to ${branch}…`, () => api.git("checkout", { branch }), (r) => `On ${branch}${r.updated ? ` (${r.before} → ${r.after})` : ", already up to date"}.${deps(r)}`);
