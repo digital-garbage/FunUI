@@ -35,12 +35,12 @@ Experimental features that never proved out have been removed in this release. T
 FunPack is available on Comfy Registry and can be installed in any of these ways:
 
 1. With `comfy-cli`:
-   `comfy node install ComfyUI-FunPack`
+   `comfy node install FunUI`
 2. With git, inside your `ComfyUI/custom_nodes` directory:
-   `git clone -b v4-classic https://github.com/digital-garbage/ComfyUI-FunPack`
+   `git clone -b v4-classic https://github.com/digital-garbage/FunUI`
    (`comfy-cli` and ComfyUI-Manager install the latest published release, which is v5 once it is published; use git with `-b v4-classic` for this classic version.)
 3. With ComfyUI-Manager:
-   Open `Custom Nodes Manager`, search for `ComfyUI-FunPack`, and click `Install`.
+   Open `Custom Nodes Manager`, search for `FunUI`, and click `Install`.
 
 ## Dependencies
 
@@ -58,7 +58,7 @@ To understand how to use FunPack Cutting Room, please consider walking through t
 
 It's available in the end of Project Setup Wizard or at anytime from the top bar menu - Help -> Welcome tour.
 
-Additional information can be found in [docs folder](https://github.com/digital-garbage/ComfyUI-FunPack/tree/main/docs).
+Additional information can be found in [docs folder](https://github.com/digital-garbage/FunUI/tree/main/docs).
 
 Version history is available in [CHANGELOG.md](CHANGELOG.md).
 
