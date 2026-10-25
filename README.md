@@ -12,6 +12,9 @@
 > FunUI is an open-source hobby project maintained by single person, available to you for zero cost. It means resources such as time and money are limited, and there is no "QA team" to review every single feature and report every bug.
 > If you discover a bug or wish to suggest a new feature, feel free to open a new issue in this repo's Issues.
 
+> [!NOTE]
+> **Why the rename?** This app started as two nodes made for experimenting with FramePack video model many months ago. FunPack naming was inspired by it, and through all these months what's been just two nodes became an own UI sitting on top of Comfy, with nodes that you can't even use directly from it - so calling it a "pack" would be rather a mislead. With this said, FunPack becomes FunUI - this naming reflects its true nature much better.
+
 <p align="center"><img src="docs/images/studio.jpg" alt="FunUI studio: preview, scene settings and a six-clip timeline" width="900"></p>
 
 ## What v5 is
