@@ -151,6 +151,21 @@ def taste_latest_key():
     return store.latest_key()
 
 
+def cache_key():
+    """Changes whenever a rating reaches the latest key. ComfyUI skips a graph whose inputs did not
+    change, and a rating is not an input: the same seed rated and sent again would run nothing, for
+    every module that learns from ratings. Waiting captures are left out: every run writes one."""
+    try:
+        key = store.latest_key()
+        folder = store._dir(key) if key else None
+        if folder is None or not folder.is_dir():
+            return ""
+        return "|".join(f"{p.name}:{p.stat().st_mtime_ns}:{p.stat().st_size}"
+                        for p in sorted(folder.glob("*.pt")) if ".pending." not in p.name)
+    except Exception:                                 # noqa: BLE001 -- a fingerprint must never fail a run
+        return ""
+
+
 def taste_kind(key, kind):
     return Kind(key, kind)
 
@@ -298,4 +313,4 @@ def routes(table, base, web):
         return web.json_response({"imported": name, "kinds": count, "keys": store.keys()})
 
 
-PROVIDES = {"modifier": install, "taste_store": taste_store, "taste_kind": taste_kind, "taste_latest_key": taste_latest_key, "routes": routes}
+PROVIDES = {"modifier": install, "taste_store": taste_store, "taste_kind": taste_kind, "taste_latest_key": taste_latest_key, "cache_key": cache_key, "routes": routes}
