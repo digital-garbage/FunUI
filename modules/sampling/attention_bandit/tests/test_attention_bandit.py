@@ -83,7 +83,7 @@ def test_a_learned_run_banks_its_size(tiny_h3, monkeypatch):
     from modules.system.taste import store
     patched, status = _load(tiny_h3, blocks="0-3")
     assert "size learned from ratings" in status
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [0] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [0] * len(table))
     _run(_outer(patched), lambda: tiny_h3.run(patched))
     store.rate("run-1", "liked")
     row = store.load("fox", "attention_bandit")["rows"][0]
@@ -114,7 +114,7 @@ def test_a_run_changes_the_output_banks_its_arms_and_a_rating_teaches_them(tiny_
     patched, status = _load(tiny_h3, mode="manual", range=0.4, blocks="0-3")
     assert "4 depth groups over 4 blocks" in status
     from modules.sampling import attention_bandit as m
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [2] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [2] * len(table))
     outs = _run(_outer(patched), lambda: tiny_h3.run(patched))
     assert not torch.equal(outs[0], base[0]), "the explorer ran and changed nothing"
     assert store.rate("run-1", "liked")["recorded"] == ["attention_bandit"]
@@ -126,7 +126,7 @@ def test_stay_everywhere_is_the_plain_model(tiny_h3, monkeypatch):
     from modules.sampling import attention_bandit as m
     base = tiny_h3.run()
     patched, _ = _load(tiny_h3, blocks="0-3")
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [m.STAY] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [m.STAY] * len(table))
     outs = _run(_outer(patched), lambda: tiny_h3.run(patched))
     assert torch.equal(outs[0], base[0])
 
@@ -149,7 +149,7 @@ def test_a_rating_changes_the_taste_cache_key_so_the_same_seed_runs_again(tiny_h
     from modules.system.taste import cache_key, store
     patched, _ = _load(tiny_h3, blocks="0-3")
     assert cache_key() == ""
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [0] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [0] * len(table))
     _run(_outer(patched), lambda: tiny_h3.run(patched))
     assert cache_key() == ""                          # a waiting capture is not a rating
     store.rate("run-1", "liked")
@@ -172,7 +172,7 @@ def test_the_log_says_how_many_attention_calls_were_changed(tiny_h3, monkeypatch
     from core import log
     from modules.sampling import attention_bandit as m
     patched, _ = _load(tiny_h3, mode="manual", blocks="0-3")
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [0] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [0] * len(table))
     log.new_run()
     _run(_outer(patched), lambda: tiny_h3.run(patched))
     assert any("applied to" in e["message"] and "attention calls" in e["message"] for e in log.history())
@@ -233,13 +233,13 @@ def test_disliked_combinations_are_not_a_recipe():
 def _force(monkeypatch, arms=1, tarms=1, rarms=1):
     from modules.sampling import attention_bandit as m
 
-    def fixed(table, rng=random):
+    def fixed(table, rng=random, **kw):
         n = len(table)
         return [{4: arms, 5: rarms}.get(n, arms)] * n if n == 5 else [arms] * n
     seq = iter([])
     calls = []
 
-    def draw(table, rng=random):
+    def draw(table, rng=random, **kw):
         calls.append(len(table))
         # the first draw is the plain groups, the second the prompt groups, the third the regions
         pick = (arms, tarms, rarms)[min(len(calls) - 1, 2)]
@@ -302,7 +302,7 @@ def test_clip_regions_change_the_output_and_stay_off_when_all_as_is(tiny_h3, mon
     # prompt focus is off, so the draws are groups then regions
     from modules.sampling import attention_bandit as m
     picks = iter([1, 0])
-    monkeypatch.setattr(m, "draw", lambda table, rng=random: [next(picks)] * len(table))
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [next(picks)] * len(table))
     log.new_run()
     outs = _run(_outer(patched), lambda: tiny_h3.run(patched))
     assert not torch.equal(outs[0], base[0])
@@ -333,7 +333,7 @@ def test_the_real_sla_override_underneath_still_gets_a_normal_call(tiny_h3, monk
         patched, _ = _load(type("T", (), {"patcher": probe})(), mode="manual", range=0.5, blocks="0-3")
         picks = iter([1, 1, 0 if on else 1])
         from modules.sampling import attention_bandit as m
-        monkeypatch.setattr(m, "draw", lambda table, rng=random: [next(picks)] * len(table))
+        monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [next(picks)] * len(table))
         seen.clear()
         _run(_outer(patched), lambda: tiny_h3.run(patched))
         return list(seen), state

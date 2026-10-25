@@ -94,6 +94,10 @@ GROUPS = 4
 ARMS = (-1.0, 0.0, 1.0)
 STAY = 1                    # index of "as is"
 STAY_HEAD_START = 2.0       # extra likes "as is" starts with, so a new key is stable
+NEW_HEAD_START = 4.0        # the same for prompt focus and clip regions, which change less often until they have data
+# A factor on the prompt's keys only is not the same size of change as a temperature: it moves the prompt's
+# logits against everyone else's, and at the full size it wrecked a trained key. A fraction of the size.
+PROMPT_SCALE = 0.3
 MAX_ROWS = 10 ** 9          # no cap: a rated run is a few KB at most
 START_SPREAD = 0.2
 SPREAD_MIN, SPREAD_MAX = 0.05, 0.5
@@ -212,14 +216,13 @@ def describe(groups, picks, spread, words=("sharper", "looser"), what="", blocks
     return "; ".join(parts)
 
 
-def draw(table, rng=random):
+def draw(table, rng=random, head=STAY_HEAD_START):
     """One arm per group: the arm whose Beta draw (likes + 1, dislikes + 1) is highest."""
     picks = []
     for group in table:
         best, best_theta = STAY, -1.0
         for arm, (liked, disliked) in enumerate(group):
-            head = STAY_HEAD_START if arm == STAY else 0.0
-            theta = rng.betavariate(liked + head + 1.0, disliked + 1.0)
+            theta = rng.betavariate(liked + (head if arm == STAY else 0.0) + 1.0, disliked + 1.0)
             if theta > best_theta:
                 best, best_theta = arm, theta
         picks.append(best)
@@ -257,8 +260,8 @@ def make_plan(rows, cond, signature, n_groups, focus, manual_spread=None, region
     """What this run does: {arms, tarms | None, rarms | None, spread, recipe | None, same, unknown}."""
     weights, sims = weights_of(rows, cond)
     arms = draw(counts(rows, signature, n_groups, "arms", weights), rng)
-    tarms = draw(counts(rows, signature, n_groups, "tarms", weights), rng) if focus else None
-    rarms = draw(counts(rows, signature, len(REGIONS), "rarms", weights), rng) if regions else None
+    tarms = draw(counts(rows, signature, n_groups, "tarms", weights), rng, head=NEW_HEAD_START) if focus else None
+    rarms = draw(counts(rows, signature, len(REGIONS), "rarms", weights), rng, head=NEW_HEAD_START) if regions else None
     spread = learned_spread(rows, signature)
     recipe = pick_recipe(rows, sims, signature, focus, regions, rng)
     if recipe is not None:
@@ -387,7 +390,7 @@ def install(patcher, values, key):
         cond = _prompt_of(getattr(executor, "class_obj", None))
         plan = make_plan(rows, cond, signature, len(groups), focus, manual_spread if manual else None, regions)
         arms, tarms, rarms, spread = plan["arms"], plan["tarms"], plan["rarms"], plan["spread"]
-        tfac = [1.0 + spread * ARMS[a] for a in tarms] if focus else [1.0] * len(groups)
+        tfac = [1.0 + PROMPT_SCALE * spread * ARMS[a] for a in tarms] if focus else [1.0] * len(groups)
         rfac = [1.0 + spread * ARMS[a] for a in rarms] if regions else [1.0] * len(REGIONS)
         live.update(scaled=0, calls=0, text=0, region_hits=0, regions=rfac,
                     region_wanted=any(f != 1.0 for f in rfac), text_wanted=any(t != 1.0 for t in tfac),
@@ -405,7 +408,7 @@ def install(patcher, values, key):
         how = f"recipe liked {plan['recipe'][0]}x, disliked {plan['recipe'][1]}x" if plan["recipe"] else "exploring"
         changes = "; ".join(x for x in (
             describe(groups, arms, spread),
-            describe(groups, tarms, spread, ("weaker", "stronger"), "prompt ") if focus else "",
+            describe(groups, tarms, PROMPT_SCALE * spread, ("weaker", "stronger"), "prompt ") if focus else "",
             describe([[n] for n in REGIONS], rarms, spread, what="clip regions ", blocks=False) if regions else "") if x)
         log.once(f"{ID}:run", log.INFO, "FunUI Attention explorer",
                  f"key {taste.key!r}, {tally(rows)}, {known}, {how}: {changes or 'no change this run'}")
