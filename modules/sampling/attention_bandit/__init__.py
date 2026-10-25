@@ -8,6 +8,9 @@ you liked and away from what you did not, and the prompt still leads: temperatur
 only re-weighs what is already in context (see Randomizer).
 
 "As is" starts with a head start so a fresh key stays close to the plain model.
+How far a change goes learns too: a liked run that changed something pulls the size
+toward the size it used, a disliked one pushes it away (as Shot memory does for its
+amount), with a little exploration. Or type your own size.
 Zero extra model calls; the speed cost is a division on the query.
 
 Not proven: with a handful of ratings the per-group counts are noisy, and whether
@@ -34,11 +37,20 @@ SETTINGS = {
         "label": "Attention explorer",
         "hint": "Each run tries a small attention change; your ratings decide which ones stay.",
     },
+    "mode": {
+        "type": "enum", "default": "learned", "options": [
+            {"value": "learned", "label": "Learn from ratings"},
+            {"value": "manual", "label": "My value"},
+        ],
+        "label": "How far", "ui": "segmented",
+        "hint": "Learn from ratings: each rating nudges the size of a change toward what you liked. My value: you set it below.",
+        "when": {"enabled": True},
+    },
     "range": {
         "type": "float", "default": 0.2, "min": 0.05, "max": 0.5, "step": 0.05,
-        "label": "How far", "ui": "slider",
-        "hint": "How much sharper or looser a change can be. Keep it small.",
-        "when": {"enabled": True},
+        "label": "Change size", "ui": "slider",
+        "hint": "How much sharper or looser a change is. Keep it small.",
+        "when": {"enabled": True, "mode": "manual"},
     },
     "blocks": {
         "type": "text", "default": "2-10,29-46",
@@ -55,6 +67,10 @@ ARMS = (-1.0, 0.0, 1.0)
 STAY = 1                    # index of "as is"
 STAY_HEAD_START = 2.0       # extra likes "as is" starts with, so a new key is stable
 MAX_ROWS = 64
+START_SPREAD = 0.2
+SPREAD_MIN, SPREAD_MAX = 0.05, 0.5
+LR = 0.5
+EXPLORE = 0.05
 
 
 def _say(message, level=log.ALERT):
@@ -87,6 +103,49 @@ def counts(rows, signature, n_groups):
     return table
 
 
+def _sign(x):
+    return (x > 0) - (x < 0)
+
+
+def learned_spread(rows, signature):
+    """The size of a change, replayed from the rated runs in order: a liked run that changed
+    something pulls it toward the size it used, a disliked one pushes it away."""
+    m = START_SPREAD
+    for r in rows:
+        p = r["rows"]
+        if "spread" not in p or "sig" not in p or "arms" not in p or not r["reward"]:
+            continue
+        if [int(x) for x in p["sig"].tolist()] != signature:
+            continue
+        if all(int(a) == STAY for a in p["arms"].tolist()):
+            continue                                  # nothing changed, so nothing to blame on the size
+        m += LR * _sign(r["reward"]) * (float(p["spread"]) - m)
+        m = min(max(m, SPREAD_MIN), SPREAD_MAX)
+    return m
+
+
+def describe(groups, picks, spread):
+    """Which blocks went sharper or looser, exactly; groups left as is are not mentioned."""
+    moved = {}
+    for g, a in zip(groups, picks):
+        if a != STAY:
+            moved.setdefault(a, []).extend(g)
+    parts = [f"{'sharper' if ARMS[a] < 0 else 'looser'} {1.0 + spread * ARMS[a]:g}x at blocks {ranges(sorted(bs))}"
+             for a, bs in sorted(moved.items())]
+    return "; ".join(parts) or "no change this run"
+
+
+def ranges(blocks):
+    out, start = [], None
+    for i, b in enumerate(blocks):
+        if start is None:
+            start = b
+        if i + 1 == len(blocks) or blocks[i + 1] != b + 1:
+            out.append(str(start) if start == b else f"{start}-{b}")
+            start = None
+    return ",".join(out)
+
+
 def draw(table, rng=random):
     """One arm per group: the arm whose Beta draw (likes + 1, dislikes + 1) is highest."""
     picks = []
@@ -113,7 +172,8 @@ def install(patcher, values, key):
     if taste is None:
         _say("off: set a Taste key first -- it is what your ratings teach")
         return None
-    spread = min(max(float(values.get("range", 0.2)), 0.05), 0.5)
+    manual = values.get("mode") == "manual"
+    manual_spread = min(max(float(values.get("range", START_SPREAD)), SPREAD_MIN), SPREAD_MAX)
     blocks, problems = dit_hooks.parse_blocks(values.get("blocks"), dit_hooks.block_count(patcher))
     for problem in problems:
         _say(f"ignored {problem}")
@@ -125,13 +185,15 @@ def install(patcher, values, key):
 
     def fresh():
         import torch
-        table = counts(taste.rows(KIND), signature, len(groups))
-        picks = draw(table)
+        rows = taste.rows(KIND)
+        picks = draw(counts(rows, signature, len(groups)))
+        spread = manual_spread if manual else min(max(
+            learned_spread(rows, signature) + random.gauss(0.0, EXPLORE), SPREAD_MIN), SPREAD_MAX)
         live["temps"] = {b: 1.0 + spread * ARMS[a] for g, a in zip(groups, picks) for b in g}
-        captured.update({"arms": torch.tensor(picks), "sig": torch.tensor(signature)})
-        shown = ", ".join(f"{g[0]}-{g[-1]}: {1.0 + spread * ARMS[a]:g}x" for g, a in zip(groups, picks))
+        captured.update({"arms": torch.tensor(picks), "sig": torch.tensor(signature),
+                         "spread": torch.tensor(float(spread))})
         log.once(f"{ID}:run", log.INFO, "FunUI Attention explorer",
-                 f"key {taste.key!r}: {shown}")
+                 f"key {taste.key!r}: {describe(groups, picks, spread)}")
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS, fresh=fresh)
 
@@ -153,7 +215,8 @@ def install(patcher, values, key):
         return func(q if t is None else q / t, k, v, *args, **kwargs)
 
     dit_hooks.add_attention_override(patcher, key, override)
-    return f"{len(groups)} depth groups over {len(blocks)} blocks, up to {spread:g} sharper or looser, learning from ratings"
+    size = f"size {manual_spread:g}" if manual else "size learned from ratings"
+    return f"{len(groups)} depth groups over {len(blocks)} blocks, {size}"
 
 
 PROVIDES = {"modifier": install}
