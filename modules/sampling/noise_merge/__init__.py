@@ -3,7 +3,7 @@ different noise and blend the two answers.
 
 Step N is answered twice. Picture A is the run's own answer. Picture B is the answer to
 the same step after A's picture is re-noised to this step's noise level with a second
-seed (the sound part of the input is left alone). The two are then mixed:
+seed (and so is the sound, when the model has it). The two are then mixed:
 
     merged = base + strength * (other - base)
 
@@ -89,6 +89,14 @@ def renoise(x0, sigma, seed, step):
     return (1.0 - sigma) * x0 + sigma * noise
 
 
+def _sound(packed, video):
+    """The part of a packed [B, 1, N] result that follows the picture (H3's sound), or None."""
+    if getattr(packed, "dim", None) is None or packed.dim() != 3:
+        return None
+    n = video[0].numel()
+    return packed[..., n:] if packed.shape[-1] > n else None
+
+
 def install(patcher, values, key):
     if not values.get("enabled"):
         return None
@@ -134,7 +142,12 @@ def install(patcher, values, key):
                 return out
             sigma = float(t.max())
             video_a, rebuild_a = split_a
-            x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], where[0]).to(split_x[0].dtype))
+            tail_a = _sound(out, video_a)
+            gen_step = where[0]
+            x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], gen_step).to(split_x[0].dtype))
+            if tail_a is not None:
+                n = x_b.shape[-1] - tail_a.shape[-1]
+                x_b = torch.cat([x_b[..., :n], renoise(tail_a.detach(), sigma, live["seed"] + 1, gen_step)], dim=-1)
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
             began = time.perf_counter()
             out_b = executor(x_b, t, *args_b, **kwargs_b)
@@ -143,14 +156,22 @@ def install(patcher, values, key):
             if split_b is None:
                 return out
             video_b, rebuild_b = split_b
+            tail_b = _sound(out_b, video_b)
             live["merged"] += 1
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
             log.info("FunUI Noise merging",
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
-                     f"merged at {strength:.2f}; the second pass took {took:.1f}s")
+                     f"merged at {strength:.2f}{' (picture and sound)' if tail_a is not None else ''}; "
+                     f"the second pass took {took:.1f}s")
             if b_first:
-                return rebuild_a(merge(video_a, video_b, strength).to(video_a.dtype))
-            return rebuild_b(merge(video_b, video_a, strength).to(video_b.dtype))
+                base, other, base_tail, other_tail, rebuild = video_a, video_b, tail_a, tail_b, rebuild_a
+            else:
+                base, other, base_tail, other_tail, rebuild = video_b, video_a, tail_b, tail_a, rebuild_b
+            merged = rebuild(merge(base, other, strength).to(base.dtype))
+            if base_tail is not None and other_tail is not None:
+                n = merged.shape[-1] - base_tail.shape[-1]
+                merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
+            return merged
         except Exception as exc:                    # noqa: BLE001
             log.broke("FunUI Noise merging", exc, "merging the second answer")
             return out

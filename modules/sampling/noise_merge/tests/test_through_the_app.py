@@ -96,3 +96,27 @@ def test_what_the_app_saves_reaches_the_h3_sampler_and_adds_one_pass_at_step_one
     texts = [e["message"] for e in log.history()]
     assert any(t.startswith("on: steps 1") for t in texts)
     assert any(t.startswith("step 1: second answer differs") for t in texts)
+
+
+def test_a_second_run_on_the_same_cached_model_still_makes_the_extra_pass(server, model):
+    """ComfyUI hands the SAME patched model to every run whose Load Modifiers inputs did not change."""
+    from comfy.nested_tensor import NestedTensor
+    from core import log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
+    from modules.sampling.sampler.nodes import FunUISampler
+    saved = _saved_by_the_app(server, APP_VALUES)
+    patched, _ = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(saved).result[0]).result
+    counts = []
+    for seed in (1, 2, 3):
+        forwards = []
+        hook = patched.model.diffusion_model.register_forward_hook(lambda *a: forwards.append(1))
+        cond = [[torch.randn(1, 5, 48), {}]]
+        latent = {"samples": NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))}
+        before = sum("second pass took" in e["message"] for e in log.history())
+        try:
+            FunUISampler.execute(patched, cond, cond, latent, seed=seed, steps=4, cfg=1.0,
+                                 sampler_name="lcm", scheduler="beta", denoise=1.0)
+        finally:
+            hook.remove()
+        counts.append((len(forwards), sum("second pass took" in e["message"] for e in log.history()) - before))
+    assert counts == [(5, 1)] * 3, counts

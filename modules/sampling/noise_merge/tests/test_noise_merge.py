@@ -69,7 +69,7 @@ def test_a_named_step_runs_the_model_twice_and_others_once(tiny_h3):
     assert len(calls) == 5 and calls.count(True) == 1
 
 
-def test_the_answer_changes_only_in_the_picture_and_order_matters(tiny_h3):
+def test_the_answer_changes_and_order_matters(tiny_h3):
     from conftest import unpacked
     x0, shapes = _packed()
     model = lambda x, *a, **k: x * 0.5 + 0.3 * x0
@@ -81,7 +81,7 @@ def test_the_answer_changes_only_in_the_picture_and_order_matters(tiny_h3):
     a, b = unpacked(results["b_into_a"], shapes), unpacked(results["a_into_b"], shapes)
     p = unpacked(plain, shapes)
     assert not torch.allclose(a[0], p[0]) and not torch.allclose(a[0], b[0])
-    assert torch.allclose(a[1], p[1])                 # sound is the model's own answer for A
+    assert not torch.allclose(a[1], p[1])             # the sound is merged too
 
 
 def test_nothing_named_or_strength_zero_installs_nothing(tiny_h3):
@@ -122,3 +122,14 @@ def test_the_log_says_the_feature_is_on_and_when_nothing_matched(tiny_h3):
     texts = [e["message"] for e in log.history()]
     assert any(t.startswith("on: steps 9") for t in texts)
     assert any("no step of this run matched" in t for t in texts)
+
+
+def test_the_sound_is_merged_too(tiny_h3):
+    from conftest import unpacked
+    x0, shapes = _packed()
+    model = lambda x, *a, **k: x * 0.5 + 0.3 * x0
+    wrap, _ = _load(tiny_h3, steps="1", strength=0.7)
+    out = wrap(model, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes)
+    plain = unpacked(model(x0, None), shapes)
+    got = unpacked(out, shapes)
+    assert not torch.allclose(got[0], plain[0]) and not torch.allclose(got[1], plain[1])
