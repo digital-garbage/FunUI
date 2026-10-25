@@ -12,7 +12,7 @@ Repository = "https://github.com/digital-garbage/FunUI"
 [tool.comfy]
 PublisherId = "digital-garbage" # TODO (fill in Publisher ID from Comfy Registry Website).
 DisplayName = "FunUI" # Display name for the Custom Node. Can be changed later.
-Icon = "https://example.com/icon.png" # SVG, PNG, JPG or GIF (MAX. 800x400px)
+Icon = "https://raw.githubusercontent.com/digital-garbage/FunUI/main/docs/images/icon.png" # SVG, PNG, JPG or GIF (MAX. 800x400px)
 
 [tool.pytest.ini_options]
 # importlib mode so pytest does not walk up into the repo root looking for a
