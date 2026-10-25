@@ -79,7 +79,7 @@ def _packed():
 
 def test_manual_k_steers_the_picture_into_the_next_step_and_never_the_answer_or_the_sound(tiny_h3):
     from conftest import unpacked
-    wrap, outer, status = _load(tiny_h3, mode="manual", k=1.4)
+    wrap, outer, status = _load(tiny_h3, mode="manual", level=10)
     assert "manual k" in status
     x0, shapes = _packed()
     seen = []
