@@ -44,6 +44,9 @@ def test_a_seekable_file_is_served_with_range_support(comfy, server):
     status, headers, body = get(server, f"{BASE}/result?filename=a.mp4&type=output")
     assert status == 200 and headers["Content-Type"] == "video/mp4" and re.search(r'filename="[0-9a-f]{12}\.mp4"', headers["Content-Disposition"])
     assert body == (comfy.output / "a.mp4").read_bytes()
+    assert get(server, f"{BASE}/result?filename=a.mp4&type=output")[1]["Content-Disposition"] == headers["Content-Disposition"], "saving twice gives the same name"
+    make_clip(comfy.output / "b.mp4")
+    assert get(server, f"{BASE}/result?filename=b.mp4&type=output")[1]["Content-Disposition"] != headers["Content-Disposition"]
     status, headers, part = get(server, f"{BASE}/result?filename=a.mp4", headers={"Range": "bytes=0-99"})
     assert status == 206 and len(part) == 100
 
@@ -118,7 +121,8 @@ def test_a_scene_segment_is_exactly_the_window_the_export_would_use(comfy, serve
     proj = _project(comfy, source_in=0.5, frames=50, frames_mode="timeline")     # 2 s at 25 fps, from 0.5 + 0.5
     status, headers, body = get(server, f"{BASE}/projects/{proj.id}/preview-segment/s1")
     assert status == 200 and headers["Cache-Control"] == "private, max-age=3600"
-    assert re.fullmatch(r'inline; filename="[0-9a-f]{12}\.mp4"', headers["Content-Disposition"]), "Save video as: a random hash, not ComfyUI's name"
+    assert re.fullmatch(r'inline; filename="[0-9a-f]{12}\.mp4"', headers["Content-Disposition"]), "Save video as: a hash, not ComfyUI's name"
+    assert get(server, f"{BASE}/projects/{proj.id}/preview-segment/s1")[1]["Content-Disposition"] == headers["Content-Disposition"], "the same video keeps its name"
     (comfy.root / "seg.mp4").write_bytes(body)
     assert files.moov_position(str(comfy.root / "seg.mp4")) == "front"
     assert probe(comfy.root / "seg.mp4")[0] == pytest.approx(2.0, abs=0.2)

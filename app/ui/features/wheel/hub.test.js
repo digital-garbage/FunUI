@@ -61,7 +61,8 @@ test("the wheel offers Clear references and the guidance switch, both opt-in, an
   const project = createProject({});
   await project.start();
   let guidance = false;
-  const pipeline = { allOff: () => false, guidanceOff: () => guidance, setGuidanceOff: async (on) => { guidance = on; } };
+  let camera = false;
+  const pipeline = { allOff: () => false, cameraOff: () => camera, setCameraOff: async (on) => { camera = on; }, modulesById: () => ({ conditioning_shot_camera: {} }), guidanceOff: () => guidance, setGuidanceOff: async (on) => { guidance = on; } };
   const app = { dom: createDom(), project, pipeline, actions: [], editorSettings: [], openSettings: () => {} };
   const off = hub.setup({ host: document.createElement("div"), app });
   try {
@@ -72,6 +73,11 @@ test("the wheel offers Clear references and the guidance switch, both opt-in, an
     await find("guidance-off").run();
     assert.equal(guidance, true);
     assert.equal(find("guidance-off").label, "Enable guidance enhancements");
+    assert.equal(find("camera-off").optIn, true);
+    assert.equal(find("camera-off").label, "Disable camera move enhancements");
+    await find("camera-off").run();
+    assert.equal(camera, true);
+    assert.equal(find("camera-off").label, "Enable camera move enhancements");
     assert.ok(!find("clear-refs").when(), "nothing to clear without references");
   } finally { off(); }
 });

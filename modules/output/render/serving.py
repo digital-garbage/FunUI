@@ -16,7 +16,6 @@ import asyncio
 import hashlib
 import mimetypes
 import os
-import secrets
 import time
 from collections import OrderedDict
 
@@ -119,9 +118,10 @@ async def playable(path: str) -> str:
         raise web.HTTPBadGateway(reason="Video could not be prepared for playback (remux failed).")
 
 
-def saved_name(path) -> str:
-    """What the browser's own "Save video as" calls the file: a random hash, never ComfyUI's FunUI_00001_."""
-    return secrets.token_hex(6) + (os.path.splitext(str(path))[1] or ".mp4")
+def saved_name(identity, ext="") -> str:
+    """What the browser's own "Save video as" calls the file: a hash of which video it is, never ComfyUI's FunUI_00001_.
+    The same video always gets the same name, so saving it twice overwrites or asks instead of piling up copies."""
+    return hashlib.sha1(str(identity).encode()).hexdigest()[:12] + (ext or os.path.splitext(str(identity))[1] or ".mp4")
 
 
 async def result(request) -> "web.StreamResponse":
@@ -295,7 +295,7 @@ async def segment(request, project) -> "web.StreamResponse":
            f"{clip['in']}:{clip['dur']}:{'rev' if reverse else ''}:{sig[0]}:{sig[1]}")
     async with _lock(key):
         headers = {"Cache-Control": "private, max-age=3600",
-                   "Content-Disposition": f'inline; filename="{saved_name(".mp4")}"'}
+                   "Content-Disposition": f'inline; filename="{saved_name(key, ".mp4")}"'}
         hit = _segments.get(key)
         if hit and os.path.isfile(hit[1]):
             return web.FileResponse(hit[1], headers=headers)

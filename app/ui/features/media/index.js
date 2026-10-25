@@ -21,6 +21,11 @@ export default {
     const VIEWS = [{ value: "adaptive", label: "Grid" }, { value: "list", label: "List" }, { value: "icons", label: "Icons" }];
     const DENSITY = [{ value: "0", label: "Auto" }, ...[1, 2, 3, 4].map((n) => ({ value: String(n), label: `${n}×` }))];
     const show = { filter: "all", sort: "name", view: "adaptive", cols: "0" };
+    // How the bin is laid out is remembered with the project (a rental's browser starts empty), checked against what is offered.
+    const KEPT = { sort: SORTS, view: VIEWS, cols: DENSITY };
+    const kept = p.pref ? p.pref("media_show", null) : null;
+    if (kept && typeof kept === "object") for (const k in KEPT) if (KEPT[k].some((o) => o.value === kept[k])) show[k] = kept[k];
+    const remember = () => { if (p.setPref) p.setPref("media_show", { sort: show.sort, view: show.view, cols: show.cols }); };
 
     let selecting = false;
     const chosen = new Set();
@@ -98,9 +103,9 @@ export default {
         try { const r = await api.uploadMedia(files, (i, n, name, f) => note.setText(`Uploading ${i + 1}/${n}: ${name}${f ? ` ${f >= 1 ? "(saving...)" : `${Math.round(f * 100)}%`}` : ""}`)); (r.problems || []).forEach(tell); await refresh(); } catch (err) { tell(err.message); }
         note.setText("");
       } });
-    const seg = (label, options, key) => c.segmented.sm({ label, options, value: show[key], onChange: (v) => { show[key] = v; draw(true); } });
+    const seg = (label, options, key) => c.segmented.sm({ label, options, value: show[key], onChange: (v) => { show[key] = v; remember(); draw(true); } });
     const tileSize = seg("Tile size", DENSITY, "cols");       // only the grid has columns
-    const sort = c.select.sm({ label: "Sort", options: SORTS, value: show.sort, onChange: (v) => { show.sort = v; draw(true); } });
+    const sort = c.select.sm({ label: "Sort", options: SORTS, value: show.sort, onChange: (v) => { show.sort = v; remember(); draw(true); } });
     const selectBtn = c.button.sm({ label: "Select", tone: "ghost", title: "Pick several files, then delete them together", onClick: () => { selecting = !selecting; chosen.clear(); draw(true); } });
     const bulk = c.button.sm({ label: "Delete (0)", tone: "danger", onClick: async () => {
       const ids = [...chosen];

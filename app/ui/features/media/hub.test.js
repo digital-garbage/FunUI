@@ -142,3 +142,25 @@ test("pinning the first reference repaints its tile even though no number moves;
   assert.equal(document.activeElement, cell("dog.png"), "the focused tile, rebuilt, keeps the focus");
   host.remove();
 });
+
+test("the bin's view and sort are kept with the project and come back on the next start", async () => {
+  const store = {};
+  const project = { selected: null, pref: (k, d) => (k in store ? store[k] : d), setPref: (k, v) => { store[k] = v; } };
+  const api = { media: async () => ({ media: [{ id: "m1", name: "cat.png", kind: "image" }] }) };
+  const mount = async () => {
+    const host = document.createElement("div");
+    hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
+    await new Promise((r) => setTimeout(r, 10));
+    return host;
+  };
+  let host = await mount();
+  const sel = host.querySelector("select");
+  sel.value = "added"; sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+  [...host.querySelectorAll("button")].find((b) => b.textContent.trim() === "List").click();
+  assert.deepEqual(store.media_show, { sort: "added", view: "list", cols: "0" });
+  host = await mount();
+  assert.equal(host.querySelector("select").value, "added");
+  store.media_show = { sort: "bogus", view: "list", cols: "9" };
+  host = await mount();
+  assert.equal(host.querySelector("select").value, "name", "an unknown saved choice falls back");
+});
