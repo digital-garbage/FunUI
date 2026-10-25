@@ -1,0 +1,138 @@
+"""Noise merging: at chosen steps, run the step a second time on the same picture with
+different noise and blend the two answers.
+
+Step N is answered twice. Picture A is the run's own answer. Picture B is the answer to
+the same step after A's picture is re-noised to this step's noise level with a second
+seed (the sound part of the input is left alone). The two are then mixed:
+
+    merged = base + strength * (other - base)
+
+`Merge order` picks the base. "B into A" keeps A's picture and lets B's variation in;
+"A into B" starts from B and lets A in. Two independent answers averaged lose contrast
+(the independent detail partly cancels), so the mix is rescaled to the base's own spread.
+
+Costs one extra model pass per merged step. The second pass is marked as a probe, so no
+learning feature records it.
+"""
+
+import torch
+from comfy.patcher_extension import WrappersMP
+
+from ..._core import dit_hooks, log, streams
+
+ID = "noise_merge"
+TITLE = "Noise merging"
+MOUNT = "generation.sampling"
+STAGE = "sampling"
+CATEGORY = "sampling"
+STATUS = "experimental"
+REQUIRES = ["temporal_latent"]
+
+SETTINGS = {
+    "enabled": {
+        "type": "bool", "default": False,
+        "label": "Noise merging",
+        "hint": "At the steps below, answers the step twice with different noise and blends the two. Costs one extra pass per merged step.",
+    },
+    "steps": {
+        "type": "text", "default": "1",
+        "label": "Steps",
+        "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the schedule's end are ignored.",
+        "when": {"enabled": True},
+    },
+    "order": {
+        "type": "enum", "default": "b_into_a", "options": [
+            {"value": "b_into_a", "label": "B into A"},
+            {"value": "a_into_b", "label": "A into B"},
+        ],
+        "label": "Merge order", "ui": "segmented",
+        "hint": "A is the picture your seed makes, B the same step on a second seed. The first named is blended in; the other is the base that keeps its overall look.",
+        "when": {"enabled": True},
+    },
+    "strength": {
+        "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
+        "label": "Merge strength", "ui": "slider",
+        "hint": "0 keeps the base picture untouched, 1 replaces it with the other.",
+        "when": {"enabled": True},
+    },
+    "seed": {
+        "type": "int", "default": 1, "min": 0, "max": 2147483647,
+        "label": "Second seed",
+        "hint": "The noise for picture B. The same number gives the same B.",
+        "when": {"enabled": True},
+    },
+}
+
+
+def _say(message, level=log.ALERT):
+    log.once(f"{ID}:{message}", level, "FunUI Noise merging", message)
+
+
+def merge(base, other, strength):
+    """base + strength * (other - base), rescaled so each clip keeps the base's spread
+    (std around its own mean) -- a plain mix of two independent answers is flatter."""
+    mixed = base + strength * (other - base)
+    dims = tuple(range(1, base.dim()))
+    base_std = base.float().std(dim=dims, keepdim=True)
+    mixed_std = mixed.float().std(dim=dims, keepdim=True).clamp(min=1e-8)
+    mean = mixed.float().mean(dim=dims, keepdim=True)
+    return ((mixed.float() - mean) * (base_std / mixed_std) + mean).to(base.dtype)
+
+
+def renoise(x0, sigma, seed, step):
+    """A rectified-flow input at `sigma` for picture x0 with fresh noise: (1 - sigma) x0 + sigma noise."""
+    gen = torch.Generator().manual_seed(int(seed) + 7919 * int(step))
+    noise = torch.randn(x0.shape, generator=gen).to(device=x0.device, dtype=x0.dtype)
+    return (1.0 - sigma) * x0 + sigma * noise
+
+
+def install(patcher, values, key):
+    if not values.get("enabled"):
+        return None
+    wanted, problems = dit_hooks.parse_blocks(values.get("steps"), 100000)
+    wanted = {i - 1 for i in wanted if i >= 1}
+    for p in problems:
+        _say(f"ignored step entry: {p}")
+    strength = float(values.get("strength", 0.5))
+    if not wanted or strength <= 0.0:
+        _say("off: " + ("no valid steps named" if not wanted else "strength is 0"))
+        return None
+    b_first = values.get("order", "b_into_a") == "b_into_a"
+    seed = int(values.get("seed", 1))
+
+    def apply_model(executor, x, t, *args, **kwargs):
+        named = streams.model_args(args, kwargs)
+        to = named.get("transformer_options") or {}
+        out = executor(x, t, *args, **kwargs)
+        where = dit_hooks.current_step(to)
+        if where is None or dit_hooks.probing(to) or where[0] not in wanted:
+            return out
+        if any(int(i) != 0 for i in (to.get("cond_or_uncond") or [0])):
+            return out                              # a negative-prompt call: guidance is for the prompt's picture
+        try:
+            split_x, split_a = streams.video_of(x, named), streams.video_of(out, named)
+            if split_x is None or split_a is None:
+                _say("off this run: could not find the picture in this model's latent")
+                return out
+            sigma = float(t.max())
+            video_a, rebuild_a = split_a
+            x_b = split_x[1](renoise(video_a.detach(), sigma, seed, where[0]).to(split_x[0].dtype))
+            args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
+            out_b = executor(x_b, t, *args_b, **kwargs_b)
+            split_b = streams.video_of(out_b, named)
+            if split_b is None:
+                return out
+            video_b, rebuild_b = split_b
+            if b_first:
+                return rebuild_a(merge(video_a, video_b, strength).to(video_a.dtype))
+            return rebuild_b(merge(video_b, video_a, strength).to(video_b.dtype))
+        except Exception as exc:                    # noqa: BLE001
+            log.broke("FunUI Noise merging", exc, "merging the second answer")
+            return out
+
+    patcher.add_wrapper_with_key(WrappersMP.APPLY_MODEL, key, apply_model)
+    return (f"steps {values.get('steps')}, {'B into A' if b_first else 'A into B'}, "
+            f"strength {strength:.2f}, second seed {seed}")
+
+
+PROVIDES = {"modifier": install}

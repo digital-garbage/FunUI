@@ -4,6 +4,7 @@
 
 ### Added (experimental)
 
+- **Noise merging** (Settings > Engine > Sampling): at the steps you name, the step is answered a second time on the same picture with different noise (a second seed), and the two pictures are blended at your strength. Merge order picks which one is the base. Costs one extra model pass per merged step. Untested on a real H3.
 - **SLA rising sparsity** (diffusion model loader, `sla_sparsity_start`): skip fewer attention blocks on early steps and more on late ones, in a straight line up to `sla_sparsity`. Off at 0. One real H3 render (4 steps, 0.70 to 0.90): quality held, perhaps slightly better. Idea from GSRS (arXiv 2610.21129); only the schedule is taken, not its other parts.
 
 ## [5.0.3] "Classy Chopper" - 2026-10-25
