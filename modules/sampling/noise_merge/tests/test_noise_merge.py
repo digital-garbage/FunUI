@@ -106,3 +106,19 @@ def test_a_negative_seed_is_new_each_run_and_a_number_is_kept(tiny_h3):
         for _ in range(2):
             outer(lambda: wrap(model, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes))
         assert torch.equal(seen[1], seen[3]) is same
+
+
+def test_the_log_says_the_feature_is_on_and_when_nothing_matched(tiny_h3):
+    from comfy.patcher_extension import WrappersMP
+    from core import log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    x0, shapes = _packed()
+    patched, _ = FunUILoadModifiers.execute(
+        tiny_h3.patcher, {"noise_merge": {"enabled": True, "steps": "9"}}).result
+    wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
+    outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws][-1]
+    log.new_run()
+    outer(lambda: wrap(lambda *a, **k: x0, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes))
+    texts = [e["message"] for e in log.history()]
+    assert any(t.startswith("on: steps 9") for t in texts)
+    assert any("no step of this run matched" in t for t in texts)

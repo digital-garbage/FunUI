@@ -101,11 +101,19 @@ def install(patcher, values, key):
         return None
     b_first = values.get("order", "b_into_a") == "b_into_a"
     chosen = int(values.get("seed", -1))
-    live = {"seed": max(chosen, 0)}
+    live = {"seed": max(chosen, 0), "merged": 0}
 
     def start(executor, *args, **kwargs):
         live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
-        return executor(*args, **kwargs)
+        live["merged"] = 0
+        log.info("FunUI Noise merging", f"on: steps {values.get('steps')}, strength {strength:.2f}, "
+                 f"second seed {live['seed']}")
+        try:
+            return executor(*args, **kwargs)
+        finally:
+            if not live["merged"]:
+                _say("Inactive | no step of this run matched the steps you named "
+                     "(or the model was not called as a plain prompt step)")
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, start)
 
@@ -132,6 +140,7 @@ def install(patcher, values, key):
             if split_b is None:
                 return out
             video_b, rebuild_b = split_b
+            live["merged"] += 1
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
             log.info("FunUI Noise merging",
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
