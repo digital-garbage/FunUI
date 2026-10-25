@@ -54,15 +54,21 @@ def _srow(reward, arms, spread, sig=(2, 0, 9)):
 
 
 def test_the_size_moves_toward_liked_and_away_from_disliked_and_ignores_unchanged_runs():
-    from modules.sampling.attention_bandit import SPREAD_MAX, SPREAD_MIN, START_SPREAD, learned_spread
+    from modules.sampling.attention_bandit import LEARN_MAX, SPREAD_MIN, START_SPREAD, learned_spread
     sig = [2, 0, 9]
     assert learned_spread([], sig) == START_SPREAD
     assert learned_spread([_srow(1.0, [0, 1], 0.4)], sig) > START_SPREAD
     assert learned_spread([_srow(-1.0, [0, 1], 0.4)], sig) < START_SPREAD
     assert learned_spread([_srow(1.0, [1, 1], 0.4)], sig) == START_SPREAD           # nothing changed
     assert learned_spread([_srow(1.0, [0, 1], 0.4, sig=(3, 0, 9))], sig) == START_SPREAD   # other layout
-    assert learned_spread([_srow(1.0, [0, 0], 0.5)] * 30, sig) == pytest.approx(0.5, abs=1e-3)
-    assert SPREAD_MIN <= learned_spread([_srow(-1.0, [0, 0], 0.5)] * 30, sig) <= SPREAD_MAX
+    assert learned_spread([_srow(1.0, [0, 0], 0.5)] * 30, sig) == pytest.approx(LEARN_MAX, abs=1e-3)
+    assert SPREAD_MIN <= learned_spread([_srow(-1.0, [0, 0], 0.5)] * 30, sig) <= LEARN_MAX
+
+
+def test_dislikes_of_small_changes_never_grow_the_size():
+    from modules.sampling.attention_bandit import START_SPREAD, learned_spread
+    assert learned_spread([_srow(-1.0, [0, 1], 0.1)] * 20, [2, 0, 9]) == START_SPREAD
+    assert learned_spread([_srow(-1.0, [0, 1], 0.4)] * 20, [2, 0, 9]) < START_SPREAD
 
 
 def test_the_log_names_exact_blocks_and_skips_the_unchanged():

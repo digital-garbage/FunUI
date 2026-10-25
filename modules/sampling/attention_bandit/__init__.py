@@ -71,6 +71,7 @@ STAY_HEAD_START = 2.0       # extra likes "as is" starts with, so a new key is s
 MAX_ROWS = 10 ** 9      # no cap: a rated run is under 1 KB
 START_SPREAD = 0.2
 SPREAD_MIN, SPREAD_MAX = 0.05, 0.5
+LEARN_MAX = 0.35                # what ratings can grow the size to; 0.5x/1.5x on many blocks wrecked a picture on H3
 LR = 0.5
 EXPLORE = 0.05
 
@@ -121,8 +122,11 @@ def learned_spread(rows, signature):
             continue
         if all(int(a) == STAY for a in p["arms"].tolist()):
             continue                                  # nothing changed, so nothing to blame on the size
-        m += LR * _sign(r["reward"]) * (float(p["spread"]) - m)
-        m = min(max(m, SPREAD_MIN), SPREAD_MAX)
+        used = float(p["spread"])
+        # A like pulls toward the size it used. A dislike can only say "too much": it pushes the
+        # size down from a bigger one, never up from a smaller one (that would ratchet to the cap).
+        m += LR * (used - m) if r["reward"] > 0 else LR * min(0.0, m - used)
+        m = min(max(m, SPREAD_MIN), LEARN_MAX)
     return m
 
 
@@ -197,7 +201,7 @@ def install(patcher, values, key):
         rows = taste.rows(KIND)
         picks = draw(counts(rows, signature, len(groups)))
         spread = manual_spread if manual else min(max(
-            learned_spread(rows, signature) + random.gauss(0.0, EXPLORE), SPREAD_MIN), SPREAD_MAX)
+            learned_spread(rows, signature) + random.gauss(0.0, EXPLORE), SPREAD_MIN), LEARN_MAX)
         live["scaled"] = live["calls"] = 0
         live["temps"] = {b: 1.0 + spread * ARMS[a] for g, a in zip(groups, picks) for b in g}
         captured.update({"arms": torch.tensor(picks), "sig": torch.tensor(signature),
