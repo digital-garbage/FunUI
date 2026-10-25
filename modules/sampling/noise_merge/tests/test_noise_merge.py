@@ -90,3 +90,19 @@ def test_nothing_named_or_strength_zero_installs_nothing(tiny_h3):
     for bad in ({"steps": "x"}, {"strength": 0.0}):
         patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, **bad}}).result
         assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
+
+
+def test_a_negative_seed_is_new_each_run_and_a_number_is_kept(tiny_h3):
+    from comfy.patcher_extension import WrappersMP
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    x0, shapes = _packed()
+    for seed, same in ((-1, False), (5, True)):
+        patched, status = FunUILoadModifiers.execute(
+            tiny_h3.patcher, {"noise_merge": {"enabled": True, "seed": seed}}).result
+        wrap = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
+        outer = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws][-1]
+        seen = []
+        model = lambda x, *a, **k: (seen.append(x), x0)[1]
+        for _ in range(2):
+            outer(lambda: wrap(model, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes))
+        assert torch.equal(seen[1], seen[3]) is same

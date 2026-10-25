@@ -15,6 +15,8 @@ Costs one extra model pass per merged step. The second pass is marked as a probe
 learning feature records it.
 """
 
+import random
+
 import torch
 from comfy.patcher_extension import WrappersMP
 
@@ -56,9 +58,9 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "seed": {
-        "type": "int", "default": 1, "min": 0, "max": 2147483647,
+        "type": "int", "default": -1, "min": -1, "max": 2147483647,
         "label": "Second seed",
-        "hint": "The noise for picture B. The same number gives the same B.",
+        "hint": "The noise for picture B. -1 picks a new one every run; a number gives the same B each time.",
         "when": {"enabled": True},
     },
 }
@@ -98,7 +100,14 @@ def install(patcher, values, key):
         _say("off: " + ("no valid steps named" if not wanted else "strength is 0"))
         return None
     b_first = values.get("order", "b_into_a") == "b_into_a"
-    seed = int(values.get("seed", 1))
+    chosen = int(values.get("seed", -1))
+    live = {"seed": max(chosen, 0)}
+
+    def start(executor, *args, **kwargs):
+        live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
+        return executor(*args, **kwargs)
+
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, start)
 
     def apply_model(executor, x, t, *args, **kwargs):
         named = streams.model_args(args, kwargs)
@@ -116,7 +125,7 @@ def install(patcher, values, key):
                 return out
             sigma = float(t.max())
             video_a, rebuild_a = split_a
-            x_b = split_x[1](renoise(video_a.detach(), sigma, seed, where[0]).to(split_x[0].dtype))
+            x_b = split_x[1](renoise(video_a.detach(), sigma, live["seed"], where[0]).to(split_x[0].dtype))
             args_b, kwargs_b = streams.with_options(args, kwargs, {**to, dit_hooks.PROBE: True})
             out_b = executor(x_b, t, *args_b, **kwargs_b)
             split_b = streams.video_of(out_b, named)
@@ -132,7 +141,7 @@ def install(patcher, values, key):
 
     patcher.add_wrapper_with_key(WrappersMP.APPLY_MODEL, key, apply_model)
     return (f"steps {values.get('steps')}, {'B into A' if b_first else 'A into B'}, "
-            f"strength {strength:.2f}, second seed {seed}")
+            f"strength {strength:.2f}, second seed {'random' if chosen < 0 else chosen}")
 
 
 PROVIDES = {"modifier": install}
