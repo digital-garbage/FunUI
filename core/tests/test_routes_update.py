@@ -206,7 +206,7 @@ def test_removing_funui_itself_is_refused_by_name(server):
     status, body = _request(server["port"], "POST", "/fun/api/packs/remove", {"name": me})
     assert status == 400
     # It has to say WHICH thing it refused to delete, or the user tries again.
-    assert "FunUI" in body["detail"]
+    assert me in body["detail"]
 
 
 def test_a_pack_that_is_not_installed_is_refused_rather_than_created(server):
