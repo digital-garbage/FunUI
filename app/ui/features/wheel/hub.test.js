@@ -82,7 +82,7 @@ test("the wheel offers Clear references and the guidance switch, both opt-in, an
   } finally { off(); }
 });
 
-test("Quick A/B is an opt-in wheel action, offered only once there is a seed to reuse, and starts the run", async () => {
+test("Quick A/B is an opt-in wheel action, offered as soon as it is ticked, and starts the run", async () => {
   server();
   localStorage.clear();
   const project = createProject({});
@@ -93,9 +93,7 @@ test("Quick A/B is an opt-in wheel action, offered only once there is a seed to 
   try {
     const a = app.actions.find((x) => x.id === "quick-ab");
     assert.ok(a && a.optIn && a.label === "Quick A/B");
-    assert.ok(!a.when(), "hidden until a run has made a seed");
-    app.lastRun.seed = 7;
-    assert.ok(a.when());
+    assert.ok(a.when(), "on the wheel from the start; with no run yet it says what it needs");
     await a.run();
     assert.equal(ran, 1);
   } finally { off(); }

@@ -40,7 +40,7 @@ export default {
         when: () => Boolean(pipe() && pipe().cameraOff && pipe().setCameraOff && pipe().modulesById?.().conditioning_shot_camera),
         run: async () => { const on = !pipe().cameraOff(); await pipe().setCameraOff(on); say(on ? "Camera move enhancements disabled" : "Camera move enhancements enabled again"); } }),
       offer(app, { id: "quick-ab", optIn: true, label: "Quick A/B", icon: "⇄",
-        when: () => Boolean(app.runner && app.runner.quickAB && pipe() && pipe().setAllOff && Number.isInteger(app.lastRun && app.lastRun.seed)),
+        when: () => Boolean(app.runner && app.runner.quickAB && pipe() && pipe().setAllOff),
         run: () => app.runner.quickAB() }),
       offer(app, { id: "clear-refs", optIn: true, label: "Clear references", icon: "⌧",
         when: () => Boolean(p() && p().selected && (p().selected.references || []).length),
