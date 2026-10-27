@@ -158,3 +158,31 @@ def test_direct_video_to_video_end_to_end(clip_id, real_tiny_ltx, monkeypatch):
     got_video, got_audio = out["samples"].unbind()
     assert got_video.shape == video.shape and got_audio.shape == audio.shape
     assert torch.isfinite(got_video).all() and not torch.allclose(got_video, video)    # it was denoised, not passed through
+
+
+def test_direct_video_to_video_with_no_video_runs_the_whole_schedule_over_a_grey_clip(comfyui, real_tiny_ltx, monkeypatch):
+    """What the app sends when nothing is fed in (text to video): a stand-in clip of the project's size and the whole schedule."""
+    import asyncio
+    import types
+    from pathlib import Path
+    import nodes as comfy_nodes
+    from core import graph
+    from modules.models.ltx.pipeline import DISTILLED_SIGMAS, presets
+
+    async def load():
+        await comfy_nodes.init_extra_nodes(init_custom_nodes=False)
+        await comfy_nodes.load_custom_node(str(Path(__file__).resolve().parents[4]), module_parent="custom_nodes")
+    asyncio.run(load())
+    monkeypatch.setattr(comfy_nodes.NODE_CLASS_MAPPINGS["GetImageSize"], "hidden", types.SimpleNamespace(unique_id=None), raising=False)
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_video_to_video_direct")
+    slots, problems = graph.override(slots, {"source_image": {"media_id": "", "blank_width": 128, "blank_height": 64, "blank_frames": 17},
+                                             "sigmas": {"sigmas": DISTILLED_SIGMAS}})
+    assert problems == []
+    prompt, _ = graph.build(slots)
+    run, done = _run(prompt, {"model": (real_tiny_ltx, ""), "vae": (StubVae(), ""), "audio_vae": (StubAudioVae(), ""), "clip": (None, "")})
+    run("latent")
+    assert done["source_image"][1].shape == (17, 64, 128, 3) and done["size"][2] == 17
+    video, audio = done["latent"][0]["samples"].unbind()
+    assert video.shape == (1, 128, 3, 2, 4)                                           # 17 frames -> 1 + 16//8 latent frames
+    run("sigmas")
+    assert round(float(done["sigmas"][0][0]), 3) == 1.0 and len(done["sigmas"][0]) == 9

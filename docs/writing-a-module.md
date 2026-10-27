@@ -263,7 +263,7 @@ Support for a model is a module in `modules/models/`. Core names no model.
 - `empty_latent(model, width, height, length, batch_size)` and `decode(latent, model=..., vae=..., audio_vae=..., tile_size=...)` return `None` for models that are not yours. Claim by identity, never by shape. If you claim the model and fail, raise: falling back would feed a wrong shape to another model's code.
 - `pipeline_presets()` returns ready-made pipelines (lists of slots). `optional_nodes()` says which slots can be passed over when their module is missing.
 - Other capabilities teach shared code about your model: `video_stream`, `text_rows`, `prompt_rows`, `video_time_rows`, `query_rotation`, `target_rows`, `anchor_pin`, `latent_upscaler`, `rescale_conditioning`.
-- A model you have not run for real stays labelled **UNTESTED** in its presets, its module docstring and the Log (see `modules/models/ltx`).
+- A model you have not run for real stays labelled **UNTESTED** in its presets, its module docstring and the Log (LTX was labelled so until it was run for real; see `modules/models/ltx`).
 
 ### Traits
 

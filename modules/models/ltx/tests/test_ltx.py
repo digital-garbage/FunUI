@@ -122,7 +122,7 @@ def test_the_empty_latent_node_passes_the_audio_vae_to_a_provider_that_asks_and_
     assert seen == {"plain": True, "wants": ("A", 30.0)}
 
 
-@pytest.mark.parametrize("pid", ["ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct", "ltx23_image_to_video_references"])
+@pytest.mark.parametrize("pid", ["ltx23_video_to_video_direct", "ltx23_image_to_video_references"])
 def test_the_pipelines_build_a_real_graph(registered, pid):
     from core import graph
     from modules.models.ltx.pipeline import presets
@@ -143,7 +143,7 @@ def test_the_pipelines_build_a_real_graph(registered, pid):
 def test_the_presets_are_offered_through_the_registry(registered):
     from core import routes
     found = {preset["id"] for _spec, make in routes.modules().providers("pipeline_presets") for preset in make()}
-    assert {"ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video"} <= found
+    assert {p["id"] for p in _ltx().pipeline.presets()} == {"ltx23_image_to_video_references", "ltx23_video_to_video_direct"} <= found
 
 
 def test_the_picture_is_found_in_both_shapes_a_sampling_latent_takes(comfyui):
@@ -188,17 +188,17 @@ def test_a_size_that_is_not_a_multiple_of_32_is_said(comfyui, monkeypatch):
     monkeypatch.setattr(log, "once", lambda key, level, source, msg: said.append(msg))
     m.empty_latent(object(), 816, 512, 9, 1, audio_vae=_AudioVae(), frame_rate=25.0)
     assert any("800x512" in m_ for m_ in said)
-    assert any("UNTESTED" in m_ for m_ in said)            # every LTX run says it is untested
+    assert any("tested on a real model" in m_ for m_ in said)            # every LTX run says what is tested
 
 
-def test_ltx_says_loudly_that_it_is_untested(registered):
+def test_ltx_presets_are_the_two_that_were_tested(registered):
     from core import routes
     titles = [p["title"] for _s, make in routes.modules().providers("pipeline_presets") for p in make() if p["id"].startswith("ltx")]
-    assert titles and all("UNTESTED" in t for t in titles)
-    assert "UNTESTED" in _ltx().UNTESTED and "issues" in _ltx().UNTESTED
+    assert len(titles) == 2 and not any("UNTESTED" in t for t in titles)
+    assert "Noise merging" in _ltx().NOTE and "issues" in _ltx().NOTE
 
 
-@pytest.mark.parametrize("pid", ["ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct"])
+@pytest.mark.parametrize("pid", ["ltx23_image_to_video_references", "ltx23_video_to_video_direct"])
 def test_what_a_run_puts_on_the_start_slot_is_accepted(registered, pid):
     """The app sets the picked video, its whole-video flag and its preparation per run: none of them may be a wired input,
     and what takes the picture must be wired to the frames output (a wired input cannot be overridden)."""
@@ -206,7 +206,7 @@ def test_what_a_run_puts_on_the_start_slot_is_accepted(registered, pid):
     from modules.models.ltx.pipeline import presets
 
     slots = next(p["slots"] for p in presets() if p["id"] == pid)
-    _slots, problems = graph.override(slots, {"source_image": {"media_id": "abc", "full": True, "prepare": "{}"}})
+    _slots, problems = graph.override(slots, {"source_image": {"media_id": "abc", "full": True, "prepare": "{}", "blank_width": 768, "blank_height": 512, "blank_frames": 97}})
     assert problems == []
     users = [(s["id"], k) for s in slots for k, v in s["inputs"].items() if isinstance(v, list) and v[0] == "source_image"]
     assert users and all(slots_v == 1 for slots_v in [next(s for s in slots if s["id"] == i)["inputs"][k][1] for i, k in users])
@@ -240,7 +240,7 @@ def test_a_direct_v2v_pipeline_saved_before_video_only_still_ignores_pictures_an
     old = [dict(s, roles=[{k: v for k, v in r.items() if k != "video_only"} for r in s.get("roles") or []]) if s["id"] == "source_image" else s for s in slots]
     assert not any(r.get("video_only") for s in old for r in s.get("roles") or [])
     assert upgrade(old) == slots
-    i2v = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video")
+    i2v = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
     assert not any(r.get("video_only") for s in upgrade(i2v) for r in s.get("roles") or [])          # i2v keeps taking pictures
 
 
@@ -250,5 +250,7 @@ def test_image_to_video_from_references_takes_its_start_from_the_first_reference
     roles = [r["at"] for s in slots for r in s.get("roles") or []]
     assert "assets.reference_1" in roles and "assets.source_image" not in roles
     assert not any(s["node"] == "FunUIIdentityTransfer" for s in slots)
+    fallback = next(r["text_fallback"] for s in slots for r in s.get("roles") or [] if r.get("text_fallback"))
+    assert {"slot": "anchor", "input": "bypass", "value": True} in fallback["set"]      # nothing in References: the anchor is bypassed
     anchor = next(s for s in slots if s["id"] == "anchor")
     assert anchor["inputs"]["image"] == ["source_image", 1]

@@ -205,3 +205,43 @@ test("a reference whose target node was deleted from an edited pipeline is left 
   assert.match(r.left[0].why, /identity/);
   assert.equal(r.left[0].id, "pic");
 });
+
+const LTX = {
+  refs: [
+    { id: "latent", node: "FunUIEmptyLatent", roles: [{ at: "project.video", input: "width" }, { at: "project.video", input: "height" }], inputs: { width: 768, height: 512 } },
+    { id: "source_image", node: "FunUILoadMedia", roles: [{ at: "assets.reference_1", input: "media_id", text_fallback: { set: [{ slot: "anchor", input: "bypass", value: true }], size: { slot: "latent", width: "width", height: "height" } } }], inputs: { media_id: "" } },
+    { id: "anchor", node: "LTXVImgToVideoInplace", inputs: { bypass: false } },
+    { id: "positive", node: "CLIPTextEncode", roles: [{ at: "generation.prompt", input: "text" }], inputs: { text: "" } },
+  ],
+  direct: [
+    { id: "source_image", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true, video_only: true, text_fallback: { set: [{ slot: "sigmas", input: "sigmas", value: "1.0, 0.0" }], round_size: 32, round_frames: 8 } },
+      { at: "project.video", input: "blank_width" }, { at: "project.video", input: "blank_height" }, { at: "project.video", input: "blank_frames", drives: "frames" }], inputs: { media_id: "", blank_width: 770, blank_height: 500 } },
+    { id: "sigmas", node: "ManualSigmas", inputs: { sigmas: "0.9, 0.0" } },
+    { id: "positive", node: "CLIPTextEncode", roles: [{ at: "generation.prompt", input: "text" }], inputs: { text: "" } },
+  ],
+};
+const run = (slots, scene, project = {}) => buildInputs({ project: { id: "P", video: { width: 770, height: 500 }, num_frames_per_scene: 100, generation_mode: "i2v", ...project }, scene: { id: "s", text: "hi", ...scene }, slots, expand: async (x) => ({ text: x.text }), nodeInfo: async () => null, frames: 100 });
+
+test("image to video from references: a picture in References is the start; with neither the anchor is bypassed and a plain picture stands in", async () => {
+  kinds.set("pic", "image");
+  let r = await run(LTX.refs, { references: ["pic"] });
+  assert.equal(r.inputs.source_image.media_id, "pic");
+  assert.equal(r.inputs.anchor, undefined);
+  r = await run(LTX.refs, { source_image: "pic" });                       // a timeline start picture is not this pipeline's input: said, with where to put it
+  assert.equal(r.left[0].why, "this pipeline starts from the first picture in References: add it there");
+  r = await run(LTX.refs, {});
+  assert.equal(r.inputs.anchor.bypass, true);
+  assert.equal(r.inputs.source_image.blank_width, 770);          // the latent node rounds its own size; the bypassed anchor never looks at this picture
+  assert.ok(r.notes.some((n) => /text to video/.test(n)));
+});
+
+test("video to video, direct: with no video the whole schedule runs over a grey clip of the project's size, rounded for the model", async () => {
+  kinds.set("vid", "video");
+  let r = await run(LTX.direct, { references: ["vid"] });
+  assert.equal(r.inputs.source_image.media_id, "vid");
+  assert.equal(r.inputs.sigmas, undefined);
+  r = await run(LTX.direct, {});
+  assert.equal(r.inputs.sigmas.sigmas, "1.0, 0.0");
+  assert.deepEqual([r.inputs.source_image.blank_width, r.inputs.source_image.blank_height, r.inputs.source_image.blank_frames], [768, 480, 97]);
+  assert.ok(!r.notes.some((n) => /works from a video/.test(n)));
+});

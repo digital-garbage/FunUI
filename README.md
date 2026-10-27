@@ -112,7 +112,7 @@ FunUI uses your existing ComfyUI/PyTorch install.
 
 - **MiniMax H3**: the model v5 is built and tested around.
 - **Stable Diffusion 1.5**: experimental.
-- **LTX 2.x**: **UNTESTED.** It has never been run on a real LTX model and nobody plans to test it soon. You are free to try it; if you hit problems, please report them in Issues.
+- **LTX 2.3**: tested on a real model: Video to Video (direct) and Image to Video (start from References), each falling back to text to video when nothing is fed in; separate model files; LoRAs; Noise merging. Other enhancements are not tested on LTX yet. Please report problems in Issues.
 
 ## Documentation
 

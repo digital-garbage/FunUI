@@ -22,7 +22,7 @@ COMFYUI_ROOT=/path/to/ComfyUI python -m pytest
 |---|---|
 | `comfyui` | The ComfyUI path on `sys.path`, or skips the test. |
 | `tiny_h3` | The real H3 model class, built tiny (random weights, CPU) with a patcher. Use it to prove a modifier or hook runs on the real forward pass. It says nothing about picture quality. |
-| `tiny_ltx` | The real LTX model class, built tiny (random weights, CPU), once per run. It proves wiring only; LTX stays UNTESTED on a real model. Clone its patcher; never leave anything installed on the model itself. |
+| `tiny_ltx` | The real LTX model class, built tiny (random weights, CPU), once per run. It proves wiring only; real LTX 2.3 runs are Dex's, on rentals. Clone its patcher; never leave anything installed on the model itself. |
 | autouse | A private addons file, a private quarantine file, and block-influence switched off, all in `tmp_path`, so a developer's own settings never change a result. |
 
 `packed_av` and `unpacked` build and undo the flat audio and video packing H3 uses.

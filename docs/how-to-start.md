@@ -24,7 +24,7 @@ Start ComfyUI as usual and open `/fun/` on the same address, for example `http:/
 |---|---|
 | MiniMax H3 | The model FunUI is built and tested around. |
 | Stable Diffusion 1.5 | Experimental. |
-| LTX 2.x (UNTESTED) | **UNTESTED.** Never run on a real LTX model, and nobody plans to test it soon. You are free to try it; if something breaks, please report it in [Issues](https://github.com/digital-garbage/FunUI/issues). |
+| LTX 2.3 | Tested on a real model: Video to Video (direct), Image to Video (start from References), LoRAs, Noise merging. Other enhancements are not tested on LTX yet; please report problems in [Issues](https://github.com/digital-garbage/FunUI/issues). |
 
 ## 4. Pick your files
 
@@ -69,6 +69,6 @@ Rate a result with **Rate scene…** (liked, disliked, bad image, bad compositio
 
 ## Known limits in 5.0
 
-- LTX 2.x is untested (see above).
+- LTX 2.3 is tested for the two presets above; other enhancements are not (see above).
 - In the H3 preset the scene picture sets the video's shape only; a start frame is not part of it.
 - The H3 "second pass" preset is not offered yet: it has not been verified.

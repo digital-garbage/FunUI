@@ -20,6 +20,8 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];
   const plan = sceneReferences(scene, project.fixed_references);
+  // A pipeline that starts from the first reference takes no start picture from the timeline: the picture goes in References.
+  const startsFromRefs = !source && (slots || []).some((s) => (s.roles || []).some((r) => r.text_fallback && r.at === "assets.reference_1"));
   // A pipeline that takes whole media where it takes a picture (LTX): with no start picked, the first reference is the start:
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
   // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone and is
@@ -79,9 +81,26 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
   const prepare = activeVideoInput(project, scene);
   if (prepare) for (const [id, fields] of Object.entries(overrides)) if (fields.full && fields.media_id && kinds.get(fields.media_id) === "video") raw[id].prepare = videoInputJson(prepare, project, scene);
+  // Nothing to feed the model (no picture or video where the pipeline looks for one): a role can say what to change so the
+  // clip is made from the prompt alone -- bypass the anchor, run the whole schedule -- and a plain picture stands in.
+  let textOnly = false;
+  const empties = (slots || []).flatMap((s) => (s.roles || []).filter((r) => r.text_fallback && r.input === "media_id" && !(raw[s.id] || {}).media_id).map((role) => ({ slot: s, fb: role.text_fallback })));
+  for (const { slot, fb } of empties) {
+    for (const x of fb.set || []) { const t = (slots || []).find((y) => y.id === x.slot); if (t) put(t, x.input, x.value); }
+    const near = (n, m) => (m > 1 ? Math.max(m, Math.floor(n / m) * m) : n);
+    if (fb.size) {              // the stand-in's size is the latent's own
+      const from = (slots || []).find((y) => y.id === fb.size.slot) || { inputs: {} };
+      const dim = (name) => Number((raw[from.id] || {})[name] ?? (from.inputs || {})[name]) || 0;
+      put(slot, "blank_width", dim(fb.size.width)); put(slot, "blank_height", dim(fb.size.height));
+    } else if (fb.round_size) {
+      for (const name of ["blank_width", "blank_height"]) put(slot, name, near(Number((raw[slot.id] || {})[name] ?? (slot.inputs || {})[name]) || 0, fb.round_size));
+    }
+    if (fb.round_frames) { const n = Number((raw[slot.id] || {}).blank_frames ?? (slot.inputs || {}).blank_frames) || 0; if (n > 1) put(slot, "blank_frames", fb.round_frames * Math.round((n - 1) / fb.round_frames) + 1); }
+    textOnly = true;
+  }
   // A picked start picture that no slot takes would otherwise be ignored without a word.
   const ignored = !source && scene.source_image && project.generation_mode !== "t2v";
-  if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: "this pipeline starts from no picture" });
+  if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: startsFromRefs ? "this pipeline starts from the first picture in References: add it there" : "this pipeline starts from no picture" });
 
   const prompt = rolesAt(slots, "generation.prompt")[0];
   let failedExpand = false;
@@ -95,7 +114,8 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // Features that add inputs of their own (a Chat comment for the enhancer, say) say so through a hook: { inputs: {slot: {name: value}}, notes: [text] }.
   const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
-  notes.push(...noVideo);
+  if (!textOnly) notes.push(...noVideo);
+  else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
   for (const hook of hooks) {
     let out;
     try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { notes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }

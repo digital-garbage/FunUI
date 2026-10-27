@@ -96,6 +96,9 @@ class FunUILoadMedia(io.ComfyNode):
                 io.Int.Input(
                     "blank_height", default=0, min=0, max=16384, optional=True,
                     tooltip="With nothing picked, make a plain grey picture this tall instead of refusing. 0 = refuse."),
+                io.Int.Input(
+                    "blank_frames", default=0, min=0, max=100000, optional=True,
+                    tooltip="With nothing picked and a size given: how many grey frames the stand-in video has. 0 = one."),
                 io.Boolean.Input(
                     "full", default=False, optional=True,
                     tooltip="Read the whole video and its sound. Off: only the first frame, which is all a picture input needs."),
@@ -110,13 +113,14 @@ class FunUILoadMedia(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, media_id: str, blank_width: int = 0, blank_height: int = 0, full: bool = False, prepare: str = "") -> io.NodeOutput:
+    def execute(cls, media_id: str, blank_width: int = 0, blank_height: int = 0, blank_frames: int = 0, full: bool = False, prepare: str = "") -> io.NodeOutput:
         mid = (media_id or "").strip()
         if not mid and blank_width > 0 and blank_height > 0:
             # A text-only start: the picture exists only to give the pipeline a SHAPE (see the H3 preset).
             log.info("FunUI Load Media", f"nothing picked: a plain {blank_width}x{blank_height} picture stands in")
             grey = torch.full((1, blank_height, blank_width, 3), 0.5)
-            return io.NodeOutput(grey, grey, _SILENCE)
+            frames = grey.expand(max(1, blank_frames), -1, -1, -1).contiguous() if blank_frames > 1 else grey
+            return io.NodeOutput(grey, frames, _SILENCE)
         if not mid:
             raise RuntimeError(
                 "FunUI Load Media: nothing is picked for this input. "

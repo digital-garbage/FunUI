@@ -12,11 +12,12 @@ def _preset(pid):
     return next(p["slots"] for p in presets() if p["id"] == pid)
 
 
-@pytest.mark.parametrize("pid", ["ltx23_video_to_video_direct", "ltx23_video_to_video", "ltx23_image_to_video", "ltx23_anchor_guide"])
+@pytest.mark.parametrize("pid", ["ltx23_video_to_video_direct", "ltx23_image_to_video_references"])
 def test_every_startup_and_render_call_answers_json_on_an_ltx_project(server, pid):
     slots = _preset(pid)
     old = [dict(s, inputs={k: (["source_image", 0] if v == ["source_image", 1] else v) for k, v in s["inputs"].items()}) for s in slots]
-    for saved in (slots, old):
+    takes_video = any(r.get("video_frames") for x in slots for r in x.get("roles") or [])
+    for saved in ((slots, old) if takes_video else (slots,)):
         status, body = _request(server, "POST", "/fun/api/pipeline", {"slots": saved})
         assert status == 200 and "raw" not in body, (status, body)
         users = [(s["id"], k) for s in body["slots"] for k, v in s["inputs"].items() if isinstance(v, list) and v[0] == "source_image"]

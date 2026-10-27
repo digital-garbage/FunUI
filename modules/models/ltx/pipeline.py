@@ -15,18 +15,16 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
-def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False, from_references: bool = False):
+def _common(latent_slots, latent_source, positive_source, negative_source):
+    """What both pipelines share: the four loaders, the prompt, the sampler and the render.
+    `latent_slots` hold the latent the sampler starts from and whatever makes it."""
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
-    latent_source = ["latent", 0]
-    model_source, positive_source, negative_source = ["modifiers", 0], ["conditioning", 0], ["conditioning", 1]
-    slots = [
+    return [
         {"id": "model", "group": "Loaders", "node": "FunUIDiffusionModelLoader",
          "inputs": {"weight_dtype": "default", "compute_dtype": "default", "attention": "default"}},
         {"id": "vae", "group": "Loaders", "node": "FunUIVAELoader", "inputs": {"dtype": "bfloat16"}},
         {"id": "audio_vae", "group": "Loaders", "node": "FunUIVAELoader", "inputs": {"dtype": "bfloat16"}},
         {"id": "clip", "group": "Loaders", "node": "FunUICLIPLoader", "inputs": {"type": "ltxv"}},
-
-        *_ic_lora(ic_lora),
         {"id": "positive", "group": "Preparation", "node": "CLIPTextEncode",
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"}],
          "inputs": {"clip": ["clip", 0], "text": ""}},
@@ -36,7 +34,31 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False, f
         {"id": "conditioning", "group": "Preparation", "node": "LTXVConditioning",
          "roles": [video],
          "inputs": {"positive": ["positive", 0], "negative": ["negative", 0], "frame_rate": 25.0}},
+        *latent_slots,
+        {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
+        {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
+         "inputs": {"model": ["model", 0], "settings": ["settings", 0]}},
+        {"id": "sigmas", "group": "Sampling", "node": "ManualSigmas", "inputs": {"sigmas": DISTILLED_SIGMAS}},
+        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
+         "roles": [{"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
+                   {"at": "generation.seed", "input": "seed", "label": "Seed"}],
+         "inputs": {"model": ["modifiers", 0], "positive": positive_source, "negative": negative_source,
+                    "latent": latent_source, "settings": ["settings", 0], "sigmas": ["sigmas", 0],
+                    "seed": 0, "steps": 8, "cfg": 1.0, "sampler_name": "euler", "scheduler": "normal",
+                    "denoise": 1.0}},
+        {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
+            "samples": ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
+        {"id": "save", "group": "Render", "node": "FunUISaveVideo",
+         "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
+         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
+    ]
 
+
+def _image_to_video():
+    """Image to video, the start taken from the scene's first reference picture (nothing is picked twice). With no
+    picture in References, the anchor is bypassed and the clip is made from the prompt alone (text to video)."""
+    video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
+    latent = [
         {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
          "roles": [{"at": "project.video", "input": "width", "label": "Width"},
                    {"at": "project.video", "input": "height", "label": "Height"},
@@ -44,95 +66,41 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False, f
                    video],
          "inputs": {"model": ["model", 0], "audio_vae": ["audio_vae", 0],
                     "width": 768, "height": 512, "length": 121, "frame_rate": 25.0, "batch_size": 1}},
+        {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
+         "roles": [{"at": "assets.reference_1", "input": "media_id",
+                    # Nothing in References: a plain picture of the clip's size stands in and the anchor is bypassed.
+                    "text_fallback": {"set": [{"slot": "anchor", "input": "bypass", "value": True}],
+                                      "size": {"slot": "latent", "width": "width", "height": "height"}}}],
+         "inputs": {"media_id": ""}},
+        {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["latent", 0]}},
+        {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
+         "inputs": {"vae": ["vae", 0], "image": ["source_image", 1], "latent": ["split", 0],
+                    "strength": 1.0, "bypass": False}},
+        {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
+         "inputs": {"video_latent": ["anchor", 0], "audio_latent": ["split", 1]}},
     ]
-    if image_to_video:
-        slots += [
-            {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
-             # video_frames: a video picked as the start is fed whole (prepared as Video input says), not as its first frame.
-             # from_references: the start is the scene's first reference picture, so nothing is picked twice.
-             "roles": [{"at": "assets.reference_1", "input": "media_id"}] if from_references
-                      else [{"at": "assets.source_image", "input": "media_id", "video_frames": True}],
-             "inputs": {"media_id": ""}},
-            {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent",
-             "inputs": {"av_latent": ["latent", 0]}},
-        ]
-        if as_guide:
-            # The picture steers through guide attention at frame 0 and is NOT the clip's first frame:
-            # the latent stays empty, so the opening is free to move. Strength is the slot's own number.
-            slots += [
-                {"id": "anchor", "group": "Preparation", "node": "LTXVAddGuide",
-                 "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["vae", 0],
-                            "latent": ["split", 0], "image": ["source_image", 1], "frame_idx": 0, "strength": 1.0 if ic_lora else 0.35,
-                            **({"iclora_parameters": ["ic_params", 0]} if ic_lora else {})}},
-                {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
-                 "inputs": {"video_latent": ["anchor", 2], "audio_latent": ["split", 1]}},
-            ]
-            guided = (["anchor", 0], ["anchor", 1])
-        else:
-            slots += [
-                {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
-                 "inputs": {"vae": ["vae", 0], "image": ["source_image", 1], "latent": ["split", 0],
-                            "strength": 1.0, "bypass": False}},
-                {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
-                 "inputs": {"video_latent": ["anchor", 0], "audio_latent": ["split", 1]}},
-            ]
-            guided = (["conditioning", 0], ["conditioning", 1])
-        latent_source = ["join", 0]
-        positive_source, negative_source = guided
-    slots += [
-        {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
-        {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
-         "inputs": {"model": ["ic_lora", 0] if ic_lora else ["model", 0], "settings": ["settings", 0]}},
-    ]
-    if image_to_video and not from_references:
-        slots += [
-            # A reference face carried into the clip. The picture is the scene's first reference
-            # (assets.reference_1): with none picked this node passes everything through untouched.
-            {"id": "identity", "group": "Preparation", "node": "FunUIIdentityTransfer",
-             "inputs": {"model": ["modifiers", 0], "vae": ["vae", 0], "positive": positive_source,
-                        "negative": negative_source, "latent": latent_source, "source_id": 2.0,
-                        "phase_scale": 1.0, "id_strength": 1.0, "arcface_mode": "auto_adjust"}},
-            {"id": "identity_source", "group": "Reference media", "node": "FunUILoadMedia",
-             "roles": [{"at": "assets.reference_1", "input": "media_id",
-                        "wireTo": {"slot": "identity", "input": "image"}}],
-             "inputs": {"media_id": ""}},
-        ]
-        model_source, positive_source, negative_source = ["identity", 0], ["identity", 1], ["identity", 2]
-    slots += [
-        {"id": "sigmas", "group": "Sampling", "node": "ManualSigmas", "inputs": {"sigmas": DISTILLED_SIGMAS}},
-        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
-         "roles": [{"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
-                   {"at": "generation.seed", "input": "seed", "label": "Seed"}],
-         "inputs": {"model": model_source, "positive": positive_source, "negative": negative_source,
-                    "latent": latent_source, "settings": ["settings", 0], "sigmas": ["sigmas", 0],
-                    "seed": 0, "steps": 8, "cfg": 1.0, "sampler_name": "euler", "scheduler": "normal",
-                    "denoise": 1.0}},
-
-        *_uncrop(as_guide),
-        {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
-            "samples": ["rejoin", 0] if as_guide else ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
-        {"id": "save", "group": "Render", "node": "FunUISaveVideo",
-         "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
-         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
-    ]
-    return slots
+    return _common(latent, ["join", 0], ["conditioning", 0], ["conditioning", 1])
 
 
 def _direct_video_to_video():
-    """Plain video-to-video, no IC-LoRA: the picked video's frames are encoded and sampled again from part-way down the
-    schedule (the tail of the distilled sigmas), so the result keeps the video's layout and motion and changes what
-    the prompt and the noise ask for. The later the schedule starts, the more of the video survives.
+    """Plain video-to-video: the picked video's frames are encoded and sampled again from part-way down the schedule
+    (the tail of the distilled sigmas), so the result keeps the video's layout and motion and changes what the prompt and
+    the noise ask for. The later the schedule starts, the more of the video survives.
 
     The size and length are the video's own (Video input sets them); the sound starts empty and is made with the picture.
+    With no video, a plain grey clip of the project's size and length stands in and the whole schedule runs (text to video).
     """
-    slots = _base(False)
-    at = next(i for i, x in enumerate(slots) if x["id"] == "latent")
     fps = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
-    slots[at:at + 1] = [
+    latent = [
         # video_frames: the whole video is fed, not its first frame (see inputs.js).
         {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
-         "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True, "video_only": True}],
-         "inputs": {"media_id": ""}},
+         "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True, "video_only": True,
+                    "text_fallback": {"set": [{"slot": "sigmas", "input": "sigmas", "value": DISTILLED_SIGMAS}],
+                                      "round_size": 32, "round_frames": 8}},
+                   {"at": "project.video", "input": "blank_width", "label": "Width (no video)"},
+                   {"at": "project.video", "input": "blank_height", "label": "Height (no video)"},
+                   {"at": "project.video", "input": "blank_frames", "label": "Length (no video)", "drives": "frames"}],
+         "inputs": {"media_id": "", "blank_width": 768, "blank_height": 512, "blank_frames": 97}},
         {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 1]}},
         {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 1], "vae": ["vae", 0]}},
         {"id": "audio_latent", "group": "Preparation", "node": "LTXVEmptyLatentAudio",
@@ -140,35 +108,11 @@ def _direct_video_to_video():
         {"id": "latent", "group": "Preparation", "node": "LTXVConcatAVLatent",
          "inputs": {"video_latent": ["encode", 0], "audio_latent": ["audio_latent", 0]}},
     ]
+    slots = _common(latent, ["latent", 0], ["conditioning", 0], ["conditioning", 1])
     for x in slots:
         if x["id"] == "sigmas":
             x["inputs"]["sigmas"] = "0.909375, 0.725, 0.421875, 0.0"      # the last three steps of the distilled schedule: about 90% re-noised
     return slots
-
-
-def _ic_lora(on):
-    """The IC-LoRA of ComfyUI's own LTX 2.3 video-to-video template: the stock LoRA loader (it keeps the file's metadata)
-    and the node that reads the guide's downscale factor from it. The picked video then steers through LTXVAddGuide."""
-    if not on:
-        return []
-    return [
-        {"id": "ic_lora", "group": "Loaders", "node": "LoraLoaderModelOnly",
-         "inputs": {"model": ["model", 0], "lora_name": "", "strength_model": 1.0}},
-        {"id": "ic_params", "group": "Loaders", "node": "GetICLoRAParameters", "inputs": {"iclora_model": ["ic_lora", 0]}},
-    ]
-
-
-def _uncrop(as_guide):
-    """A guide sits in the latent as extra frames: take them off again before the picture is decoded."""
-    if not as_guide:
-        return []
-    return [
-        {"id": "unjoin", "group": "Render", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["sampler", 0]}},
-        {"id": "crop", "group": "Render", "node": "LTXVCropGuides",
-         "inputs": {"positive": ["identity", 1], "negative": ["identity", 2], "latent": ["unjoin", 0]}},
-        {"id": "rejoin", "group": "Render", "node": "LTXVConcatAVLatent",
-         "inputs": {"video_latent": ["crop", 2], "audio_latent": ["unjoin", 1]}},
-    ]
 
 
 #: See minimax_h3/pipeline.py: what to pass through when the node's module did not load.
@@ -201,15 +145,9 @@ def optional_nodes():
 
 
 def presets():
-    return [{"id": "ltx23_text_to_video", "title": "LTX 2.3 · Text to Video (UNTESTED)", "slots": _base(False)},
-            {"id": "ltx23_image_to_video", "title": "LTX 2.3 · Image to Video (UNTESTED)", "slots": _base(True)},
-            {"id": "ltx23_image_to_video_references", "title": "LTX 2.3 · Image to Video, start from References (UNTESTED)",
-             "slots": _base(True, from_references=True)},
-            {"id": "ltx23_anchor_guide", "title": "LTX 2.3 · Anchor as guide (UNTESTED)",
-             "slots": _base(True, True)},
-            {"id": "ltx23_video_to_video", "title": "LTX 2.3 · Video to Video, IC-LoRA (UNTESTED)",
-             "slots": _base(True, True, True)},
-            {"id": "ltx23_video_to_video_direct", "title": "LTX 2.3 · Video to Video, direct (UNTESTED)",
+    return [{"id": "ltx23_image_to_video_references", "title": "LTX 2.3 · Image to Video, from References",
+             "slots": _image_to_video()},
+            {"id": "ltx23_video_to_video_direct", "title": "LTX 2.3 · Video to Video, direct",
              "slots": _direct_video_to_video()}]
 
 
