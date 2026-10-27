@@ -162,12 +162,24 @@ test("a video picked as the start feeds its frames to what the picture fed, when
 test("a video-in pipeline takes the first video among the references as its start, and says so when there is none", async () => {
   const { learn } = await import("../../shell/bin.js");
   learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
-  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true }], inputs: {} }, { id: "a", node: "X", inputs: { image: ["src", 0] } }];
+  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true, video_only: true }], inputs: {} }, { id: "a", node: "X", inputs: { image: ["src", 0] } }];
   const run = (scene, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", ...scene }, slots, expand: async () => null });
   const r = await run({ references: ["pic", "vid"] }, { generation_mode: "t2v" });
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
   assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "pic");          // a picked start wins
   assert.ok((await run({ references: ["pic"] })).notes.some((n) => /works from a video/.test(n)));
+  learn([]);
+});
+
+test("an LTX image-to-video pipeline starts from the first reference picture when none is picked, and keeps it as a reference", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }, { id: "pic2", name: "q.png", kind: "image" }]);
+  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true }], inputs: {} }];
+  const run = (scene, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", ...scene }, slots, expand: async () => null });
+  assert.equal((await run({ references: ["pic", "pic2"] })).inputs.src.media_id, "pic");
+  assert.equal((await run({ references: ["pic", "vid"] })).inputs.src.media_id, "vid");          // a video is the start when there is one
+  assert.equal((await run({ source_image: "pic2", references: ["pic"] })).inputs.src.media_id, "pic2");          // a picked start wins
+  assert.equal((await run({ references: ["pic"] }, { generation_mode: "t2v" })).inputs.src.media_id, "");          // "From a prompt": no picture
   learn([]);
 });
