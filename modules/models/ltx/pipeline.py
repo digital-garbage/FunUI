@@ -137,7 +137,34 @@ OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positiv
                   "FunUIGuideFrames": {"pass": {"0": "positive", "1": "negative", "2": "latent"}}}
 
 
+def _add_aspect(slots):
+    """Image to Video from References saved before the timeline picture became its aspect source: the two slots that give the
+    shape are put in front of the latent, and the latent reads the size from them (the size typed there stays the budget)."""
+    ids = {x.get("id"): x for x in slots}
+    latent, start = ids.get("latent"), ids.get("source_image")
+    if "aspect" in ids or not latent or latent.get("node") != "FunUIEmptyLatent" or not start or not any(
+            r.get("at") == "assets.reference_1" and r.get("text_fallback") for r in start.get("roles") or []):
+        return slots
+    fresh = {x["id"]: x for x in _image_to_video()}
+    aspect = {**fresh["aspect"], "inputs": {**fresh["aspect"]["inputs"], **{k: latent["inputs"][k] for k in ("width", "height") if isinstance(latent["inputs"].get(k), int)}}}
+    out = []
+    for x in slots:
+        if x is latent:
+            out += [fresh["aspect_source"], aspect]
+            x = {**x, "inputs": {**x["inputs"], "width": ["aspect", 0], "height": ["aspect", 1]},
+                 "roles": [r for r in x.get("roles") or [] if r.get("input") not in ("width", "height")]}
+        elif x is start:
+            x = {**x, "roles": [dict(r, text_fallback={**r["text_fallback"], "size": fresh["source_image"]["roles"][0]["text_fallback"]["size"]}) if r.get("text_fallback") else r
+                                for r in x.get("roles") or []]}
+        out.append(x)
+    return out
+
+
 def upgrade(slots, _outputs=None):
+    return _add_aspect(_upgrade_video(slots))
+
+
+def _upgrade_video(slots):
     """Pipelines saved by an earlier build, brought up to date:
     * the picture inputs read the loader's first output (always one frame): a start slot that takes whole videos feeds them
       from the frames output now;

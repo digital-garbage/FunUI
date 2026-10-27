@@ -257,3 +257,22 @@ def test_image_to_video_from_references_takes_its_start_from_the_first_reference
     assert {"slot": "anchor", "input": "bypass", "value": True} in fallback["set"]      # nothing in References: the anchor is bypassed
     anchor = next(s for s in slots if s["id"] == "anchor")
     assert anchor["inputs"]["image"] == ["source_image", 1]
+
+
+def test_an_image_to_video_pipeline_saved_before_the_aspect_source_gets_it():
+    from core import graph
+    from modules.models.ltx.pipeline import presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    ids = [x["id"] for x in now]
+    old = [x for x in now if x["id"] not in ("aspect_source", "aspect")]
+    latent = next(x for x in old if x["id"] == "latent")
+    latent["inputs"] = {**latent["inputs"], "width": 1024, "height": 576}
+    latent["roles"] = [{"at": "project.video", "input": "width", "label": "Width"}, {"at": "project.video", "input": "height", "label": "Height"}, *latent["roles"]]
+    fixed = upgrade(old)
+    assert [x["id"] for x in fixed] == ids
+    aspect = next(x for x in fixed if x["id"] == "aspect")
+    assert (aspect["inputs"]["width"], aspect["inputs"]["height"]) == (1024, 576)           # what was typed stays the budget
+    latent = next(x for x in fixed if x["id"] == "latent")
+    assert latent["inputs"]["width"] == ["aspect", 0] and not any(r["input"] in ("width", "height") for r in latent["roles"])
+    assert upgrade(fixed) == fixed                                                           # and it is done once
+    assert upgrade(now) == now

@@ -35,3 +35,11 @@ def test_every_startup_and_render_call_answers_json_on_an_ltx_project(server, pi
     ids = [m["id"] for m in body.get("modules", [])]
     assert "conditioning_shot_camera" not in ids, "shot camera must be hidden for LTX"
     assert "conditioning_shot_camera" in [m["id"] for m in body.get("incompatible", [])]
+
+
+def test_a_saved_image_to_video_pipeline_without_the_aspect_source_comes_back_with_it(server):
+    slots = [s for s in _preset("ltx23_image_to_video_references") if s["id"] not in ("aspect_source", "aspect")]
+    latent = next(s for s in slots if s["id"] == "latent")
+    latent["inputs"] = {**latent["inputs"], "width": 768, "height": 512}
+    status, body = _request(server, "POST", "/fun/api/pipeline", {"slots": slots})
+    assert status == 200 and {"aspect_source", "aspect"} <= {s["id"] for s in body["slots"]}, body
