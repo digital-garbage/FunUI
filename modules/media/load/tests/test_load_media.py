@@ -164,3 +164,16 @@ def test_a_cut_that_leaves_nothing_is_explained_and_a_picture_input_reads_one_fr
         FunUILoadMedia.execute(mid, full=True, prepare=json.dumps({"skip_first": 100})).result
     image, _, _ = FunUILoadMedia.execute(mid).result
     assert image.shape == (1, 48, 64, 3)
+
+
+def test_a_japanese_file_name_loads_even_when_the_console_cannot_print_it(store, monkeypatch):
+    """A rental whose console is ASCII must not fail a generation because a clip is called 日本語.mp4."""
+    import io
+    import sys
+    from modules.media.load.nodes import FunUILoadMedia
+    mid = _long_clip(store)
+    media.rename(mid, "日本語の動画 ｶﾀｶﾅ.mp4")
+    console = io.TextIOWrapper(io.BytesIO(), encoding="ascii")
+    monkeypatch.setattr(sys, "stderr", console)
+    image, frames, _ = FunUILoadMedia.execute(mid, full=True, prepare='{"frame_cap": 3}').result
+    assert frames.shape[0] == 3 and image.shape[0] == 1

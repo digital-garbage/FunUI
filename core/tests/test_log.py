@@ -227,3 +227,12 @@ def test_colour_codes_never_reach_the_panel(monkeypatch):
     monkeypatch.setattr(backend_log, "_memory", lambda: deque([{"m": painted + "\n"}]))
     answer = backend_log.recent()
     assert answer["lines"] == ["[Log] Warning: x | y"] and answer["tones"] == ["warn"]
+
+
+def test_a_console_that_cannot_encode_a_name_does_not_raise(monkeypatch):
+    import io
+    import sys
+    from core import log
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="ascii"))
+    entry = log.info("FunUI Load Media", "loaded 日本語.mp4")
+    assert "日本語" in entry["message"]            # the Log window keeps the real characters

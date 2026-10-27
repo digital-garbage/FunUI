@@ -120,6 +120,19 @@ def _paint(level: str, text: str) -> str:
     return f"{code}{text}\x1b[0m" if code and _colour_wanted() else text
 
 
+def _say(text: str) -> None:
+    """Print to the console, never raising. A console that is not UTF-8 (a rental's ASCII locale, a redirected pipe)
+    cannot print a Japanese file name; that must cost the characters, not the generation that was only mentioning it."""
+    try:
+        print(text, file=sys.stderr, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(sys.stderr, "encoding", None) or "ascii"
+        try:
+            print(text.encode(enc, errors="replace").decode(enc, errors="replace"), file=sys.stderr, flush=True)
+        except Exception:  # noqa: BLE001 -- the Log window still has the record
+            pass
+
+
 def record(level: str, source: str, message: str) -> dict:
     # Imported here rather than at module level: `run` starts a run by clearing
     # what this module holds, so a top-level import would be circular.
@@ -128,7 +141,7 @@ def record(level: str, source: str, message: str) -> dict:
              "message": message, "run": run_mod.current()}
     _records.append(entry)
     _keep(entry)
-    print(_paint(level, line(level, source, message)), file=sys.stderr, flush=True)
+    _say(_paint(level, line(level, source, message)))
     return entry
 
 
