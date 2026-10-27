@@ -120,3 +120,47 @@ def test_slots_of_the_retired_video_and_audio_nodes_are_dropped_with_their_wires
     out = upgrade(slots, None)
     assert [s["id"] for s in out] == ["r2v", "ref"]
     assert out[0]["inputs"] == {"keep": 3, "b": ["ref", 0]}
+
+
+def _long_clip(store, frames=30, rate=30, size=(64, 48)):
+    import av
+    import numpy as np
+    store.parent.mkdir(parents=True, exist_ok=True)
+    path = store.parent / "long.mp4"
+    with av.open(str(path), "w") as out:
+        stream = out.add_stream("libx264", rate=rate)
+        stream.width, stream.height, stream.pix_fmt = size[0], size[1], "yuv420p"
+        for i in range(frames):
+            arr = np.full((size[1], size[0], 3), (i * 7) % 255, dtype=np.uint8)
+            for packet in stream.encode(av.VideoFrame.from_ndarray(arr, format="rgb24")):
+                out.mux(packet)
+        for packet in stream.encode():
+            out.mux(packet)
+    return media.save_upload("long.mp4", path.read_bytes())["id"]
+
+
+def test_a_prepared_video_decodes_only_what_it_keeps_and_matches_the_whole_decode_route(store):
+    import json
+    import torch
+    from comfy_api.latest import InputImpl
+    from modules.media.load import prepare as prep
+    from modules.media.load.nodes import FunUILoadMedia
+    mid = _long_clip(store)
+    options = {"fps": 24, "skip_first": 2, "cut_last": 3, "every_nth": 2, "frame_cap": 6, "width": 32, "height": 32, "fit": "crop", "multiple_of": 16}
+
+    _, frames, _ = FunUILoadMedia.execute(mid, full=True, prepare=json.dumps(options)).result
+
+    comp = InputImpl.VideoFromFile(str(media.path_for(mid))).get_components()
+    expected, _, _, _ = prep.prepare(comp.images, float(comp.frame_rate), options)
+    assert frames.shape == expected.shape and frames.shape[0] == 6
+    assert torch.allclose(frames, expected, atol=1 / 255)
+
+
+def test_a_cut_that_leaves_nothing_is_explained_and_a_picture_input_reads_one_frame(store):
+    import json
+    from modules.media.load.nodes import FunUILoadMedia
+    mid = _long_clip(store)
+    with pytest.raises(RuntimeError, match="cannot be prepared"):
+        FunUILoadMedia.execute(mid, full=True, prepare=json.dumps({"skip_first": 100})).result
+    image, _, _ = FunUILoadMedia.execute(mid).result
+    assert image.shape == (1, 48, 64, 3)

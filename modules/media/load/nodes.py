@@ -46,6 +46,34 @@ def _read_audio(path):
     return {"waveform": torch.from_numpy(np.concatenate(chunks, axis=1)).unsqueeze(0), "sample_rate": rate}
 
 
+def _read_prepared(path, options):
+    """A video's frames made ready, decoding only the ones that are kept and shaping each as it comes.
+
+    Memory follows the prepared result, not the file: a long 4K clip with a frame cap and a target size never holds
+    more than the capped frames at the target size (plus the one being decoded). -> (frames, out_fps, start, span).
+    """
+    import av
+    o = prep.merged(options)
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        fps = float(stream.average_rate or REF_VIDEO_FPS)
+        count = sum(1 for packet in container.demux(stream) if packet.size)      # counting packets decodes nothing
+    index, out_fps, start, span = prep.pick_frames(count, fps, o["fps"], o["skip_first"], o["cut_last"], o["every_nth"], o["frame_cap"])
+    wanted, last, kept = set(index), max(index), {}
+    with av.open(str(path)) as container:
+        for i, frame in enumerate(container.decode(video=0)):
+            if i in wanted:
+                rgb = torch.from_numpy(frame.to_ndarray(format="rgb24")).float().div_(255)[None]
+                kept[i] = prep.shape(rgb, **prep.shape_options(o))[0]
+            if i >= last:
+                break
+    if not kept:
+        raise ValueError("no frames could be decoded")
+    have = sorted(kept)
+    pick = lambda i: kept[i] if i in kept else kept[max((h for h in have if h <= i), default=have[0])]   # a short decode repeats the last frame
+    return torch.stack([pick(i) for i in index]), out_fps, start, span
+
+
 class FunUILoadMedia(io.ComfyNode):
     """Takes a picture, a video or an audio file and fills what it has: the app wires the output that fits."""
 
@@ -114,6 +142,31 @@ class FunUILoadMedia(io.ComfyNode):
             grey = torch.full((1, 64, 64, 3), 0.5)       # no picture in it: the outputs for pictures are never wired
             return io.NodeOutput(grey, grey, sound)
 
+        wants_prepared = kind == "video" and full and (prepare or "").strip()
+        if wants_prepared:
+            try:
+                options = json.loads(prepare)
+                frames, out_fps, start, span = _read_prepared(path, options if isinstance(options, dict) else {})
+                sound = _read_audio(path)
+            except (ValueError, TypeError) as exc:           # bad JSON, or a cut that leaves nothing
+                raise RuntimeError(f"FunUI Load Media: {name!r} cannot be prepared ({exc}).") from exc
+            except Exception as exc:                         # noqa: BLE001 -- a damaged file raises whatever PyAV raises
+                raise RuntimeError(f"FunUI Load Media: could not read {name!r} ({exc}).") from exc
+            sound = prep.cut_audio(sound, start, span) if sound else _SILENCE
+            log.info("FunUI Load Media", f"loaded {name}: {frames.shape[0]} frames {frames.shape[2]}x{frames.shape[1]} at {out_fps:g} fps")
+            return io.NodeOutput(frames[:1], frames, sound)
+
+        if kind == "video" and not full:
+            # A picture input wants the first frame: decoding the whole clip for it is what a long video cannot afford.
+            try:
+                import av
+                with av.open(str(path)) as container:
+                    first = torch.from_numpy(next(container.decode(video=0)).to_ndarray(format="rgb24")).float().div_(255)[None]
+            except Exception as exc:                         # noqa: BLE001 -- a damaged file raises whatever PyAV raises
+                raise RuntimeError(f"FunUI Load Media: could not read {name!r} ({exc}).") from exc
+            log.info("FunUI Load Media", f"loaded {name}")
+            return io.NodeOutput(first, first, _SILENCE)
+
         try:
             components = InputImpl.VideoFromFile(str(path)).get_components()
         except Exception as exc:                             # noqa: BLE001 -- a damaged file raises whatever PyAV raises
@@ -127,15 +180,6 @@ class FunUILoadMedia(io.ComfyNode):
             return io.NodeOutput(first, first, _SILENCE)
 
         fps = float(components.frame_rate or REF_VIDEO_FPS)
-        if (prepare or "").strip():
-            try:
-                options = json.loads(prepare)
-                frames, out_fps, start, span = prep.prepare(images, fps, options if isinstance(options, dict) else {})
-            except (ValueError, TypeError) as exc:           # bad JSON, or a cut that leaves nothing
-                raise RuntimeError(f"FunUI Load Media: {name!r} cannot be prepared ({exc}).") from exc
-            sound = prep.cut_audio(components.audio, start, span) if components.audio else _SILENCE
-            log.info("FunUI Load Media", f"loaded {name}: {frames.shape[0]} frames {frames.shape[2]}x{frames.shape[1]} at {out_fps:g} fps")
-            return io.NodeOutput(frames[:1], frames, sound)
         # Whatever the source rate, the model wants 24 fps: pick the frame showing at each 1/24 s.
         count = max(1, int(images.shape[0] / fps * REF_VIDEO_FPS))
         index = torch.clamp((torch.arange(count) * fps / REF_VIDEO_FPS).long(), max=images.shape[0] - 1)

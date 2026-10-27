@@ -93,9 +93,20 @@ def shape(images, width=0, height=0, fit="crop", crop_left=0, crop_right=0, crop
     return out
 
 
+def merged(options):
+    """The options with every missing key at its default; unknown keys dropped."""
+    return {**DEFAULTS, **{k: v for k, v in (options or {}).items() if k in DEFAULTS}}
+
+
+def shape_options(o):
+    """The part of the options that `shape` takes."""
+    return dict(width=o["width"], height=o["height"], fit=o["fit"], crop_left=o["crop_left"], crop_right=o["crop_right"],
+                crop_top=o["crop_top"], crop_bottom=o["crop_bottom"], multiple_of=o["multiple_of"])
+
+
 def prepare(images, src_fps, options=None):
     """The whole job. -> (frames, out_fps, start_sec, span_sec)."""
-    o = {**DEFAULTS, **{k: v for k, v in (options or {}).items() if k in DEFAULTS}}
+    o = merged(options)
     index, out_fps, start, span = pick_frames(images.shape[0], src_fps, o["fps"], o["skip_first"], o["cut_last"], o["every_nth"], o["frame_cap"])
     frames = shape(images[torch.tensor(index)], o["width"], o["height"], o["fit"], o["crop_left"], o["crop_right"],
                    o["crop_top"], o["crop_bottom"], o["multiple_of"])
