@@ -129,8 +129,7 @@ def _direct_video_to_video():
     slots[at:at + 1] = [
         # video_frames: the whole video is fed, not its first frame (see inputs.js).
         {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
-         "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True, "video_only": True}],
-         "inputs": {"media_id": ""}},
+         "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}], "inputs": {"media_id": ""}},
         {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 1]}},
         {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 1], "vae": ["vae", 0]}},
         {"id": "audio_latent", "group": "Preparation", "node": "LTXVEmptyLatentAudio",

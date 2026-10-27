@@ -20,17 +20,12 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];
   const plan = sceneReferences(scene, project.fixed_references);
-  // A pipeline that takes whole media where it takes a picture (LTX): with no start picked, the first reference is the start:
-  // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
-  // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone and is
-  // never blanked by "From a prompt".
-  const takesVideo = Boolean(source && source.role.video_frames), videoOnly = Boolean(source && source.role.video_only);
-  const wanted = (id) => kinds.get(id) === "video" || (!videoOnly && kinds.get(id) === "image");
-  const blank = project.generation_mode === "t2v" && !videoOnly;
-  const fromRefs = takesVideo && !scene.source_image && !blank
-    ? plan.ids.find((id) => kinds.get(id) === "video") || (videoOnly ? null : plan.ids.find((id) => wanted(id))) : null;
-  if (fromRefs && kinds.get(fromRefs) === "video") plan.ids = plan.ids.filter((id) => id !== fromRefs);
-  const startId = takesVideo ? (blank ? "" : scene.source_image || fromRefs || "") : project.generation_mode === "t2v" ? "" : scene.source_image;
+  // A pipeline that takes a whole video where it takes a picture (video-to-video): with no start picked, the first VIDEO
+  // among the references is the one it works from, and is not also sent as a reference. It is never blanked by "From a prompt".
+  const takesVideo = Boolean(source && source.role.video_frames);
+  const fromRefs = takesVideo && !scene.source_image ? plan.ids.find((id) => kinds.get(id) === "video") : null;
+  if (fromRefs) plan.ids = plan.ids.filter((id) => id !== fromRefs);
+  const startId = takesVideo ? scene.source_image || fromRefs || "" : project.generation_mode === "t2v" ? "" : scene.source_image;
   if (source) put(source.slot, "media_id", startId || "");    // "from a prompt" starts every shot without a picture
   // A pipeline that can take a whole video where it takes a picture (LTX) says so on the role: a picked VIDEO then
   // supplies its frames (prepared as Video input says); the preset wires the frames output where the picture goes (a
@@ -85,7 +80,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (!(body && typeof body.text === "string")) failedExpand = true;
   }
   // Features that add inputs of their own (a Chat comment for the enhancer, say) say so through a hook: { inputs: {slot: {name: value}}, notes: [text] }.
-  const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
+  const noVideo = takesVideo && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
   notes.push(...noVideo);
   for (const hook of hooks) {
