@@ -1,12 +1,11 @@
 """LTX 2.3 pipelines, as loadable presets.
 
-Built from ComfyUI's own LTX nodes plus FunUI's, the chain the stock templates use: the
-checkpoint carries the model and the picture VAE, the audio VAE and the text encoder are loaded
-from the same file, conditioning carries the frame rate, and the sampler runs the distilled
+Built from ComfyUI's own LTX nodes plus FunUI's, the chain the stock templates use:
+conditioning carries the frame rate, and the sampler runs the distilled
 schedule written out as numbers (`project_sigmas`: the official anchors, never replaced).
 
-The checkpoint is picked three times (model, audio VAE, text encoder): they are three nodes that
-each read a file, and the first two are the same file.
+Four separate files, as most people keep them: the diffusion model, the video VAE, the audio VAE and the text
+encoder(s), each in its own loader (FunUI's own, like the H3 pipeline).
 
 Every `frame_rate` and `fps` is a role at `project.video`, so the project's FPS is the one number
 the conditioning, the sound's length and the saved video agree on.
@@ -21,10 +20,11 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
     latent_source = ["latent", 0]
     model_source, positive_source, negative_source = ["modifiers", 0], ["conditioning", 0], ["conditioning", 1]
     slots = [
-        {"id": "model", "group": "Loaders", "node": "FunUICheckpointLoader", "inputs": {"ckpt_name": ""}},
-        {"id": "audio_vae", "group": "Loaders", "node": "LTXVAudioVAELoader", "inputs": {"ckpt_name": ""}},
-        {"id": "clip", "group": "Loaders", "node": "LTXAVTextEncoderLoader",
-         "inputs": {"text_encoder": "", "ckpt_name": "", "device": "default"}},
+        {"id": "model", "group": "Loaders", "node": "FunUIDiffusionModelLoader",
+         "inputs": {"weight_dtype": "default", "compute_dtype": "default", "attention": "default"}},
+        {"id": "vae", "group": "Loaders", "node": "FunUIVAELoader", "inputs": {"dtype": "bfloat16"}},
+        {"id": "audio_vae", "group": "Loaders", "node": "FunUIVAELoader", "inputs": {"dtype": "bfloat16"}},
+        {"id": "clip", "group": "Loaders", "node": "FunUICLIPLoader", "inputs": {"type": "ltxv"}},
 
         *_ic_lora(ic_lora),
         {"id": "positive", "group": "Preparation", "node": "CLIPTextEncode",
@@ -59,7 +59,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
             # the latent stays empty, so the opening is free to move. Strength is the slot's own number.
             slots += [
                 {"id": "anchor", "group": "Preparation", "node": "LTXVAddGuide",
-                 "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["model", 2],
+                 "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["vae", 0],
                             "latent": ["split", 0], "image": ["source_image", 0], "frame_idx": 0, "strength": 1.0 if ic_lora else 0.35,
                             **({"iclora_parameters": ["ic_params", 0]} if ic_lora else {})}},
                 {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
@@ -69,7 +69,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
         else:
             slots += [
                 {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
-                 "inputs": {"vae": ["model", 2], "image": ["source_image", 0], "latent": ["split", 0],
+                 "inputs": {"vae": ["vae", 0], "image": ["source_image", 0], "latent": ["split", 0],
                             "strength": 1.0, "bypass": False}},
                 {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
                  "inputs": {"video_latent": ["anchor", 0], "audio_latent": ["split", 1]}},
@@ -87,7 +87,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
             # A reference face carried into the clip. The picture is the scene's first reference
             # (assets.reference_1): with none picked this node passes everything through untouched.
             {"id": "identity", "group": "Preparation", "node": "FunUIIdentityTransfer",
-             "inputs": {"model": ["modifiers", 0], "vae": ["model", 2], "positive": positive_source,
+             "inputs": {"model": ["modifiers", 0], "vae": ["vae", 0], "positive": positive_source,
                         "negative": negative_source, "latent": latent_source, "source_id": 2.0,
                         "phase_scale": 1.0, "id_strength": 1.0, "arcface_mode": "auto_adjust"}},
             {"id": "identity_source", "group": "Reference media", "node": "FunUILoadMedia",
@@ -108,7 +108,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
 
         *_uncrop(as_guide),
         {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
-            "samples": ["rejoin", 0] if as_guide else ["sampler", 0], "vae": ["model", 2], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
+            "samples": ["rejoin", 0] if as_guide else ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
         {"id": "save", "group": "Render", "node": "FunUISaveVideo",
          "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
          "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
@@ -131,7 +131,7 @@ def _direct_video_to_video():
         {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
          "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}], "inputs": {"media_id": ""}},
         {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 0]}},
-        {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 0], "vae": ["model", 2]}},
+        {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 0], "vae": ["vae", 0]}},
         {"id": "audio_latent", "group": "Preparation", "node": "LTXVEmptyLatentAudio",
          "roles": [fps], "inputs": {"frames_number": ["size", 2], "frame_rate": 25, "batch_size": 1, "audio_vae": ["audio_vae", 0]}},
         {"id": "latent", "group": "Preparation", "node": "LTXVConcatAVLatent",

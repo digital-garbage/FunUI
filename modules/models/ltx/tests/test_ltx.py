@@ -135,7 +135,7 @@ def test_the_pipelines_build_a_real_graph(registered, pid):
             if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
                 assert value[0] in ids
     _prompt, problems = graph.build(slots)
-    unset = ("needs 'ckpt_name'", "needs 'text_encoder'", "is '', which is not one of")   # a file nobody has picked yet
+    unset = ("needs 'ckpt_name'", "needs 'text_encoder'", "needs 'model_name'", "needs 'vae_name'", "needs 'clip_name1'", "is '', which is not one of")   # a file nobody has picked yet
     structural = [p for p in problems if not any(u in p for u in unset)]
     assert structural == [], structural
 
