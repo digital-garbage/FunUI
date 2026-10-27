@@ -139,7 +139,7 @@ def _direct_video_to_video():
     ]
     for x in slots:
         if x["id"] == "sigmas":
-            x["inputs"]["sigmas"] = "0.909375, 0.725, 0.421875, 0.0"      # the last three steps of the distilled schedule: about 90% re-noised
+            x["inputs"]["sigmas"] = "0.725, 0.421875, 0.0"      # the last two steps of the distilled schedule: about 70% re-noised
     return slots
 
 
