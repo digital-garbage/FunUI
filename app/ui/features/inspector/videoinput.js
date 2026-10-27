@@ -18,6 +18,7 @@ function settingsCard(use, save, size) {
         use.fps_from === "custom" ? n("FPS", "fps", { min: 1, max: 1000 }) : null].filter(Boolean) }),
       c.label.section({ text: "Picture" }),
       c.field.row({ fields: [n("Width", "width", { max: 16384, hint: "0 keeps the video's own." }), n("Height", "height", { max: 16384, hint: "0 keeps the video's own." })] }),
+      c.button.sm({ label: "⇄ Flip width and height", tone: "ghost", onClick: () => save({ ...use, width: use.height, height: use.width }) }),
       size ? c.button.sm({ label: `Use the project's size (${size[0]}×${size[1]})`, tone: "ghost", onClick: () => save({ ...use, width: size[0], height: size[1] }) }) : null,
       c.field.row({ fields: [c.field.default({ label: "When the shape differs", control: c.select.md({ label: "When the shape differs", options: FITS, value: use.fit, onChange: set("fit") }) }),
         n("Round to a multiple of", "multiple_of", { min: 1, max: 256, hint: "Most models want 32." })] }),

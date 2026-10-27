@@ -674,8 +674,13 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
     let grown = [];
     try {
       const isAsset = (s) => (s.roles || []).length && s.roles.every((r) => String(r.at || "").startsWith("assets."));
-      const from = ((await API.pipelinePresets()).presets || []).find((pr) => (pr.slots || []).some((s) => isAsset(s) && byId.has(s.id)));
-      if (from) grown = from.slots.filter((s) => isAsset(s) && sound(s) && !byId.has(s.id) && !gone.has(s.id));
+      // Which preset it came from is read off the slots it still shares: the first preset with ONE matching input
+      // slot is not it (an Image to Video preset shares "source_image" with Video to Video, and its identity
+      // loader then landed in a pipeline that has no identity node to feed).
+      const shared = (pr) => (pr.slots || []).filter((s) => byId.has(s.id)).length;
+      const from = ((await API.pipelinePresets()).presets || []).filter((pr) => (pr.slots || []).some((s) => isAsset(s) && byId.has(s.id))).sort((a, b) => shared(b) - shared(a))[0];
+      const feeds = (s) => (s.roles || []).every((r) => !r.wireTo || byId.has(r.wireTo.slot) || have.has(r.wireTo.slot));      // an input is laid in only where what it feeds is there
+      if (from) grown = from.slots.filter((s) => isAsset(s) && sound(s) && !byId.has(s.id) && !gone.has(s.id) && feeds(s));
     } catch (_) { /* the saved pipeline goes in as it is */ }
     const lay = (extras) => isWhole ? JSON.parse(JSON.stringify([...saved.filter(sound), ...(extras ? grown : [])])) : offered.filter((def) => !gone.has(def.id)).map((def) => {
       const mine = byId.get(def.id);

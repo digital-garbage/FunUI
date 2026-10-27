@@ -813,3 +813,14 @@ test("Disable all guidance enhancements is its own flag and keeps the other choi
   assert.strictEqual(PS.guidanceOff(), false);
   assert.strictEqual(PS.isOff("alg"), true);
 });
+
+test("a Video to Video pipeline does not gain the Image to Video preset's identity loader just because both have a source_image", async () => {
+  const media = (id, at, wireTo) => ({ id, node: "LoadIt", roles: [{ at, input: "media_id", ...(wireTo ? { wireTo } : {}) }], inputs: { media_id: "" } });
+  const direct = [{ id: "ckpt", node: "Checkpoint", inputs: {} }, { id: "encode", node: "VAEEncode", inputs: {} }, media("source_image", "assets.source_image")];
+  const i2v = [{ id: "ckpt", node: "Checkpoint", inputs: {} }, { id: "identity", node: "Identity", inputs: {} }, media("source_image", "assets.source_image"),
+    media("identity_source", "assets.reference_1", { slot: "identity", input: "image" })];
+  const PS = load([]);
+  lastApi.pipelinePresets = async () => ({ presets: [{ id: "i2v", slots: i2v }, { id: "direct", slots: direct }] });
+  await PS.adopt(direct, ["model"], {}, true);
+  assert.deepStrictEqual(PS.slots().map((s) => s.id), ["ckpt", "encode", "source_image"]);
+});

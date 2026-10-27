@@ -87,3 +87,17 @@ test("the Project tab flips width and height in one undo step", async () => {
   assert.equal(edits, 1);
   host.remove();
 });
+
+test("the Video input card flips its width and height", async () => {
+  let fire;
+  const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, video_input: { on: true, width: 1280, height: 720 }, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  const p = { project: doc, video: {}, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, setField: (k, v) => { doc[k] = v; fire("change"); }, setVideo: () => {}, edit: (fn) => fn(doc) };
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {}, pipeline: { slots: () => [] } } });
+  [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
+  [...host.querySelectorAll("button")].find((b) => b.textContent.includes("Flip width and height")).click();
+  assert.deepEqual([doc.video_input.width, doc.video_input.height], [720, 1280]);
+  host.remove();
+});
