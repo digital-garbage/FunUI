@@ -66,7 +66,15 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const target = role && role.wireTo && (slots || []).find((x) => x.id === role.wireTo.slot);
     return target ? routeFor(kind, info.get(target.node), info.get(slot.node), target.id) : null;
   };
-  const { overrides, unwired, left } = wireReferences(plan.ids, slots, source ? [source.slot.id] : [], plan.pins, (id) => kinds.get(id), routeOf, (id) => sounds.has(id));
+  let { overrides, unwired, left } = wireReferences(plan.ids, slots, source ? [source.slot.id] : [], plan.pins, (id) => kinds.get(id), routeOf, (id) => sounds.has(id));
+  // An edited pipeline can keep a reference loader but not the node it fed (the identity node deleted, say): a value for a
+  // slot that is not there would refuse the whole run, so that reference is said to be unused instead.
+  const have = new Set((slots || []).map((s) => s.id));
+  for (const id of Object.keys(overrides)) if (!have.has(id)) {
+    const link = Object.values(overrides[id]).find((v) => Array.isArray(v));
+    delete overrides[id];
+    unwired += 1; left.push({ id: link && (overrides[link[0]] || {}).media_id, at: "a reference", why: `the slot it feeds (${id}) is not in this pipeline` });
+  }
   for (const [id, fields] of Object.entries(overrides)) raw[id] = { ...raw[id], ...fields };
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
   const prepare = activeVideoInput(project, scene);

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildInputs } from "./inputs.js";
+import { kinds } from "../../shell/bin.js";
 
 const slots = [
   { id: "p", roles: [{ at: "generation.prompt", input: "text" }] },
@@ -193,4 +194,14 @@ test("a direct video-to-video pipeline saved without the video-only flag is stil
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
   learn([]);
+});
+
+test("a reference whose target node was deleted from an edited pipeline is left unused, not put into a slot that is not there", async () => {
+  const slots = [{ id: "identity_source", node: "FunUILoadMedia", roles: [{ at: "assets.reference_1", input: "media_id", wireTo: { slot: "identity", input: "image" } }], inputs: { media_id: "" } }];
+  kinds.set("pic", "image");
+  const r = await buildInputs({ project: { id: "P", video: {} }, scene: { id: "s", text: "", references: ["pic"] }, slots, expand: async (x) => ({ text: x.text }), nodeInfo: async () => null, frames: 49 });
+  assert.equal(r.inputs.identity, undefined);
+  assert.equal(r.unwired, 1);
+  assert.match(r.left[0].why, /identity/);
+  assert.equal(r.left[0].id, "pic");
 });

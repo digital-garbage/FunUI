@@ -15,7 +15,7 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
-def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
+def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False, from_references: bool = False):
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
     latent_source = ["latent", 0]
     model_source, positive_source, negative_source = ["modifiers", 0], ["conditioning", 0], ["conditioning", 1]
@@ -49,7 +49,9 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
         slots += [
             {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
              # video_frames: a video picked as the start is fed whole (prepared as Video input says), not as its first frame.
-             "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}],
+             # from_references: the start is the scene's first reference picture, so nothing is picked twice.
+             "roles": [{"at": "assets.reference_1", "input": "media_id"}] if from_references
+                      else [{"at": "assets.source_image", "input": "media_id", "video_frames": True}],
              "inputs": {"media_id": ""}},
             {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent",
              "inputs": {"av_latent": ["latent", 0]}},
@@ -82,7 +84,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
         {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
          "inputs": {"model": ["ic_lora", 0] if ic_lora else ["model", 0], "settings": ["settings", 0]}},
     ]
-    if image_to_video:
+    if image_to_video and not from_references:
         slots += [
             # A reference face carried into the clip. The picture is the scene's first reference
             # (assets.reference_1): with none picked this node passes everything through untouched.
@@ -201,6 +203,8 @@ def optional_nodes():
 def presets():
     return [{"id": "ltx23_text_to_video", "title": "LTX 2.3 · Text to Video (UNTESTED)", "slots": _base(False)},
             {"id": "ltx23_image_to_video", "title": "LTX 2.3 · Image to Video (UNTESTED)", "slots": _base(True)},
+            {"id": "ltx23_image_to_video_references", "title": "LTX 2.3 · Image to Video, start from References (UNTESTED)",
+             "slots": _base(True, from_references=True)},
             {"id": "ltx23_anchor_guide", "title": "LTX 2.3 · Anchor as guide (UNTESTED)",
              "slots": _base(True, True)},
             {"id": "ltx23_video_to_video", "title": "LTX 2.3 · Video to Video, IC-LoRA (UNTESTED)",

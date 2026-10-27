@@ -122,7 +122,7 @@ def test_the_empty_latent_node_passes_the_audio_vae_to_a_provider_that_asks_and_
     assert seen == {"plain": True, "wants": ("A", 30.0)}
 
 
-@pytest.mark.parametrize("pid", ["ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct"])
+@pytest.mark.parametrize("pid", ["ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct", "ltx23_image_to_video_references"])
 def test_the_pipelines_build_a_real_graph(registered, pid):
     from core import graph
     from modules.models.ltx.pipeline import presets
@@ -242,3 +242,13 @@ def test_a_direct_v2v_pipeline_saved_before_video_only_still_ignores_pictures_an
     assert upgrade(old) == slots
     i2v = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video")
     assert not any(r.get("video_only") for s in upgrade(i2v) for r in s.get("roles") or [])          # i2v keeps taking pictures
+
+
+def test_image_to_video_from_references_takes_its_start_from_the_first_reference_and_has_no_other_picture_slot():
+    from modules.models.ltx.pipeline import presets
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    roles = [r["at"] for s in slots for r in s.get("roles") or []]
+    assert "assets.reference_1" in roles and "assets.source_image" not in roles
+    assert not any(s["node"] == "FunUIIdentityTransfer" for s in slots)
+    anchor = next(s for s in slots if s["id"] == "anchor")
+    assert anchor["inputs"]["image"] == ["source_image", 1]
