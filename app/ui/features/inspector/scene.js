@@ -4,6 +4,7 @@ import { namesOf, pick } from "./mediapick.js";
 import { effFrames, effFps, genUnitId, isSubclip, seconds, snapFrames } from "../../shell/scenes.js";
 import { gridOf } from "../../shell/frame_grid.js";
 import { restoreToPlan } from "../../shell/edits.js";
+import { sceneVideoInput } from "./videoinput.js";
 
 const SOURCES = [{ value: "image", label: "Image · i2v anchor" }, { value: "carry", label: "From generated frame" }, { value: "video", label: "Video clip" }];
 const MODES = [{ value: "project", label: "Project default" }, { value: "timeline", label: "Timeline trim" }, { value: "custom", label: "Custom" }];
@@ -63,6 +64,7 @@ export function sceneRows(p, app) {
     card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture (or a video's first frame). Its shape sets this scene's aspect ratio (the project's Width/Height set the scale). A model that starts from a picture, such as LTX image-to-video, also begins the clip from it; the prompt enhancer can read it.",
       key: "source_image", multiple: false, kinds: ["image", "video"], empty: "— choose aspect ratio source —" }),
     mediaField(app, p, sc, { label: "References", key: "references", multiple: true, kinds: ["image", "video", "audio"], empty: "+ Add reference" })),
+    ...sceneVideoInput(p, sc),
     c.label.section({ text: "Length" }),
     card(c.field.row({ fields: [
       lengthField(p, sc, "Frames", "frames_mode", "frames", effFrames(sc, open), gridOf(app.pipeline && (app.pipeline.view || app.pipeline.slots)())),

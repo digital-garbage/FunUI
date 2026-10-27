@@ -146,6 +146,23 @@ def _clean_source(raw) -> dict:
     return out
 
 
+#: How a picked reference video is got ready for the model (the loader choices): per project and per scene.
+#: `on` switches it; every number is a whole count or percent, `fit` is a word. Anything else is dropped.
+VIDEO_INPUT_FITS = ("crop", "pad", "stretch")
+VIDEO_INPUT_LIMITS = {"fps": (0, 1000), "skip_first": (0, 10 ** 6), "cut_last": (0, 10 ** 6), "every_nth": (1, 1000),
+                      "frame_cap": (0, 10 ** 6), "width": (0, 16384), "height": (0, 16384), "multiple_of": (1, 256),
+                      "crop_left": (0, 90), "crop_right": (0, 90), "crop_top": (0, 90), "crop_bottom": (0, 90)}
+
+
+def _clean_video_input(raw) -> dict:
+    d = raw if isinstance(raw, dict) else {}
+    out = {"on": _bool(d.get("on")), "fit": d.get("fit") if d.get("fit") in VIDEO_INPUT_FITS else "crop",
+           "fps_from": d.get("fps_from") if d.get("fps_from") in ("project", "source", "custom") else "project"}
+    for key, (lo, hi) in VIDEO_INPUT_LIMITS.items():
+        out[key] = _int(d.get(key), lo, lo, hi)
+    return out
+
+
 #: What a person can say about a result: it was good, or it was not.
 #:
 #: Binary because that is all anything downstream reads. dev proved it on H3 --
@@ -204,6 +221,8 @@ class Scene:
     height: int | None = None
     #: How the scene's latent is born (carry / image / video clip / ...).
     source: dict = field(default_factory=lambda: _clean_source(None))
+    #: How this scene's reference videos are prepared; used when the project says "scene" (or "auto" and its own is off).
+    video_input: dict = field(default_factory=lambda: _clean_video_input(None))
     excluded: bool = False
     #: Timeline cuts of one generated clip share the root scene's id; only the root
     #: (cut_offset_frames == 0) owns prompt, rating and source.
@@ -265,6 +284,7 @@ class Scene:
             width=_int(d.get("width"), None, 1, MAX_SETTING),
             height=_int(d.get("height"), None, 1, MAX_SETTING),
             source=_clean_source(d.get("source")),
+            video_input=_clean_video_input(d.get("video_input")),
             excluded=_bool(d.get("excluded")),
             gen_unit_id=guide if is_token(guide) else None,
             cut_offset_frames=_int(d.get("cut_offset_frames"), 0, 0, 10 ** 7),
@@ -438,6 +458,10 @@ class Project:
     continuity_settings: dict = field(default_factory=dict)
     #: Media ids pinned to a slot for every scene: { media id: slot number 1-16 }.
     fixed_references: dict = field(default_factory=dict)
+    #: Reference-video preparation for the whole project, and whose wins: "auto" = the project's when it is on,
+    #: otherwise the scene's; "project" / "scene" = that one only.
+    video_input: dict = field(default_factory=lambda: _clean_video_input(None))
+    video_input_from: str = "auto"
     generation_meta: dict = field(default_factory=dict)
     #: What each scene last rendered ({media, inSec, promptId}) and the removed scenes whose
     #: clip still previews: a reload shows the timeline the person left.
@@ -501,6 +525,8 @@ class Project:
             guide_settings=_blob(d.get("guide_settings"), dict),
             continuity_settings=_blob(d.get("continuity_settings"), dict),
             fixed_references=_pins(d.get("fixed_references")),
+            video_input=_clean_video_input(d.get("video_input")),
+            video_input_from=d.get("video_input_from") if d.get("video_input_from") in ("auto", "project", "scene") else "auto",
             generation_meta=_blob(d.get("generation_meta"), dict),
             scene_renders=_blob(d.get("scene_renders"), dict),
             scene_variants=_blob(d.get("scene_variants"), dict),

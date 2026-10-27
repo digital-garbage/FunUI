@@ -3,6 +3,7 @@
 import { sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
 import { DRIVEN } from "../../shell/scenes.js";
+import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
 
 export const rolesAt = (slots, at) => (slots || []).flatMap((s) => (s.roles || []).filter((r) => r.at === at).map((role) => ({ slot: s, role })));
 
@@ -48,6 +49,9 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   };
   const { overrides, unwired, left } = wireReferences(plan.ids, slots, source ? [source.slot.id] : [], plan.pins, (id) => kinds.get(id), routeOf, (id) => sounds.has(id));
   for (const [id, fields] of Object.entries(overrides)) raw[id] = { ...raw[id], ...fields };
+  // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
+  const prepare = activeVideoInput(project, scene);
+  if (prepare) for (const [id, fields] of Object.entries(overrides)) if (fields.full && fields.media_id && kinds.get(fields.media_id) === "video") raw[id].prepare = videoInputJson(prepare, project, scene);
   // A picked start picture that no slot takes would otherwise be ignored without a word.
   const ignored = !source && scene.source_image && project.generation_mode !== "t2v";
   if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: "this pipeline starts from no picture" });

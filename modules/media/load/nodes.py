@@ -10,10 +10,13 @@ a run queues, the same way a scene's prompt text lands on CLIPTextEncode's
 `text`), not from someone typing a file name into this node by hand.
 """
 
+import json
+
 import torch
 from comfy_api.latest import InputImpl, io
 
 from ..._core import log, media as media_mod
+from . import prepare as prep
 
 
 #: Frame rate the H3 reference-video input takes.
@@ -68,13 +71,18 @@ class FunUILoadMedia(io.ComfyNode):
                 io.Boolean.Input(
                     "full", default=False, optional=True,
                     tooltip="Read the whole video and its sound. Off: only the first frame, which is all a picture input needs."),
+                io.String.Input(
+                    "prepare", default="", optional=True,
+                    tooltip="With full on: how to get the video ready, as JSON. Keys: fps, skip_first, cut_last, every_nth, frame_cap, "
+                            "width, height, fit (crop|pad|stretch), crop_left/right/top/bottom (percent), multiple_of. "
+                            "Empty: all frames at 24 fps, size untouched."),
             ],
             outputs=[io.Image.Output(display_name="image"), io.Image.Output(display_name="frames"),
                      io.Audio.Output(display_name="audio")],
         )
 
     @classmethod
-    def execute(cls, media_id: str, blank_width: int = 0, blank_height: int = 0, full: bool = False) -> io.NodeOutput:
+    def execute(cls, media_id: str, blank_width: int = 0, blank_height: int = 0, full: bool = False, prepare: str = "") -> io.NodeOutput:
         mid = (media_id or "").strip()
         if not mid and blank_width > 0 and blank_height > 0:
             # A text-only start: the picture exists only to give the pipeline a SHAPE (see the H3 preset).
@@ -119,6 +127,15 @@ class FunUILoadMedia(io.ComfyNode):
             return io.NodeOutput(first, first, _SILENCE)
 
         fps = float(components.frame_rate or REF_VIDEO_FPS)
+        if (prepare or "").strip():
+            try:
+                options = json.loads(prepare)
+                frames, out_fps, start, span = prep.prepare(images, fps, options if isinstance(options, dict) else {})
+            except (ValueError, TypeError) as exc:           # bad JSON, or a cut that leaves nothing
+                raise RuntimeError(f"FunUI Load Media: {name!r} cannot be prepared ({exc}).") from exc
+            sound = prep.cut_audio(components.audio, start, span) if components.audio else _SILENCE
+            log.info("FunUI Load Media", f"loaded {name}: {frames.shape[0]} frames {frames.shape[2]}x{frames.shape[1]} at {out_fps:g} fps")
+            return io.NodeOutput(frames[:1], frames, sound)
         # Whatever the source rate, the model wants 24 fps: pick the frame showing at each 1/24 s.
         count = max(1, int(images.shape[0] / fps * REF_VIDEO_FPS))
         index = torch.clamp((torch.arange(count) * fps / REF_VIDEO_FPS).long(), max=images.shape[0] - 1)

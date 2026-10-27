@@ -47,3 +47,24 @@ test("typing in the Prompt box, then pressing a button in the panel, does not re
   assert.ok(button.isConnected, "the pressed button is still there for its mouse-up");
   host.remove();
 });
+
+test("the scene's Video input card switches on, shows its controls, and says when the project's settings win", async () => {
+  let fire;
+  const calls = [];
+  const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  const p = { project: doc, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: (id, key, value) => { calls.push([key, value]); doc.scenes[0][key] = value; fire("change"); }, edit: (fn) => fn(doc) };
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {} } });
+  assert.ok(host.textContent.includes("Video input"));
+  assert.ok(!host.textContent.includes("Every Nth frame"));
+  const sw = [...host.querySelectorAll("input[role=switch]")].find((i) => i.closest(".cx-toggle-row").textContent.includes("Prepare video inputs"));
+  sw.checked = true; sw.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.equal(calls[0][0], "video_input");
+  assert.equal(calls[0][1].on, true);
+  assert.ok(host.textContent.includes("Every Nth frame") && host.textContent.includes("Skip first") && host.textContent.includes("Cut last"));
+  doc.video_input = { on: true }; fire("change");
+  assert.ok(host.textContent.includes("project's video input settings are used"));
+  host.remove();
+});

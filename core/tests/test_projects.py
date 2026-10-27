@@ -603,3 +603,15 @@ def test_a_template_never_carries_variables_and_an_old_one_loses_them():
     from core import projects
     kept = projects._clean_templates([{"name": "old", "scenes": ["a"], "variables": [{"name": "v", "value": "1"}]}])
     assert kept == [{"name": "old", "scenes": ["a"]}]
+
+
+def test_video_input_is_cleaned_and_survives_a_round_trip():
+    from core.projects import Project
+    p = Project.from_dict({"video_input": {"on": True, "skip_first": 7, "fit": "pad", "crop_left": 500, "every_nth": 0, "bogus": 1},
+                           "video_input_from": "scene", "scenes": [{"video_input": {"on": "yes", "fit": "weird"}}]})
+    assert p.video_input["on"] is True and p.video_input["skip_first"] == 7 and p.video_input["fit"] == "pad"
+    assert p.video_input["crop_left"] == 0 and p.video_input["every_nth"] == 1 and "bogus" not in p.video_input
+    assert p.scenes[0].video_input["on"] is False and p.scenes[0].video_input["fit"] == "crop"
+    again = Project.from_dict(p.to_dict())
+    assert again.video_input == p.video_input and again.video_input_from == "scene"
+    assert Project.from_dict({"video_input_from": "x"}).video_input_from == "auto"

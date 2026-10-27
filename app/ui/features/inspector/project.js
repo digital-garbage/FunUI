@@ -3,6 +3,7 @@ import { composer as c } from "../../composer/composer.js";
 import { DRIVEN, isVideoClip, segments, snapFrames } from "../../shell/scenes.js";
 import { gridOf } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
+import { projectVideoInput } from "./videoinput.js";
 
 const STARTS = [{ value: "i2v", label: "From an image" }, { value: "t2v", label: "From a prompt" }];
 
@@ -73,6 +74,7 @@ export function projectRows(p, slots, api) {
       c.field.default({ label: "Final render size", hint: "The size of the exported video: the first clip's, the project's, or any rendered clip's own.", control: c.select.md({ label: "Final render size", options: sizes(open), value: open.export_size_from || "",
         onChange: (v) => p.setField("export_size_from", v) }) }),
       c.field.default({ label: "Start shots", hint: "From an image: a scene uses its picture, or the last frame of the clip before it. From a prompt: every scene starts without a picture. (MiniMax H3 takes only the picture's shape.)", control: c.select.md({ label: "Start shots", options: STARTS, value: open.generation_mode === "t2v" ? "t2v" : "i2v", onChange: (v) => p.setField("generation_mode", v) }) })),
+    ...projectVideoInput(p),
     c.label.section({ text: "Prompt" }),
     card(c.field.default({ label: "Anchor", hint: "Put in front of every scene's prompt.", control: c.textarea.md({ label: "Anchor", value: p.anchor, rows: 2, onInput: (v) => p.setAnchor(v) }) }),
       c.field.default({ label: "Negative prompt", hint: "What to steer away from. A model that ignores negative prompts (MiniMax H3) uses it only with Shadow negative or Negative erase on.", control: c.textarea.md({ label: "Negative prompt", value: p.negative, rows: 2, onInput: (v) => p.setNegative(v) }) }),
