@@ -66,6 +66,7 @@ FROZEN = {
     "FunUIApplyPromptMarkup": ["model", "clip", "positive", "latent", "markup"],
     "FunUILatentResample": ["latent", "upscaler", "operation", "scale", "positive", "negative"],
     "FunUIModifierSettings": ["settings"],
+    "FunUIGuideFrames": ["positive", "negative", "vae", "latent", "frames"],
     "FunUIIdentityTransfer": ["model", "vae", "positive", "negative", "latent", "image", "identity_projector",
                                 "source_id", "phase_scale", "id_strength", "arcface_mode"],
     "FunUIDecode": ["samples", "vae", "model", "audio_vae", "tile_size"],
