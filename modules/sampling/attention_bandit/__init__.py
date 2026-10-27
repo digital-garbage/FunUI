@@ -44,7 +44,7 @@ MOUNT = "generation.sampling"
 STAGE = "sampling"
 CATEGORY = "sampling"
 STATUS = "experimental"
-REQUIRES = ["dit_block_hooks"]
+REQUIRES = ["block_scope"]
 USES = ["taste_store"]
 
 SETTINGS = {
@@ -316,6 +316,28 @@ def region_spans(options):
     return [(edges[i], edges[i + 1]) for i in range(BANDS)] + [seg["audio"]]
 
 
+def paired_regions(q, factors, video_width, sound_width):
+    """q with each clip region's rows asking differently, for a model whose picture and sound attend in
+    calls of their own (rows run frame by frame): the picture's self-attention is cut into BANDS equal
+    time bands, the sound's self-attention is the last region. Any other call comes back as it was."""
+    width = int(q.shape[-1])
+    if width == video_width:
+        edges = [int(q.shape[1]) * i // BANDS for i in range(BANDS + 1)]
+        spans = list(zip(edges[:-1], edges[1:]))
+        mine = factors[:BANDS]
+    elif width == sound_width:
+        spans, mine = [(0, int(q.shape[1]))], factors[BANDS:BANDS + 1]
+    else:
+        return q
+    if all(f == 1.0 for f in mine):
+        return q
+    q = q.clone()
+    for (a, b), factor in zip(spans, mine):
+        if factor != 1.0:
+            q[:, a:b] /= factor
+    return q
+
+
 # Carried on the per-block copy of transformer_options, as Randomizer does, so an
 # attention call knows its block's factors without a shared flag.
 _SCOPE = "funui_attention_bandit"
@@ -343,6 +365,11 @@ def install(patcher, values, key):
             "text": 0, "text_wanted": False, "region_hits": 0, "region_wanted": False}
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS)
+    dm = getattr(patcher.model, "diffusion_model", None)
+    paired = hasattr(dm, "transformer_blocks")                 # picture and sound attend in separate calls, one stream each
+    video_width, sound_width = getattr(dm, "inner_dim", None), getattr(dm, "audio_inner_dim", None)
+    if focus and paired:
+        focus = False                  # the prompt's rows are not one run of the sequence here: that part is H3's
 
     def scoped_for(index):
         def scoped(args, extra):
@@ -367,7 +394,10 @@ def install(patcher, values, key):
         live["scaled"] += 1
         if temperature != 1.0:
             q = q / temperature
-        if live["region_wanted"] and q.ndim == 4:
+        if live["region_wanted"] and paired and q.ndim == 3 and q.shape == k.shape:
+            q = paired_regions(q, live["regions"], video_width, sound_width)
+            live["region_hits"] += 1
+        elif live["region_wanted"] and q.ndim == 4:
             spans = region_spans(options)
             if spans and spans[-1][1] <= q.shape[2]:
                 q = q.clone()
