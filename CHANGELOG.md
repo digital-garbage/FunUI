@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **LTX users: you no longer drop pictures on the timeline to feed the model.** The start picture is chosen in the scene's References selector (reference picture 1), and Image to Video and Video to Video are separate workflows: switch the preset (Settings > Models & Pipeline) to change between them; a pipeline is not interchangeable between the two.
 - **On LTX only Noise merging, the Attention explorer and Taste are offered for now.** Every other sampling and guidance enhancement (REINS, Block repeat, Identity bank, Guide frames, Shot memory, Camera move, Temporal style and the rest) is held back there until it has been proven on a real LTX run; H3 is unchanged. A model holds a module back with a `hides:<module id>` trait, so taking one off the list in `modules/models/ltx/__init__.py` (`HELD_BACK`) is all it takes to bring it back. Saved settings are kept; the Log says "held back for now".
 - **Load Media decodes only what it keeps**: a prepared video decodes just the kept frames and shapes each as it comes, and a picture input reads one frame, so a long clip no longer sits whole in memory.
 - **A clip named in Japanese (or any non-ASCII name) no longer fails a run on a machine whose console is not UTF-8.**
