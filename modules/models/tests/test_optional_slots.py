@@ -44,10 +44,11 @@ def _cases():
     return [(preset["id"], slot["id"]) for preset in _presets() for slot in preset["slots"] if slot["node"] in table]
 
 
-def test_the_seven_optional_node_classes_are_declared():
+def test_the_optional_node_classes_the_presets_use_are_declared():
+    # FunUIIdentityTransfer is still declared (LTX pipelines saved with it keep running) but no preset carries it any more.
     nodes = {s["node"] for p in _presets() for s in p["slots"] if s["node"] in _table()}
     assert nodes == {"FunUIEnhancePrompt", "FunUIShotCamera", "FunUIPromptMarkup", "FunUIApplyPromptMarkup",
-                     "FunUINegativeErase", "FunUICutOpening", "FunUIIdentityTransfer"}
+                     "FunUINegativeErase", "FunUICutOpening"}
 
 
 @pytest.mark.parametrize("preset_id,slot_id", _cases())

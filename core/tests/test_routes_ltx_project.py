@@ -4,7 +4,7 @@ and for a render. Each must answer JSON: a page that gets anything else fails on
 
 import pytest
 
-from core.tests.test_routes_pipeline import _request, registered, server  # noqa: F401
+from core.tests.test_routes_pipeline import _request, model_files, registered, server  # noqa: F401
 
 
 def _preset(pid):

@@ -13,7 +13,7 @@ import torch
 
 pytest.importorskip("aiohttp")
 
-from core.tests.test_routes_pipeline import _request, registered, server  # noqa: E402,F401
+from core.tests.test_routes_pipeline import _request, model_files, registered, server  # noqa: E402,F401
 
 
 @pytest.fixture(autouse=True)

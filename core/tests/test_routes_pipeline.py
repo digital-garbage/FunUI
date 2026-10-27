@@ -20,7 +20,22 @@ from core import routes  # noqa: E402
 
 
 @pytest.fixture(scope="module")
-def registered(comfyui):
+def model_files(comfyui, tmp_path_factory):
+    """One empty file in each folder a default loader reads, so the loaders' dropdowns have something to offer.
+
+    A machine without models (a cloud test run) would otherwise report "nothing fills it" for every loader, and a
+    test that deletes ONE file could not tell its own problem from that. The nodes read their options when they
+    register, so this comes before `registered`."""
+    import folder_paths
+    root = tmp_path_factory.mktemp("models")
+    for kind in ("diffusion_models", "vae", "text_encoders", "clip", "loras"):
+        (root / kind).mkdir()
+        (root / kind / "stand-in.safetensors").write_bytes(b"\0")
+        folder_paths.add_model_folder_path(kind, str(root / kind))
+
+
+@pytest.fixture(scope="module")
+def registered(comfyui, model_files):
     """FunUI's nodes registered the way ComfyUI registers them.
 
     Without this the pipeline's slots all look like missing nodes, because the
