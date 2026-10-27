@@ -172,6 +172,17 @@ def _uncrop(as_guide):
 OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positive", "2": "negative"}}}
 
 
+def upgrade(slots, _outputs=None):
+    """A pipeline saved while the picture inputs still read the loader's first output: a start slot that takes whole
+    videos feeds them from the frames output now (output 0 is always one frame, so such a pipeline ran on a single frame)."""
+    start = next((s for s in slots if s.get("id") == "source_image" and s.get("node") == "FunUILoadMedia"
+                  and any(r.get("video_frames") for r in s.get("roles") or [])), None)
+    if not start:
+        return slots
+    return [dict(s, inputs={k: (["source_image", 1] if isinstance(v, (list, tuple)) and list(v) == ["source_image", 0] else v)
+                            for k, v in (s.get("inputs") or {}).items()}) for s in slots]
+
+
 def optional_nodes():
     return OPTIONAL_NODES
 

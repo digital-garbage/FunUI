@@ -210,3 +210,13 @@ def test_what_a_run_puts_on_the_start_slot_is_accepted(registered, pid):
     assert problems == []
     users = [(s["id"], k) for s in slots for k, v in s["inputs"].items() if isinstance(v, list) and v[0] == "source_image"]
     assert users and all(slots_v == 1 for slots_v in [next(s for s in slots if s["id"] == i)["inputs"][k][1] for i, k in users])
+
+
+def test_a_pipeline_saved_with_the_old_first_frame_wiring_is_brought_up_to_date():
+    from modules.models.ltx.pipeline import presets, upgrade
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_video_to_video_direct")
+    old = [dict(s, inputs={k: (["source_image", 0] if v == ["source_image", 1] else v) for k, v in s["inputs"].items()}) for s in slots]
+    assert old != slots
+    assert upgrade(old) == slots
+    plain = [{"id": "source_image", "node": "FunUILoadMedia", "roles": [{"at": "assets.source_image"}], "inputs": {}}, {"id": "a", "node": "X", "inputs": {"image": ["source_image", 0]}}]
+    assert upgrade(plain) == plain

@@ -29,7 +29,7 @@ import torch
 from comfy.nested_tensor import NestedTensor
 
 from ..._core import log, streams as _streams, traits as _traits, vae_tiles
-from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets
+from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets, upgrade as _upgrade
 
 has_block = _traits.has_block
 
@@ -150,4 +150,4 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
 TRAITS = traits
 PROVIDES = {"empty_latent": empty_latent, "decode": decode, "detect": detect,
             "probe_traits": probe_traits, "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes,
-            "video_stream": _streams.av_video_stream}
+            "video_stream": _streams.av_video_stream, "upgrade_slots": _upgrade}
