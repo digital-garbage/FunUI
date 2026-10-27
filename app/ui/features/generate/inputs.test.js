@@ -159,3 +159,17 @@ test("a video picked as the start feeds its frames to what the picture fed, when
   assert.equal((await run(mk(true), "pic")).inputs.src.full, undefined);          // a picture stays a picture
   learn([]);
 });
+
+test("a video-in pipeline takes the first video among the references as its start, and says so when there is none", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
+  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true }], inputs: {} }, { id: "a", node: "X", inputs: { image: ["src", 0] } }];
+  const run = (scene, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", ...scene }, slots, expand: async () => null });
+  const r = await run({ references: ["pic", "vid"] }, { generation_mode: "t2v" });
+  assert.equal(r.inputs.src.media_id, "vid");
+  assert.equal(r.inputs.src.full, true);
+  assert.deepEqual(r.inputs.a.image, ["src", 1]);
+  assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "pic");          // a picked start wins
+  assert.ok((await run({ references: ["pic"] })).notes.some((n) => /works from a video/.test(n)));
+  learn([]);
+});
