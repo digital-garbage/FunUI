@@ -121,6 +121,8 @@ def block_count(model) -> int:
     """How many hookable blocks the model has, or 0 when it cannot be read."""
     root = getattr(getattr(model, "model", None), "diffusion_model", None)
     blocks = getattr(root, "blocks", None)
+    if blocks is None:
+        blocks = getattr(root, "transformer_blocks", None)       # LTX names them so
     try:
         return len(blocks)
     except TypeError:

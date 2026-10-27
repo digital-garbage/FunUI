@@ -122,7 +122,7 @@ def probe_traits(keys) -> list:
         return []
     from comfy.latent_formats import MiniMaxH3AV
 
-    found = ["audio_stream", "dit_block_hooks", "adaln_modalities", *H3_ONLY]
+    found = ["audio_stream", "dit_block_hooks", "block_scope", "adaln_modalities", *H3_ONLY]
     rank = _traits.LATENT_RANK.get(MiniMaxH3AV.latent_dimensions)
     if rank:
         found.append(rank)
@@ -138,7 +138,7 @@ def traits(model):
     # dit_block_hooks: its forward honours patches_replace["dit"][("double_block",
     # i)] and routes every attention call through optimized_attention, which is
     # what core/dit_hooks.py hooks.
-    found = ["audio_stream", "dit_block_hooks", *H3_ONLY]
+    found = ["audio_stream", "dit_block_hooks", "block_scope", *H3_ONLY]
     if has_block(model, ADALN_CLASS):
         found.append("adaln_modalities")
     return found

@@ -6,10 +6,11 @@ folder mentions LTX.
 
 What it contributes, and what it deliberately does NOT:
 
-* **Traits** -- a joint audio+video model with a compressed time axis. It does NOT announce
-  `dit_block_hooks`: the block hooks other modules install (attention temperature, block repeat...)
-  are written for H3's packed block layout, and LTX's blocks take `(video, audio)` as a pair. Until
-  a module is written for that layout it is absent here, said, rather than half-working.
+* **Traits** -- a joint audio+video model with a compressed time axis. It announces `block_scope` (a
+  hook may hand a block changed options: the Randomizer) but NOT `dit_block_hooks`: the hooks that edit
+  rows (REINS, block repeat...) are written for H3's packed block layout, and LTX's blocks take
+  `(video, audio)` as a pair. Until a module is written for that layout it is absent here, said,
+  rather than half-working.
 * **An empty latent** -- video 128 channels at /32 and /8, plus an audio latent whose length comes
   from the AUDIO VAE and the frame rate. That is why this provider asks for `audio_vae` and
   `frame_rate`: without them the audio half cannot be sized, and a video-only latent would make a
@@ -66,7 +67,7 @@ def probe_traits(keys) -> list:
     """What `traits()` would say, read before anything loads."""
     if not detect(keys):
         return []
-    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av"]
+    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope"]
 
 
 def traits(model):
@@ -74,7 +75,11 @@ def traits(model):
         return ()
     # ltx_av: transformer_blocks that take (video, audio) as a pair and have the video<->audio
     # cross-attention submodules. What the LTX-only modules require.
-    return ["audio_stream", "ltx_av"]
+    # block_scope: its forward honours patches_replace["dit"][("double_block", i)] and routes attention
+    # through optimized_attention with the block's transformer_options, so a hook that only SCOPES a
+    # block (hands it changed transformer_options) works. Not dit_block_hooks: a block here takes and
+    # returns (video, audio), where the hooks that edit rows expect one packed tensor.
+    return ["audio_stream", "ltx_av", "block_scope"]
 
 
 def frames_for(length: int) -> int:

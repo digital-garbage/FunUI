@@ -22,7 +22,7 @@ MOUNT = "generation.sampling"
 STAGE = "sampling"
 CATEGORY = "sampling"
 STATUS = "proven"
-REQUIRES = ["dit_block_hooks"]
+REQUIRES = ["block_scope"]
 
 SETTINGS = {
     "enabled": {
