@@ -143,3 +143,19 @@ test("a reference video is prepared as the project says, else as the scene says,
   assert.equal((await run({ video_input_from: "project", video_input: { on: false } }, scene)).prepare, undefined);
   learn([]);
 });
+
+test("a video picked as the start feeds its frames to what the picture fed, when the pipeline says it can", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
+  const mk = (flag) => [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", ...(flag ? { video_frames: true } : {}) }], inputs: {} },
+    { id: "anchor", node: "X", inputs: { image: ["src", 0], other: ["src", 1] } }];
+  const run = (slots, id, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", source_image: id }, slots, expand: async () => null });
+  const on = await run(mk(true), "vid", { video_input: { on: true, skip_first: 3 } });
+  assert.equal(on.inputs.src.full, true);
+  assert.equal(JSON.parse(on.inputs.src.prepare).skip_first, 3);
+  assert.deepEqual(on.inputs.anchor.image, ["src", 1]);
+  assert.equal((await run(mk(true), "vid")).inputs.src.prepare, undefined);          // no preparation switched on: whole video as before
+  assert.equal((await run(mk(false), "vid")).inputs.src.full, undefined);          // the pipeline did not say: first frame only
+  assert.equal((await run(mk(true), "pic")).inputs.src.full, undefined);          // a picture stays a picture
+  learn([]);
+});

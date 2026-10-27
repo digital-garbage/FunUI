@@ -47,7 +47,8 @@ def _base(image_to_video: bool, as_guide: bool = False):
     if image_to_video:
         slots += [
             {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
-             "roles": [{"at": "assets.source_image", "input": "media_id"}],
+             # video_frames: a video picked as the start is fed whole (prepared as Video input says), not as its first frame.
+             "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}],
              "inputs": {"media_id": ""}},
             {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent",
              "inputs": {"av_latent": ["latent", 0]}},
