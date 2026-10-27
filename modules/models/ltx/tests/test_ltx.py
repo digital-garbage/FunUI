@@ -247,7 +247,11 @@ def test_image_to_video_from_references_takes_its_start_from_the_first_reference
     from modules.models.ltx.pipeline import presets
     slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
     roles = [r["at"] for s in slots for r in s.get("roles") or []]
-    assert "assets.reference_1" in roles and "assets.source_image" not in roles
+    assert "assets.reference_1" in roles and "assets.source_image" in roles      # the start from References; the timeline picture gives the shape
+    aspect = next(s for s in slots if s["id"] == "aspect")
+    assert aspect["inputs"]["image"] == ["aspect_source", 0]
+    latent = next(s for s in slots if s["id"] == "latent")
+    assert latent["inputs"]["width"] == ["aspect", 0] and latent["inputs"]["height"] == ["aspect", 1]
     assert not any(s["node"] == "FunUIIdentityTransfer" for s in slots)
     fallback = next(r["text_fallback"] for s in slots for r in s.get("roles") or [] if r.get("text_fallback"))
     assert {"slot": "anchor", "input": "bypass", "value": True} in fallback["set"]      # nothing in References: the anchor is bypassed

@@ -208,8 +208,9 @@ test("a reference whose target node was deleted from an edited pipeline is left 
 
 const LTX = {
   refs: [
-    { id: "latent", node: "FunUIEmptyLatent", roles: [{ at: "project.video", input: "width" }, { at: "project.video", input: "height" }], inputs: { width: 768, height: 512 } },
-    { id: "source_image", node: "FunUILoadMedia", roles: [{ at: "assets.reference_1", input: "media_id", text_fallback: { set: [{ slot: "anchor", input: "bypass", value: true }], size: { slot: "latent", width: "width", height: "height" } } }], inputs: { media_id: "" } },
+    { id: "aspect_source", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", blank_like: { slot: "aspect", width: "width", height: "height" } }], inputs: { media_id: "", blank_width: 0, blank_height: 0 } },
+    { id: "aspect", node: "FunUIAspectSize", roles: [{ at: "project.video", input: "width" }, { at: "project.video", input: "height" }], inputs: { width: 768, height: 512 } },
+    { id: "source_image", node: "FunUILoadMedia", roles: [{ at: "assets.reference_1", input: "media_id", text_fallback: { set: [{ slot: "anchor", input: "bypass", value: true }], size: { slot: "aspect", width: "width", height: "height" } } }], inputs: { media_id: "" } },
     { id: "anchor", node: "LTXVImgToVideoInplace", inputs: { bypass: false } },
     { id: "positive", node: "CLIPTextEncode", roles: [{ at: "generation.prompt", input: "text" }], inputs: { text: "" } },
   ],
@@ -222,16 +223,19 @@ const LTX = {
 };
 const run = (slots, scene, project = {}) => buildInputs({ project: { id: "P", video: { width: 770, height: 500 }, num_frames_per_scene: 100, generation_mode: "i2v", ...project }, scene: { id: "s", text: "hi", ...scene }, slots, expand: async (x) => ({ text: x.text }), nodeInfo: async () => null, frames: 100 });
 
-test("image to video from references: a picture in References is the start; with neither the anchor is bypassed and a plain picture stands in", async () => {
+test("image to video from references: a picture in References is the start and the timeline picture gives the shape; with neither the anchor is bypassed and a plain picture stands in", async () => {
   kinds.set("pic", "image");
   let r = await run(LTX.refs, { references: ["pic"] });
   assert.equal(r.inputs.source_image.media_id, "pic");
   assert.equal(r.inputs.anchor, undefined);
-  r = await run(LTX.refs, { source_image: "pic" });                       // a timeline start picture is not this pipeline's input: said, with where to put it
-  assert.equal(r.left[0].why, "this pipeline starts from the first picture in References: add it there");
+  r = await run(LTX.refs, { source_image: "pic" });                       // the timeline picture is the ASPECT source here, not the start
+  assert.equal(r.inputs.aspect_source.media_id, "pic");
+  assert.ok(!(r.inputs.source_image || {}).media_id);
+  assert.deepEqual(r.left, []);
   r = await run(LTX.refs, {});
   assert.equal(r.inputs.anchor.bypass, true);
-  assert.equal(r.inputs.source_image.blank_width, 770);          // the latent node rounds its own size; the bypassed anchor never looks at this picture
+  assert.equal(r.inputs.source_image.blank_width, 770);          // the bypassed anchor never looks at this picture
+  assert.equal(r.inputs.aspect_source.blank_width, 770);        // with no aspect picture a plain one of the project's size stands in
   assert.ok(r.notes.some((n) => /text to video/.test(n)));
 });
 

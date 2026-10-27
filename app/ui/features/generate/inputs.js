@@ -20,8 +20,6 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];
   const plan = sceneReferences(scene, project.fixed_references);
-  // A pipeline that starts from the first reference takes no start picture from the timeline: the picture goes in References.
-  const startsFromRefs = !source && (slots || []).some((s) => (s.roles || []).some((r) => r.text_fallback && r.at === "assets.reference_1"));
   // A pipeline that takes whole media where it takes a picture (LTX): with no start picked, the first reference is the start:
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
   // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone and is
@@ -100,7 +98,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   }
   // A picked start picture that no slot takes would otherwise be ignored without a word.
   const ignored = !source && scene.source_image && project.generation_mode !== "t2v";
-  if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: startsFromRefs ? "this pipeline starts from the first picture in References: add it there" : "this pipeline starts from no picture" });
+  if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: "this pipeline starts from no picture" });
 
   const prompt = rolesAt(slots, "generation.prompt")[0];
   let failedExpand = false;

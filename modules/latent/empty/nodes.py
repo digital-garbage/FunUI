@@ -149,3 +149,34 @@ class FunUIEmptyLatent(io.ComfyNode):
 
         return io.NodeOutput(derive(model, width, height, length, batch_size),
                              "shaped from the model's own latent format")
+
+
+class FunUIAspectSize(io.ComfyNode):
+    """A picture's shape at a pixel budget: the width and height to make a clip so it has the picture's aspect ratio."""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="FunUIAspectSize",
+            display_name="FunUI Aspect Size",
+            category="FunUI/Latent",
+            description="The picture supplies the SHAPE, width x height supplies the SCALE: out comes a width and a height with "
+                        "the picture's aspect ratio and about width x height pixels, each the nearest multiple of `multiple_of`.",
+            inputs=[
+                io.Image.Input("image", tooltip="Only its width-to-height ratio is used."),
+                io.Int.Input("width", default=768, min=16, max=16384, tooltip="The pixel budget is width x height."),
+                io.Int.Input("height", default=512, min=16, max=16384),
+                io.Int.Input("multiple_of", default=32, min=1, max=256, optional=True,
+                             tooltip="Round each side to a multiple of this (LTX wants 32)."),
+            ],
+            outputs=[io.Int.Output(display_name="width"), io.Int.Output(display_name="height")],
+        )
+
+    @classmethod
+    def execute(cls, image, width: int, height: int, multiple_of: int = 32) -> io.NodeOutput:
+        ih, iw = int(image.shape[1]), int(image.shape[2])
+        step = max(1, int(multiple_of))
+        w = (width * height * iw / ih) ** 0.5
+        h = w * ih / iw
+        snap = lambda v: max(step, int(v / step + 0.5) * step)
+        return io.NodeOutput(snap(w), snap(h))

@@ -55,22 +55,29 @@ def _common(latent_slots, latent_source, positive_source, negative_source, decod
 
 
 def _image_to_video():
-    """Image to video, the start taken from the scene's first reference picture (nothing is picked twice). With no
+    """Image to video, the start taken from the scene's first reference picture (nothing is picked twice). The picture on the
+    timeline is the ASPECT SOURCE, as on H3: it gives the clip its shape, the project's Width x Height give the scale. With no
     picture in References, the anchor is bypassed and the clip is made from the prompt alone (text to video)."""
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
     latent = [
-        {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
+        {"id": "aspect_source", "group": "Reference media", "node": "FunUILoadMedia",
+         # With no picture a plain one of the budget's size stands in, so the shape is the project's own.
+         "roles": [{"at": "assets.source_image", "input": "media_id",
+                    "blank_like": {"slot": "aspect", "width": "width", "height": "height"}}],
+         "inputs": {"media_id": "", "blank_width": 0, "blank_height": 0}},
+        {"id": "aspect", "group": "Preparation", "node": "FunUIAspectSize",
          "roles": [{"at": "project.video", "input": "width", "label": "Width"},
-                   {"at": "project.video", "input": "height", "label": "Height"},
-                   {"at": "project.video", "input": "length", "label": "Length", "drives": "frames"},
-                   video],
+                   {"at": "project.video", "input": "height", "label": "Height"}],
+         "inputs": {"image": ["aspect_source", 0], "width": 768, "height": 512, "multiple_of": 32}},
+        {"id": "latent", "group": "Preparation", "node": "FunUIEmptyLatent",
+         "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}, video],
          "inputs": {"model": ["model", 0], "audio_vae": ["audio_vae", 0],
-                    "width": 768, "height": 512, "length": 121, "frame_rate": 25.0, "batch_size": 1}},
+                    "width": ["aspect", 0], "height": ["aspect", 1], "length": 121, "frame_rate": 25.0, "batch_size": 1}},
         {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
          "roles": [{"at": "assets.reference_1", "input": "media_id",
-                    # Nothing in References: a plain picture of the clip's size stands in and the anchor is bypassed.
+                    # Nothing in References: the anchor is bypassed (the picture it would carry is a plain stand-in).
                     "text_fallback": {"set": [{"slot": "anchor", "input": "bypass", "value": True}],
-                                      "size": {"slot": "latent", "width": "width", "height": "height"}}}],
+                                      "size": {"slot": "aspect", "width": "width", "height": "height"}}}],
          "inputs": {"media_id": ""}},
         {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["latent", 0]}},
         {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",

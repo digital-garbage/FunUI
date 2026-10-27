@@ -186,3 +186,38 @@ def test_direct_video_to_video_with_no_video_runs_the_whole_schedule_over_a_grey
     assert video.shape == (1, 128, 3, 2, 4)                                           # 17 frames -> 1 + 16//8 latent frames
     run("sigmas")
     assert round(float(done["sigmas"][0][0]), 3) == 1.0 and len(done["sigmas"][0]) == 9
+
+
+def test_image_to_video_takes_its_shape_from_the_aspect_source_picture(comfyui, real_tiny_ltx, tmp_path, monkeypatch):
+    """A portrait picture on the timeline makes a portrait latent at the project's pixel budget; with none the project's own shape."""
+    import asyncio
+    import io as pyio
+    from pathlib import Path
+    import nodes as comfy_nodes
+    from PIL import Image
+    from core import config, graph, media
+    from modules.models.ltx.pipeline import presets
+
+    async def load():
+        await comfy_nodes.init_extra_nodes(init_custom_nodes=False)
+        await comfy_nodes.load_custom_node(str(Path(__file__).resolve().parents[4]), module_parent="custom_nodes")
+    asyncio.run(load())
+    monkeypatch.setattr(config, "MEDIA_DIR", tmp_path / "media")
+    buf = pyio.BytesIO()
+    Image.new("RGB", (300, 600), (255, 0, 0)).save(buf, format="PNG")
+    portrait = media.save_upload("tall.png", buf.getvalue())["id"]
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+
+    def latent_shape(edits):
+        s, problems = graph.override(slots, edits)
+        assert problems == []
+        prompt, _ = graph.build(s)
+        run, done = _run(prompt, {"model": (real_tiny_ltx, ""), "vae": (StubVae(), ""), "audio_vae": (StubAudioVae(), ""), "clip": (None, "")})
+        run("latent")
+        return done["aspect"], done["latent"][0]["samples"].unbind()[0].shape
+
+    sized, shape = latent_shape({"aspect_source": {"media_id": portrait}, "aspect": {"width": 256, "height": 256}, "latent": {"length": 9}})
+    assert sized[0] < sized[1] and (sized[0] % 32, sized[1] % 32) == (0, 0)            # a portrait budget of 256 x 256 pixels
+    assert shape[-2:] == (sized[1] // 32, sized[0] // 32)                              # the latent follows it
+    sized, _ = latent_shape({"aspect_source": {"media_id": "", "blank_width": 256, "blank_height": 128}, "aspect": {"width": 256, "height": 128}, "latent": {"length": 9}})
+    assert sized == (256, 128)                                                         # no picture: the project's own shape
