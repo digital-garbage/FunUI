@@ -183,14 +183,3 @@ test("an LTX image-to-video pipeline starts from the first reference picture whe
   assert.equal((await run({ references: ["pic"] }, { generation_mode: "t2v" })).inputs.src.media_id, "");          // "From a prompt": no picture
   learn([]);
 });
-
-test("a direct video-to-video pipeline saved without the video-only flag is still video-to-video (an encoder is fed by the start slot)", async () => {
-  const { learn } = await import("../../shell/bin.js");
-  learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
-  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true }], inputs: {} },
-    { id: "enc", node: "VAEEncode", inputs: { pixels: ["src", 1] } }];
-  const r = await buildInputs({ project: { video: {}, generation_mode: "t2v" }, scene: { text: "x", references: ["pic", "vid"] }, slots, expand: async () => null });
-  assert.equal(r.inputs.src.media_id, "vid");
-  assert.equal(r.inputs.src.full, true);
-  learn([]);
-});

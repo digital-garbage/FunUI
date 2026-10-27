@@ -24,7 +24,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
   // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone and is
   // never blanked by "From a prompt".
-  const takesVideo = Boolean(source && source.role.video_frames), videoOnly = Boolean(source && (source.role.video_only || (slots || []).some((s) => s.node === "VAEEncode" && ((s.inputs || {}).pixels || [])[0] === source.slot.id)));       // a pipeline that encodes the start itself is video-to-video, whether or not it was saved saying so
+  const takesVideo = Boolean(source && source.role.video_frames), videoOnly = Boolean(source && source.role.video_only);
   const wanted = (id) => kinds.get(id) === "video" || (!videoOnly && kinds.get(id) === "image");
   const blank = project.generation_mode === "t2v" && !videoOnly;
   const fromRefs = takesVideo && !scene.source_image && !blank

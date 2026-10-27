@@ -174,24 +174,14 @@ OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positiv
 
 
 def upgrade(slots, _outputs=None):
-    """Pipelines saved by an earlier build, brought up to date:
-    * the picture inputs read the loader's first output (always one frame): a start slot that takes whole videos feeds them
-      from the frames output now;
-    * the direct video-to-video pipeline, saved before its start slot said it takes videos only."""
+    """A pipeline saved while the picture inputs still read the loader's first output: a start slot that takes whole
+    videos feeds them from the frames output now (output 0 is always one frame, so such a pipeline ran on a single frame)."""
     start = next((s for s in slots if s.get("id") == "source_image" and s.get("node") == "FunUILoadMedia"
                   and any(r.get("video_frames") for r in s.get("roles") or [])), None)
     if not start:
         return slots
-    encoded = any(s.get("node") == "VAEEncode" and (s.get("inputs") or {}).get("pixels") in (["source_image", 0], ["source_image", 1]) for s in slots)
-    out = []
-    for s in slots:
-        inputs = {k: (["source_image", 1] if isinstance(v, (list, tuple)) and list(v) == ["source_image", 0] else v)
-                  for k, v in (s.get("inputs") or {}).items()}
-        item = dict(s, inputs=inputs)
-        if s is start and encoded:
-            item["roles"] = [dict(r, video_only=True) if r.get("video_frames") else r for r in s.get("roles") or []]
-        out.append(item)
-    return out
+    return [dict(s, inputs={k: (["source_image", 1] if isinstance(v, (list, tuple)) and list(v) == ["source_image", 0] else v)
+                            for k, v in (s.get("inputs") or {}).items()}) for s in slots]
 
 
 def optional_nodes():
