@@ -246,8 +246,8 @@ def install(patcher, values, key):
         video, rebuild = split
         base = streams.video_of(latent_image, named) if latent_image is not None else None
         if base is None or bool(torch.count_nonzero(base[0])):
-            _say("Inactive | the starting latent is not empty (a second pass or an anchor), "
-                 "so shot memory leaves this run's noise alone")
+            _say("Inactive | the starting latent is not empty (a second pass, an anchor or a "
+                 "start video), so the layout is already set and shot memory leaves this run's noise alone")
             return run(noise)
         own = coarse_of(video)
         if own is None:

@@ -188,8 +188,8 @@ def install(patcher, values, key):
         live.update(empty=base is not None and not bool(torch.count_nonzero(base[0])),
                     seed=int((extra_args or {}).get("seed") or 0), seen=set(), multi=False, moved=0)
         if not live["empty"]:
-            _say("Inactive | the starting latent is not empty (a second pass or an anchor), "
-                 "so the picture is not moved")
+            _say("Inactive | the starting latent is not empty (a second pass, an anchor or a "
+                 "start video), so the picture is not moved")
         out = executor(model_wrap, sigmas, extra_args, callback, noise,
                        latent_image, denoise_mask, disable_pbar)
         if live["moved"] and not live["multi"]:
