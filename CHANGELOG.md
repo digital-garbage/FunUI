@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- **An older LTX Image to Video pipeline now falls back to text to video** when no picture is fed in (its start slot is upgraded on load to bypass the anchor and use a plain stand-in), instead of refusing to start. The fallback chain is now also run end to end in a test.
 - **Cancelling during a Noise merging second pass now cancels** instead of being swallowed as a failed merge.
 - **Identity bank's lock** no longer counts probe passes (such as Noise merging's second answer) as steps of the run.
 - **Attention explorer ratings made on H3 no longer teach LTX** under the same Taste key: the two model families keep their ratings apart.

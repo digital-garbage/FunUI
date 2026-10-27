@@ -160,8 +160,27 @@ def _add_aspect(slots):
     return out
 
 
+def _add_text_fallback(slots):
+    """An Image to Video saved before text to video was the fallback: its start picture is required, so a run with nothing fed
+    in could not start. The start slot now says what to change when there is none (bypass the anchor, a plain picture of the
+    latent's size stands in), as the shipped preset does."""
+    ids = {x.get("id"): x for x in slots}
+    start, anchor, latent = ids.get("source_image"), ids.get("anchor"), ids.get("latent")
+    if not start or not anchor or anchor.get("node") != "LTXVImgToVideoInplace" or not latent or start.get("node") != "FunUILoadMedia":
+        return slots
+    roles = start.get("roles") or []
+    if any(r.get("text_fallback") for r in roles) or not any(r.get("input") == "media_id" for r in roles):
+        return slots
+    if "bypass" not in (anchor.get("inputs") or {}):
+        return slots
+    size = {"slot": "aspect", "width": "width", "height": "height"} if "aspect" in ids else {"slot": "latent", "width": "width", "height": "height"}
+    fallback = {"set": [{"slot": "anchor", "input": "bypass", "value": True}], "size": size}
+    new = [dict(r, text_fallback=fallback) if r.get("input") == "media_id" else r for r in roles]
+    return [dict(x, roles=new) if x is start else x for x in slots]
+
+
 def upgrade(slots, _outputs=None):
-    return _add_aspect(_upgrade_video(slots))
+    return _add_text_fallback(_add_aspect(_upgrade_video(slots)))
 
 
 def _upgrade_video(slots):

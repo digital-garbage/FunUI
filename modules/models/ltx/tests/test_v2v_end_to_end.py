@@ -85,7 +85,7 @@ def _run(prompt, stubs):
         cls = comfy_nodes.NODE_CLASS_MAPPINGS[spec["class_type"]]
         kwargs = {k: value(v) for k, v in spec["inputs"].items()}
         if hasattr(cls, "GET_SCHEMA"):
-            out = cls.execute(**kwargs)
+            out = cls.EXECUTE_NORMALIZED(**kwargs)
             done[node_id] = tuple(out.result)
         else:
             done[node_id] = getattr(cls(), cls.FUNCTION)(**kwargs)
@@ -221,3 +221,31 @@ def test_image_to_video_takes_its_shape_from_the_aspect_source_picture(comfyui, 
     assert shape[-2:] == (sized[1] // 32, sized[0] // 32)                              # the latent follows it
     sized, _ = latent_shape({"aspect_source": {"media_id": "", "blank_width": 256, "blank_height": 128}, "aspect": {"width": 256, "height": 128}, "latent": {"length": 9}})
     assert sized == (256, 128)                                                         # no picture: the project's own shape
+
+
+def test_image_to_video_with_nothing_fed_in_builds_its_latent_and_samples(comfyui, real_tiny_ltx, monkeypatch):
+    """What the app sends with no reference picture: stand-in pictures, the anchor bypassed. The whole chain up to the sampler runs."""
+    import asyncio
+    from pathlib import Path
+    import nodes as comfy_nodes
+    from core import graph
+    from modules.models.ltx.pipeline import presets
+
+    async def load():
+        await comfy_nodes.init_extra_nodes(init_custom_nodes=False)
+        await comfy_nodes.load_custom_node(str(Path(__file__).resolve().parents[4]), module_parent="custom_nodes")
+    asyncio.run(load())
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    edits = {"aspect_source": {"media_id": "", "blank_width": 256, "blank_height": 128},
+             "aspect": {"width": 256, "height": 128}, "latent": {"length": 17},
+             "source_image": {"media_id": "", "blank_width": 256, "blank_height": 128},
+             "anchor": {"bypass": True}}
+    slots, problems = graph.override(slots, edits)
+    assert problems == []
+    prompt, _ = graph.build(slots)
+    cond = [[torch.randn(1, 5, 48), {}]]
+    run, done = _run(prompt, {"model": (real_tiny_ltx, ""), "vae": (StubVae(), ""), "audio_vae": (StubAudioVae(), ""),
+                              "clip": (None, ""), "positive": (cond, ""), "negative": (cond, "")})
+    run("join")
+    video, audio = done["join"][0]["samples"].unbind()
+    assert video.shape[-2:] == (4, 8)

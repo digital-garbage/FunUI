@@ -305,3 +305,18 @@ def test_unproven_enhancements_are_held_back_but_the_proven_ones_stay(comfyui):
     assert traits.missing_for(spec, traits_) == ["a proven run on this model (held back for now)"]
     other = type("S", (), {"id": "noise_merge", "requires": []})()
     assert traits.split([spec, other], traits_) == ([other], [spec])
+
+
+def test_an_older_image_to_video_gets_the_text_to_video_fallback(comfyui):
+    from modules.models.ltx import pipeline
+    slots = [
+        {"id": "latent", "node": "FunUIEmptyLatent", "inputs": {"width": 768, "height": 512}},
+        {"id": "source_image", "node": "FunUILoadMedia", "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}],
+         "inputs": {"media_id": ""}},
+        {"id": "anchor", "node": "LTXVImgToVideoInplace", "inputs": {"bypass": False}},
+    ]
+    fixed = pipeline.upgrade(slots)
+    fb = fixed[1]["roles"][0]["text_fallback"]
+    assert {"slot": "anchor", "input": "bypass", "value": True} in fb["set"] and fb["size"]["slot"] == "latent"
+    assert fixed[1]["roles"][0]["video_frames"] is True
+    assert pipeline.upgrade(fixed) == fixed
