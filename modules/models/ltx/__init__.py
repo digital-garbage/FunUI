@@ -83,16 +83,10 @@ def frames_for(length: int) -> int:
     return ((length - 1 + VIDEO_TEMPORAL_RATIO - 1) // VIDEO_TEMPORAL_RATIO) * VIDEO_TEMPORAL_RATIO + 1
 
 
-NOTE = ('LTX 2.3 is tested on a real model (Video to Video direct, Image to Video from References, separate loaders, LoRAs, Noise merging). '
-        'Other enhancements are not tested on LTX yet. Problems: '
-        'https://github.com/digital-garbage/FunUI/issues')
-
-
 def empty_latent(model, width, height, length, batch_size=1, audio_vae=None, frame_rate=25.0):
     """The joint latent, or None when this is not an LTX audio+video model."""
     if not is_ltx(model):
         return None
-    log.once("ltx_note", log.INFO, "FunUI LTX", NOTE)
     if audio_vae is None:
         raise RuntimeError(
             "this model makes sound with the picture and sizes it from the audio VAE: wire the audio "

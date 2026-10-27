@@ -188,14 +188,13 @@ def test_a_size_that_is_not_a_multiple_of_32_is_said(comfyui, monkeypatch):
     monkeypatch.setattr(log, "once", lambda key, level, source, msg: said.append(msg))
     m.empty_latent(object(), 816, 512, 9, 1, audio_vae=_AudioVae(), frame_rate=25.0)
     assert any("800x512" in m_ for m_ in said)
-    assert any("tested on a real model" in m_ for m_ in said)            # every LTX run says what is tested
+    assert not any("tested" in m_ for m_ in said)                        # a working model needs no notice
 
 
 def test_ltx_presets_are_the_two_that_were_tested(registered):
     from core import routes
     titles = [p["title"] for _s, make in routes.modules().providers("pipeline_presets") for p in make() if p["id"].startswith("ltx")]
     assert len(titles) == 2 and not any("UNTESTED" in t for t in titles)
-    assert "Noise merging" in _ltx().NOTE and "issues" in _ltx().NOTE
 
 
 @pytest.mark.parametrize("pid", ["ltx23_image_to_video_references", "ltx23_video_to_video_direct"])
