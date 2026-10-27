@@ -232,3 +232,13 @@ def test_h3_only_features_are_not_offered_on_ltx(comfyui):
     have = ltx.probe_traits({"audio_adaln_single.linear.weight"})
     assert traits.missing_for(spec, have) == ["shot_prompts"]
     assert not set(H3_ONLY) & set(have)
+
+
+def test_a_direct_v2v_pipeline_saved_before_video_only_still_ignores_pictures_and_the_prompt_switch():
+    from modules.models.ltx.pipeline import presets, upgrade
+    slots = next(p["slots"] for p in presets() if p["id"] == "ltx23_video_to_video_direct")
+    old = [dict(s, roles=[{k: v for k, v in r.items() if k != "video_only"} for r in s.get("roles") or []]) if s["id"] == "source_image" else s for s in slots]
+    assert not any(r.get("video_only") for s in old for r in s.get("roles") or [])
+    assert upgrade(old) == slots
+    i2v = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video")
+    assert not any(r.get("video_only") for s in upgrade(i2v) for r in s.get("roles") or [])          # i2v keeps taking pictures
