@@ -23,7 +23,7 @@ MOUNT = "generation.sampling"
 STAGE = "guidance"
 CATEGORY = "guidance"
 STATUS = "experimental"
-REQUIRES = ["dit_block_hooks"]
+REQUIRES = ["block_rows"]
 USES = ["taste_store"]
 
 SETTINGS = {
@@ -87,27 +87,32 @@ def install(patcher, values, key):
     def make(block):
         def hook(args, extra):
             out = extra["original_block"](args)["img"]
-            span = video_span(args, out)
-            if span is None:
-                return {"img": out}
-            rows = out[span[0]:span[1]]
+            if isinstance(out, (tuple, list)):         # an audio+video block hands back (video, audio): the video is all picture
+                rows, width = out[0].reshape(-1, out[0].shape[-1]), out[0].shape[-1]
+            else:
+                span = video_span(args, out)
+                if span is None:
+                    return {"img": out}
+                rows, width = out[span[0]:span[1]], out.shape[-1]
             if dit_hooks.last_step(args.get("transformer_options")):
                 captured[block] = rows.mean(0, dtype=torch.float32).detach()
             direction = live["dirs"].get(block)
             if direction is None or strength <= 0.0:
                 return {"img": out}
-            if direction.numel() != out.shape[-1]:
+            if direction.numel() != width:
                 _say(f"block {block}'s learned direction is from a different model; "
                      "learning only there")
                 return {"img": out}
-            d = cast.get((block, out.dtype))
+            d = cast.get((block, rows.dtype))
             if d is None:
-                d = cast[(block, out.dtype)] = direction.to(device=out.device, dtype=out.dtype)
+                d = cast[(block, rows.dtype)] = direction.to(device=rows.device, dtype=rows.dtype)
             norm = torch.linalg.vector_norm(rows, dim=-1, dtype=torch.float32).mean()
             # No host sync: a bad norm makes the push zero instead of a branch.
             scale = torch.where(torch.isfinite(norm) & (norm > 0), norm * strength,
                                 torch.zeros_like(norm))
-            rows += d * scale.to(out.dtype)
+            rows += d * scale.to(rows.dtype)
+            if isinstance(out, (tuple, list)) and rows.data_ptr() != out[0].data_ptr():
+                out[0].copy_(rows.view_as(out[0]))         # the reshape had to copy: put the push back
             return {"img": out}
         return hook
 

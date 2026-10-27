@@ -35,7 +35,7 @@ MOUNT = "generation.sampling"
 STAGE = "sampling"
 CATEGORY = "sampling"
 STATUS = "experimental"
-REQUIRES = ["dit_block_hooks"]
+REQUIRES = ["block_rows"]
 
 SETTINGS = {
     "enabled": {
@@ -121,6 +121,10 @@ def install(patcher, values, key):
     steps = int(values.get("steps", 0))
     video_only = bool(values.get("video_only"))
     span = values.get("shape") == "span"
+    paired = hasattr(getattr(patcher.model, "diffusion_model", None), "transformer_blocks")      # audio+video blocks: (video, audio) in and out
+    if span and paired:
+        _say("this model's blocks take picture and sound as a pair, so 'whole span' runs as 'each block'")
+        span = False
 
     if span:
         lo, hi = blocks[0], blocks[-1]
@@ -154,7 +158,20 @@ def install(patcher, values, key):
             dit_hooks.add_block_hook(patcher, key, i, skip)
         what = f"blocks {lo}-{hi} loop {times + 1}x as one span"
     else:
+        def repeat_pair(args, extra):
+            once = extra["original_block"](args)["img"]
+            if not _in_window(args, steps):
+                return {"img": once}
+            if video_only:         # these blocks add their residual into their input: keep the single pass whole
+                once = tuple(t.clone() for t in once)
+            h = once
+            for _ in range(times):
+                h = extra["original_block"]({**args, "img": h})["img"]
+            return {"img": (h[0], once[1]) if video_only else h}
+
         def repeat(args, extra):
+            if paired:
+                return repeat_pair(args, extra)
             once = extra["original_block"](args)["img"]
             if not _in_window(args, steps):
                 return {"img": once}

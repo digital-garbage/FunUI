@@ -30,7 +30,7 @@ def test_blocks_past_the_models_last_are_said_not_silently_dropped(tiny_ltx):
     assert f"0-{n - 1}" in status
 
 
-def test_row_editing_modules_stay_off_ltx(tiny_ltx):
+def test_modules_written_for_h3s_packed_rows_stay_off_ltx(tiny_ltx):
     from modules.sampling.modifiers.nodes import FunUILoadModifiers
-    _p, status = FunUILoadModifiers.execute(tiny_ltx.patcher, {"reins": {"enabled": True}}).result
-    assert "reins: needs dit_block_hooks" in status
+    _p, status = FunUILoadModifiers.execute(tiny_ltx.patcher, {"stas": {"enabled": True}}).result
+    assert "stas: needs dit_block_hooks" in status

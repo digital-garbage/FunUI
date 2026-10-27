@@ -67,7 +67,7 @@ def probe_traits(keys) -> list:
     """What `traits()` would say, read before anything loads."""
     if not detect(keys):
         return []
-    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope"]
+    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope", "block_rows"]
 
 
 def traits(model):
@@ -79,7 +79,9 @@ def traits(model):
     # through optimized_attention with the block's transformer_options, so a hook that only SCOPES a
     # block (hands it changed transformer_options) works. Not dit_block_hooks: a block here takes and
     # returns (video, audio), where the hooks that edit rows expect one packed tensor.
-    return ["audio_stream", "ltx_av", "block_scope"]
+    # block_rows: the hooks that read or push the video rows of a block's output (REINS, Block repeat)
+    # handle the pair too (see those modules).
+    return ["audio_stream", "ltx_av", "block_scope", "block_rows"]
 
 
 def frames_for(length: int) -> int:

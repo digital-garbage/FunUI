@@ -241,6 +241,9 @@ class TinyLTX:
                       torch.tensor([sigma * 1000.0]), self.context, frame_rate=25, transformer_options=to)
 
 
+TinyLTX.sample = TinyH3.sample           # `run` inside the patcher's OUTER_SAMPLE wrappers, the same way
+
+
 _TINY_LTX = []
 
 
