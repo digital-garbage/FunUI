@@ -118,11 +118,19 @@ def test_direct_video_to_video_end_to_end(clip_id, real_tiny_ltx, monkeypatch):
     slots = upgrade(old)
 
     prepare = json.dumps({"skip_first": 1, "cut_last": 0, "every_nth": 1, "multiple_of": 32, "fps": 25})
-    slots, problems = graph.override(slots, {"source_image": {"media_id": clip_id, "full": True, "prepare": prepare}})
+    slots, problems = graph.override(slots, {"source_image": {"media_id": clip_id, "full": True, "prepare": prepare},
+                                              "positive": {"text": "a red fox runs"}})
     assert problems == []
     prompt, problems = graph.build(slots)
     unset = ("needs 'ckpt_name'", "needs 'model_name'", "needs 'vae_name'", "needs 'clip_name1'", "is '', which is not one of")
     assert [p for p in problems if not any(u in p for u in unset)] == []
+
+    # the typed prompt is what the sampler's positive input comes from, through the conditioning node and nothing else
+    node = prompt["sampler"]["inputs"]["positive"]
+    while prompt[node[0]]["class_type"] != "CLIPTextEncode":
+        node = next(v for v in prompt[node[0]]["inputs"].values() if isinstance(v, list) and prompt[v[0]]["class_type"] in ("LTXVConditioning", "CLIPTextEncode"))
+    assert prompt[node[0]]["inputs"]["text"] == "a red fox runs"
+    assert prompt["sampler"]["inputs"]["latent"][0] == "latent" and prompt["sampler"]["inputs"]["denoise"] == 1.0
 
     vae, audio_vae = StubVae(), StubAudioVae()
     run, done = _run(prompt, {"model": (real_tiny_ltx, ""), "vae": (vae, ""), "audio_vae": (audio_vae, ""), "clip": (None, "")})
@@ -140,9 +148,13 @@ def test_direct_video_to_video_end_to_end(clip_id, real_tiny_ltx, monkeypatch):
     from modules.sampling.sampler.nodes import FunUISampler
     run("sigmas")
     sig = done["sigmas"][0]
-    assert [round(float(x), 3) for x in sig] == [0.725, 0.422, 0.0]                    # the tail of the distilled schedule
+    assert [round(float(x), 3) for x in sig] == [0.909, 0.725, 0.422, 0.0]                    # the tail of the distilled schedule
     start = done["latent"][0]
     out = FunUISampler.execute(real_tiny_ltx, [[ctx, {}]], [[ctx, {}]], start, 1, 2, 1.0, "euler", "normal", sigmas=sig).result[0]
+    # the prompt reaches the sampler: a different text embedding, same seed and latent, gives a different video AND sound
+    other = FunUISampler.execute(real_tiny_ltx, [[torch.randn(1, 5, 48), {}]], [[ctx, {}]], start, 1, 2, 1.0, "euler", "normal", sigmas=sig).result[0]
+    assert not torch.allclose(other["samples"].unbind()[0], out["samples"].unbind()[0])
+    assert not torch.allclose(other["samples"].unbind()[1], out["samples"].unbind()[1])
     got_video, got_audio = out["samples"].unbind()
     assert got_video.shape == video.shape and got_audio.shape == audio.shape
     assert torch.isfinite(got_video).all() and not torch.allclose(got_video, video)    # it was denoised, not passed through
