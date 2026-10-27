@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **The ComfyUI log survives a restart**: the console is kept on disk as it prints, and the Log window has a "Previous run" button for the run before the last start. The Log also says how much RAM and GPU memory is in use when a LoRA is applied and when sampling starts, so a run the box kills for memory leaves a trace.
 - **Shot camera and SLA are H3-only**: models announce `shot_prompts` and `sparse_attention` (only H3 does), shot camera requires the first and the loader's SLA fields the second, so both are hidden when an LTX model is picked.
 
 ### Added (experimental)

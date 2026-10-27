@@ -20,6 +20,7 @@ export function mount({ dom, poll = EVERY, setFooter = () => {}, close = () => {
   let timer = null;
   let follow = true;                 // stick to the end until the user scrolls off it
   let last = "";
+  let previous = false;              // the run before this one, from disk: what a restart took off the screen
   let copyText = "";                 // what Copy gives: the lines, never the colour bookkeeping
 
   const view = composer.code.block({ text: "Reading…" });
@@ -37,7 +38,7 @@ export function mount({ dom, poll = EVERY, setFooter = () => {}, close = () => {
   async function refresh() {
     if (selecting()) return;         // never redraw under a drag
     try {
-      const res = await fetch("/fun/api/log?limit=600", { cache: "no-store" });
+      const res = await fetch(`/fun/api/log?limit=600${previous ? "&previous=1" : ""}`, { cache: "no-store" });
       const payload = await res.json().catch(() => ({}));
       const lines = payload.lines || [];
       const text = lines.join("\n") || payload.detail || "Nothing in the log yet.";
@@ -59,6 +60,10 @@ export function mount({ dom, poll = EVERY, setFooter = () => {}, close = () => {
   }
 
   const footer = () => [
+    composer.button.md({
+      label: previous ? "This run" : "Previous run", tone: "ghost", title: "The server's console from before its last start, kept on disk",
+      onClick: () => { previous = !previous; last = ""; follow = true; refresh(); },
+    }),
     composer.button.md({
       label: "Copy", onClick: () => {
         // Selecting a thousand lines by hand is the other reason this is hard to

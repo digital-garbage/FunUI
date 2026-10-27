@@ -26,7 +26,7 @@ import latent_preview
 import torch
 from comfy_api.latest import io
 
-from ..._core import chain as chain_mod, log, patching, registry as registry_mod, run as run_mod
+from ..._core import chain as chain_mod, log, patching, registry as registry_mod, run as run_mod, sysinfo
 from ..._core import control as control_mod, relations as relations_mod, schema as schema_mod, traits as traits_mod
 
 # The hook points this sampler offers. A modifier asking for anything else is
@@ -142,6 +142,7 @@ class FunUISampler(io.ComfyNode):
         # exists left every run after the first reporting as the first, because
         # the node that used to start them is cached away by ComfyUI.
         run = run_mod.start()
+        log.info("FunUI Sampler", f"{run}: starting. {sysinfo.memory_line()}")
 
         # The record travels on the model, which ComfyUI may hand us again from
         # its cache -- so it is emptied here rather than trusted to be fresh.

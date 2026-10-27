@@ -15,8 +15,11 @@ file, because the reason someone opened it is that something else already broke.
 from __future__ import annotations
 
 import re
+import sys
 from collections import deque
 from pathlib import Path
+
+from . import config
 
 #: Read from the end. A ComfyUI log runs to megabytes over a long session and
 #: nobody scrolls back through a boot from three days ago.
@@ -24,20 +27,98 @@ MAX_BYTES = 512 * 1024
 MAX_LINES = 2000
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+#: The console copy kept on disk is cut back to the newest half when it passes this, so a long session cannot fill the disk.
+KEEP_BYTES = 8 * 1024 * 1024
+
+
+class Kept(deque):
+    """ComfyUI's console copy, also written to a file as it is printed and flushed per write: a process that dies (the
+    server restarts, the box kills it for memory) still leaves what it said, and the next start can show it.
+
+    Progress-bar redraws ("\r..." writes) are not written: they would fill the file with every percentage."""
+
+    def __init__(self, items=(), maxlen=None, path=None):
+        super().__init__(items, maxlen)
+        self.path = path
+        self._file = None
+        self._writes = 0
+
+    def append(self, entry):
+        super().append(entry)
+        if self.path is None:
+            return
+        try:
+            text = _ANSI.sub("", str(entry.get("m", "")))
+            if text.startswith("\r"):
+                return
+            if self._file is None:
+                self._file = open(self.path, "a", encoding="utf-8", errors="replace")
+            self._file.write(text)
+            self._file.flush()
+            self._writes += 1
+            if self._writes % 500 == 0 and self.path.stat().st_size > KEEP_BYTES:
+                self._cut()
+        except Exception:  # noqa: BLE001 -- a console that cannot be kept is still shown, and must never stop ComfyUI printing
+            self.path = None
+
+    def _cut(self):
+        self._file.close()
+        data = self.path.read_bytes()[-KEEP_BYTES // 2:]
+        self.path.write_bytes(data.split(b"\n", 1)[-1])
+        self._file = open(self.path, "a", encoding="utf-8", errors="replace")
+
+
+def start_session(path=None, previous=None):
+    """A new server run: the last run's console becomes `previous`, and this run's is written fresh. -> the file path, or None."""
+    path, previous = path or config.CONSOLE_FILE, previous or config.CONSOLE_PREV_FILE
+    try:
+        if path.exists() and path.stat().st_size:
+            path.replace(previous)
+        path.write_text("", encoding="utf-8")
+    except OSError:
+        return None
+    return path
+
+
+_session = None if "pytest" in sys.modules else "unset"
+
+
 def _memory():
-    """ComfyUI's deque of `{t, m}` writes, lengthened once; None outside ComfyUI's main."""
+    """ComfyUI's deque of `{t, m}` writes, lengthened and kept on disk once; None outside ComfyUI's main."""
+    global _session
     try:
         import app.logger as comfy_log
     except Exception:  # noqa: BLE001
         return None
     logs = comfy_log.logs
-    if logs is not None and (logs.maxlen or 0) < 8000:
+    if logs is not None and not isinstance(logs, Kept):
+        if _session == "unset":
+            _session = start_session()
         # its interceptor looks the global up on every write, so the longer deque takes over
-        comfy_log.logs = logs = deque(logs, maxlen=8000)
+        comfy_log.logs = logs = Kept(logs, maxlen=max(logs.maxlen or 0, 8000), path=_session or None)
     return logs
 
 
 _memory()
+
+
+def previous_lines(limit: int = 600) -> dict:
+    """The console of the run before this one (what a crash or a restart took from the screen)."""
+    path = config.CONSOLE_PREV_FILE
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as fh:
+            if size > MAX_BYTES:
+                fh.seek(size - MAX_BYTES)
+                fh.readline()
+            text = fh.read().decode("utf-8", errors="replace")
+    except OSError:
+        return _answer([], None, "No earlier run was kept: this is the first start since the console began being saved.")
+    lines = [ln.rsplit("\r", 1)[-1] for ln in _ANSI.sub("", text).split("\n")]
+    if lines and not lines[-1]:
+        lines.pop()
+    return _answer(lines[-limit:], str(path), "" if lines else "The run before this one printed nothing.")
 
 
 def log_file() -> Path | None:
@@ -95,7 +176,7 @@ def _answer(lines: list, path, detail: str = "") -> dict:
     return {"lines": lines, "tones": tones(lines), "path": path, "detail": detail}
 
 
-def recent(limit: int = 600) -> dict:
+def recent(limit: int = 600, previous: bool = False) -> dict:
     """`{lines, path, detail}`. `detail` is set only when there is nothing to show.
 
     The absence of a log is a real state with a real cause -- ComfyUI started
@@ -103,6 +184,8 @@ def recent(limit: int = 600) -> dict:
     that looks like a quiet log.
     """
     limit = max(1, min(int(limit or 600), MAX_LINES))
+    if previous:
+        return previous_lines(limit)
     logs = _memory()
     if logs:
         text = re.sub(r"\x1b\[[0-9;]*m", "", "".join(str(e.get("m", "")) for e in list(logs)))   # terminal colours

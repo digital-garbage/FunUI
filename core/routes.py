@@ -769,7 +769,7 @@ def register(routes, prefix=None):
             limit = int(req.query.get("limit", 600))
         except (TypeError, ValueError):
             limit = 600
-        return web.json_response(await asyncio.to_thread(backend_log.recent, limit))
+        return web.json_response(await asyncio.to_thread(backend_log.recent, limit, req.query.get("previous") == "1"))
 
     @routes.get(P + "/api/temp")
     async def _temp(req):

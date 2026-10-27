@@ -185,3 +185,26 @@ def collect():
         "torch": _torch(),
         "comfyui": _comfy_version(),
     }
+
+
+def memory_line() -> str:
+    """Where memory stands right now, for the Log: this process, the machine's RAM and the card. Never raises.
+
+    Said before work that can kill the process (a sampler start, a LoRA applied): a run the box ends for memory leaves
+    no error to read, only the last thing it said."""
+    parts = []
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        parts.append(f"RAM {(vm.total - vm.available) / 2 ** 30:.1f} of {vm.total / 2 ** 30:.1f} GiB used, "
+                     f"this process {psutil.Process().memory_info().rss / 2 ** 30:.1f} GiB")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import torch
+        if torch.cuda.is_available():
+            free, total = torch.cuda.mem_get_info()
+            parts.append(f"GPU {(total - free) / 2 ** 30:.1f} of {total / 2 ** 30:.1f} GiB used")
+    except Exception:  # noqa: BLE001
+        pass
+    return "; ".join(parts) or "memory not readable here"

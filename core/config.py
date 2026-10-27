@@ -50,3 +50,7 @@ TRAINING_DIR = ROOT / "training"
 
 # The Log's last lines, kept on disk as they are written so a crash does not take them (core/log.py). Per machine.
 LOG_FILE = ROOT / "log.jsonl"
+
+# ComfyUI's console as it printed, this run and the run before (core/backend_log.py). Per machine.
+CONSOLE_FILE = ROOT / "console.log"
+CONSOLE_PREV_FILE = ROOT / "console.prev.log"

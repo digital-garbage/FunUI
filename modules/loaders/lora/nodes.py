@@ -11,7 +11,7 @@ import comfy.utils
 import folder_paths
 from comfy_api.latest import io
 
-from ..._core import log
+from ..._core import log, sysinfo
 from .keys import match
 
 
@@ -80,6 +80,6 @@ class FunUILoraLoader(io.ComfyNode):
         applied = [f"model={strength_model}"]
         applied.append(f"clip={strength_clip}" if clip is not None else "clip=not wired")
         found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "")
-        log.info("FunUI LoRA Loader", f"{lora_name} applied ({', '.join(applied)}; {found})")
+        log.info("FunUI LoRA Loader", f"{lora_name} applied ({', '.join(applied)}; {found}). {sysinfo.memory_line()}")
         return io.NodeOutput(patched_model, patched_clip,
                              f"FunUI LoRA Loader | {lora_name} ({', '.join(applied)}; {found})")

@@ -50,3 +50,5 @@ app/playwright-report/
 /phrase_probe.enabled
 /phrase_probe.latest.json
 /log.jsonl
+/console.log
+/console.prev.log
