@@ -16,7 +16,7 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
-def _base(image_to_video: bool, as_guide: bool = False):
+def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
     latent_source = ["latent", 0]
     model_source, positive_source, negative_source = ["modifiers", 0], ["conditioning", 0], ["conditioning", 1]
@@ -26,6 +26,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
         {"id": "clip", "group": "Loaders", "node": "LTXAVTextEncoderLoader",
          "inputs": {"text_encoder": "", "ckpt_name": "", "device": "default"}},
 
+        *_ic_lora(ic_lora),
         {"id": "positive", "group": "Preparation", "node": "CLIPTextEncode",
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"}],
          "inputs": {"clip": ["clip", 0], "text": ""}},
@@ -59,7 +60,8 @@ def _base(image_to_video: bool, as_guide: bool = False):
             slots += [
                 {"id": "anchor", "group": "Preparation", "node": "LTXVAddGuide",
                  "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["model", 2],
-                            "latent": ["split", 0], "image": ["source_image", 0], "frame_idx": 0, "strength": 0.35}},
+                            "latent": ["split", 0], "image": ["source_image", 0], "frame_idx": 0, "strength": 1.0 if ic_lora else 0.35,
+                            **({"iclora_parameters": ["ic_params", 0]} if ic_lora else {})}},
                 {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
                  "inputs": {"video_latent": ["anchor", 2], "audio_latent": ["split", 1]}},
             ]
@@ -78,7 +80,7 @@ def _base(image_to_video: bool, as_guide: bool = False):
     slots += [
         {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
         {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
-         "inputs": {"model": ["model", 0], "settings": ["settings", 0]}},
+         "inputs": {"model": ["ic_lora", 0] if ic_lora else ["model", 0], "settings": ["settings", 0]}},
     ]
     if image_to_video:
         slots += [
@@ -114,6 +116,18 @@ def _base(image_to_video: bool, as_guide: bool = False):
     return slots
 
 
+def _ic_lora(on):
+    """The IC-LoRA of ComfyUI's own LTX 2.3 video-to-video template: the stock LoRA loader (it keeps the file's metadata)
+    and the node that reads the guide's downscale factor from it. The picked video then steers through LTXVAddGuide."""
+    if not on:
+        return []
+    return [
+        {"id": "ic_lora", "group": "Loaders", "node": "LoraLoaderModelOnly",
+         "inputs": {"model": ["model", 0], "lora_name": "", "strength_model": 1.0}},
+        {"id": "ic_params", "group": "Loaders", "node": "GetICLoRAParameters", "inputs": {"iclora_model": ["ic_lora", 0]}},
+    ]
+
+
 def _uncrop(as_guide):
     """A guide sits in the latent as extra frames: take them off again before the picture is decoded."""
     if not as_guide:
@@ -139,7 +153,9 @@ def presets():
     return [{"id": "ltx23_text_to_video", "title": "LTX 2.3 · Text to Video (UNTESTED)", "slots": _base(False)},
             {"id": "ltx23_image_to_video", "title": "LTX 2.3 · Image to Video (UNTESTED)", "slots": _base(True)},
             {"id": "ltx23_anchor_guide", "title": "LTX 2.3 · Anchor as guide (UNTESTED)",
-             "slots": _base(True, True)}]
+             "slots": _base(True, True)},
+            {"id": "ltx23_video_to_video", "title": "LTX 2.3 · Video to Video, IC-LoRA (UNTESTED)",
+             "slots": _base(True, True, True)}]
 
 
 PROVIDES = {"pipeline_presets": presets}
