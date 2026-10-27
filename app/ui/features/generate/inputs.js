@@ -28,14 +28,12 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const startId = takesVideo ? scene.source_image || fromRefs || "" : project.generation_mode === "t2v" ? "" : scene.source_image;
   if (source) put(source.slot, "media_id", startId || "");    // "from a prompt" starts every shot without a picture
   // A pipeline that can take a whole video where it takes a picture (LTX) says so on the role: a picked VIDEO then
-  // supplies its frames (prepared as Video input says) to everything the picture fed, instead of only its first frame.
+  // supplies its frames (prepared as Video input says); the preset wires the frames output where the picture goes (a
+  // wired input cannot be overridden per run), and that output is the first frame alone until `full` is set.
   if (takesVideo && startId && kinds.get(startId) === "video") {
     put(source.slot, "full", true);
     const use = activeVideoInput(project, scene);
     if (use) put(source.slot, "prepare", videoInputJson(use, project, scene));
-    for (const s of slots || []) for (const [name, v] of Object.entries(s.inputs || {})) {
-      if (Array.isArray(v) && v[0] === source.slot.id && v[1] === 0) put(s, name, [source.slot.id, 1]);
-    }
   }
   // A project saved before the preset said so still has this shape: a picture-resizing slot is enough to know a stand-in fits.
   const resizer = (slots || []).find((s) => s.node === "ImageTransformKJ"), enhancer = (slots || []).find((s) => s.node === "FunUIEnhancePrompt");

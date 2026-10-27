@@ -196,3 +196,17 @@ def test_ltx_says_loudly_that_it_is_untested(registered):
     titles = [p["title"] for _s, make in routes.modules().providers("pipeline_presets") for p in make() if p["id"].startswith("ltx")]
     assert titles and all("UNTESTED" in t for t in titles)
     assert "UNTESTED" in _ltx().UNTESTED and "issues" in _ltx().UNTESTED
+
+
+@pytest.mark.parametrize("pid", ["ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct"])
+def test_what_a_run_puts_on_the_start_slot_is_accepted(registered, pid):
+    """The app sets the picked video, its whole-video flag and its preparation per run: none of them may be a wired input,
+    and what takes the picture must be wired to the frames output (a wired input cannot be overridden)."""
+    from core import graph
+    from modules.models.ltx.pipeline import presets
+
+    slots = next(p["slots"] for p in presets() if p["id"] == pid)
+    _slots, problems = graph.override(slots, {"source_image": {"media_id": "abc", "full": True, "prepare": "{}"}})
+    assert problems == []
+    users = [(s["id"], k) for s in slots for k, v in s["inputs"].items() if isinstance(v, list) and v[0] == "source_image"]
+    assert users and all(slots_v == 1 for slots_v in [next(s for s in slots if s["id"] == i)["inputs"][k][1] for i, k in users])

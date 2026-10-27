@@ -153,7 +153,6 @@ test("a video picked as the start feeds its frames to what the picture fed, when
   const on = await run(mk(true), "vid", { video_input: { on: true, skip_first: 3 } });
   assert.equal(on.inputs.src.full, true);
   assert.equal(JSON.parse(on.inputs.src.prepare).skip_first, 3);
-  assert.deepEqual(on.inputs.anchor.image, ["src", 1]);
   assert.equal((await run(mk(true), "vid")).inputs.src.prepare, undefined);          // no preparation switched on: whole video as before
   assert.equal((await run(mk(false), "vid")).inputs.src.full, undefined);          // the pipeline did not say: first frame only
   assert.equal((await run(mk(true), "pic")).inputs.src.full, undefined);          // a picture stays a picture
@@ -168,7 +167,6 @@ test("a video-in pipeline takes the first video among the references as its star
   const r = await run({ references: ["pic", "vid"] }, { generation_mode: "t2v" });
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
-  assert.deepEqual(r.inputs.a.image, ["src", 1]);
   assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "pic");          // a picked start wins
   assert.ok((await run({ references: ["pic"] })).notes.some((n) => /works from a video/.test(n)));
   learn([]);

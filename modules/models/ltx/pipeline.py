@@ -60,7 +60,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
             slots += [
                 {"id": "anchor", "group": "Preparation", "node": "LTXVAddGuide",
                  "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["vae", 0],
-                            "latent": ["split", 0], "image": ["source_image", 0], "frame_idx": 0, "strength": 1.0 if ic_lora else 0.35,
+                            "latent": ["split", 0], "image": ["source_image", 1], "frame_idx": 0, "strength": 1.0 if ic_lora else 0.35,
                             **({"iclora_parameters": ["ic_params", 0]} if ic_lora else {})}},
                 {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
                  "inputs": {"video_latent": ["anchor", 2], "audio_latent": ["split", 1]}},
@@ -69,7 +69,7 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
         else:
             slots += [
                 {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
-                 "inputs": {"vae": ["vae", 0], "image": ["source_image", 0], "latent": ["split", 0],
+                 "inputs": {"vae": ["vae", 0], "image": ["source_image", 1], "latent": ["split", 0],
                             "strength": 1.0, "bypass": False}},
                 {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
                  "inputs": {"video_latent": ["anchor", 0], "audio_latent": ["split", 1]}},
@@ -130,8 +130,8 @@ def _direct_video_to_video():
         # video_frames: the whole video is fed, not its first frame (see inputs.js).
         {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
          "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}], "inputs": {"media_id": ""}},
-        {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 0]}},
-        {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 0], "vae": ["vae", 0]}},
+        {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 1]}},
+        {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 1], "vae": ["vae", 0]}},
         {"id": "audio_latent", "group": "Preparation", "node": "LTXVEmptyLatentAudio",
          "roles": [fps], "inputs": {"frames_number": ["size", 2], "frame_rate": 25, "batch_size": 1, "audio_vae": ["audio_vae", 0]}},
         {"id": "latent", "group": "Preparation", "node": "LTXVConcatAVLatent",
