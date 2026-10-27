@@ -404,3 +404,26 @@ def test_fp32_compute_over_bf16_weights_is_said():
     assert fp32_over_bf16("default", "fp32", "bf16") and fp32_over_bf16("bf16", "fp32")
     assert fp32_over_bf16("fp32", "fp32", "bf16") is None and fp32_over_bf16("default", "bf16", "bf16") is None
     assert fp32_over_bf16("default", "fp32", "int8+bf16") is None
+
+
+def test_the_vae_loader_hands_the_file_header_to_the_vae(comfyui, tmp_path, monkeypatch):
+    """An audio VAE refuses to build without the config in its file's header ("Metadata is required for audio VAE")."""
+    import comfy.sd
+    import folder_paths
+    import torch
+    from safetensors.torch import save_file
+    from modules.loaders.vae.nodes import FunUIVAELoader
+    path = tmp_path / "audio_vae.safetensors"
+    save_file({"audio_vae.x": torch.zeros(1)}, str(path), metadata={"config": "{}"})
+    seen = {}
+
+    class Vae:
+        def __init__(self, sd=None, dtype=None, metadata=None, **kw):
+            seen.update(keys=list(sd), metadata=metadata)
+
+        def throw_exception_if_invalid(self):
+            pass
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: str(path))
+    monkeypatch.setattr(comfy.sd, "VAE", Vae)
+    FunUIVAELoader.execute("audio_vae.safetensors", "bfloat16")
+    assert seen["metadata"] == {"config": "{}"} and seen["keys"] == ["autoencoder.x"]

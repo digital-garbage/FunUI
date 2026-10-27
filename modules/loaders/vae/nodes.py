@@ -53,8 +53,10 @@ class FunUIVAELoader(io.ComfyNode):
     @classmethod
     def execute(cls, vae_name: str, dtype: str) -> io.NodeOutput:
         path = folder_paths.get_full_path_or_raise("vae", vae_name)
-        state_dict = comfy.utils.load_torch_file(path)
-        vae = comfy.sd.VAE(sd=state_dict, dtype=DTYPES[dtype])
+        state_dict, metadata = comfy.utils.load_torch_file(path, return_metadata=True)
+        # An audio VAE's own file keeps its model config in the header, and may name its parts as a whole checkpoint does.
+        state_dict = comfy.utils.state_dict_prefix_replace(state_dict, {"audio_vae.": "autoencoder."})
+        vae = comfy.sd.VAE(sd=state_dict, dtype=DTYPES[dtype], metadata=metadata)
         vae.throw_exception_if_invalid()
         log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
         return io.NodeOutput(vae, f"{vae_name} loaded as {dtype}")
