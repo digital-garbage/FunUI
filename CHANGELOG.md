@@ -1,14 +1,22 @@
 # Changelog
 
-## [Unreleased]
+## [5.1.0] "Classy Chopper" - 2026-10-27
 
 ### Changed
 
+- **On LTX only Noise merging, the Attention explorer and Taste are offered for now.** Every other sampling and guidance enhancement (REINS, Block repeat, Identity bank, Guide frames, Shot memory, Camera move, Temporal style and the rest) is held back there until it has been proven on a real LTX run; H3 is unchanged. A model holds a module back with a `hides:<module id>` trait, so taking one off the list in `modules/models/ltx/__init__.py` (`HELD_BACK`) is all it takes to bring it back. Saved settings are kept; the Log says "held back for now".
 - **Load Media decodes only what it keeps**: a prepared video decodes just the kept frames and shapes each as it comes, and a picture input reads one frame, so a long clip no longer sits whole in memory.
 - **A clip named in Japanese (or any non-ASCII name) no longer fails a run on a machine whose console is not UTF-8.**
 - **Restoring a saved pipeline no longer adds another preset's input slots** (an Image to Video loader landing in a Video to Video pipeline made a picture reference fail with "identity: there is no such slot").
 - **The ComfyUI log survives a restart**: the console is kept on disk as it prints, and the Log window has a "Previous run" button for the run before the last start. The Log also says how much RAM and GPU memory is in use when a LoRA is applied and when sampling starts, so a run the box kills for memory leaves a trace.
 - **Shot camera and SLA are H3-only**: models announce `shot_prompts` and `sparse_attention` (only H3 does), shot camera requires the first and the loader's SLA fields the second, so both are hidden when an LTX model is picked.
+
+### Fixed
+
+- **Cancelling during a Noise merging second pass now cancels** instead of being swallowed as a failed merge.
+- **Identity bank's lock** no longer counts probe passes (such as Noise merging's second answer) as steps of the run.
+- **Attention explorer ratings made on H3 no longer teach LTX** under the same Taste key: the two model families keep their ratings apart.
+- **Guide frames** refuses a NaN position instead of crashing.
 
 ### Added
 
@@ -22,8 +30,8 @@
 - **LTX Image to Video takes its shape from the aspect source**: the picture on the timeline gives the clip its aspect ratio and the project's Width x Height give the pixel budget (new **FunUI Aspect Size** node), as on H3. With no such picture the project's own shape is used. It is not the start frame: that is reference picture 1.
 - **Flip width and height** button in Project settings, and on the Video input card.
 - **Video input** (Project and Scene tabs): reference videos (and, on LTX, a video picked as the scene start, fed as frames) from the Media bin can be got ready before the model sees them, like a video loader node: target width and height (fill, fit with bars, or stretch; rounded to a multiple), edge crop in percent, frame rate (project's, the video's own or a number), skip first N frames, cut last N, every Nth frame, frame cap. The sound is cut to match. One set per project and one per scene; a dropdown in Project settings says whose is used (Automatic: the project's when switched on, otherwise the scene's). Off by default, so existing projects load videos as before. Works for any model whose pipeline takes reference videos (MiniMax H3 today). Tested on made-up frames and an encoded file, not yet on a rental.
-- **Attention explorer** (needs a Taste key): each run tries a small attention change (sharper, as is or looser) per depth group of blocks, and your ratings decide which changes stay; how far a change goes learns from ratings too (or type your own). The Log names the exact blocks made sharper or looser. Also learns, per run: how strongly each group attends to your prompt ("Prompt focus"), and the clip's four time bands and its sound separately ("Clip regions"). A rating counts more for runs of a similar prompt, and a combination you liked on this prompt is reused (with some groups re-drawn). Zero extra model passes. Untested on a real H3.
-- **Noise merging** (Settings > Engine > Sampling): "Merge" can also run a whole second video beside yours from the second seed ("Second run": one extra pass at every step up to the last one named, blended at the steps you name), or mix the run's starting noise with a second seed's (no extra cost, variance kept). Or, at the steps you name, the step is answered a second time on the same picture with different noise (a second seed), and the two pictures are blended at your strength. Merge order picks which one is the base. The second seed is random each run unless you type one. Picture and sound are both merged (the sound can be left out with "Merge sound too"). "Second pass new noise" sets how much of the step's own noise the second pass swaps for the second seed's (1 all, lower keeps more of your own). Costs one extra model pass per merged step. Untested on a real H3.
+- **Attention explorer** (needs a Taste key): each run tries a small attention change (sharper, as is or looser) per depth group of blocks, and your ratings decide which changes stay; how far a change goes learns from ratings too (or type your own). The Log names the exact blocks made sharper or looser. Also learns, per run: how strongly each group attends to your prompt ("Prompt focus"), and the clip's four time bands and its sound separately ("Clip regions"). A rating counts more for runs of a similar prompt, and a combination you liked on this prompt is reused (with some groups re-drawn). Zero extra model passes. Verified on H3 and LTX.
+- **Noise merging** (Settings > Engine > Sampling): "Merge" can also run a whole second video beside yours from the second seed ("Second run": one extra pass at every step up to the last one named, blended at the steps you name), or mix the run's starting noise with a second seed's (no extra cost, variance kept). Or, at the steps you name, the step is answered a second time on the same picture with different noise (a second seed), and the two pictures are blended at your strength. Merge order picks which one is the base. The second seed is random each run unless you type one. Picture and sound are both merged (the sound can be left out with "Merge sound too"). "Second pass new noise" sets how much of the step's own noise the second pass swaps for the second seed's (1 all, lower keeps more of your own). Costs one extra model pass per merged step. Verified on H3 and LTX.
 - **SLA rising sparsity** (diffusion model loader, `sla_sparsity_start`): skip fewer attention blocks on early steps and more on late ones, in a straight line up to `sla_sparsity`. Off at 0. One real H3 render (4 steps, 0.70 to 0.90): quality held, perhaps slightly better. Idea from GSRS (arXiv 2610.21129); only the schedule is taken, not its other parts.
 
 ## [5.0.3] "Classy Chopper" - 2026-10-25

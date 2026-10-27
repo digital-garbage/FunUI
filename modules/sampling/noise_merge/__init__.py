@@ -23,6 +23,7 @@ import random
 import time
 
 import torch
+from comfy.model_management import InterruptProcessingException
 from comfy.patcher_extension import WrappersMP
 
 from ..._core import dit_hooks, log, streams
@@ -256,6 +257,8 @@ def install(patcher, values, key):
                 n = merged.shape[-1] - base_tail.shape[-1]
                 merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
             return merged
+        except InterruptProcessingException:
+            raise                                   # Cancel stops the run, it is not a failed merge
         except Exception as exc:                    # noqa: BLE001
             log.broke("FunUI Noise merging", exc, "merging the second answer")
             return out

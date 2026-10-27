@@ -368,6 +368,8 @@ def install(patcher, values, key):
     dm = getattr(patcher.model, "diffusion_model", None)
     paired = hasattr(dm, "transformer_blocks")                 # picture and sound attend in separate calls, one stream each
     video_width, sound_width = getattr(dm, "inner_dim", None), getattr(dm, "audio_inner_dim", None)
+    if paired:
+        signature.append(1)            # ratings made on a packed-sequence model (H3) must not teach a paired one
     if focus and paired:
         focus = False                  # the prompt's rows are not one run of the sequence here: that part is H3's
 

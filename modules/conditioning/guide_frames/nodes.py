@@ -37,8 +37,10 @@ def parse(text):
     out = []
     for item in raw[:MAX_FRAMES]:
         try:
-            out.append((str(item["media_id"]), min(max(float(item.get("at", 0.5)), 0.0), 1.0),
-                        min(max(float(item.get("strength", 0.25)), 0.0), 10.0)))
+            at, strength = float(item.get("at", 0.5)), float(item.get("strength", 0.25))
+            if at != at or strength != strength:
+                raise ValueError("not a number")             # JSON allows NaN; a position cannot be one
+            out.append((str(item["media_id"]), min(max(at, 0.0), 1.0), min(max(strength, 0.0), 10.0)))
         except (KeyError, TypeError, ValueError, AttributeError):
             return f"{item!r} is not {{media_id, at, strength}}"
     return out

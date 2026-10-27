@@ -61,3 +61,8 @@ def test_a_picture_gone_from_the_library_is_left_out_and_bad_lists_are_refused(m
     for bad in ("not json", '{"a": 1}', '[{"nothing": 1}]'):
         with pytest.raises(RuntimeError):
             nodes.FunUIGuideFrames.execute(pos, neg, _Vae(), lat, bad)
+
+
+def test_a_nan_position_is_refused_not_crashed():
+    from modules.conditioning.guide_frames import nodes
+    assert isinstance(nodes.parse('[{"media_id": "a", "at": NaN}]'), str)
