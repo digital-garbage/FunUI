@@ -12,6 +12,7 @@
 
 ### Added
 
+- **Block settings know the model**: the file's header gives its block count, the Blocks hint says "This model has blocks 0-47", and a list is cut to those blocks when you commit it.
 - **Temporal style: auto** picks a style for each shot from its own words (motion words punch, calm words hold, loop words loop).
 - **Randomizer, REINS and Block repeat on LTX** (new traits `block_scope` and `block_rows`); the other block-hook features stay H3-only. Whole-span repeat runs as each-block on LTX.
 - **Attention explorer on LTX**: the depth groups and the clip regions (four time bands of the picture, and the sound) work; Prompt focus stays H3-only and is left out on LTX.

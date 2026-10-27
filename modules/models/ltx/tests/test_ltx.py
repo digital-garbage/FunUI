@@ -276,3 +276,18 @@ def test_an_image_to_video_pipeline_saved_before_the_aspect_source_gets_it():
     assert latent["inputs"]["width"] == ["aspect", 0] and not any(r["input"] in ("width", "height") for r in latent["roles"])
     assert upgrade(fixed) == fixed                                                           # and it is done once
     assert upgrade(now) == now
+
+
+def test_the_block_count_is_read_off_the_header(comfyui):
+    m = _ltx()
+    keys = {f"model.diffusion_model.transformer_blocks.{i}.attn1.to_q.weight" for i in range(48)} | {"model.diffusion_model.audio_adaln_single.linear.weight"}
+    assert m.probe_blocks(keys) == 48
+    assert m.probe_blocks({"audio_adaln_single.linear.weight"}) is None
+    assert m.probe_blocks({"transformer_blocks.0.x", "transformer_blocks.9.x"}) == 2          # counts distinct numbers, as the file names them
+
+
+def test_the_h3_block_count_ignores_its_token_refiner(comfyui):
+    from importlib import import_module
+    h3 = import_module("modules.models.minimax_h3")
+    keys = {f"blocks.{i}.attn.q.weight" for i in range(50)} | {f"token_refiner.blocks.{i}.x" for i in range(2)}
+    assert h3.probe_blocks(keys) == 50

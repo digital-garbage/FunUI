@@ -39,7 +39,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "blocks": {
-        "type": "text", "default": "43-44",
+        "type": "text", "model_blocks": True, "default": "43-44",
         "label": "Blocks",
         "hint": "Where it steers, e.g. 43-44 or 0,1,47-49. Every block keeps learning either way.",
         "when": {"enabled": True},

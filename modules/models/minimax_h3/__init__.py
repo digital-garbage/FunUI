@@ -28,7 +28,7 @@ import torch
 from comfy.nested_tensor import NestedTensor
 from comfy_extras.nodes_minimax_h3 import temporal_shape
 
-from ..._core import log, traits as _traits
+from ..._core import dit_hooks as _dit_hooks, log, traits as _traits
 from . import vae_decode as _decode
 from .training import adapt as _training_adapt
 from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets
@@ -100,6 +100,11 @@ def detect(keys) -> bool:
 
 #: Things only H3 has: [Shot N] prompts (shot camera), and the sparse attention SLA was built and validated for.
 H3_ONLY = ("shot_prompts", "sparse_attention")
+
+
+def probe_blocks(keys):
+    """How many transformer blocks the file has, read off its header."""
+    return _dit_hooks.count_indexed(keys, tuple(f"{p}blocks." for p in _PREFIXES))
 
 
 def probe_traits(keys) -> list:
@@ -233,7 +238,7 @@ def empty_latent(model, width, height, length, batch_size=1):
 
 TRAITS = traits
 PROVIDES = {"training_adapt": _training_adapt, "empty_latent": empty_latent, "decode": decode, "detect": detect,
-            "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes, "probe_traits": probe_traits,
+            "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes, "probe_traits": probe_traits, "probe_blocks": probe_blocks,
             "target_rows": _target_rows, "anchor_pin": _anchor_pin,
             "latent_upscaler": _load_upscaler, "rescale_conditioning": _rescale_pins,
             "text_tokenizer": _prompt_layout.text_tokenizer,

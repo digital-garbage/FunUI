@@ -44,7 +44,7 @@ SETTINGS = {
         "hint": "Re-rolls part of the model's thinking for a different take on the same prompt.",
     },
     "blocks": {
-        "type": "text", "default": "31-40",
+        "type": "text", "model_blocks": True, "default": "31-40",
         "label": "Blocks",
         "hint": "e.g. 31-40, or 20,35. Somewhere in 20-41 works best.",
         "when": {"enabled": True},

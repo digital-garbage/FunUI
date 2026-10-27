@@ -45,7 +45,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "blocks": {
-        "type": "text", "default": "20,30",
+        "type": "text", "model_blocks": True, "default": "20,30",
         "label": "Blocks",
         "hint": "Where the look is kept and applied, e.g. 14,20,30. Each block kept costs about 100 MB per remembered clip.",
         "when": {"enabled": True},

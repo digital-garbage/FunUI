@@ -37,7 +37,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "blocks": {
-        "type": "text", "default": "2-10",
+        "type": "text", "model_blocks": True, "default": "2-10",
         "label": "Blocks",
         "hint": "e.g. 2-10 or 29-46. Keep away from blocks a steering feature uses.",
         "when": {"enabled": True},

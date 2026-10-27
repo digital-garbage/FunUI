@@ -129,6 +129,19 @@ def block_count(model) -> int:
         return 0
 
 
+def count_indexed(keys, prefixes):
+    """How many numbered entries (`<prefix>0.`, `<prefix>1.`...) a header has under any of these prefixes, or None.
+    A model module answers `probe_blocks` with this over the name its transformer blocks carry."""
+    seen = set()
+    for key in keys:
+        for prefix in prefixes:
+            if key.startswith(prefix):
+                head = key[len(prefix):].split(".", 1)[0]
+                if head.isdigit():
+                    seen.add(int(head))
+    return len(seen) or None
+
+
 def parse_blocks(spec, n_blocks: int):
     """"40" | "38-42" | "10,40,44" | "" -> (sorted indices, [problems]).
 

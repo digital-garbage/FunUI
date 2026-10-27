@@ -81,7 +81,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "blocks": {
-        "type": "text", "default": "2-10,29-46",
+        "type": "text", "model_blocks": True, "default": "2-10,29-46",
         "label": "Blocks",
         "hint": "e.g. 2-10,29-46. Split by depth into groups that learn separately.",
         "when": {"enabled": True},

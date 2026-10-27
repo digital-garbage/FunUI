@@ -29,7 +29,7 @@ import comfy.model_management
 import torch
 from comfy.nested_tensor import NestedTensor
 
-from ..._core import log, streams as _streams, traits as _traits, vae_tiles
+from ..._core import dit_hooks as _dit_hooks, log, streams as _streams, traits as _traits, vae_tiles
 from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets, upgrade as _upgrade
 
 has_block = _traits.has_block
@@ -68,6 +68,11 @@ def probe_traits(keys) -> list:
     if not detect(keys):
         return []
     return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope", "block_rows"]
+
+
+def probe_blocks(keys):
+    """How many transformer blocks the file has, read off its header."""
+    return _dit_hooks.count_indexed(keys, tuple(f"{p}transformer_blocks." for p in _PREFIXES))
 
 
 def traits(model):
@@ -150,5 +155,5 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
 
 TRAITS = traits
 PROVIDES = {"empty_latent": empty_latent, "decode": decode, "detect": detect,
-            "probe_traits": probe_traits, "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes,
+            "probe_traits": probe_traits, "probe_blocks": probe_blocks, "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes,
             "video_stream": _streams.av_video_stream, "upgrade_slots": _upgrade}

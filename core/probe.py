@@ -125,8 +125,16 @@ def detect(path: Path, registry=None) -> dict:
                 except Exception as exc:                # noqa: BLE001
                     from . import log
                     log.once(f"provider:{spec.id}.probe_traits:{type(exc).__name__}", log.WARNING, f"{spec.id}.probe_traits", f"failed while answering -- {type(exc).__name__}: {exc}")
+            blocks = None
+            probe_blocks = spec.provides.get("probe_blocks")
+            if probe_blocks is not None:
+                try:
+                    blocks = probe_blocks(keyset)
+                except Exception as exc:                # noqa: BLE001
+                    from . import log
+                    log.once(f"provider:{spec.id}.probe_blocks:{type(exc).__name__}", log.WARNING, f"{spec.id}.probe_blocks", f"failed while answering -- {type(exc).__name__}: {exc}")
             return {"module": spec.id, "title": spec.title, "detected": True,
-                    "reason": f"{p.name}: {spec.title}", "traits": traits}
+                    "reason": f"{p.name}: {spec.title}", "traits": traits, "blocks": blocks}
     return {"module": None, "title": None, "detected": False,
             "reason": (f"{p.name}: could not be checked, {', '.join(broken)} failed while looking at it (see the Log)" if broken
                        else f"{p.name}: no installed model module recognises this file"),

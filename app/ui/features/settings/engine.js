@@ -31,7 +31,7 @@ export const engine = (app) => function mount() {
         checked: ps.cameraOff(), onChange: (on) => ps.setCameraOff(on).then(draw) }) : null,
       ...(category === "guidance" && gOff ? [c.hint.default({ text: "Guidance enhancements are disabled for this project. Their settings are hidden, not lost." })]
         : withSettings.filter((m) => (m.category || "") === category).flatMap((m) => [c.label.section({ text: m.title || m.id }),
-          ...Object.entries(m.settings).filter(([, spec]) => whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change))])),
+          ...Object.entries(m.settings).filter(([, spec]) => whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change, ps.blocks?.()))])),
     ].filter(Boolean));
   }
   draw();
