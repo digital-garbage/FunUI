@@ -43,14 +43,26 @@ def split(specs: Iterable[ModuleSpec], available: Sequence[str]) -> Tuple[List[M
     genuinely cannot work on.
     """
     have: Set[str] = set(available or ())
+    held = held_back(have)
     compatible, incompatible = [], []
     for spec in specs:
-        (compatible if set(spec.requires) <= have else incompatible).append(spec)
+        (compatible if set(spec.requires) <= have and spec.id not in held else incompatible).append(spec)
     return compatible, incompatible
+
+
+#: A model may announce `hides:<module id>` for a module that runs on it but has not been proven on it yet.
+#: Hidden like an incompatible one, and one line to take back when it has been.
+HOLDS = "hides:"
+
+
+def held_back(available: Iterable[str]) -> Set[str]:
+    return {t[len(HOLDS):] for t in (available or ()) if str(t).startswith(HOLDS)}
 
 
 def missing_for(spec: ModuleSpec, available: Sequence[str]) -> List[str]:
     """Which traits a module wanted and did not get. For the modules dump."""
+    if spec.id in held_back(available):
+        return ["a proven run on this model (held back for now)"]
     return sorted(set(spec.requires) - set(available or ()))
 
 

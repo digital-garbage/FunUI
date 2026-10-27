@@ -248,9 +248,12 @@ _TINY_LTX = []
 
 
 @pytest.fixture
-def tiny_ltx(comfyui):
+def tiny_ltx(comfyui, monkeypatch):
     """One model for the whole run (building it costs seconds): tests clone its patcher and never
-    leave anything installed on the model itself."""
+    leave anything installed on the model itself. The held-back list is emptied, so a feature is
+    tested on LTX whether or not it is shown there yet (`ltx_held_back` puts it back)."""
+    from modules.models import ltx
+    monkeypatch.setattr(ltx, "HELD_BACK", ())
     if not _TINY_LTX:
         _TINY_LTX.append(TinyLTX())
     return _TINY_LTX[0]

@@ -63,11 +63,20 @@ def detect(keys) -> bool:
     return any(all(f"{prefix}{key}" in keyset for key in _SIGNATURE_KEYS) for prefix in _PREFIXES)
 
 
+#: Enhancements that run on LTX but have not been proven on a real run there: held back (hidden) until they have.
+#: Proven on LTX so far: Noise merging and the Attention explorer. Take an id off this list once it has been.
+HELD_BACK = ("conditioning_identity_transfer", "guide_frames", "camera_move", "shot_memory", "audio_coupling", "decisiveness",
+             "dynashift", "momentum", "output_guidance", "reins", "sharpness", "trajectory_guidance", "velocity_bias", "alg",
+             "attention_temperature", "block_repeat", "context_windows", "explore_first_step", "identity_bank", "prompt_nudge",
+             "score_slider", "temporal_style")
+
+
 def probe_traits(keys) -> list:
     """What `traits()` would say, read before anything loads."""
     if not detect(keys):
         return []
-    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope", "block_rows"]
+    return ["audio_stream", "temporal_latent", "temporal_compression", "ltx_av", "block_scope", "block_rows",
+            *(_traits.HOLDS + i for i in HELD_BACK)]
 
 
 def probe_blocks(keys):
@@ -86,7 +95,7 @@ def traits(model):
     # returns (video, audio), where the hooks that edit rows expect one packed tensor.
     # block_rows: the hooks that read or push the video rows of a block's output (REINS, Block repeat)
     # handle the pair too (see those modules).
-    return ["audio_stream", "ltx_av", "block_scope", "block_rows"]
+    return ["audio_stream", "ltx_av", "block_scope", "block_rows", *(_traits.HOLDS + i for i in HELD_BACK)]
 
 
 def frames_for(length: int) -> int:

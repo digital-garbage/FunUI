@@ -291,3 +291,17 @@ def test_the_h3_block_count_ignores_its_token_refiner(comfyui):
     h3 = import_module("modules.models.minimax_h3")
     keys = {f"blocks.{i}.attn.q.weight" for i in range(50)} | {f"token_refiner.blocks.{i}.x" for i in range(2)}
     assert h3.probe_blocks(keys) == 50
+
+
+def test_unproven_enhancements_are_held_back_but_the_proven_ones_stay(comfyui):
+    from modules import models  # noqa: F401
+    from modules.models import ltx
+    from core import traits
+    traits_ = ltx.probe_traits({"audio_adaln_single.linear.weight"})
+    held = traits.held_back(traits_)
+    assert {"reins", "block_repeat", "camera_move"} <= held
+    assert not held & {"noise_merge", "attention_bandit", "taste"}
+    spec = type("S", (), {"id": "reins", "requires": []})()
+    assert traits.missing_for(spec, traits_) == ["a proven run on this model (held back for now)"]
+    other = type("S", (), {"id": "noise_merge", "requires": []})()
+    assert traits.split([spec, other], traits_) == ([other], [spec])
