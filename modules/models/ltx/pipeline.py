@@ -116,6 +116,33 @@ def _base(image_to_video: bool, as_guide: bool = False, ic_lora: bool = False):
     return slots
 
 
+def _direct_video_to_video():
+    """Plain video-to-video, no IC-LoRA: the picked video's frames are encoded and sampled again from part-way down the
+    schedule (the tail of the distilled sigmas), so the result keeps the video's layout and motion and changes what
+    the prompt and the noise ask for. The later the schedule starts, the more of the video survives.
+
+    The size and length are the video's own (Video input sets them); the sound starts empty and is made with the picture.
+    """
+    slots = _base(False)
+    at = next(i for i, x in enumerate(slots) if x["id"] == "latent")
+    fps = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
+    slots[at:at + 1] = [
+        # video_frames: the whole video is fed, not its first frame (see inputs.js).
+        {"id": "source_image", "group": "Reference media", "node": "FunUILoadMedia",
+         "roles": [{"at": "assets.source_image", "input": "media_id", "video_frames": True}], "inputs": {"media_id": ""}},
+        {"id": "size", "group": "Preparation", "node": "GetImageSize", "inputs": {"image": ["source_image", 0]}},
+        {"id": "encode", "group": "Preparation", "node": "VAEEncode", "inputs": {"pixels": ["source_image", 0], "vae": ["model", 2]}},
+        {"id": "audio_latent", "group": "Preparation", "node": "LTXVEmptyLatentAudio",
+         "roles": [fps], "inputs": {"frames_number": ["size", 2], "frame_rate": 25, "batch_size": 1, "audio_vae": ["audio_vae", 0]}},
+        {"id": "latent", "group": "Preparation", "node": "LTXVConcatAVLatent",
+         "inputs": {"video_latent": ["encode", 0], "audio_latent": ["audio_latent", 0]}},
+    ]
+    for x in slots:
+        if x["id"] == "sigmas":
+            x["inputs"]["sigmas"] = "0.725, 0.421875, 0.0"      # the last two steps of the distilled schedule: about 70% re-noised
+    return slots
+
+
 def _ic_lora(on):
     """The IC-LoRA of ComfyUI's own LTX 2.3 video-to-video template: the stock LoRA loader (it keeps the file's metadata)
     and the node that reads the guide's downscale factor from it. The picked video then steers through LTXVAddGuide."""
@@ -155,7 +182,9 @@ def presets():
             {"id": "ltx23_anchor_guide", "title": "LTX 2.3 · Anchor as guide (UNTESTED)",
              "slots": _base(True, True)},
             {"id": "ltx23_video_to_video", "title": "LTX 2.3 · Video to Video, IC-LoRA (UNTESTED)",
-             "slots": _base(True, True, True)}]
+             "slots": _base(True, True, True)},
+            {"id": "ltx23_video_to_video_direct", "title": "LTX 2.3 · Video to Video, direct (UNTESTED)",
+             "slots": _direct_video_to_video()}]
 
 
 PROVIDES = {"pipeline_presets": presets}

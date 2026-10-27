@@ -122,7 +122,7 @@ def test_the_empty_latent_node_passes_the_audio_vae_to_a_provider_that_asks_and_
     assert seen == {"plain": True, "wants": ("A", 30.0)}
 
 
-@pytest.mark.parametrize("pid", ["ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video"])
+@pytest.mark.parametrize("pid", ["ltx23_text_to_video", "ltx23_image_to_video", "ltx23_anchor_guide", "ltx23_video_to_video", "ltx23_video_to_video_direct"])
 def test_the_pipelines_build_a_real_graph(registered, pid):
     from core import graph
     from modules.models.ltx.pipeline import presets
