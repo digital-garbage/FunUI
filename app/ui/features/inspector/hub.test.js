@@ -68,3 +68,22 @@ test("the scene's Video input card switches on, shows its controls, and says whe
   assert.ok(host.textContent.includes("project's video input settings are used"));
   host.remove();
 });
+
+test("the Project tab flips width and height in one undo step", async () => {
+  let fire;
+  const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, video: { width: 768, height: 512 }, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  let edits = 0;
+  const p = { project: doc, video: doc.video, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, setField: () => {}, setVideo: () => {}, edit: (fn) => { edits++; const r = fn(doc); fire("change"); return r; } };
+  const slots = [{ roles: [{ at: "project.video", input: "width", label: "Width" }, { at: "project.video", input: "height", label: "Height" }], inputs: { width: 768, height: 512 } }];
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {}, pipeline: { slots: () => slots } } });
+  [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
+  const button = () => [...host.querySelectorAll("button")].find((b) => b.textContent.includes("Flip width and height"));
+  assert.ok(button(), "the flip button is on the Project tab");
+  button().click();
+  assert.deepEqual([doc.video.width, doc.video.height], [512, 768]);
+  assert.equal(edits, 1);
+  host.remove();
+});

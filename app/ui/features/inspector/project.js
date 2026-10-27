@@ -15,7 +15,7 @@ const videoControls = (p, slots) => (slots || []).flatMap((slot) => (slot.roles 
   if (!Number.isInteger(now)) return null;                  // the project file keeps whole numbers only
   const label = role.label || role.input, grid = role.drives === "frames" ? gridOf(slots) : null;
   // On a model with a frame grid the arrows walk it (H3: 22, 39, 56 …) and a typed number lands on it: what runs is what shows.
-  return { key: field || role.input, label, field: c.field.default({ label, hint: grid ? `This model makes ${grid.step}k+${grid.base} frames; other numbers snap to the nearest.` : undefined,
+  return { key: field || role.input, label, now, field: c.field.default({ label, hint: grid ? `This model makes ${grid.step}k+${grid.base} frames; other numbers snap to the nearest.` : undefined,
     control: c.number.md({ label, min: grid ? grid.step + grid.base : 1, max: role.drives === "fps" ? 1000 : 16384, step: grid ? grid.step : 1, precision: 0, value: now,
       snap: grid ? (v) => snapFrames(v, "round", grid) : undefined, onChange: (v) => (field ? p.setField(field, v) : p.setVideo(role.input, v)) }) }) };
 }).filter(Boolean)).filter((r, i, all) => all.findIndex((x) => x.key === r.key) === i);
@@ -54,6 +54,18 @@ function custom(p, open) {
     action: { label: "Use project length everywhere", onClick: () => p.edit((pr) => { let hit = false; for (const s of pr.scenes) if (!isVideoClip(s) && s.frames_mode === "custom") { s.frames_mode = "project"; hit = true; } return hit; }) } })];
 }
 
+/** Swaps width and height in one undo step: portrait from landscape and back. Only when the pipeline gives both a number. */
+function flip(p, size) {
+  const w = size.find((x) => /width/i.test(x.key)), h = size.find((x) => /height/i.test(x.key));
+  if (!w || !h) return null;
+  return c.button.sm({ label: "⇄ Flip width and height", tone: "ghost", title: `Make it ${h.now}×${w.now}`, onClick: () => p.edit((pr) => {
+    pr.video = pr.video || {};
+    pr.video[w.key] = h.now;
+    pr.video[h.key] = w.now;
+    return h.now !== w.now;
+  }) });
+}
+
 export function projectRows(p, slots, api) {
   const open = p.project;
   if (!open) return [c.emptyState.default({ icon: "▭", title: "No project", hint: "Open or create one." })];
@@ -70,6 +82,7 @@ export function projectRows(p, slots, api) {
     card(c.field.row({ fields: [frames.field, fps.field] }),
       c.hint.default({ text: `≈ ${per.toFixed(2)} s per shot` }),
       size.length ? c.field.row({ fields: size.map((x) => x.field) }) : null,
+      flip(p, size),
       ...custom(p, open),
       c.field.default({ label: "Final render size", hint: "The size of the exported video: the first clip's, the project's, or any rendered clip's own.", control: c.select.md({ label: "Final render size", options: sizes(open), value: open.export_size_from || "",
         onChange: (v) => p.setField("export_size_from", v) }) }),
