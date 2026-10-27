@@ -16,6 +16,9 @@ export async function call(method, path, body) {
   });
   const payload = await res.json().catch(() => null);
   if (!res.ok) throw Object.assign(new Error(why(res, payload)), { status: res.status });      // status: a refusal (4xx) is not an outage
+  // A 200 that is not JSON is not FunUI answering (ComfyUI restarting, a proxy's page, a route this server does not have):
+  // saying so beats every caller failing on "r is null".
+  if (payload === null && res.status !== 204) throw Object.assign(new Error(`FunUI did not answer ${path} (ComfyUI may be restarting, or this page is older than the server: reload the page).`), { status: 502 });
   return payload;
 }
 
