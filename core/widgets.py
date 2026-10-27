@@ -56,6 +56,9 @@ def _one(name: str, declared: Any, required: bool) -> Dict[str, Any]:
     # [{input, when}]: the form draws this only while every named input holds one of its values.
     if isinstance(options.get("funui_shows"), list):
         widget["shows"] = options["funui_shows"]
+    # [trait]: the form draws this only for a model that has every one (see core/traits.py).
+    if isinstance(options.get("funui_requires"), list):
+        widget["requires"] = options["funui_requires"]
     return widget
 
 

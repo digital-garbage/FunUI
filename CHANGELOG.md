@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Shot camera and SLA are H3-only**: models announce `shot_prompts` and `sparse_attention` (only H3 does), shot camera requires the first and the loader's SLA fields the second, so both are hidden when an LTX model is picked.
+
 ### Added (experimental)
 
 - **LTX 2.3 · Video to Video, direct** preset (UNTESTED): no IC-LoRA. The picked video is encoded and sampled again from part-way down the schedule, so it keeps its layout and motion. How much changes is the sigmas slot (default `0.725, 0.421875, 0.0`; start higher to change more). Size and length are the video's own, set by Video input. The graph validates; never run on a GPU.

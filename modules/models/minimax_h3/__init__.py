@@ -98,6 +98,10 @@ def detect(keys) -> bool:
                for prefix in _PREFIXES)
 
 
+#: Things only H3 has: [Shot N] prompts (shot camera), and the sparse attention SLA was built and validated for.
+H3_ONLY = ("shot_prompts", "sparse_attention")
+
+
 def probe_traits(keys) -> list:
     """What `traits()` would say for a loaded H3 model, read before anything
     loads.
@@ -118,7 +122,7 @@ def probe_traits(keys) -> list:
         return []
     from comfy.latent_formats import MiniMaxH3AV
 
-    found = ["audio_stream", "dit_block_hooks", "adaln_modalities"]
+    found = ["audio_stream", "dit_block_hooks", "adaln_modalities", *H3_ONLY]
     rank = _traits.LATENT_RANK.get(MiniMaxH3AV.latent_dimensions)
     if rank:
         found.append(rank)
@@ -134,7 +138,7 @@ def traits(model):
     # dit_block_hooks: its forward honours patches_replace["dit"][("double_block",
     # i)] and routes every attention call through optimized_attention, which is
     # what core/dit_hooks.py hooks.
-    found = ["audio_stream", "dit_block_hooks"]
+    found = ["audio_stream", "dit_block_hooks", *H3_ONLY]
     if has_block(model, ADALN_CLASS):
         found.append("adaln_modalities")
     return found

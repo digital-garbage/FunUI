@@ -102,3 +102,24 @@ test("a field still on screen for a node that was swapped away does not put its 
   assert.match(page.node.textContent, /was swapped for Other: the value was not kept/);
   page.node.remove();
 });
+
+test("a field only some models have (SLA) is not drawn for a model known to lack the trait, nor the fields that hang off it", async () => {
+  const widgets = [{ name: "model_name", type: "COMBO", choices: ["a"] }, { name: "sla", type: "BOOLEAN", requires: ["sparse_attention"] },
+    { name: "sla_method", type: "COMBO", choices: ["sla"], shows: [{ input: "sla", when: [true] }] }];
+  const draw = async (traits) => {
+    const slots = [{ id: "model", node: "XLoader", inputs: { model_name: "a", sla: true } }];
+    const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
+      loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [], queueable: () => true, removedIds: () => [], offered: () => [], traits: () => traits };
+    const page = models({ dom: createDom(), pipeline: ps, api: { describeNodes: async () => ({ nodes: { XLoader: { widgets } } }) } })();
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 0));
+    const tile = page.node.querySelector("[class*=cx-tile]"); if (tile) (tile.closest("button") || tile).click();
+    await new Promise((r) => setTimeout(r, 0));
+    const text = page.node.textContent; if (process.env.DBG) console.log(JSON.stringify(text).slice(0, 600));
+    page.node.remove();
+    return text;
+  };
+  const ltx = await draw(["audio_stream", "ltx_av"]), h3 = await draw(["audio_stream", "sparse_attention"]), unknown = await draw(null);
+  assert.ok(h3.includes("sla_method") && unknown.includes("sla_method"), "H3, or a model nobody recognised, keeps SLA");
+  assert.ok(!ltx.includes("sla_method") && !/\bsla\b/.test(ltx.replace("sla_method", "")), "LTX has none of it");
+});

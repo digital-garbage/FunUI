@@ -24,6 +24,7 @@ from .nodes import FunUIShotCamera
 ID = "conditioning_shot_camera"
 TITLE = "Shot camera"
 MOUNT = "settings.general"
+REQUIRES = ["shot_prompts"]
 STAGE = "conditioning"
 CATEGORY = "conditioning"
 STATUS = "experimental"

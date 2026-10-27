@@ -130,7 +130,9 @@ export const models = (app) => function mount() {
     if (spec === null && (ps.skipped && ps.skipped() || {})[slot.id]) return [head, c.banner.warn({ text: `${slot.node} is skipped: it is not available (its module did not load, or the node was rejected), so the run goes without it. The Log says why; when it is back, this node runs again.` })];
     if (spec === null) return [head, structure(slot), c.banner.warn({ text: `${slot.node} is not installed — this slot can't be edited or run. Install the pack that provides it, swap it for another node, or remove it.` }), installRow(slot.node)];
     const sockets = (spec.sockets || []).filter((w) => showing(w, slot, spec)).map((s) => c.field.default({ label: s.name, hint: s.required ? `${s.type} · needed` : s.type, control: wiring(slot, s.name, s.type, slot.inputs && slot.inputs[s.name], "Not connected") }));
-    const rows = (spec.widgets || []).filter((w) => showing(w, slot, spec)).flatMap((w) => {
+    // A field only some models have (SLA is H3's) is not drawn for a model known to lack the trait, nor are the fields that hang off it.
+    const have = ps.traits && ps.traits(), gone = new Set((spec.widgets || []).filter((w) => have && (w.requires || []).some((t) => !have.includes(t))).map((w) => w.name));
+    const rows = (spec.widgets || []).filter((w) => !gone.has(w.name) && !(w.shows || []).some((x) => gone.has(x.input)) && showing(w, slot, spec)).flatMap((w) => {
       const cur = slot.inputs && slot.inputs[w.name];
       if (fed(cur)) return [c.field.default({ label: w.name, hint: "Fed by another node: change it there, or pick “A value” to type one here.", control: wiring(slot, w.name, w.type, cur, "A value (typed here)") })];
       const value = cur !== undefined ? cur : w.default;

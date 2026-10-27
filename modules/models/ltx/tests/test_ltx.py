@@ -220,3 +220,15 @@ def test_a_pipeline_saved_with_the_old_first_frame_wiring_is_brought_up_to_date(
     assert upgrade(old) == slots
     plain = [{"id": "source_image", "node": "FunUILoadMedia", "roles": [{"at": "assets.source_image"}], "inputs": {}}, {"id": "a", "node": "X", "inputs": {"image": ["source_image", 0]}}]
     assert upgrade(plain) == plain
+
+
+def test_h3_only_features_are_not_offered_on_ltx(comfyui):
+    """Shot camera writes [Shot N] prompts and SLA is H3's sparse attention: the traits say so, and LTX has neither."""
+    from core import registry, traits
+    from modules.models import ltx
+    from modules.models.minimax_h3 import H3_ONLY
+    spec = registry.scan().specs["conditioning_shot_camera"]
+    assert "shot_prompts" in spec.requires and set(H3_ONLY) == {"shot_prompts", "sparse_attention"}
+    have = ltx.probe_traits({"audio_adaln_single.linear.weight"})
+    assert traits.missing_for(spec, have) == ["shot_prompts"]
+    assert not set(H3_ONLY) & set(have)

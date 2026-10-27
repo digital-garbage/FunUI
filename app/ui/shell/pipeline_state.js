@@ -748,6 +748,8 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
     /** The slots as the controls should show them: a skipped node keeps only the controls its pass-through needs. Read-only; never save this. */
     view: () => (slots && Object.keys(skipped).length ? slots.map(seen) : slots),
     skipped: () => skipped,
+    /** The traits the chosen model has (null: not known, so nothing is hidden for it). */
+    traits: () => lastTraits || null,
     incomplete: () => incomplete,
     refused: () => refused,
     queueable: () => queueable,

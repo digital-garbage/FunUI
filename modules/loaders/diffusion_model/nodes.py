@@ -64,7 +64,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                        "listed; 'default' keeps ComfyUI's launch choice."),
                 io.Boolean.Input("fp16_accumulation", default=False, optional=True,
                                  tooltip="Faster fp16 matmuls where the torch build supports it."),
-                io.Boolean.Input("sla", default=False, optional=True,
+                io.Boolean.Input("sla", default=False, optional=True, extra_dict={"funui_requires": ["sparse_attention"]},
                                  tooltip="Block-sparse attention for MiniMax H3 -- the "
                                          "inference path lightx2v's SLA turbo LoRA was "
                                          "distilled against, which is why that LoRA gives no "
