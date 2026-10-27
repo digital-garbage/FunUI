@@ -247,6 +247,9 @@ def test_last_frame_route_saves_a_picture_to_the_bin_once_and_flags_a_fade_to_bl
     assert _post(server, f"{BASE}/projects/{dark.id}/last-frame", {"scene_id": "s1"})[1]["dark"] is True
     assert _post(server, f"{BASE}/projects/{dark.id}/last-frame", {"scene_id": "nope"})[0] == 404
     assert _post(server, f"{BASE}/projects/{dark.id}/last-frame", {})[0] == 400
+    middle = _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1", "at": 0.5})
+    assert middle[0] == 200 and media.path_for(middle[1]["media_id"]) and middle[1]["media_id"] != a["media_id"]      # its own picture, not the last one
+    assert _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1", "at": 2})[0] == 400
 
 
 @needs_ffmpeg

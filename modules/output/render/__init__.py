@@ -67,8 +67,11 @@ def routes(table, base, web):
             return bad("Send {scene_id}.")
         render = body.get("render") if isinstance(body.get("render"), dict) and isinstance((body["render"].get("media") or None), dict) else None
         window = serving.query_window({"dur": body.get("dur"), "src_in": body.get("src_in")})
+        at = body.get("at")
+        if at is not None and (isinstance(at, bool) or not isinstance(at, (int, float)) or not 0 <= at <= 1):
+            return bad("`at` is how far into the clip, 0 to 1.")
         try:
-            return web.json_response(await asyncio.to_thread(serving.last_frame, proj, scene_id, render, window, bool(body.get("reverse"))))
+            return web.json_response(await asyncio.to_thread(serving.last_frame, proj, scene_id, render, window, bool(body.get("reverse")), at))
         except KeyError as exc:
             return bad(f"No render for this scene ({exc}).", 404)
         except (files.ClipError, ValueError, OSError) as exc:

@@ -160,6 +160,7 @@ I express my deepest gratitude to:
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) — reads quantized `.gguf` encoders when it is installed;
 - ComfyUI-H3-SLA-Attention (MIT) — the SLA block-sparse attention for MiniMax H3 is ported from it, and its kernel and block map come from [LightX2V](https://github.com/ModelTC/LightX2V) (Apache-2.0);
 - ComfyUI-MiniMaxH3_LatentUpscaler by Tr1dae — the tiled H3 decode and the X2 Detail VAE output handling are ported from its "VAE Decode (fast)";
+- [JoyAI-Echo](https://github.com/jd-opensource/JoyAI-Echo) by jd-opensource — the cross-shot memory idea behind the Guide frames "Memory" mode;
 - the authors of the papers behind the sampling modules: ALG (arXiv 2506.08456), FreeSliders (2511.00103), Decisiveness (2510.01184), momentum (2602.20360), "Pulling The REINS" (2606.17257) STAS (2603.17825) and GSRS (2610.21129, Dai, Chen, Wen, Zhuang, Chen, Zeng: the rising sparsity schedule in SLA);
 - [OpenCut](https://github.com/opencut-app/opencut-classic) — the in-browser non-linear video editor whose UI and interaction patterns inspired FunUI's timeline studio;
 - [Inter](https://github.com/rsms/inter) and IBM Plex Mono — the fonts of the app (SIL Open Font License; copies in `app/assets/fonts`);

@@ -154,13 +154,16 @@ def trim(src: str, out: str, start=None, dur=None, *, fast=False, reverse=False,
     run(cmd)
 
 
-def last_frame(src: str, out_png: str, start=0.0, dur=None, fps=25.0, first=False) -> tuple[float, float]:
+def last_frame(src: str, out_png: str, start=0.0, dur=None, fps=25.0, first=False, at_fraction=None) -> tuple[float, float]:
     """Write the last picture of [start, start+dur) of `src` as a PNG (the first one with `first`: a reversed clip ends where it began);
     -> (average brightness, a near-peak brightness), both 0 (black) .. 255.
 
-    One frame before the window's end, not at it (a seek to the very end finds nothing), and never past the file's own end."""
+    One frame before the window's end, not at it (a seek to the very end finds nothing), and never past the file's own end.
+    `at_fraction` (0..1) takes the picture that far into the window instead (0.5: the middle one)."""
     end = float(start) + float(dur) if dur else None
     at = float(start) if first or end is None else max(float(start), end - 1.5 / (fps or 25.0))
+    if at_fraction is not None and end is not None:
+        at = min(at, float(start) + max(0.0, min(1.0, float(at_fraction))) * float(dur))
     have = duration(src)
     if have and not first:
         at = max(0.0, min(at, have - 2.0 / (fps or 25.0)))

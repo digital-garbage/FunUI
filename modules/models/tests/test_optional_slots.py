@@ -48,7 +48,7 @@ def test_the_optional_node_classes_the_presets_use_are_declared():
     # FunUIIdentityTransfer is still declared (LTX pipelines saved with it keep running) but no preset carries it any more.
     nodes = {s["node"] for p in _presets() for s in p["slots"] if s["node"] in _table()}
     assert nodes == {"FunUIEnhancePrompt", "FunUIShotCamera", "FunUIPromptMarkup", "FunUIApplyPromptMarkup",
-                     "FunUINegativeErase", "FunUICutOpening"}
+                     "FunUINegativeErase", "FunUICutOpening", "FunUIGuideFrames"}
 
 
 @pytest.mark.parametrize("preset_id,slot_id", _cases())

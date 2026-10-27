@@ -239,7 +239,7 @@ DARK_MEAN, DARK_PEAK = 20.0, 70.0     # a fade-out is dark AND flat: a night sce
 _frames: dict = {}                   # what a window's last frame was saved as: key -> (media id, brightness)
 
 
-def last_frame(project, scene_id: str, render: dict | None = None, window: dict | None = None, first: bool = False) -> dict:
+def last_frame(project, scene_id: str, render: dict | None = None, window: dict | None = None, first: bool = False, at_fraction=None) -> dict:
     """The last picture of a scene's render, saved in the media bin: {media_id, brightness, dark}.
 
     Dark means the clip ends in a fade to black -- starting the next shot from it gives a black start
@@ -248,13 +248,13 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
     clip = scene_clip(project, scene_id, render, window)       # a render just made, and the trim the page shows, win over the saved project
     src = files.clip_path(clip)
     sig = files.signature(src)
-    key = (clip["filename"], clip["subfolder"], clip["type"], clip["in"], clip["dur"], first, sig)
+    key = (clip["filename"], clip["subfolder"], clip["type"], clip["in"], clip["dur"], first, at_fraction, sig)
     hit = _frames.get(key)
     if hit and media.path_for(hit[0]):
         return {"media_id": hit[0], "brightness": hit[1], "dark": hit[1] < DARK_MEAN and hit[2] < DARK_PEAK}
     out = files.temp_file(f"funui_last_{projects.safe_part(project.id)[:8]}_{projects.safe_part(scene_id)}_{int(time.time() * 1000)}.png")
     try:
-        brightness, peak = files.last_frame(src, out, clip["in"], clip["dur"], clip["fps"], first)
+        brightness, peak = files.last_frame(src, out, clip["in"], clip["dur"], clip["fps"], first, at_fraction)
         with open(out, "rb") as fh:
             entry = media.save_upload(f"last_frame_{projects.safe_part(scene_id)[:12]}.png", fh.read())
     finally:

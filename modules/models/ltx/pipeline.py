@@ -15,7 +15,7 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
-def _common(latent_slots, latent_source, positive_source, negative_source):
+def _common(latent_slots, latent_source, positive_source, negative_source, decode_source=("sampler", 0)):
     """What both pipelines share: the four loaders, the prompt, the sampler and the render.
     `latent_slots` hold the latent the sampler starts from and whatever makes it."""
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
@@ -47,7 +47,7 @@ def _common(latent_slots, latent_source, positive_source, negative_source):
                     "seed": 0, "steps": 8, "cfg": 1.0, "sampler_name": "euler", "scheduler": "normal",
                     "denoise": 1.0}},
         {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
-            "samples": ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
+            "samples": list(decode_source), "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
         {"id": "save", "group": "Render", "node": "FunUISaveVideo",
          "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
          "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
@@ -76,10 +76,20 @@ def _image_to_video():
         {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
          "inputs": {"vae": ["vae", 0], "image": ["source_image", 1], "latent": ["split", 0],
                     "strength": 1.0, "bypass": False}},
+        # Pictures from the clips before (Guide frames, filled per run by the app; nothing in it passes everything through).
+        {"id": "guides", "group": "Preparation", "node": "FunUIGuideFrames",
+         "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["vae", 0],
+                    "latent": ["anchor", 0], "frames": ""}},
         {"id": "join", "group": "Preparation", "node": "LTXVConcatAVLatent",
-         "inputs": {"video_latent": ["anchor", 0], "audio_latent": ["split", 1]}},
+         "inputs": {"video_latent": ["guides", 2], "audio_latent": ["split", 1]}},
+        # Guides sit at the tail of the sequence while sampling: cut them off before decoding.
+        {"id": "split_made", "group": "Render", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["sampler", 0]}},
+        {"id": "crop", "group": "Render", "node": "LTXVCropGuides",
+         "inputs": {"positive": ["guides", 0], "negative": ["guides", 1], "latent": ["split_made", 0]}},
+        {"id": "join_made", "group": "Render", "node": "LTXVConcatAVLatent",
+         "inputs": {"video_latent": ["crop", 2], "audio_latent": ["split_made", 1]}},
     ]
-    return _common(latent, ["join", 0], ["conditioning", 0], ["conditioning", 1])
+    return _common(latent, ["join", 0], ["guides", 0], ["guides", 1], decode_source=("join_made", 0))
 
 
 def _direct_video_to_video():
@@ -116,7 +126,8 @@ def _direct_video_to_video():
 
 
 #: See minimax_h3/pipeline.py: what to pass through when the node's module did not load.
-OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positive", "2": "negative"}}}
+OPTIONAL_NODES = {"FunUIIdentityTransfer": {"pass": {"0": "model", "1": "positive", "2": "negative"}},
+                  "FunUIGuideFrames": {"pass": {"0": "positive", "1": "negative", "2": "latent"}}}
 
 
 def upgrade(slots, _outputs=None):

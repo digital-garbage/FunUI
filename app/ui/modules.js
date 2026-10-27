@@ -40,6 +40,7 @@ export default [
   "./features/generate/progress.js",
   "./features/continuity/index.js",
   "./features/temporal/index.js",
+  "./features/guides/index.js",
   "./features/composer/index.js",
   "./features/settings/index.js",
   "./features/welcome/index.js",
