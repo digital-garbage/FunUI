@@ -59,14 +59,14 @@ SETTINGS = {
     "second_order": {
         "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Second order late", "ui": "slider",
-        "hint": "How much the late steps lean on the step before. 0 = off (default: no value tried on a rental was safe). It fades in over the run.",
+        "hint": "How much the late steps lean on the step before. 0 = off. It fades in over the run. Strong values can distort the picture.",
         "when": {"enabled": True},
     },
     "polish": {
         "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
-        "hint": "0 = off. Default 0.25. Otherwise one extra full-size model call after the last step, from this small noise "
-                "level. Costs one step (about 15 to 25% of a run). Around 0.25 to 0.3 has given more natural motion on a rental.",
+        "hint": "0 = off. One extra full-size model call after the last step, started from this noise level: a short "
+                "re-pass over the finished video. Costs one step. From about 0.4 the sound is redrawn too.",
         "when": {"enabled": True},
     },
 }
