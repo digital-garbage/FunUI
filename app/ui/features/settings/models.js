@@ -190,6 +190,7 @@ export const models = (app) => function mount() {
     const pick = found.find((p) => p.id === id);
     if (!pick || !(await confirm("Replace pipeline", `Replace the whole pipeline with “${pick.title}”? Every file and value you set here is cleared. Revert puts it back until you leave this page.`, "danger"))) return;
     const r = await ps.restore({ slots: pick.slots, removed: [], unwired: {} });
+    if (!r.refused.length) Object.entries(pick.prefs || {}).forEach(([k, v]) => app.project.setPref(k, v));      // project settings the preset goes with (render steps)
     specs = {}; await describe(); say(r.refused.length ? `Not changed: ${r.refused[0]}` : "");
   }
   async function importWorkflow() {

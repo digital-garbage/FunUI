@@ -203,3 +203,10 @@ def test_fast_simple_preset_carries_its_settings_and_builds_clean(registered):
     _prompt, problems = graph.build(list(slots.values()))
     loader_file = ("needs 'model_name'", "needs 'clip_name", "needs 'vae_name'", "decode_vae_name")
     assert not [p for p in problems if not any(k in p for k in loader_file) and "kjnodes" not in p.lower() and "ImageTransformKJ" not in p], problems
+
+
+def test_fast_simple_preset_names_its_render_steps():
+    from modules.models.minimax_h3.pipeline import presets
+    prefs = next(p for p in presets() if p["id"] == "minimax_h3_fast_simple_r2v")["prefs"]
+    assert prefs["interpolateMode"] == "always" and prefs["interpolateOpts"] == {"mode": "MEDIUM", "multiplier": 2}
+    assert prefs["upscaleMode"] == "button" and prefs["upscaleRtx"] == {"quality": "DENOISE_MEDIUM"}

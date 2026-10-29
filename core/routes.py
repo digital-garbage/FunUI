@@ -312,7 +312,8 @@ def register(routes, prefix=None):
             for preset in (offered or []):
                 if isinstance(preset, dict) and preset.get("id") and preset.get("slots"):
                     found.append({"id": preset["id"], "title": preset.get("title") or preset["id"],
-                                  "module": spec.id, "slots": preset["slots"]})
+                                  "module": spec.id, "slots": preset["slots"],
+                                  "prefs": preset.get("prefs") if isinstance(preset.get("prefs"), dict) else {}})
         return web.json_response({"presets": found})
 
     @routes.post(P + "/api/pipeline/import")

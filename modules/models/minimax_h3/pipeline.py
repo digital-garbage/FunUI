@@ -157,6 +157,14 @@ def h3_reference_to_video():
     return slots
 
 
+#: Project settings the Fast & Simple preset goes with (the render steps after a clip finishes): Frame Generation on every
+#: render, Balanced, 2 times; Super Resolution on demand (a button beside the rating), Denoise · Medium.
+FAST_SIMPLE_PREFS = {
+    "interpolateMode": "always", "interpolateOpts": {"mode": "MEDIUM", "multiplier": 2},
+    "upscaleMode": "button", "upscaleEngine": "rtx", "upscaleRtx": {"quality": "DENOISE_MEDIUM"},
+}
+
+
 def h3_fast_simple_r2v():
     """Reference to Video set up for speed with few settings to think about: MXFP8 weights, block-sparse attention
     that ramps from 0.7 to 0.9, a DMAD LoRA slot, five steps on the Turbo sampler with the first three on a smaller
@@ -268,7 +276,7 @@ def presets():
              "slots": h3_reference_to_video()},
             {"id": "minimax_h3_fast_simple_r2v",
              "title": "MiniMax H3 · Fast & Simple R2V",
-             "slots": h3_fast_simple_r2v()}]
+             "slots": h3_fast_simple_r2v(), "prefs": FAST_SIMPLE_PREFS}]
     # Held back, not offered: h3_reference_to_video_second_pass() builds clean but was never verified on a GPU
     # (it needs a compatible H3 latent upscaler file). Add it back here once it has been.
 

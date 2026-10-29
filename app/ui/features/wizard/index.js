@@ -28,7 +28,7 @@ export default {
       const pick = presets.find((p) => p.id === ctx.preset);
       try {
         await app.project.newProject((ctx.name || "").trim() || "Untitled montage");
-        if (pick) { const r = await app.pipeline.restore({ slots: pick.slots, removed: [], unwired: {} }); if (r.refused.length) c.toast.warn({ text: `The model's pipeline was not loaded: ${r.refused[0]}` }); }
+        if (pick) { const r = await app.pipeline.restore({ slots: pick.slots, removed: [], unwired: {} }); if (r.refused.length) c.toast.warn({ text: `The model's pipeline was not loaded: ${r.refused[0]}` }); else Object.entries(pick.prefs || {}).forEach(([k, v]) => app.project.setPref(k, v)); }
       } catch (err) { busy = false; return c.toast.warn({ text: `Could not make the project: ${err.message}` }); }
       busy = false;
       close();
