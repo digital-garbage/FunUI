@@ -26,3 +26,16 @@ def ngx_hint():
     except OSError:
         return (" This machine has no libnvidia-ngx.so.1 (NVIDIA's driver library that the RTX video effects need; some rented GPUs do not mount it, "
                 "like libnvidia-encode). Use an upscale model instead, or rent a host that exposes the full NVIDIA driver (graphics/video capabilities).")
+
+
+_held = {}
+
+
+def held(kind, key, build):
+    """The loaded effect of this `kind` for these settings, kept between jobs: pressing the button again reuses it instead of loading NVIDIA's model again.
+    A different setting or size replaces it (only one of each kind is kept, so the card is never holding a pile of them)."""
+    got = _held.get(kind)
+    if got is None or got[0] != key:
+        _held.pop(kind, None)
+        _held[kind] = (key, build())
+    return _held[kind][1]

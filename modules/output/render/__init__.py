@@ -13,8 +13,8 @@ import asyncio
 import os
 import time
 
-from ..._core import media, projects
-from . import files, jobs, library, rtx, serving, stitch, upscale
+from ..._core import jobs, media, projects
+from . import files, library, rtx, serving, stitch, upscale
 
 try:
     from aiohttp import web

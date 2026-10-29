@@ -144,10 +144,9 @@ export const api = {
     return body.prompt_id;
   },
   frameGeneration: () => call("GET", "/api/m/interpolate/frame_generation"),
-  /** Interpolation is an ordinary ComfyUI job too; read it back with upscaleResult. -> the prompt id. */
-  queueInterpolate(media, opts) {
-    return this.queueGraph({ 1: { class_type: "FunUIInterpolateVideo", inputs: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output", frame_options: JSON.stringify(opts || {}) } } });
-  },
+  /** Interpolation is a background job of FunUI, not a ComfyUI prompt (that would make ComfyUI drop the workflow's loaded models). -> {job_id}. */
+  interpolate: (media, options) => call("POST", "/api/m/interpolate/run", { media: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output" }, options }),
+  interpolateJob: (id) => call("GET", `/api/m/interpolate/jobs/${encodeURIComponent(id)}`),
   /** Whether ComfyUI's queue holds a run of this project (queued from any tab). Unreadable: false, the queue decides. */
   async projectQueued(projectId) {
     try {

@@ -45,10 +45,10 @@ def make(o):
         raise RuntimeError("This nvidia-vfx has no frame generation: update it (needs 0.2 or newer).")
     import torch
     mult = o["multiplier"]
-    effects, last = {}, [None]                       # one effect per frame size; the previous frame, on the GPU
+    last = [None]                                    # the previous frame, on the GPU
 
     def effect(h, w):
-        if (h, w) not in effects:
+        def build():
             kw = {"image_encoding": VideoFrameGeneration.ImageEncoding.RGB10A2} if o["tenbit"] else {}
             e = VideoFrameGeneration(getattr(VideoFrameGeneration.Mode, o["mode"]), **kw)
             e.input_width, e.input_height, e.frame_multiplier = w, h, mult
@@ -56,8 +56,8 @@ def make(o):
                 e.load()
             except Exception as exc:                  # noqa: BLE001 -- NvVFXError: say what to do, not just the SDK code
                 raise RuntimeError(f"{NAME} could not start ({exc}).{ngx_hint()}") from exc
-            effects[(h, w)] = e
-        return effects[(h, w)]
+            return e
+        return nvidia.held("framegen", (o["mode"], o["tenbit"], mult, h, w), build)
 
     def run(x):
         out = []

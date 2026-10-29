@@ -63,10 +63,9 @@ def make(o):
     quality = getattr(VideoSuperRes.QualityLevel, o["quality"], None)
     if quality is None:
         raise RuntimeError(f"This nvidia-vfx has no quality level {o['quality']}.")
-    effects = {}
 
     def effect(h, w):
-        if (h, w) not in effects:
+        def build():
             kw = {"quality": quality}
             if o["strength"] < 1.0:
                 kw["strength"] = o["strength"]
@@ -78,8 +77,8 @@ def make(o):
                 e.load()
             except Exception as exc:                  # noqa: BLE001 -- NvVFXError: say what to do, not just the SDK code
                 raise RuntimeError(f"{NAME} could not start ({exc}).{ngx_hint()}") from exc
-            effects[(h, w)] = e
-        return effects[(h, w)]
+            return e
+        return nvidia.held("vsr", (o["quality"], o["strength"], o["tenbit"], h, w, out_size(w, h, o)), build)
 
     def run(x):
         out = []

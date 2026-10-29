@@ -71,7 +71,6 @@ FROZEN = {
                                 "source_id", "phase_scale", "id_strength", "arcface_mode"],
     "FunUIDecode": ["samples", "vae", "model", "audio_vae", "tile_size"],
     "FunUIUpscaleVideo": ["filename", "subfolder", "type", "upscale_model", "rtx_options"],
-    "FunUIInterpolateVideo": ["filename", "subfolder", "type", "frame_options"],
     "FunUITrainLora": [
         "model", "clip", "vae", "audio_vae", "set_name", "name", "use", "steps", "learning_rate", "rank", "algorithm",
         "optimizer", "loss", "batch_size", "grad_accumulation", "resolution", "aspect_buckets", "frames", "fps", "start",

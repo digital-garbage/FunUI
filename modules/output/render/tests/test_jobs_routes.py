@@ -10,7 +10,7 @@ pytest.importorskip("aiohttp")
 
 from core import media, projects  # noqa: E402
 from core.tests.test_routes_shortcuts import server  # noqa: E402,F401
-from modules.output.render import jobs  # noqa: E402
+from core import jobs  # noqa: E402
 from modules.output.render.tests.clips import comfy, make_clip, needs_ffmpeg, probe  # noqa: E402,F401
 
 BASE = "/fun/api/m/render"

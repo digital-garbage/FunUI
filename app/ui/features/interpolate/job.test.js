@@ -5,13 +5,21 @@ import { derived, swap, wentThrough } from "../../shell/renders.js";
 
 const m = (f, sub = "") => ({ filename: f, subfolder: sub, type: "output" });
 
-test("the options reach the node, the job is waited for, and an error is thrown in words", async () => {
-  const seen = [], seq = [null, { videos: [m("fi.mp4", "funui_interpolated")] }];
-  const api = { queueInterpolate: async (...a) => (seen.push(a), "id"), upscaleResult: async () => seq.shift() };
+test("the options reach the job, the job is waited for, and an error is thrown in words", async () => {
+  const seen = [], seq = [{ state: "running" }, { state: "done", media: m("fi.mp4", "funui_interpolated") }];
+  const api = { interpolate: async (...a) => (seen.push(a), { job_id: "id" }), interpolateJob: async () => seq.shift() };
   assert.equal((await interpolate(api, m("x.mp4"), { multiplier: 2 }, async () => {})).filename, "fi.mp4");
   assert.deepEqual(seen[0][1], { multiplier: 2 });
-  const bad = { queueInterpolate: async () => "id", upscaleResult: async () => ({ error: "no libnvidia-ngx" }) };
+  const bad = { interpolate: async () => ({ job_id: "id" }), interpolateJob: async () => ({ state: "error", detail: "no libnvidia-ngx" }) };
   await assert.rejects(interpolate(bad, m("x.mp4"), {}, async () => {}), /libnvidia-ngx/);
+});
+
+test("a restart is named, a dropped reply is retried", async () => {
+  const gone = { interpolate: async () => ({ job_id: "id" }), interpolateJob: async () => { throw Object.assign(new Error("x"), { status: 404 }); } };
+  await assert.rejects(interpolate(gone, m("x.mp4"), {}, async () => {}), /restarted/);
+  let n = 0;
+  const flaky = { interpolate: async () => ({ job_id: "id" }), interpolateJob: async () => { if (++n < 5) throw new Error("net"); return { state: "done", media: m("u.mp4") }; } };
+  assert.equal((await interpolate(flaky, m("x.mp4"), {}, async () => {})).filename, "u.mp4");
 });
 
 test("modes read as words", () => {
