@@ -260,8 +260,6 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
             else:
                 _, note = mxfp8_module.quantize_state_dict(state_dict, comfy.model_management.get_torch_device())
                 notes.append(note)
-                if compute_dtype != "default":
-                    notes.append("mxfp8: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
             for line in notes[mark:]:                   # the status output is rarely read; the log is
                 log.info("FunUI Diffusion Model Loader", line)
         # Read before the load: comfy may consume the dict.
