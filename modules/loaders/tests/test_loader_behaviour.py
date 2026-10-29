@@ -427,3 +427,35 @@ def test_the_vae_loader_hands_the_file_header_to_the_vae(comfyui, tmp_path, monk
     monkeypatch.setattr(comfy.sd, "VAE", Vae)
     FunUIVAELoader.execute("audio_vae.safetensors", "bfloat16")
     assert seen["metadata"] == {"config": "{}"} and seen["keys"] == ["autoencoder.x"]
+
+
+def test_several_loras_in_one_node_apply_in_order(monkeypatch):
+    import comfy.utils
+    import folder_paths
+    from modules.loaders.lora import nodes
+
+    seen = []
+
+    class M:
+        def clone(self):
+            return self
+
+        def add_patches(self, patches, strength):
+            seen.append((patches["tag"], strength))
+
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: name)
+    monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {"name": p})
+    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"tag": l["name"]}, "as-is", 0))
+    out = nodes.FunUILoraLoader.execute(
+        model=M(), lora_name="a", strength_model=0.5,
+        lora_name_2="None", lora_name_3="c", strength_model_3=1.5,
+        lora_name_8="h", strength_model_8=-1.0)
+    assert seen == [("a", 0.5), ("c", 1.5), ("h", -1.0)]
+    assert out.result[2].count("FunUI LoRA Loader |") == 3
+
+
+def test_a_skipped_slot_between_two_loras_does_not_break_the_chain(monkeypatch):
+    from modules.loaders.lora import nodes
+    model = object()
+    out = nodes.FunUILoraLoader.execute(model=model, lora_name="None", lora_name_2="None")
+    assert out.result[0] is model and out.result[2] == "no LoRA picked"
