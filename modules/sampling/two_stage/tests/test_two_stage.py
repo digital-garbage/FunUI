@@ -142,3 +142,14 @@ def test_the_upscaler_follows_the_latents_dtype(upscaler_file):
     video = torch.randn(1, 24, 2, 4, 4, device="cpu", dtype=torch.bfloat16)
     out = stages.enlarge(video, 8, 8, net)
     assert out.dtype == torch.bfloat16 and out.device == video.device
+
+
+def test_the_upscaler_list_is_read_again_when_settings_open(upscaler_file, tmp_path):
+    from modules.sampling import two_stage
+    from safetensors.torch import save_file
+    assert [o["value"] for o in two_stage.PROVIDES["setting_options"]()["upscaler"]] == [upscaler_file]
+    save_file({"x": torch.zeros(1)}, str(tmp_path / "later.safetensors"))
+    import folder_paths
+    folder_paths.filename_list_cache.pop("latent_upscale_models", None)
+    now = [o["value"] for o in two_stage.PROVIDES["setting_options"]()["upscaler"]]
+    assert "later.safetensors" in now

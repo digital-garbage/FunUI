@@ -86,4 +86,4 @@ def install(patcher, values, key):
     return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else "")
 
 
-PROVIDES = {"modifier": install}
+PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}
