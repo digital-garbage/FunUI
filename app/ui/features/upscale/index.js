@@ -2,7 +2,8 @@
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
-import { RTX, RTX_DEFAULTS, UPSCALED, keepsSize, keyOf, qualityLabel, swap, upscale } from "./job.js";
+import { derived, wentThrough } from "../../shell/renders.js";
+import { RTX, RTX_DEFAULTS, keepsSize, keyOf, qualityLabel, swap, upscale } from "./job.js";
 
 export default {
   id: "upscale",
@@ -36,7 +37,7 @@ export default {
     }
 
     async function run(media, pressed = false) {
-      if (!media || media.subfolder === UPSCALED) return;                    // never upscale twice
+      if (!media || wentThrough(media, "upscale")) return;                    // never upscale twice, even after an interpolation in between
       const key = keyOf(media), pid = p.project.id;
       if (busy.has(key)) return;
       busy.add(key); draw();
@@ -48,6 +49,7 @@ export default {
         if (!model) return void (pressed ? suggest() : c.toast.warn({ text: "Upscale: pick a model or NVIDIA RTX Super Resolution in Settings ▸ Editor." }));
         c.toast.info({ text: `Upscaling with ${model}…` });
         const out = await upscale(app.api, media, model, undefined, rtxOn() ? rtxOpts() : undefined);
+        derived(media, out, "upscale");
         const swapped = await p.editFor(pid, (pr) => swap(pr, media, out) > 0);
         if (!swapped) c.toast.warn({ text: "Upscaled, but that render was replaced meanwhile, so nothing was swapped." });
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
@@ -58,8 +60,8 @@ export default {
     function draw() {
       const media = p.pref("upscaleMode", "never") === "button" ? target() : null;
       if (!media) return put();
-      const working = busy.has(keyOf(media)) || media.subfolder === UPSCALED;
-      put(c.button.sm({ label: busy.has(keyOf(media)) ? "Upscaling…" : media.subfolder === UPSCALED ? "Upscaled" : "Upscale", tone: "ghost", disabled: working,
+      const working = busy.has(keyOf(media)) || wentThrough(media, "upscale");
+      put(c.button.sm({ label: busy.has(keyOf(media)) ? "Upscaling…" : wentThrough(media, "upscale") ? "Upscaled" : "Upscale", tone: "ghost", disabled: working,
         title: "Upscale this video with the engine picked in Settings ▸ Editor; it replaces the render", onClick: () => run(media, true) }).node);
     }
 

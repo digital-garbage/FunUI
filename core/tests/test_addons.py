@@ -43,7 +43,8 @@ def test_switching_on_waits_for_the_restart_and_off_keeps_the_packages(here):
 
 
 def test_an_add_on_this_machine_cannot_run_is_not_offered(here, monkeypatch):
-    monkeypatch.setitem(addons._BY_ID["nvidia_vsr"], "offered", lambda: False)
+    for gone in ("nvidia_vsr", "nvidia_framegen"):
+        monkeypatch.setitem(addons._BY_ID[gone], "offered", lambda: False)
     assert [a["id"] for a in addons.listing()] == ["camera", "lora_training"]
     assert addons.set_wanted("nvidia_vsr", True) is False
     assert addons.set_wanted("no-such-addon", True) is False
@@ -52,7 +53,7 @@ def test_an_add_on_this_machine_cannot_run_is_not_offered(here, monkeypatch):
 def test_the_start_installs_only_what_is_wanted_and_missing(here, monkeypatch):
     ran = []
 
-    def fake(lines):
+    def fake(lines, upgrade=()):
         ran.append(list(lines))
         here.add("nvidia_vsr")
         return {"ok": True, "detail": ""}
@@ -68,7 +69,7 @@ def test_the_start_installs_only_what_is_wanted_and_missing(here, monkeypatch):
 
 def test_a_failed_install_is_said_and_not_retried_until_switched_off_and_on(here, monkeypatch):
     ran = []
-    monkeypatch.setattr(update, "install_lines", lambda lines: ran.append(1) or {"ok": False, "detail": "no wheel for this Python"})
+    monkeypatch.setattr(update, "install_lines", lambda lines, upgrade=(): ran.append(1) or {"ok": False, "detail": "no wheel for this Python"})
     addons.set_wanted("nvidia_vsr", True)
     addons.install_wanted()
     row = next(a for a in addons.listing() if a["id"] == "nvidia_vsr")
@@ -107,7 +108,7 @@ def test_the_routes_list_and_switch(comfyui, here):
             ok = await (await client.post("/fun/api/addons", json={"id": "camera", "enabled": True})).json()
             return got, bad.status, ok
     got, bad, ok = asyncio.run(go())
-    assert {a["id"] for a in got["addons"]} == {"nvidia_vsr", "camera", "lora_training"}
+    assert {a["id"] for a in got["addons"]} == {"nvidia_vsr", "nvidia_framegen", "camera", "lora_training"}
     assert bad == 400
     assert next(a["state"] for a in ok["addons"] if a["id"] == "camera") == "pending"
     assert json.loads(config.ADDONS_FILE.read_text())["wanted"] == ["camera"]
@@ -139,3 +140,39 @@ def test_preshed_3_0_14_is_flagged_and_older_is_not(monkeypatch):
     for have, bad in (("3.0.14", True), ("3.0.13", False), ("3.1.0", True)):
         monkeypatch.setattr(metadata, "version", lambda _n, have=have: have)
         assert addons.preshed_broken() is bad
+
+
+def test_frame_generation_is_a_separate_switch_on_the_same_package():
+    vsr, fg = addons._BY_ID["nvidia_vsr"], addons._BY_ID["nvidia_framegen"]
+    assert vsr["requires"] == fg["requires"] == ("nvidia-vfx>=0.2",)       # neither add-on can ask for the 0.1 that has no frame generation
+    assert fg["floors"] == {"nvidia-vfx": "0.2"} and "floors" not in vsr
+
+
+def test_an_old_nvidia_vfx_is_present_for_super_resolution_but_not_for_frame_generation(monkeypatch):
+    monkeypatch.setattr(addons.importlib.util, "find_spec", lambda m: object())
+    for have, ok in (("0.1.0.1", False), ("0.2.0.0", True), ("0.10.0", True)):
+        monkeypatch.setattr(update, "_installed_version", lambda n, have=have: have)
+        assert addons._present(addons._BY_ID["nvidia_framegen"]) is ok
+        assert addons._present(addons._BY_ID["nvidia_vsr"]) is True
+
+
+def _pip(monkeypatch, installed, freeze):
+    seen = {}
+    monkeypatch.setattr(update, "_installed_version", lambda n: installed.get(n))
+    monkeypatch.setattr(update, "_pip_freeze", lambda: freeze)
+    monkeypatch.setattr(update, "_install_each", lambda status, path, before, note, timeout, broken:
+                        seen.update(lines=status["install"], pins=open(path).read()) or {"ok": True})
+    return seen
+
+
+def test_frame_generation_moves_an_old_nvidia_vfx_up_and_nothing_else(monkeypatch):
+    seen = _pip(monkeypatch, {"nvidia-vfx": "0.1.0.1"}, {"torch": "2.10.0", "nvidia-vfx": "0.1.0.1"})
+    update.install_lines(["nvidia-vfx>=0.2"], upgrade=("nvidia-vfx",))
+    assert seen["lines"] == ["nvidia-vfx>=0.2"]
+    assert "torch==2.10.0" in seen["pins"] and "nvidia-vfx" not in seen["pins"]
+
+
+def test_super_resolution_never_moves_a_newer_nvidia_vfx_back(monkeypatch):
+    seen = _pip(monkeypatch, {"nvidia-vfx": "0.2.0.0"}, {"nvidia-vfx": "0.2.0.0"})
+    assert update.install_lines(["nvidia-vfx>=0.2"])["ran"] is False and not seen          # present: nothing to do, in either order
+    assert update.install_lines(["nvidia-vfx>=0.2"], upgrade=("nvidia-vfx",))["ran"] is False   # already at the floor

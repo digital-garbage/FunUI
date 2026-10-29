@@ -18,6 +18,7 @@ export default [
   "./features/takes/index.js",
   "./features/subjects/index.js",
   "./features/upscale/index.js",
+  "./features/interpolate/index.js",
   "./features/revolver/index.js",
   "./features/autocomplete/index.js",
   "./features/autosave/index.js",

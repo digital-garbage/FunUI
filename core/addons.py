@@ -46,6 +46,9 @@ ADDONS = (
     {"id": "nvidia_vsr", "title": "NVIDIA RTX Super Resolution",
      "hint": "Native upscaling for images and videos. Installs NVIDIA's own package, under its licence.",
      "requires": ("nvidia-vfx>=0.2",), "modules": ("nvvfx",), "offered": _nvidia_gpu},
+    {"id": "nvidia_framegen", "title": "NVIDIA RTX Frame Generation",
+     "hint": "Adds in-between frames to finished videos (x2 and more). Installs NVIDIA's own package, under its licence; needs nvidia-vfx 0.2 or newer, and replaces an older one.",
+     "requires": ("nvidia-vfx>=0.2",), "modules": ("nvvfx",), "floors": {"nvidia-vfx": "0.2"}, "offered": _nvidia_gpu},
     {"id": "camera", "title": "Automatic camera and focus",
      "hint": "Lets Shot camera aim camera moves, cuts, transitions and focus at the right things in your prompts, using spaCy.",
      "requires": ("spacy>=3.8,<3.9", PRESHED_PIN, _SPACY_MODEL), "modules": ("spacy", "en_core_web_sm"), "offered": lambda: True},
@@ -56,8 +59,28 @@ ADDONS = (
 _BY_ID = {a["id"]: a for a in ADDONS}
 
 
+def _version_tuple(v) -> tuple:
+    out = []
+    for part in str(v).split("."):
+        digits = "".join(ch for ch in part if ch.isdigit())
+        if not digits:
+            break
+        out.append(int(digits))
+    return tuple(out)
+
+
+def _old(addon) -> bool:
+    """True when a package the add-on needs is installed below the version it needs ("floors"): present, but not usable."""
+    from . import update
+    for name, floor in (addon.get("floors") or {}).items():
+        have = update._installed_version(name)
+        if have is not None and _version_tuple(have) < _version_tuple(floor):
+            return True
+    return False
+
+
 def _present(addon) -> bool:
-    return all(importlib.util.find_spec(m) is not None for m in addon["modules"])
+    return all(importlib.util.find_spec(m) is not None for m in addon["modules"]) and not _old(addon)
 
 
 def _read() -> dict | None:
@@ -167,7 +190,7 @@ def install_wanted() -> None:
             from . import update
             for a in todo:
                 log.info("add-ons", f"installing {a['title']}…")
-                result = update.install_lines(a["requires"])
+                result = update.install_lines(a["requires"], upgrade=tuple(a.get("floors") or ()))
                 importlib.invalidate_caches()
                 if _present(a):
                     continue

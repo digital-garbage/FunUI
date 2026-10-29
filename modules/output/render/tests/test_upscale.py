@@ -85,3 +85,4 @@ def test_rtx_refuses_when_switched_off_even_if_installed(monkeypatch):
     monkeypatch.setattr(addons, "enabled", lambda _id: False)
     with pytest.raises(RuntimeError, match="switched off"):
         rtx.make(rtx.options("{}"))
+

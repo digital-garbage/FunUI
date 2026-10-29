@@ -7,6 +7,10 @@ for ComfyUI (quality, scale or target size, strength, 8/10-bit), so a setup carr
 
 import json
 
+from ..._core import nvidia
+
+ngx_hint, pack10, unpack10 = nvidia.ngx_hint, nvidia.pack10, nvidia.unpack10      # pack10/unpack10 stay importable from here
+
 NAME = "NVIDIA RTX Super Resolution"        # sent as the model name when this engine is picked (the UI holds the same string)
 _LEVELS = ("LOW", "MEDIUM", "HIGH", "ULTRA")
 QUALITIES = ("BICUBIC", *_LEVELS,
@@ -46,34 +50,6 @@ def out_size(w, h, o):
     return snap(ow), snap(oh)
 
 
-def pack10(x):
-    """[3,H,W] float 0-1 -> (H,W) uint32 in the SDK's RGB10A2 layout: R bits 0-9, G 10-19, B 20-29, A 30-31."""
-    import torch
-    v = (x.clamp(0, 1) * 1023).round().to(torch.int64)
-    return (v[0] | (v[1] << 10) | (v[2] << 20) | (3 << 30)).to(torch.uint32)
-
-
-def unpack10(p):
-    """(H,W) uint32 -> [3,H,W] float 0-1."""
-    import torch
-    v = p.to(torch.int64)
-    return torch.stack([v & 1023, (v >> 10) & 1023, (v >> 20) & 1023]).float() / 1023.0
-
-
-def _ngx_hint():
-    """Why load() can fail on a rental: the SDK needs the driver's own libnvidia-ngx.so.1, which a container host may not mount."""
-    import ctypes
-    import sys
-    if sys.platform != "linux":
-        return ""
-    try:
-        ctypes.CDLL("libnvidia-ngx.so.1")
-        return " The driver's NGX library is present, so check the driver is 570.190+ / 580.82+ / 590.44+ and the card is Turing or newer."
-    except OSError:
-        return (" This machine has no libnvidia-ngx.so.1 (NVIDIA's driver library that RTX VSR needs; some rented GPUs do not mount it, "
-                "like libnvidia-encode). Use an upscale model instead, or rent a host that exposes the full NVIDIA driver (graphics/video capabilities).")
-
-
 def make(o):
     """-> the upscale function for these (already checked) options. Raises a sentence when the add-on is missing."""
     from ..._core import addons
@@ -101,7 +77,7 @@ def make(o):
             try:
                 e.load()
             except Exception as exc:                  # noqa: BLE001 -- NvVFXError: say what to do, not just the SDK code
-                raise RuntimeError(f"{NAME} could not start ({exc}).{_ngx_hint()}") from exc
+                raise RuntimeError(f"{NAME} could not start ({exc}).{ngx_hint()}") from exc
             effects[(h, w)] = e
         return effects[(h, w)]
 

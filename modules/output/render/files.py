@@ -20,47 +20,21 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from ..._core import media
+from ..._core import media, video_pipe
 
 ISOBMFF = (".mp4", ".m4v", ".mov")          # containers where moov/mdat order applies
 
 AUDIO_RATE = 48000                          # every exported part is made at this rate, so parts can be joined
 
-FFMPEG_MISSING = "ffmpeg was not found on PATH: install it to preview, export or render clips."
-
-
-class ClipError(Exception):
-    """A clip cannot be used, with the sentence the person should read."""
-
-
-def ffmpeg() -> str:
-    path = shutil.which("ffmpeg")
-    if not path:
-        raise ClipError(FFMPEG_MISSING)
-    return path
+ClipError, FFMPEG_MISSING, ffmpeg = video_pipe.ClipError, video_pipe.FFMPEG_MISSING, video_pipe.ffmpeg
 
 
 def comfy_dir(kind: str) -> str | None:
-    """ComfyUI's output or temp folder, or None when ComfyUI is not here to ask."""
-    try:
-        import folder_paths
-        return folder_paths.get_output_directory() if kind == "output" else folder_paths.get_temp_directory()
-    except Exception:                         # noqa: BLE001 -- tests, headless
-        return None
+    return video_pipe.comfy_dir(kind)
 
 
 def comfy_path(filename, subfolder="", kind="output") -> str | None:
-    """The file ComfyUI calls (filename, subfolder, kind), or None if the name does not
-    resolve to a place under that folder."""
-    if not isinstance(filename, str) or not filename:
-        return None
-    base = comfy_dir("output" if kind != "temp" else "temp")
-    if not base:
-        return None
-    base = os.path.realpath(base)
-    full = os.path.realpath(os.path.join(base, subfolder if isinstance(subfolder, str) else "",
-                                         os.path.basename(filename)))
-    return full if os.path.commonpath((full, base)) == base else None
+    return video_pipe.comfy_path(filename, subfolder, kind, comfy_dir)    # through this module's comfy_dir, which tests replace
 
 
 def clip_path(clip: dict) -> str:

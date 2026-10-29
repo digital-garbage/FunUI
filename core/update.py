@@ -449,17 +449,30 @@ def _constrained(before, run):
         os.unlink(constraints.name)
 
 
-def install_lines(lines, timeout: int = 900) -> dict:
+def _below_floor(name, spec) -> bool:
+    """True when `name` is installed but older than the ">=X" in `spec`."""
+    have = _installed_version(name)
+    m = re.match(r"^>=\s*([0-9][0-9.]*)", spec or "")
+    if have is None or not m:
+        return False
+    key = lambda v: tuple(int(x) for x in re.findall(r"\d+", v))
+    return key(have) < key(m.group(1))
+
+
+def install_lines(lines, timeout: int = 900, upgrade=()) -> dict:
     """Install the absent ones of these requirement lines, with the same guard as install_requirements:
-    nothing already present moves. Never raises."""
-    todo = [l for l in lines if (p := parse_requirement(l)) and _installed_version(p[0]) is None]
+    nothing already present moves. Never raises. A name in `upgrade` that is installed below the line's
+    ">=" floor is moved up to it (and only that package: every other one stays pinned)."""
+    todo = [l for l in lines if (p := parse_requirement(l)) and (_installed_version(p[0]) is None or (p[0] in upgrade and _below_floor(*p)))]
     if not todo:
         return {"ran": False, "ok": True, "changed": [], "detail": "Nothing to install."}
     before = _pip_freeze()
     if not before:
         return {"ran": False, "ok": False, "detail": "Could not read the installed packages, so nothing was installed."}
     status = {"install": todo, "missing": [parse_requirement(l)[0] for l in todo]}
-    return _constrained(before, lambda path: _install_each(status, path, before, "", timeout, False))
+    moving = {parse_requirement(l)[0].lower().replace("_", "-") for l in todo}
+    held = {n: v for n, v in before.items() if n.lower().replace("_", "-") not in moving}      # the package being moved up is the one pin lifted
+    return _constrained(held, lambda path: _install_each(status, path, before, "", timeout, False))
 
 
 def _install_each(status, constraints_path, before, floor_note, timeout, model_broken):
