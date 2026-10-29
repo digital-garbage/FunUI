@@ -110,3 +110,31 @@ def test_a_feature_around_the_run_is_called_once_and_one_inside_each_stage_knows
     assert outer_seen[0][1] == outer_seen[1][1]                       # both see the full-size run
     assert all(g is None for _w, _s, g in outer_seen)                 # outside the stages
     assert stages_seen == [1, 2]
+
+
+def test_a_planted_massive_channel_is_found_and_steered_in_both_stages(model, monkeypatch, tmp_path):
+    """STAS reads the channel at a block in the small first stage (4x4 latent) and in the full one (8x8)."""
+    from modules._core import dit_hooks
+    from modules.sampling import stas
+    from modules.system.taste import store
+    heard = []
+    monkeypatch.setattr(stas.log, "once", lambda key, level, title, message: heard.append(message))
+    monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
+
+    def plant(args, extra):
+        out = extra["original_block"](args)["img"]
+        out[..., 3] += 1000.0 * out.abs().mean()          # a channel far over 50x the mean, at every size
+        return {"img": out}
+
+    def install_it(patched, when):
+        if when != "after":
+            return
+        dit_hooks.add_block_hook(patched, "test.plant", 0, plant)
+        stas.install(patched, {"enabled": True, "mode": "manual", "alpha": 2.0, "block": 1}, "funui.stas")
+
+    sigmas = tuple(1.0 - i / 9 for i in range(10))
+    monkeypatch.setattr(__import__("sys").modules[__name__], "SIGMAS", sigmas)
+    _run(model, install_it)
+    result = [m for m in heard if m.startswith("Active")]
+    assert result and "steered 4 call(s)" in result[0]       # steps 1-2 small, steps 3-4 full: 4 of the first 4 steps
+    assert not [m for m in heard if m.startswith("Inactive")]
