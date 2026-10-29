@@ -67,31 +67,77 @@ def _upscaler(name):
     return _CACHE["model"]
 
 
-def enlarge(video, h, w, upscaler=None):
-    """The hand-over: the first stage's clean guess at the full grid. With an upscaler, its learned 2D resize at the
-    ratio that gets nearest (it works in even steps), then a bicubic trim to the exact grid; without, plain bicubic."""
-    from ...latent.second_pass.nodes import downscale_to, run_upscaler
-    if upscaler is None:
+METHODS = ("bicubic", "lanczos", "bislerp", "bilinear", "trilinear", "area", "nearest-exact")
+
+
+def _lanczos_weights(n_in, n_out, like, a=3):
+    """Lanczos-3 resampling as a matrix [n_out, n_in], rows summing to 1 (same footprint rule as PIL's)."""
+    scale = n_in / n_out
+    support = a * max(scale, 1.0)
+    centre = (torch.arange(n_out, dtype=torch.float32) + 0.5) * scale
+    taps = torch.arange(n_in, dtype=torch.float32) + 0.5
+    x = (taps[None, :] - centre[:, None]) / max(scale, 1.0)
+    w = torch.where(x.abs() < a, torch.sinc(x) * torch.sinc(x / a), torch.zeros(()))
+    w = w * ((taps[None, :] - centre[:, None]).abs() < support)
+    return (w / w.sum(1, keepdim=True)).to(device=like.device, dtype=like.dtype)
+
+
+def _lanczos(video, h, w):
+    """ComfyUI's own "lanczos" goes through 8-bit pictures, which a 24-channel latent cannot survive; this is the
+    same filter done on the numbers themselves."""
+    wh = _lanczos_weights(video.shape[-2], h, video)
+    ww = _lanczos_weights(video.shape[-1], w, video)
+    return torch.einsum("hH,bcfHW,wW->bcfhw", wh, video, ww)
+
+
+def resize_video(video, h, w, method="bicubic"):
+    """Every frame to h x w by `method`, frames independent (time is never resampled)."""
+    import torch.nn.functional as F
+    if tuple(video.shape[-2:]) == (h, w):
+        return video
+    if method == "bicubic":
+        from ...latent.second_pass.nodes import downscale_to
         return downscale_to(video, h, w)
+    if method == "lanczos":
+        return _lanczos(video.float(), h, w).to(video.dtype)
+    if method == "trilinear":
+        return F.interpolate(video.float(), size=(video.shape[2], h, w), mode="trilinear",
+                             align_corners=False).to(video.dtype)
+    b, c, f, hh, ww = video.shape
+    x = video.permute(0, 2, 1, 3, 4).reshape(b * f, c, hh, ww).float()
+    if method == "bislerp":
+        import comfy.utils
+        x = comfy.utils.bislerp(x, w, h)
+    else:
+        x = F.interpolate(x, size=(h, w), mode=method, **({"align_corners": False} if method == "bilinear" else {}))
+    return x.reshape(b, f, c, h, w).permute(0, 2, 1, 3, 4).to(video.dtype)
+
+
+def enlarge(video, h, w, upscaler=None, method="bicubic"):
+    """The hand-over: the first stage's clean guess at the full grid. With an upscaler, its learned resize at the
+    ratio that gets nearest (it works in even steps), then a bicubic trim to the exact grid; without, `method`."""
+    from ...latent.second_pass.nodes import run_upscaler
+    if upscaler is None:
+        return resize_video(video, h, w, method)
     ratio = (h / video.shape[-2] + w / video.shape[-1]) / 2.0
     if ratio <= 1.0:
         return video
-    return downscale_to(run_upscaler(upscaler, video, ratio), h, w)
+    return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
-def make_wrapper(size, steps, resize=None):
+def make_wrapper(size, steps, resize=None, method="bicubic"):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
 
 
-def _staged(original, guider, size, steps, resize, *args, **kwargs):
+def _staged(original, guider, size, steps, resize, method, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
@@ -155,7 +201,7 @@ def _staged(original, guider, size, steps, resize, *args, **kwargs):
     done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
     video, audio = done.unbind()
     handed, _ = comfy.utils.pack_latents(
-        (enlarge(video, h, w, upscaler).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
+        (enlarge(video, h, w, upscaler, method).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
     guider.conds = raw_conds                        # the first stage encoded the originals for its own size
     shifted = None

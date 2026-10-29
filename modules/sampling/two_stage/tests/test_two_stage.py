@@ -153,3 +153,25 @@ def test_the_upscaler_list_is_read_again_when_settings_open(upscaler_file, tmp_p
     folder_paths.filename_list_cache.pop("latent_upscale_models", None)
     now = [o["value"] for o in two_stage.PROVIDES["setting_options"]()["upscaler"]]
     assert "later.safetensors" in now
+
+
+@pytest.mark.parametrize("method", ["bicubic", "lanczos", "bislerp", "bilinear", "trilinear", "area", "nearest-exact"])
+def test_every_plain_method_reaches_the_full_grid_and_keeps_dtype(method):
+    from modules.sampling.two_stage import stages
+    video = torch.randn(1, 24, 2, 5, 7).to(torch.bfloat16)
+    out = stages.resize_video(video, 9, 13, method)
+    assert out.shape == (1, 24, 2, 9, 13) and out.dtype == torch.bfloat16 and out.device == video.device
+    assert torch.isfinite(out.float()).all()
+
+
+def test_lanczos_keeps_a_flat_latent_flat_and_is_not_8_bit():
+    from modules.sampling.two_stage import stages
+    flat = torch.full((1, 24, 2, 4, 4), -3.7)
+    out = stages.resize_video(flat, 8, 8, "lanczos")
+    assert torch.allclose(out, flat.new_full(out.shape, -3.7), atol=1e-5)      # values outside 0..1 survive
+
+
+def test_a_chosen_method_runs_through_a_whole_staged_run(model):
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "lanczos"})
+    assert "enlarged by lanczos" in note and calls == [(4, 4), (4, 4), (8, 8), (8, 8)]
+    assert torch.isfinite(out.unbind()[0]).all()

@@ -16,7 +16,7 @@ import folder_paths
 
 from ..._core import log
 
-from .stages import keep_whole_schedule, make_wrapper
+from .stages import METHODS, keep_whole_schedule, make_wrapper
 
 ID = "two_stage"
 TITLE = "Two stages"
@@ -59,9 +59,13 @@ SETTINGS = {
     },
     "resize": {
         "type": "enum", "default": "bicubic",
-        "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "upscaler", "label": "Latent upscaler"}],
+        "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "lanczos", "label": "Lanczos"},
+                    {"value": "bislerp", "label": "Bislerp"}, {"value": "bilinear", "label": "Bilinear"},
+                    {"value": "trilinear", "label": "Trilinear"}, {"value": "area", "label": "Area"},
+                    {"value": "nearest-exact", "label": "Nearest-exact"},
+                    {"value": "upscaler", "label": "Latent upscaler"}],
         "label": "How the hand-over is enlarged",
-        "hint": "Bicubic is plain and free. Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
+        "hint": "The plain methods are free (Trilinear gives the same as Bilinear here: time is never resampled). Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
                 "on the clean guess, so the added detail is learned instead of blurred; it costs one small network pass "
                 "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
         "when": {"enabled": True},
@@ -81,9 +85,10 @@ def install(patcher, values, key):
         return None
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize))
+    method = values.get("resize") if values.get("resize") in METHODS else "bicubic"
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else "")
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "")
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}
