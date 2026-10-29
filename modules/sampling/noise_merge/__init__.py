@@ -131,6 +131,14 @@ def _sound(packed, video):
     return packed[..., n:] if packed.shape[-1] > n else None
 
 
+def _resized(video, shape):
+    """`video` [B, C, T, H, W] brought to `shape` (only the picture's height and width may differ), or None."""
+    if video.dim() != 5 or len(shape) != 5 or tuple(video.shape[:3]) != tuple(shape[:3]):
+        return None
+    return torch.nn.functional.interpolate(video.float(), size=tuple(shape[2:]), mode="trilinear",
+                                           align_corners=False).to(device=video.device, dtype=video.dtype)
+
+
 def mix_noise(noise, other, strength):
     """cos(t) noise + sin(t) other, t = strength * 90 degrees: two independent unit-variance noises
     stay unit variance (a plain average would shrink to 71% at an even mix, and the model reads that as a calmer, blurrier start)."""
@@ -144,16 +152,21 @@ def install_noise(patcher, values, key):
         _say("off: strength is 0")
         return None
     chosen = int(values.get("seed", -1))
+    run_seed = {}
 
     def sampler_sample(executor, model_wrap, sigmas, extra_args, callback, noise,
                        latent_image=None, denoise_mask=None, disable_pbar=False):
         if not isinstance(noise, torch.Tensor):
             _say("off this run: the starting noise is not a plain tensor")
             return executor(model_wrap, sigmas, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar)
-        seed = chosen if chosen >= 0 else random.randrange(2 ** 31)
+        second_stage = dit_hooks.stage_of(model_wrap) == 2      # Two stages: both stages mix with the SAME second seed
+        if not second_stage or "seed" not in run_seed:
+            run_seed["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
+        seed = run_seed["seed"]
         other = torch.randn(noise.shape, generator=torch.Generator().manual_seed(seed)).to(noise)
-        log.info("FunUI Noise merging", f"on: starting noise mixed with the second seed's ({seed}) at "
-                 f"strength {strength:.2f}, no extra pass")
+        if not second_stage:
+            log.info("FunUI Noise merging", f"on: starting noise mixed with the second seed's ({seed}) at "
+                     f"strength {strength:.2f}, no extra pass")
         return executor(model_wrap, sigmas, extra_args, callback, mix_noise(noise, other, strength),
                         latent_image, denoise_mask, disable_pbar)
 
@@ -219,8 +232,10 @@ def install(patcher, values, key):
                 # second seed's noise, the way a few-step sampler chains its steps.
                 prev = live["prev"] or (torch.zeros_like(video_a), torch.zeros_like(tail_a) if tail_a is not None else None)
                 if prev[0].shape != video_a.shape:
-                    _say("Inactive | the latent changed size during the run, so the second run was dropped")
-                    return out
+                    prev = (_resized(prev[0], video_a.shape), prev[1])      # Two stages: the second run moves to the full size too
+                    if prev[0] is None:
+                        _say("Inactive | the latent changed size during the run, so the second run was dropped")
+                        return out
                 base_v, base_t, mix = prev[0], prev[1], 1.0
             else:
                 base_v, base_t, mix = video_a.detach(), tail_a, fresh

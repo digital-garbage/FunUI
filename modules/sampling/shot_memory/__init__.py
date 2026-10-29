@@ -30,7 +30,7 @@ import torch
 import torch.nn.functional as F
 from comfy.patcher_extension import WrappersMP
 
-from ..._core import log, registry, streams
+from ..._core import dit_hooks, log, registry, streams
 
 ID = "shot_memory"
 TITLE = "Shot memory"
@@ -238,6 +238,8 @@ def install(patcher, values, key):
             return executor(model_wrap, sigmas, extra_args, callback, n,
                             latent_image, denoise_mask, disable_pbar)
 
+        if dit_hooks.stage_of(model_wrap) == 2:
+            return run(noise)                        # the layout was set in the first stage
         named = {"latent_shapes": getattr(getattr(model_wrap, "inner_model", None), "latent_shapes", None)}
         split = streams.video_of(noise, named)
         if split is None:

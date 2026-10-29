@@ -90,6 +90,8 @@ def install(patcher, values, key):
                                  latent_image, denoise_mask, disable_pbar)
         judge = live.get("judge")
         sampler = getattr(executor, "class_obj", None)
+        if dit_hooks.stage_of(model_wrap) == 2:
+            return run(noise)                                        # the seed was chosen for the first stage
         if judge is None or noise.shape[0] != 1 or not hasattr(sampler, "max_denoise"):
             return run(noise)
         best = pick(judge, model_wrap, sigmas, extra_args, noise, latent_image, denoise_mask,

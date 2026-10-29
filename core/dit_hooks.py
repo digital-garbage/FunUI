@@ -189,6 +189,17 @@ def current_step(transformer_options):
     return int(hit[0]), int(sched.shape[0]) - 1
 
 
+# Set on the guider by Two stages: 1 while the small first stage runs, 2 while the full-size one does. A
+# SAMPLER_SAMPLE wrapper runs once per stage and reads it (its `model_wrap` is the guider) to do its
+# once-per-run work in stage 1 only.
+STAGE = "funui_stage"
+
+
+def stage_of(guider):
+    """1 or 2 while a Two stages run is in that stage, None for a plain run."""
+    return getattr(guider, STAGE, None)
+
+
 PROBE = "funui_probe"
 # Set on late-branch guidance's weakened copy (which also carries PROBE). Hooks that must not
 # run on it, or must tell it from a probe, read this.

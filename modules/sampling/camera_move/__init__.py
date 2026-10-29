@@ -183,6 +183,9 @@ def install(patcher, values, key):
 
     def sampler_sample(executor, model_wrap, sigmas, extra_args, callback, noise,
                        latent_image=None, denoise_mask=None, disable_pbar=False):
+        if dit_hooks.stage_of(model_wrap) == 2:                # the cut run goes on: same state, the start picture is the first stage's
+            return executor(model_wrap, sigmas, extra_args, callback, noise,
+                            latent_image, denoise_mask, disable_pbar)
         named = {"latent_shapes": getattr(getattr(model_wrap, "inner_model", None), "latent_shapes", None)}
         base = streams.video_of(latent_image, named) if latent_image is not None else None
         live.update(empty=base is not None and not bool(torch.count_nonzero(base[0])),
@@ -192,7 +195,7 @@ def install(patcher, values, key):
                  "start video), so the picture is not moved")
         out = executor(model_wrap, sigmas, extra_args, callback, noise,
                        latent_image, denoise_mask, disable_pbar)
-        if live["moved"] and not live["multi"]:
+        if live["moved"] and not live["multi"] and dit_hooks.stage_of(model_wrap) != 1:
             log.once(f"{ID}:result", log.INFO, "FunUI Camera move",
                      f"Active | {move.describe()}, from step {move.step}; moved {live['moved']} call(s)")
         return out
