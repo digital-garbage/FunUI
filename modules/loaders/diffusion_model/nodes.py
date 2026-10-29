@@ -14,6 +14,7 @@ from comfy_api.latest import io
 from ..._core import log
 from .. import gguf_support, sla_attention
 from .. import int8_convrot as int8_convrot_module
+from .. import mxfp8 as mxfp8_module
 from ..common import (COMPUTE_DTYPES, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
                       attention_override, dtype_of, set_fp16_accumulation,
                       slow_int8_build, stored_weights, weight_model_options)
@@ -40,7 +41,7 @@ def shows(*conditions):
 class FunUIDiffusionModelLoader(io.ComfyNode):
     # How the form lists them (core/widgets): the file, how it is stored and computed, attention, then SLA in the
     # order its choices narrow it. Not the schema's order, which saved canvas workflows read by position.
-    WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "compute_dtype", "fp16_accumulation", "attention",
+    WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "mxfp8", "compute_dtype", "fp16_accumulation", "attention",
                     "sla", "sla_method", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
                     "sla_dense_steps", "sla_dense_last_steps", "sla_min_seq_len", "sla_protect_audio",
                     "sla_references", "sla_tail", "sla_stabilize_motion")
@@ -178,6 +179,15 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                       "(attention concentrates as denoising goes, GSRS, arXiv 2610.21129). "
                                       "0 is off: one fixed share all run. One H3 render: quality held, perhaps a little better. Try 0.70 "
                                       "with sla_sparsity 0.90. Early steps cost more time than late ones."),
+                io.Boolean.Input("mxfp8", default=False, optional=True,
+                                 tooltip="MiniMax H3 from an ordinary (bf16/fp16) file: store the attention and MLP "
+                                         "weights of the middle blocks as MXFP8 (one scale per 32 weights), which "
+                                         "Blackwell GPUs (RTX 50, RTX PRO 6000) multiply at about twice the bf16 "
+                                         "rate. The first 2 and last 3 blocks stay bf16, as in NVIDIA's Sol-H3. "
+                                         "Needs torch 2.10+ with CUDA 13 and a current comfy-kitchen, else it is "
+                                         "skipped and the status says so. Slightly different pictures: listen to "
+                                         "the sound first, it spoils before the picture does. A LoRA applied to "
+                                         "these layers slows them back down."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
@@ -194,7 +204,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 sla_engine: str = None, sla_dense_steps: str = None, sla_references: str = None,
                 sla_tail: bool = None, sla_stabilize_motion: bool = None,
                 sla_method: str = None, sla_tau: float = None,
-                sla_sparsity_start: float = None) -> io.NodeOutput:
+                sla_sparsity_start: float = None, mxfp8: bool = False) -> io.NodeOutput:
         notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
@@ -239,6 +249,18 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 notes.append(note)
                 if compute_dtype != "default":
                     notes.append("int8_convrot: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
+        if mxfp8:
+            if weight_dtype != "default":
+                notes.append(f"mxfp8: skipped, weight dtype is forced to {weight_dtype}")
+            elif int8_convrot:
+                notes.append("mxfp8: skipped, int8_convrot already stores the weights")
+            elif not mxfp8_module.available(comfy.model_management.get_torch_device()):
+                notes.append("mxfp8: skipped, this machine cannot run MXFP8 matmuls (needs a Blackwell GPU, torch 2.10+ and a current comfy-kitchen)")
+            else:
+                _, note = mxfp8_module.quantize_state_dict(state_dict, comfy.model_management.get_torch_device())
+                notes.append(note)
+                if compute_dtype != "default":
+                    notes.append("mxfp8: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
         # Read before the load: comfy may consume the dict.
         gguf = gguf_support.is_gguf(model_name) or misnamed
         stored = None if gguf else stored_weights(state_dict)
@@ -254,7 +276,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
             raise RuntimeError(
                 f"Could not detect a diffusion model in {model_name}. Loading a text "
                 f"encoder or a VAE file here is the usual cause.")
-        if not gguf and not int8_convrot and hasattr(model, "cached_patcher_init") and model.cached_patcher_init is None and hasattr(comfy.sd, "load_diffusion_model"):
+        if not gguf and not int8_convrot and not mxfp8 and hasattr(model, "cached_patcher_init") and model.cached_patcher_init is None and hasattr(comfy.sd, "load_diffusion_model"):
             # What LoRA training clones the model from: core's own loaders set it, and a plain file is the one case this loader can say how to read again.
             model.cached_patcher_init = (comfy.sd.load_diffusion_model, (path, model_options))
 
