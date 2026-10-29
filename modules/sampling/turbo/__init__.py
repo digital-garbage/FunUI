@@ -78,10 +78,10 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "polish": {
-        "type": "float", "default": 0.0, "min": 0.0, "max": 0.3, "step": 0.01,
+        "type": "float", "default": 0.0, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
         "hint": "0 = off. Otherwise one extra full-size model call after the last step, from this small noise "
-                "level. Costs one step (about 15 to 25% of a run). 0.05 is a start.",
+                "level. Costs one step (about 15 to 25% of a run). Around 0.25 to 0.3 has given more natural motion on a rental.",
         "when": {"enabled": True},
     },
 }
