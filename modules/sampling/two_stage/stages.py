@@ -45,7 +45,8 @@ def keep_whole_schedule(executor, guider, sigmas, extra_args, *args, **kwargs):
     ramp, step windows) sees 8 steps and not two runs of 4."""
     full = getattr(guider, FULL, None)
     if full is not None:
-        extra_args["model_options"].setdefault("transformer_options", {})["sample_sigmas"] = full
+        extra_args["model_options"].setdefault("transformer_options", {})["sample_sigmas"] = \
+            full.to(device=sigmas.device, dtype=sigmas.dtype)       # where this stage's own schedule lives (the GPU)
     return executor(guider, sigmas, extra_args, *args, **kwargs)
 
 

@@ -76,3 +76,17 @@ def test_every_stage_sees_the_whole_schedule(model):
     sigmas = (1.0, 0.9, 0.7, 0.3, 0.0)
     _run(model, {"enabled": True, "size": 0.5, "steps": 2}, sigmas=sigmas, seen=seen)
     assert len(seen) == 4 and all(s == pytest.approx(list(sigmas)) for s in seen)
+
+
+def test_the_whole_schedule_lives_where_the_stage_schedule_does():
+    from ..stages import FULL, keep_whole_schedule
+
+    class Guider:
+        pass
+
+    guider, extra = Guider(), {"model_options": {}}
+    setattr(guider, FULL, torch.tensor([1.0, 0.5, 0.0], dtype=torch.float64))
+    stage = torch.zeros(2, device="meta")
+    keep_whole_schedule(lambda *a, **k: None, guider, stage, extra)
+    got = extra["model_options"]["transformer_options"]["sample_sigmas"]
+    assert got.device == stage.device and got.dtype == stage.dtype
