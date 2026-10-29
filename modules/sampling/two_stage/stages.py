@@ -129,43 +129,31 @@ def resize_video(video, h, w, method="bicubic"):
     return x.reshape(b, f, c, h, w).permute(0, 2, 1, 3, 4).to(video.dtype)
 
 
-def match_spread(out, ref):
-    """Enlarging smooths, so each channel's spread shrinks; put every channel back to the mean and spread it had
-    before (over all frames and pixels), so stage 2 starts from a latent that looks like a real one."""
-    o, r = out.float(), ref.float()
-    dims = (2, 3, 4)
-    mo, so = o.mean(dims, keepdim=True), o.std(dims, keepdim=True)
-    mr, sr = r.mean(dims, keepdim=True), r.std(dims, keepdim=True)
-    return ((o - mo) * (sr / so.clamp_min(1e-6)) + mr).to(out.dtype)
-
-
-def enlarge(video, h, w, upscaler=None, method="bicubic", match=False):
+def enlarge(video, h, w, upscaler=None, method="bicubic"):
     """The hand-over: the first stage's clean guess at the full grid. With an upscaler, its learned resize at the
     ratio that gets nearest (it works in even steps), then a bicubic trim to the exact grid; without, `method`."""
     from ...latent.second_pass.nodes import run_upscaler
     if upscaler is None:
-        out = resize_video(video, h, w, method)
-    else:
-        ratio = (h / video.shape[-2] + w / video.shape[-1]) / 2.0
-        if ratio <= 1.0:
-            return video
-        out = resize_video(run_upscaler(upscaler, video, ratio), h, w)
-    return match_spread(out, video) if match and out is not video else out
+        return resize_video(video, h, w, method)
+    ratio = (h / video.shape[-2] + w / video.shape[-1]) / 2.0
+    if ratio <= 1.0:
+        return video
+    return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
-def make_wrapper(size, steps, resize=None, method="bicubic", match=False):
+def make_wrapper(size, steps, resize=None, method="bicubic"):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, match, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
 
 
-def _staged(original, guider, size, steps, resize, method, match, *args, **kwargs):
+def _staged(original, guider, size, steps, resize, method, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
@@ -229,7 +217,7 @@ def _staged(original, guider, size, steps, resize, method, match, *args, **kwarg
     done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
     video, audio = done.unbind()
     handed, _ = comfy.utils.pack_latents(
-        (enlarge(video, h, w, upscaler, method, match).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
+        (enlarge(video, h, w, upscaler, method).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
     guider.conds = raw_conds                        # the first stage encoded the originals for its own size
     shifted = None

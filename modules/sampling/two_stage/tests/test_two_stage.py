@@ -183,22 +183,3 @@ def test_flat_stays_flat_for_the_cubics_too():
     for method in ("mitchell", "catmull-rom"):
         out = stages.resize_video(flat, 7, 9, method)
         assert torch.allclose(out, flat.new_full(out.shape, 2.5), atol=1e-5)
-
-
-def test_keeping_the_spread_restores_each_channels_mean_and_std():
-    from modules.sampling.two_stage import stages
-    torch.manual_seed(0)
-    video = torch.randn(1, 24, 2, 8, 8) * torch.linspace(0.5, 3, 24).view(1, 24, 1, 1, 1) + 1.0
-    smooth = stages.enlarge(video, 16, 16, method="area")
-    kept = stages.enlarge(video, 16, 16, method="area", match=True)
-    dims = (2, 3, 4)
-    assert torch.allclose(kept.std(dims), video.std(dims), rtol=1e-4)
-    assert torch.allclose(kept.mean(dims), video.mean(dims), atol=1e-4)
-    assert kept.dtype == video.dtype and smooth.std(dims).mean() <= video.std(dims).mean() + 1e-3
-
-
-def test_keeping_the_spread_runs_through_a_staged_run_and_in_bf16():
-    from modules.sampling.two_stage import stages
-    video = torch.randn(1, 24, 2, 4, 4).to(torch.bfloat16)
-    out = stages.enlarge(video, 8, 8, method="mitchell", match=True)
-    assert out.dtype == torch.bfloat16 and torch.isfinite(out.float()).all()

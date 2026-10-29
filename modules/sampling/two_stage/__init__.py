@@ -71,13 +71,6 @@ SETTINGS = {
                 "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
         "when": {"enabled": True},
     },
-    "match": {
-        "type": "bool", "default": False,
-        "label": "Keep the latent's spread",
-        "hint": "Enlarging smooths the picture and shrinks each channel's spread. This puts every channel back to the "
-                "mean and spread it had before enlarging, whichever method is chosen.",
-        "when": {"enabled": True},
-    },
     "upscaler": {
         "type": "enum", "default": (_files() or [""])[0],
         "options": _options(),
@@ -94,10 +87,9 @@ def install(patcher, values, key):
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
     method = values.get("resize") if values.get("resize") in METHODS else "bicubic"
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, bool(values.get("match"))))
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "") \
-        + (", spread kept" if values.get("match") else "")
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "")
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}
