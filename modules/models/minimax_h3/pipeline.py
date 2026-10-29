@@ -168,6 +168,54 @@ def h3_reference_to_video():
     return slots
 
 
+def h3_reference_to_video_two_stage():
+    """The same pipeline run in two stages of different size (the cross-resolution schedule of NVIDIA's Sol-H3).
+
+    The model's own schedule is cut in two. The first steps (where the shot's layout and motion are
+    decided) run on a smaller picture, the model's clean guess at that point is resized to the full
+    size, and the last steps run there, so most of the early work costs a fraction. References and
+    text ride along unchanged: only the empty latent differs in size. Untested on a GPU.
+    """
+    slots = h3_reference_to_video()
+    slots = [s for s in slots if s["id"] != "sampler"]
+    at = next(i for i, s in enumerate(slots) if s["id"] == "decode")
+    sampling_roles = [{"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
+                      {"at": "generation.seed", "input": "seed", "label": "Seed"}]
+    slots[at:at] = [
+        {"id": "stage_size", "group": "Sampling", "node": "FunUIStageSize",
+         "roles": [{"at": "generation.sampling", "input": "scale", "label": "First stage size"}],
+         "inputs": {"width": ["image_transform", 4], "height": ["image_transform", 5], "scale": 0.7}},
+        {"id": "latent_low", "group": "Sampling", "node": "FunUIEmptyLatent",
+         "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
+         "inputs": {"model": ["model", 0], "width": ["stage_size", 0], "height": ["stage_size", 1],
+                    "length": 124, "batch_size": 1, "audio_vae": ["audio_vae", 0], "frame_rate": 24.0}},
+        {"id": "schedule", "group": "Sampling", "node": "BasicScheduler",
+         "roles": [{"at": "generation.sampling", "input": "steps", "label": "Steps"},
+                   {"at": "generation.sampling", "input": "scheduler", "label": "Scheduler"}],
+         "inputs": {"model": ["markup_apply", 0], "scheduler": "normal", "steps": 4, "denoise": 1.0}},
+        {"id": "split", "group": "Sampling", "node": "SplitSigmas",
+         "roles": [{"at": "generation.sampling", "input": "step", "label": "Steps in the first stage"}],
+         "inputs": {"sigmas": ["schedule", 0], "step": 2}},
+        {"id": "sampler_low", "group": "Sampling", "node": "FunUISampler",
+         "roles": sampling_roles,
+         "inputs": {
+             "model": ["markup_apply", 0], "positive": ["erase", 0], "negative": ["negative", 0],
+             "latent": ["latent_low", 0], "settings": ["settings", 0], "sigmas": ["split", 0],
+             "seed": 0, "steps": 4, "cfg": 1.0, "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
+        {"id": "resample", "group": "Sampling", "node": "FunUILatentResample",
+         "inputs": {"latent": ["sampler_low", 2], "operation": "upscale", "scale": 1.5,
+                    "positive": ["erase", 0], "negative": ["negative", 0],
+                    "target_width": ["image_transform", 4], "target_height": ["image_transform", 5]}},
+        {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
+         "roles": sampling_roles,
+         "inputs": {
+             "model": ["markup_apply", 0], "positive": ["resample", 1], "negative": ["resample", 2],
+             "latent": ["resample", 0], "settings": ["settings", 0], "sigmas": ["split", 1],
+             "seed": 0, "steps": 4, "cfg": 1.0, "sampler_name": "euler", "scheduler": "normal", "denoise": 1.0}},
+    ]
+    return slots
+
+
 def h3_reference_to_video_second_pass():
     """The same pipeline, then a second pass: resample between passes (sharpen
     by default) and a second sampler running a typed schedule as written.
@@ -221,7 +269,10 @@ def optional_nodes():
 def presets():
     return [{"id": "minimax_h3_reference_to_video",
              "title": "MiniMax H3 · Reference to Video",
-             "slots": h3_reference_to_video()}]
+             "slots": h3_reference_to_video()},
+            {"id": "minimax_h3_reference_to_video_two_stage",
+             "title": "MiniMax H3 · Reference to Video, two stages (test)",
+             "slots": h3_reference_to_video_two_stage()}]
     # Held back, not offered: h3_reference_to_video_second_pass() builds clean but was never verified on a GPU
     # (it needs a compatible H3 latent upscaler file). Add it back here once it has been.
 

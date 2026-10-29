@@ -102,6 +102,35 @@ def rescale(conditioning, h, w):
     return conditioning, 0
 
 
+def bicubic_to(video, h, w):
+    """The plain way up when there is no upscaler file: bicubic per frame, same as the way down."""
+    return downscale_to(video, h, w)
+
+
+class FunUIStageSize(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="FunUIStageSize",
+            display_name="FunUI Stage Size",
+            category="FunUI/Latent",
+            description="The size of a cheaper first stage: the full size scaled down, kept on the 32 pixel grid.",
+            inputs=[
+                io.Int.Input("width", default=640, min=32, max=16384, step=32),
+                io.Int.Input("height", default=640, min=32, max=16384, step=32),
+                io.Float.Input("scale", default=0.7, min=0.25, max=1.0, step=0.05,
+                               tooltip="Share of the full width and height the first stage runs at. 0.7 is about half the work per step."),
+            ],
+            outputs=[io.Int.Output(display_name="width"), io.Int.Output(display_name="height")],
+        )
+
+    @classmethod
+    def execute(cls, width: int, height: int, scale: float) -> io.NodeOutput:
+        def snap(v):
+            return max(64, int(round(v * scale / 32.0)) * 32)
+        return io.NodeOutput(min(snap(width), int(width)), min(snap(height), int(height)))
+
+
 class FunUILatentResample(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -113,7 +142,8 @@ class FunUILatentResample(io.ComfyNode):
                         "keep the conditioning valid at the new size.",
             inputs=[
                 io.Latent.Input("latent"),
-                io.LatentUpscaleModel.Input("upscaler"),
+                io.LatentUpscaleModel.Input("upscaler", optional=True,
+                                            tooltip="Without one the latent is resized with bicubic, which is enough to hand a first stage to a second."),
                 io.Combo.Input("operation", options=["sharpen", "upscale"], default="sharpen",
                                tooltip="sharpen: up, then back to this size -- pass 2 "
                                        "re-denoises the added detail. upscale: kept larger, "
@@ -121,6 +151,10 @@ class FunUILatentResample(io.ComfyNode):
                 io.Float.Input("scale", default=2.0, min=1.0, max=4.0, step=0.05),
                 io.Conditioning.Input("positive", optional=True),
                 io.Conditioning.Input("negative", optional=True),
+                io.Int.Input("target_width", default=0, min=0, max=16384, step=32, optional=True,
+                             tooltip="upscale only: land exactly on this picture width (0 keeps whatever scale gives)."),
+                io.Int.Input("target_height", default=0, min=0, max=16384, step=32, optional=True,
+                             tooltip="upscale only: land exactly on this picture height."),
             ],
             outputs=[
                 io.Latent.Output(display_name="latent"),
@@ -131,14 +165,25 @@ class FunUILatentResample(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, latent, upscaler, operation: str, scale: float,
-                positive=None, negative=None) -> io.NodeOutput:
+    def execute(cls, latent, upscaler=None, operation: str = "sharpen", scale: float = 2.0,
+                positive=None, negative=None, target_width: int = 0, target_height: int = 0) -> io.NodeOutput:
         video, rebuild = _video_of(latent["samples"])
         if getattr(video, "ndim", 0) != 5:
             raise RuntimeError(
                 f"expected a video latent [B, C, T, H, W], got {tuple(video.shape)}")
         h, w = int(video.shape[-2]), int(video.shape[-1])
-        up = run_upscaler(upscaler, video, float(scale))
+        goal = None
+        if operation == "upscale" and target_width and target_height:
+            goal = (int(target_height) // 16, int(target_width) // 16)     # H3's picture is 16 pixels per latent cell
+            scale = max(1.0, goal[0] / h, goal[1] / w)
+        if upscaler is None:
+            if operation == "sharpen":
+                raise RuntimeError("sharpen needs a latent upscaler: connect one, or use upscale.")
+            up = bicubic_to(video, max(2, int(round(h * scale / 2.0)) * 2), max(2, int(round(w * scale / 2.0)) * 2))
+        else:
+            up = run_upscaler(upscaler, video, float(scale))
+        if goal is not None:
+            up = downscale_to(up, *goal) if up.shape[-2] >= goal[0] and up.shape[-1] >= goal[1] else bicubic_to(up, *goal)
 
         # noise_mask is kept: a pinned frame must stay pinned in pass 2, and
         # ComfyUI's prepare_mask resizes a mask to whatever latent it meets.

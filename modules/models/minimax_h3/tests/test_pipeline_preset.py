@@ -33,7 +33,8 @@ def registered(comfyui):
 def test_the_preset_is_offered(registered):
     from modules.models.minimax_h3.pipeline import presets
     offered = presets()
-    assert [p["id"] for p in offered] == ["minimax_h3_reference_to_video"]      # the second-pass preset is held back
+    assert [p["id"] for p in offered] == ["minimax_h3_reference_to_video",
+                                          "minimax_h3_reference_to_video_two_stage"]      # the second-pass preset is held back
     assert all(p["slots"] for p in offered)
 
 
@@ -154,3 +155,23 @@ def test_the_second_pass_preset_builds_clean_and_decodes_pass_two(registered):
     assert [p for p in problems if not any(m in p for m in unset)] == []
     decode = next(s for s in slots if s["id"] == "decode")
     assert decode["inputs"]["samples"] == ["pass2", 0]
+
+
+def test_the_two_stage_preset_is_wired_to_real_slots_and_cuts_the_schedule_once():
+    from modules.models.minimax_h3.pipeline import h3_reference_to_video_two_stage
+
+    slots = h3_reference_to_video_two_stage()
+    ids = [s["id"] for s in slots]
+    assert len(ids) == len(set(ids))
+    known = set(ids)
+    by_id = {s["id"]: s for s in slots}
+    for slot in slots:
+        for name, value in (slot.get("inputs") or {}).items():
+            if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
+                assert value[0] in known, f"{slot['id']}.{name} is wired to {value[0]!r}, which is not a slot here"
+    # First stage takes the front of the schedule, the second stage the rest of the same schedule.
+    assert by_id["sampler_low"]["inputs"]["sigmas"] == ["split", 0] and by_id["sampler"]["inputs"]["sigmas"] == ["split", 1]
+    # The second stage starts from the first stage's clean guess (output 2), resized, and decode reads the second stage.
+    assert by_id["resample"]["inputs"]["latent"] == ["sampler_low", 2]
+    assert by_id["sampler"]["inputs"]["latent"] == ["resample", 0]
+    assert by_id["decode"]["inputs"]["samples"] == ["sampler", 0]
