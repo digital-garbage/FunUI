@@ -101,3 +101,26 @@ test("the Video input card flips its width and height", async () => {
   assert.deepEqual([doc.video_input.width, doc.video_input.height], [720, 1280]);
   host.remove();
 });
+
+test("the Project tab offers Short side / Long side only when the pipeline fits a picture's shape to the size, and saves the choice", async () => {
+  let fire;
+  const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, resolution_basis: "area", video: { target_width: 1344, target_height: 768 }, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  const set = [];
+  const p = { project: doc, video: doc.video, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, setField: (k, v) => { set.push([k, v]); doc[k] = v; fire("change"); }, setVideo: () => {}, edit: (fn) => fn(doc) };
+  const size = [{ at: "project.video", input: "width", label: "Width", was: "target_width" }, { at: "project.video", input: "height", label: "Height", was: "target_height" }];
+  let slots = [{ roles: size, inputs: { width: 768, height: 512 } }];
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {}, pipeline: { slots: () => slots } } });
+  const tab = () => [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
+  tab();
+  assert.ok(!host.textContent.includes("Resolution is the"), "a model that takes no picture's shape has nothing to choose");
+  slots = [{ roles: [...size, { at: "project.resolution_basis", input: "basis" }], inputs: { width: 768, height: 512 } }];
+  fire("change");
+  tab();
+  assert.ok(host.textContent.includes("Resolution is the") && host.textContent.includes("Pixel count"), "the choice is on the Project tab");
+  const shown = [...host.querySelectorAll("input")].map((i) => i.value);
+  assert.ok(shown.includes("1344") && shown.includes("768"), "the size saved under the old name shows");
+  host.remove();
+});

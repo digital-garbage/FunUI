@@ -13,7 +13,9 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const put = (slot, name, value) => { raw[slot.id] = { ...raw[slot.id], [name]: value }; };
 
   for (const { slot, role } of (slots || []).flatMap((s) => (s.roles || []).filter((r) => (r.at || "").startsWith("project.") && r.input).map((role) => ({ slot: s, role })))) {
-    const v = role.at === "project.negative" ? project.negative : DRIVEN[role.drives] ? (role.drives === "frames" && frames ? frames : project[DRIVEN[role.drives]]) : (project.video || {})[role.input];
+    const video = project.video || {};
+    const v = role.at === "project.negative" ? project.negative : role.at === "project.resolution_basis" ? project.resolution_basis
+      : DRIVEN[role.drives] ? (role.drives === "frames" && frames ? frames : project[DRIVEN[role.drives]]) : video[role.input] ?? video[role.was];      // `was`: what an older pipeline called it, so a saved size still counts
     if (v !== undefined && v !== null && v !== "") put(slot, role.input, v);
   }
   if (seed) for (const { slot, role } of rolesAt(slots, "generation.seed")) put(slot, role.input, seed());      // null: the seed node's own number runs

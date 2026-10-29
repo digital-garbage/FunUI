@@ -31,7 +31,7 @@ from comfy_extras.nodes_minimax_h3 import temporal_shape
 from ..._core import dit_hooks as _dit_hooks, log, traits as _traits
 from . import vae_decode as _decode
 from .training import adapt as _training_adapt
-from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets
+from .pipeline import optional_nodes as _optional_nodes, presets as _pipeline_presets, upgrade as _upgrade
 from .anchor import anchor_pin as _anchor_pin
 from .anchor import rescale_pins as _rescale_pins
 from .latent_upscaler import load_upscaler as _load_upscaler
@@ -238,7 +238,7 @@ def empty_latent(model, width, height, length, batch_size=1):
 
 TRAITS = traits
 PROVIDES = {"training_adapt": _training_adapt, "empty_latent": empty_latent, "decode": decode, "detect": detect,
-            "pipeline_presets": _pipeline_presets, "optional_nodes": _optional_nodes, "probe_traits": probe_traits, "probe_blocks": probe_blocks,
+            "pipeline_presets": _pipeline_presets, "upgrade_slots": _upgrade, "optional_nodes": _optional_nodes, "probe_traits": probe_traits, "probe_blocks": probe_blocks,
             "target_rows": _target_rows, "anchor_pin": _anchor_pin,
             "latent_upscaler": _load_upscaler, "rescale_conditioning": _rescale_pins,
             "text_tokenizer": _prompt_layout.text_tokenizer,

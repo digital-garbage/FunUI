@@ -151,8 +151,27 @@ class FunUIEmptyLatent(io.ComfyNode):
                              "shaped from the model's own latent format")
 
 
+#: How the project's Width and Height become the clip's size: "area" keeps their pixel count (the original rule: a
+#: 1024x1024 budget gives 1312x768 for a 16:9 picture), "short" makes the clip's shorter side the smaller of the two,
+#: "long" makes its longer side the larger.
+ASPECT_BASES = ("area", "short", "long")
+
+
+def fit_size(iw: int, ih: int, width: int, height: int, basis: str = "area", step: int = 32) -> tuple[int, int]:
+    """The picture's shape (iw x ih) at the scale `width` x `height` asks for, each side the nearest multiple of `step`."""
+    step = max(1, int(step))
+    if basis == "short":
+        scale = min(width, height) / min(iw, ih)
+    elif basis == "long":
+        scale = max(width, height) / max(iw, ih)
+    else:
+        scale = (width * height / (iw * ih)) ** 0.5
+    snap = lambda v: max(step, int(v / step + 0.5) * step)
+    return snap(iw * scale), snap(ih * scale)
+
+
 class FunUIAspectSize(io.ComfyNode):
-    """A picture's shape at a pixel budget: the width and height to make a clip so it has the picture's aspect ratio."""
+    """A picture's shape at a size: the width and height to make a clip so it has the picture's aspect ratio."""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -161,22 +180,22 @@ class FunUIAspectSize(io.ComfyNode):
             display_name="FunUI Aspect Size",
             category="FunUI/Latent",
             description="The picture supplies the SHAPE, width x height supplies the SCALE: out comes a width and a height with "
-                        "the picture's aspect ratio and about width x height pixels, each the nearest multiple of `multiple_of`.",
+                        "the picture's aspect ratio, each the nearest multiple of `multiple_of`. `basis` says what the scale is: "
+                        "the pixel count of width x height, the shorter side (the smaller of the two numbers) or the longer side "
+                        "(the larger).",
             inputs=[
                 io.Image.Input("image", tooltip="Only its width-to-height ratio is used."),
-                io.Int.Input("width", default=768, min=16, max=16384, tooltip="The pixel budget is width x height."),
+                io.Int.Input("width", default=768, min=16, max=16384, tooltip="With height: the pixel budget, or the short or long side."),
                 io.Int.Input("height", default=512, min=16, max=16384),
                 io.Int.Input("multiple_of", default=32, min=1, max=256, optional=True,
-                             tooltip="Round each side to a multiple of this (LTX wants 32)."),
+                             tooltip="Round each side to a multiple of this (LTX and H3 want 32)."),
+                io.Combo.Input("basis", options=list(ASPECT_BASES), default="area", optional=True,
+                               tooltip="area: keep width x height pixels. short: the shorter side is the smaller of width and height. "
+                                       "long: the longer side is the larger."),
             ],
             outputs=[io.Int.Output(display_name="width"), io.Int.Output(display_name="height")],
         )
 
     @classmethod
-    def execute(cls, image, width: int, height: int, multiple_of: int = 32) -> io.NodeOutput:
-        ih, iw = int(image.shape[1]), int(image.shape[2])
-        step = max(1, int(multiple_of))
-        w = (width * height * iw / ih) ** 0.5
-        h = w * ih / iw
-        snap = lambda v: max(step, int(v / step + 0.5) * step)
-        return io.NodeOutput(snap(w), snap(h))
+    def execute(cls, image, width: int, height: int, multiple_of: int = 32, basis: str = "area") -> io.NodeOutput:
+        return io.NodeOutput(*fit_size(int(image.shape[2]), int(image.shape[1]), width, height, basis, multiple_of))

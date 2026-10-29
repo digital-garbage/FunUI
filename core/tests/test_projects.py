@@ -615,3 +615,10 @@ def test_video_input_is_cleaned_and_survives_a_round_trip():
     again = Project.from_dict(p.to_dict())
     assert again.video_input == p.video_input and again.video_input_from == "scene"
     assert Project.from_dict({"video_input_from": "x"}).video_input_from == "auto"
+
+
+def test_resolution_basis_old_projects_keep_the_pixel_count_rule_and_new_ones_start_on_short_side():
+    assert projects.Project.from_dict({"name": "old"}).resolution_basis == "area"
+    assert projects.Project.from_dict({"resolution_basis": "weird"}).resolution_basis == "area"
+    assert [projects.Project.from_dict({"resolution_basis": b}).resolution_basis for b in ("short", "long", "area")] == ["short", "long", "area"]
+    assert projects.Project(name="new").resolution_basis == "short"

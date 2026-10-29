@@ -154,3 +154,35 @@ def test_the_second_pass_preset_builds_clean_and_decodes_pass_two(registered):
     assert [p for p in problems if not any(m in p for m in unset)] == []
     decode = next(s for s in slots if s["id"] == "decode")
     assert decode["inputs"]["samples"] == ["pass2", 0]
+
+
+def test_a_pipeline_saved_with_image_transform_gets_the_aspect_size_in_its_place():
+    from modules.models.minimax_h3.pipeline import h3_reference_to_video, upgrade
+    new = h3_reference_to_video()
+    old = [dict(s) for s in new if s["id"] != "aspect"]
+    at = next(i for i, s in enumerate(old) if s["id"] == "source_image")
+    old[at] = {**old[at], "roles": [{"at": "assets.source_image", "input": "media_id", "blank_like": {"slot": "image_transform", "width": "target_width", "height": "target_height"}}]}
+    old.insert(at + 1, {"id": "image_transform", "node": "ImageTransformKJ",
+                        "roles": [{"at": "project.video", "input": "target_width", "label": "Width"}, {"at": "project.video", "input": "target_height", "label": "Height"}],
+                        "inputs": {"image": ["source_image", 0], "target_width": 1280, "target_height": 720, "keep_proportion": "total_pixels", "divisible_by": 32}})
+    r2v = next(s for s in old if s["id"] == "r2v")
+    r2v["inputs"] = {**r2v["inputs"], "width": ["image_transform", 4], "height": ["image_transform", 5]}
+    fixed = upgrade(old)
+    ids = [s["id"] for s in fixed]
+    assert "image_transform" not in ids and ids.index("aspect") == at + 1
+    aspect = next(s for s in fixed if s["id"] == "aspect")
+    assert aspect["node"] == "FunUIAspectSize" and (aspect["inputs"]["width"], aspect["inputs"]["height"], aspect["inputs"]["basis"]) == (1280, 720, "area")
+    assert {r["input"]: r.get("was") for r in aspect["roles"] if r["at"] == "project.video"} == {"width": "target_width", "height": "target_height"}
+    out = next(s for s in fixed if s["id"] == "r2v")["inputs"]
+    assert out["width"] == ["aspect", 0] and out["height"] == ["aspect", 1]
+    blank = next(s for s in fixed if s["id"] == "source_image")["roles"][0]["blank_like"]
+    assert (blank["slot"], blank["width"], blank["height"]) == ("aspect", "width", "height")
+    assert upgrade(fixed) == fixed and upgrade(new) == new
+
+
+def test_the_preset_takes_its_size_from_the_aspect_size_alone():
+    from modules.models.minimax_h3.pipeline import h3_reference_to_video
+    slots = {s["id"]: s for s in h3_reference_to_video()}
+    assert "image_transform" not in slots and slots["aspect"]["node"] == "FunUIAspectSize"
+    assert slots["r2v"]["inputs"]["width"] == ["aspect", 0] and slots["r2v"]["inputs"]["height"] == ["aspect", 1]
+    assert {"at": "project.resolution_basis", "input": "basis"} in slots["aspect"]["roles"]

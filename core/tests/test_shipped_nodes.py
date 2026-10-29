@@ -77,7 +77,7 @@ FROZEN = {
         "trigger", "seed", "training_dtype", "lora_dtype", "gradient_checkpointing", "offloading", "bypass",
         "model_name", "weight_dtype", "compute_dtype", "postfix", "swap_blocks", "preview_every", "save_every", "resume",
     ],
-    "FunUIAspectSize": ["image", "width", "height", "multiple_of"],
+    "FunUIAspectSize": ["image", "width", "height", "multiple_of", "basis"],
     "FunUIEmptyLatent": ["model", "width", "height", "length", "batch_size", "audio_vae", "frame_rate"],
     "FunUIDiffusionModelLoader": [
         "model_name", "weight_dtype", "compute_dtype", "attention", "fp16_accumulation",

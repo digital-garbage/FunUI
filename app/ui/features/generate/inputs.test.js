@@ -249,3 +249,11 @@ test("video to video, direct: with no video the whole schedule runs over a grey 
   assert.deepEqual([r.inputs.source_image.blank_width, r.inputs.source_image.blank_height, r.inputs.source_image.blank_frames], [768, 480, 97]);
   assert.ok(!r.notes.some((n) => /works from a video/.test(n)));
 });
+
+test("the project's Short side / Long side choice reaches the aspect slot, and a size saved under an older name still counts", async () => {
+  const s = [{ id: "a", node: "FunUIAspectSize", roles: [{ at: "project.video", input: "width", was: "target_width" }, { at: "project.video", input: "height", was: "target_height" }, { at: "project.resolution_basis", input: "basis" }], inputs: { width: 1344, height: 768, basis: "short" } }];
+  const run = (project) => buildInputs({ project, scene: {}, slots: s, expand: async () => null });
+  assert.deepEqual((await run({ resolution_basis: "long", video: { width: 1024, height: 1024 } })).inputs.a, { width: 1024, height: 1024, basis: "long" });
+  assert.deepEqual((await run({ resolution_basis: "area", video: { target_width: 1280, target_height: 720 } })).inputs.a, { width: 1280, height: 720, basis: "area" });
+  assert.deepEqual((await run({ resolution_basis: "short", video: { width: 640, target_width: 1280, height: 480 } })).inputs.a, { width: 640, height: 480, basis: "short" });      // the new number wins over a stale one
+});

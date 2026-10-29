@@ -148,6 +148,7 @@ def _clean_source(raw) -> dict:
 
 #: How a picked reference video is got ready for the model (the loader choices): per project and per scene.
 #: `on` switches it; every number is a whole count or percent, `fit` is a word. Anything else is dropped.
+RESOLUTION_BASES = ("short", "long", "area")
 VIDEO_INPUT_FITS = ("crop", "pad", "stretch")
 VIDEO_INPUT_LIMITS = {"fps": (0, 1000), "skip_first": (0, 10 ** 6), "cut_last": (0, 10 ** 6), "every_nth": (1, 1000),
                       "frame_cap": (0, 10 ** 6), "width": (0, 16384), "height": (0, 16384), "multiple_of": (1, 256),
@@ -430,6 +431,10 @@ class Project:
     frame_rate: int = 25
     width: int = 768
     height: int = 512
+    #: What Width and Height mean for a model that fits a picture's shape to them: "short" and "long" make the shorter /
+    #: longer side of the clip the smaller / larger of the two, "area" keeps their pixel count (every project made before
+    #: this setting existed: reading it as anything else would resize their clips).
+    resolution_basis: str = "short"
     max_scenes: int = 8
     #: The pre-roll marker between the anchor and the first scene, and the negative the editor edits.
     intro_transition: str = ""
@@ -505,6 +510,7 @@ class Project:
             frame_rate=_int(d.get("frame_rate"), 25, 1, 1000),
             width=_int(d.get("width"), 768, 1, MAX_SETTING),
             height=_int(d.get("height"), 512, 1, MAX_SETTING),
+            resolution_basis=d.get("resolution_basis") if d.get("resolution_basis") in RESOLUTION_BASES else "area",
             max_scenes=_int(d.get("max_scenes"), 8, 1, 10 ** 4),
             intro_transition=_str(d.get("intro_transition"), "", 200),
             negative_prompt=_str(d.get("negative_prompt")),

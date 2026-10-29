@@ -9,14 +9,12 @@ apply to it exactly as they do to anything else).
 
 The chain mirrors what this app's own H3 user actually runs by hand today:
 loaders, MiniMaxH3SigmaShift patching the model's flow shifts, an
-ImageTransformKJ node turning a dropped-in picture into canvas-multiple
+FunUIAspectSize node turning a dropped-in picture into canvas-multiple
 width/height ints -- but the picture supplies only its ASPECT RATIO, not the
-resolution. The actual pixel budget is target_width*target_height, role-
-mounted at "project.video" exactly like the default pipeline's own
-width/height: a project setting, typed once, not implied by whatever a phone
-camera happened to produce. "total_pixels" keep_proportion is what makes that
-true -- it fits the image's own aspect ratio into that budget's area, rather
-than using the image's raw size. Those two resulting ints feed
+resolution. The scale is the project's width and height, role-mounted at
+"project.video" exactly like the default pipeline's own width/height: a
+project setting, typed once, not implied by whatever a phone camera happened
+to produce. Those two resulting ints feed
 MiniMaxH3ReferenceToVideo's width/height, and Reference-to-Video's own
 conditioning+latent feeds a plain sampler at CFG 1 (H3 wants no negative
 guidance) into FunUIDecode and a video/audio mux.
@@ -63,27 +61,18 @@ def h3_reference_to_video():
          # `blank_like`: with no picture (text-only), buildInputs gives this node the size of that
          # slot's target_width/height, so a plain grey stand-in carries the project's own shape.
          "roles": [{"at": "assets.source_image", "input": "media_id",
-                    "blank_like": {"slot": "image_transform", "width": "target_width", "height": "target_height",
+                    "blank_like": {"slot": "aspect", "width": "width", "height": "height",
                                      "unsend": {"slot": "enhance", "input": "use_image"}}}],
          "inputs": {"media_id": "", "blank_width": 0, "blank_height": 0}},
-        {"id": "image_transform", "group": "Reference media", "node": "ImageTransformKJ",
-         # target_width/height are the PIXEL BUDGET, set in Project settings
-         # like any other project resolution -- not the dropped picture's own
-         # size. "total_pixels" is what makes that budget win: it takes
-         # target_width*target_height as an area and fits the image's own
-         # aspect ratio into it, so the picture supplies the SHAPE and the
-         # project supplies the SCALE. A 12-megapixel phone photo dropped in
-         # must not become the generation's actual resolution.
-         "roles": [{"at": "project.video", "input": "target_width", "label": "Width"},
-                   {"at": "project.video", "input": "target_height", "label": "Height"}],
-         "inputs": {
-            "image": ["source_image", 0], "target_width": 1344, "target_height": 768,
-            "upscale_method": "lanczos",
-            "keep_proportion": "total_pixels",
-            "divisible_by": 32,
-            "extra_padding": "disabled",
-            "invert_crop": "disabled",
-            "bboxes": ""}},
+        # Width and height are the SCALE, set in Project settings like any other project resolution -- not the
+        # dropped picture's own size (a 12-megapixel phone photo must not become the generation's resolution). The
+        # picture supplies the SHAPE; `basis` (Project settings > Resolution is the) says what the scale means: the
+        # pixel count, the short side or the long side.
+        {"id": "aspect", "group": "Reference media", "node": "FunUIAspectSize",
+         "roles": [{"at": "project.video", "input": "width", "label": "Width", "was": "target_width"},
+                   {"at": "project.video", "input": "height", "label": "Height", "was": "target_height"},
+                   {"at": "project.resolution_basis", "input": "basis"}],
+         "inputs": {"image": ["source_image", 0], "width": 1344, "height": 768, "multiple_of": 32, "basis": "short"}},
 
         # Off by default: the prompt passes straight through and the model never
         # runs. Before the markup node because a rewrite changes the words the
@@ -104,7 +93,7 @@ def h3_reference_to_video():
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
          "inputs": {
              "clip": ["clip", 0], "vae": ["vae", 0], "audio_vae": ["audio_vae", 0],
-             "prompt": ["markup", 0], "width": ["image_transform", 4], "height": ["image_transform", 5],
+             "prompt": ["markup", 0], "width": ["aspect", 0], "height": ["aspect", 1],
              "length": 124, "ref_image_size": "match"}},
         {"id": "negative", "group": "Preparation", "node": "CLIPTextEncode",
          # H3 samples at CFG 1, where a negative prompt does nothing -- wired
@@ -212,6 +201,33 @@ OPTIONAL_NODES = {
     "FunUINegativeErase": {"pass": {"0": "positive"}},
     "FunUICutOpening": {"pass": {"0": "images", "1": "audio"}},
 }
+
+
+def upgrade(slots, _outputs=None):
+    """A pipeline saved while the size came from ImageTransformKJ (total_pixels, the pixel count of the project's width x height)
+    gets FunUIAspectSize in its place: the same size (`basis` is "area" in it), and the project's Short side / Long side choice
+    can reach it. The project's saved width and height keep working (the new roles say what they were called)."""
+    old = next((x for x in slots if x.get("id") == "image_transform" and x.get("node") == "ImageTransformKJ"), None)
+    if not old or (old.get("inputs") or {}).get("keep_proportion") != "total_pixels":
+        return slots
+    feeds = lambda v: isinstance(v, (list, tuple)) and len(v) == 2 and v[0] == "image_transform"
+    users = [(x, k) for x in slots if x is not old for k, v in (x.get("inputs") or {}).items() if feeds(v)]
+    if not users or any(not (v[1] in (4, 5)) for x, k in users for v in [x["inputs"][k]]):
+        return slots                                    # something else reads the resized picture: not a pipeline made from the preset
+    fresh = next(x for x in h3_reference_to_video() if x["id"] == "aspect")
+    size = {k: (old["inputs"].get(f"target_{k}") if isinstance(old["inputs"].get(f"target_{k}"), int) else fresh["inputs"][k]) for k in ("width", "height")}
+    aspect = {**fresh, "inputs": {**fresh["inputs"], **size, "image": old["inputs"].get("image", fresh["inputs"]["image"]), "basis": "area"}}
+    out = []
+    for x in slots:
+        if x is old:
+            x = aspect
+        else:
+            inputs = {k: (["aspect", v[1] - 4] if feeds(v) else v) for k, v in (x.get("inputs") or {}).items()}
+            roles = [dict(r, blank_like=dict(r["blank_like"], slot="aspect", width="width", height="height")) if (r.get("blank_like") or {}).get("slot") == "image_transform" else r
+                     for r in x.get("roles") or []]
+            x = {**x, "inputs": inputs, **({"roles": roles} if "roles" in x else {})}
+        out.append(x)
+    return out
 
 
 def optional_nodes():

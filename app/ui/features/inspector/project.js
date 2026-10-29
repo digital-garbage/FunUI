@@ -5,13 +5,22 @@ import { gridOf } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
 
+const BASES = [{ value: "short", label: "Short side" }, { value: "long", label: "Long side" }, { value: "area", label: "Pixel count" }];
+const BASIS_HINT = { short: "The clip's shorter side is the smaller of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1824 × 1024.",
+  long: "The clip's longer side is the larger of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1024 × 576.",
+  area: "The clip has about Width × Height pixels; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1376 × 768." };
+
+/** For a model that fits the scene picture's shape to Width and Height: what those two numbers mean. */
+const basis = (p, slots) => (slots || []).some((s) => (s.roles || []).some((r) => r.at === "project.resolution_basis")) ? c.field.default({ label: "Resolution is the", hint: BASIS_HINT[p.project.resolution_basis] || BASIS_HINT.short,
+  control: c.select.md({ label: "Resolution is the", options: BASES, value: BASES.some((b) => b.value === p.project.resolution_basis) ? p.project.resolution_basis : "area", onChange: (v) => p.setField("resolution_basis", v) }) }) : null;
+
 const STARTS = [{ value: "i2v", label: "From an image" }, { value: "t2v", label: "From a prompt" }];
 
 // What the pipeline lets the project decide (width, length, rate...): one whole-number control per slot input
 // that declares the role. A role that `drives` length or rate edits the number the timeline draws.
 const videoControls = (p, slots) => (slots || []).flatMap((slot) => (slot.roles || []).filter((r) => r.at === "project.video" && r.input).map((role) => {
   const field = DRIVEN[role.drives];
-  const now = field ? p.project[field] : p.video[role.input] ?? (slot.inputs || {})[role.input];
+  const now = field ? p.project[field] : p.video[role.input] ?? p.video[role.was] ?? (slot.inputs || {})[role.input];
   if (!Number.isInteger(now)) return null;                  // the project file keeps whole numbers only
   const label = role.label || role.input, grid = role.drives === "frames" ? gridOf(slots) : null;
   // On a model with a frame grid the arrows walk it (H3: 22, 39, 56 …) and a typed number lands on it: what runs is what shows.
@@ -83,6 +92,7 @@ export function projectRows(p, slots, api) {
       c.hint.default({ text: `≈ ${per.toFixed(2)} s per shot` }),
       size.length ? c.field.row({ fields: size.map((x) => x.field) }) : null,
       flip(p, size),
+      basis(p, slots),
       ...custom(p, open),
       c.field.default({ label: "Final render size", hint: "The size of the exported video: the first clip's, the project's, or any rendered clip's own.", control: c.select.md({ label: "Final render size", options: sizes(open), value: open.export_size_from || "",
         onChange: (v) => p.setField("export_size_from", v) }) }),
