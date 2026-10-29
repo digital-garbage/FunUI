@@ -173,23 +173,13 @@ def registered(model, x, sigmas, extra_args=None, callback=None, disable=None, *
     return make(_CURRENT or _settings({}))(model, x, sigmas, extra_args=extra_args, callback=callback, disable=disable, **options)
 
 
-def schedule(model_sampling, steps):
-    """`funui_turbo` in ComfyUI's scheduler list: the evenly spaced timesteps of `sgm_uniform`, the grid the turbo
-    merges are trained on."""
-    import comfy.samplers
-    return comfy.samplers.normal_scheduler(model_sampling, steps, sgm=True)
-
-
 def register():
-    """Add the sampler and the scheduler to ComfyUI's own lists (in place: its Sampler nodes share the lists)."""
+    """Add the sampler to ComfyUI's own list (in place: its Sampler nodes share the list)."""
     import comfy.k_diffusion.sampling as ksampling
     import comfy.samplers
     if "funui_turbo" not in comfy.samplers.SAMPLER_NAMES:
         ksampling.sample_funui_turbo = registered
         comfy.samplers.SAMPLER_NAMES.append("funui_turbo")
-    if "funui_turbo" not in comfy.samplers.SCHEDULER_HANDLERS:
-        comfy.samplers.SCHEDULER_HANDLERS["funui_turbo"] = comfy.samplers.SchedulerHandler(schedule)
-        comfy.samplers.SCHEDULER_NAMES.append("funui_turbo")
 
 
 register()

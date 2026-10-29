@@ -141,17 +141,16 @@ def test_without_two_stages_and_without_polish(model):
     assert len(calls) == 3 and torch.isfinite(out.unbind()[0]).all()
 
 
-def test_registered_in_comfys_lists_and_runs_like_the_module(model):
+def test_registered_in_comfys_sampler_list_and_runs_like_the_module(model):
     import comfy.samplers
     from comfy.nested_tensor import NestedTensor
-    assert "funui_turbo" in comfy.samplers.SAMPLER_NAMES and "funui_turbo" in comfy.samplers.SCHEDULER_NAMES
+    assert "funui_turbo" in comfy.samplers.SAMPLER_NAMES
     patched = model.clone()
     guider = comfy.samplers.CFGGuider(patched)
     cond = [[torch.randn(1, 5, 48), {}]]
     guider.set_conds(cond, cond)
     guider.set_cfg(1.0)
-    sigmas = comfy.samplers.calculate_sigmas(patched.get_model_object("model_sampling"), "funui_turbo", 4)
-    assert torch.allclose(sigmas, comfy.samplers.calculate_sigmas(patched.get_model_object("model_sampling"), "sgm_uniform", 4))
+    sigmas = comfy.samplers.calculate_sigmas(patched.get_model_object("model_sampling"), "sgm_uniform", 4)
     noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
     latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
     out = guider.sample(noise, latent, comfy.samplers.sampler_object("funui_turbo"), sigmas, seed=1, disable_pbar=True)
