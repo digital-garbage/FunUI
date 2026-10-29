@@ -14,7 +14,7 @@ from comfy.patcher_extension import WrappersMP
 
 from ..._core import log
 
-from .stages import make_wrapper
+from .stages import keep_whole_schedule, make_wrapper
 
 ID = "two_stage"
 TITLE = "Two stages"
@@ -51,6 +51,7 @@ def install(patcher, values, key):
         return None
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps))
+    patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
     return f"first {steps} step(s) at {size:.0%} of the size"
 
 

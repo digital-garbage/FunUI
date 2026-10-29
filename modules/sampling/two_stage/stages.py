@@ -36,6 +36,19 @@ def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
     return None
 
 
+FULL = "funui_full_sigmas"
+
+
+def keep_whole_schedule(executor, guider, sigmas, extra_args, *args, **kwargs):
+    """SAMPLER_SAMPLE wrapper: while a stage runs, the model sees the WHOLE schedule in `sample_sigmas`, so every
+    module that reads the step number, the step count or how far along the run is (Decisiveness, SLA's sparsity
+    ramp, step windows) sees 8 steps and not two runs of 4."""
+    full = getattr(guider, FULL, None)
+    if full is not None:
+        extra_args["model_options"].setdefault("transformer_options", {})["sample_sigmas"] = full
+    return executor(guider, sigmas, extra_args, *args, **kwargs)
+
+
 def make_wrapper(size, steps):
     def outer(executor, *args, **kwargs):
         import comfy.nested_tensor
@@ -80,8 +93,13 @@ def make_wrapper(size, steps):
                 preview(step, nested(x0), nested(x), total)
 
         log.info(TITLE, f"first {steps} step(s) at latent {h1}x{w1} instead of {h}x{w}, then {len(second) - 1} at the full size")
-        executor(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
-                 latent_shapes=shapes1)
+        setattr(guider, FULL, sigmas)
+        try:
+            executor(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
+                     latent_shapes=shapes1)
+        except BaseException:
+            setattr(guider, FULL, None)
+            raise
         if "x0" not in seen:
             raise RuntimeError("the first stage gave no clean guess to hand over")
 
@@ -96,6 +114,9 @@ def make_wrapper(size, steps):
         if callback is not None:
             def shifted(step, x0, x, total):
                 return callback(step + steps, x0, x, total + steps)
-        return executor(noise, handed, sampler, second, None, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
+        try:
+            return executor(noise, handed, sampler, second, None, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
+        finally:
+            setattr(guider, FULL, None)
 
     return outer

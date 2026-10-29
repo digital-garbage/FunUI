@@ -22,7 +22,7 @@ def model(comfyui):
     return mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
 
 
-def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None):
+def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None, seen=None):
     import comfy.samplers
     from comfy.nested_tensor import NestedTensor
     from modules.sampling.two_stage import install
@@ -31,6 +31,9 @@ def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None):
     calls = []
     hook = patched.model.diffusion_model.register_forward_pre_hook(
         lambda m, a: calls.append(tuple(a[0][0].shape[-2:]) if isinstance(a[0], (list, tuple)) else tuple(a[0].shape[-2:])))
+    if seen is not None:
+        patched.model.diffusion_model.register_forward_pre_hook(
+            lambda m, a, kw: seen.append(kw["transformer_options"]["sample_sigmas"].tolist()), with_kwargs=True)
     guider = comfy.samplers.CFGGuider(patched)
     cond = [[torch.randn(1, 5, 48), {}]]
     guider.set_conds(cond, cond)
@@ -66,3 +69,10 @@ def test_a_run_that_cannot_be_cut_is_left_alone(model):
     assert calls == [(8, 8)] * 4                             # a start from a picture is not cut
     _n, _o, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 4})
     assert calls == [(8, 8)] * 4                             # nothing would be left for the full size
+
+
+def test_every_stage_sees_the_whole_schedule(model):
+    seen = []
+    sigmas = (1.0, 0.9, 0.7, 0.3, 0.0)
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2}, sigmas=sigmas, seen=seen)
+    assert len(seen) == 4 and all(s == pytest.approx(list(sigmas)) for s in seen)
