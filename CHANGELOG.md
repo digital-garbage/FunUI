@@ -5,7 +5,7 @@
 ### Added
 
 - **H3 loader: MXFP8** (Blackwell GPUs): stores the attention and MLP weights of the middle blocks as MXFP8 (first 2 and last 3 blocks stay bf16) for about twice the matmul rate. Needs torch 2.10+ with CUDA 13; skipped with a note elsewhere. Untested on a GPU; listen to the sound first.
-- **H3 preset "Reference to Video, two stages (test)"**: the model's own schedule is cut in two. The first steps run on a smaller picture (First stage size, 0.7 by default), the model's clean guess is resized to the full size, and the last steps finish there. New nodes: Stage Size; Sampler gained a `denoised` output; Latent Resample can land on an exact size and works without an upscaler file (bicubic). Untested on a GPU.
+- **Two stages** (Settings > Engine > Sampling, H3): the first steps of a run go on a smaller picture (First stage size, 0.7 by default), the model's clean guess is resized to the full size and the last steps finish there. Works with any sampler; skipped for a run that starts from a picture or a mask. Untested on a GPU.
 
 ## [5.1.0] "Classy Chopper" - 2026-10-27
 

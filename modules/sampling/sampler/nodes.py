@@ -19,7 +19,6 @@ Three things keep it from becoming a hub again:
 """
 
 import comfy.model_management
-import comfy.nested_tensor
 import comfy.sample
 import comfy.samplers
 import comfy.utils
@@ -125,7 +124,6 @@ class FunUISampler(io.ComfyNode):
             outputs=[
                 io.Latent.Output(display_name="latent"),
                 io.String.Output(display_name="status"),
-                io.Latent.Output(display_name="denoised"),
             ],
         )
 
@@ -190,8 +188,7 @@ class FunUISampler(io.ComfyNode):
         # Progress and previews, from ComfyUI's own machinery rather than ours:
         # it already picks a preview method, already falls back when the decoder
         # is missing, and already reports steps to whatever is watching.
-        x0_output = {}      # the model's last clean guess: what a run cut short at a middle sigma hands to the next stage
-        callback = latent_preview.prepare_callback(model, max(0, len(sigmas) - 1), x0_output)
+        callback = latent_preview.prepare_callback(model, max(0, len(sigmas) - 1))
 
         try:
             samples = guider.sample(
@@ -219,20 +216,12 @@ class FunUISampler(io.ComfyNode):
         out.pop("downscale_ratio_spacial", None)
         out.pop("downscale_ratio_temporal", None)
         out["samples"] = samples
-        denoised = out
-        if "x0" in x0_output:
-            x0 = x0_output["x0"]
-            if samples.is_nested and not x0.is_nested:
-                x0 = comfy.nested_tensor.NestedTensor(
-                    comfy.utils.unpack_latents(x0, [t.shape for t in samples.unbind()]))
-            denoised = out.copy()
-            denoised["samples"] = model.model.process_latent_out(x0.cpu()).to(comfy.model_management.intermediate_device())
 
         schedule = f"wired schedule from {float(sigmas[0]):.3g}" if wired else scheduler
         headline = (f"{run}: {sampler_name} / {schedule}, {len(sigmas) - 1} step(s), "
                     f"cfg {cfg}")
         log.info("FunUI Sampler", headline)
-        return io.NodeOutput(out, "\n".join([headline, *notes]), denoised)
+        return io.NodeOutput(out, "\n".join([headline, *notes]))
 
     # --- the parts, kept separate so each is testable on its own -----------
 

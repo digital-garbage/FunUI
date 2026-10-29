@@ -19,7 +19,7 @@ What this module adds is the part the graph could not already do:
 v4's user verdict: the H3 second pass WORKS (2026-09-20).
 """
 
-from .nodes import FunUILatentResample, FunUILatentUpscalerLoader, FunUIStageSize
+from .nodes import FunUILatentResample, FunUILatentUpscalerLoader
 
 ID = "latent_second_pass"
 TITLE = "Second pass"
@@ -27,4 +27,4 @@ STAGE = "latent"
 CATEGORY = "sampling"
 STATUS = "proven"
 
-NODES = [FunUILatentUpscalerLoader, FunUILatentResample, FunUIStageSize]
+NODES = [FunUILatentUpscalerLoader, FunUILatentResample]
