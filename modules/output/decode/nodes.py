@@ -60,6 +60,7 @@ class FunUIDecode(io.ComfyNode):
     @classmethod
     def execute(cls, samples, vae, model=None, audio_vae=None, tile_size=0) -> io.NodeOutput:
         latent = samples["samples"]
+        vae = getattr(vae, "funui_decode_vae", None) or vae         # a decode-only VAE named in the VAE loader
 
         for spec, decode in registry_mod.current().providers(CAPABILITY):
             try:

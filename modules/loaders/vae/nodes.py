@@ -43,6 +43,12 @@ class FunUIVAELoader(io.ComfyNode):
                 io.Combo.Input("vae_name", options=vae_files()),
                 io.Combo.Input("dtype", options=list(DTYPES), default="bfloat16",
                                tooltip="The precision the VAE works in. bfloat16 is the default; MiniMax H3 needs it."),
+                io.Combo.Input("decode_vae_name", options=["None", *vae_files()], default="None", optional=True,
+                               display_name="Decode-only VAE (Optional)",
+                               tooltip="A second VAE used only for the final picture decode; this one still encodes "
+                                       "(references, start pictures). For a decoder that has no encoder: MiniMax H3's "
+                                       "Sol-H3-VAE (sol_h3_vae.safetensors, whole clip at once, about 2.5 times faster; "
+                                       "needs a ComfyUI that supports it) or an X2 Detail VAE. None decodes with this VAE."),
             ],
             outputs=[
                 io.Vae.Output(display_name="vae"),
@@ -51,7 +57,17 @@ class FunUIVAELoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, vae_name: str, dtype: str) -> io.NodeOutput:
+    def execute(cls, vae_name: str, dtype: str, decode_vae_name: str = "None") -> io.NodeOutput:
+        vae = cls._load(vae_name, dtype)
+        status = f"{vae_name} loaded as {dtype}"
+        if decode_vae_name and decode_vae_name != "None":
+            # Rides on the VAE object: the decode node prefers it, everything else (encoding) uses this VAE.
+            vae.funui_decode_vae = cls._load(decode_vae_name, dtype)
+            status += f"; {decode_vae_name} decodes the finished picture"
+        return io.NodeOutput(vae, status)
+
+    @staticmethod
+    def _load(vae_name: str, dtype: str):
         path = folder_paths.get_full_path_or_raise("vae", vae_name)
         state_dict, metadata = comfy.utils.load_torch_file(path, return_metadata=True)
         # An audio VAE's own file keeps its model config in the header, and may name its parts as a whole checkpoint does.
@@ -59,4 +75,4 @@ class FunUIVAELoader(io.ComfyNode):
         vae = comfy.sd.VAE(sd=state_dict, dtype=DTYPES[dtype], metadata=metadata)
         vae.throw_exception_if_invalid()
         log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
-        return io.NodeOutput(vae, f"{vae_name} loaded as {dtype}")
+        return vae

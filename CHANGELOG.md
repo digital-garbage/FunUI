@@ -4,6 +4,7 @@
 
 ### Added
 
+- **VAE Loader: Decode-only VAE (Optional)**: a second VAE used only for the final picture decode while the first still encodes (references, start pictures). For decoders without an encoder: MiniMax H3's Sol-H3-VAE (`sol_h3_vae.safetensors`, whole clip at once, about 2.5x faster decode, needs a ComfyUI newer than 0.43.1) and the X2 Detail VAE.
 - **H3 loader: MXFP8** (Blackwell GPUs): stores the attention and MLP weights of the middle blocks as MXFP8 (first 2 and last 3 blocks stay bf16) for about twice the matmul rate. Needs torch 2.10+ with CUDA 13; skipped with a note elsewhere. Untested on a GPU; listen to the sound first.
 - **Two stages** (Settings > Engine > Sampling, H3): the first steps of a run go on a smaller picture (First stage size, 0.7 by default), the model's clean guess is resized to the full size and the last steps finish there. Works with any sampler; skipped for a run that starts from a picture or a mask. Untested on a GPU.
 

@@ -88,7 +88,7 @@ FROZEN = {
     "FunUILoraLoader": [
         "model", "lora_name", "strength_model", "clip", "strength_clip",
     ],
-    "FunUIVAELoader": ["vae_name", "dtype"],
+    "FunUIVAELoader": ["vae_name", "dtype", "decode_vae_name"],
     "FunUILoadMedia": ["media_id", "blank_width", "blank_height", "blank_frames", "full", "prepare"],
 }
 
