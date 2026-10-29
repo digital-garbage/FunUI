@@ -52,3 +52,6 @@ def install(patcher, values, key):
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps))
     return f"first {steps} step(s) at {size:.0%} of the size"
+
+
+PROVIDES = {"modifier": install}
