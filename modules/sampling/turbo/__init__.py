@@ -1,7 +1,7 @@
 """Turbo sampler: a step rule made for few-step turbo runs, aware of Two stages, for any step count.
 
 Replaces the chosen sampler for the run (the model calls are the same: one per step, no extra cost) with a
-flow step that has three dials:
+flow step that has these dials:
 
 * Fresh noise per step. After each model answer the next point is `(1 - s) * picture + s * noise`; the
   noise is the model's own implied noise, blended with fresh noise by `eta` (0 = plain Euler, 1 = a full
@@ -10,8 +10,6 @@ flow step that has three dials:
 * Second order late in the run: the picture guesses of the last steps are extrapolated from the one before
   (as in Distilled Flow's `dflow_ord2_ab2`), faded in with the run's progress. History starts fresh in each
   stage, because a Two stages hand-over changes the size.
-* Step spacing per stage: the steps inside a stage are moved earlier or later while the stage's first and
-  last sigma stay put, so the hand-over point never moves. 1 = the schedule as given.
 * Polish step (on by default at 0.25): after the last step, noise the finished picture back to a small sigma and let the
   model answer once more at full size. One extra model call, in the last stage only.
 
@@ -64,19 +62,6 @@ SETTINGS = {
         "hint": "How much the late steps lean on the step before. 0 = off (default: no value tried on a rental was safe). It fades in over the run.",
         "when": {"enabled": True},
     },
-    "spacing_first": {
-        "type": "float", "default": 1.0, "min": 0.5, "max": 2.0, "step": 0.05,
-        "label": "Step spacing, first stage", "ui": "slider",
-        "hint": "Moves the steps inside the first stage (with Two stages) or the whole run (without). Above 1 "
-                "pulls them toward the end of the stage, below 1 toward its start. 1 = as scheduled.",
-        "when": {"enabled": True},
-    },
-    "spacing_last": {
-        "type": "float", "default": 1.0, "min": 0.5, "max": 2.0, "step": 0.05,
-        "label": "Step spacing, last stage", "ui": "slider",
-        "hint": "The same for the stage at the full size. Ignored without Two stages.",
-        "when": {"enabled": True},
-    },
     "polish": {
         "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
@@ -85,21 +70,6 @@ SETTINGS = {
         "when": {"enabled": True},
     },
 }
-
-
-def warp(sigmas, k):
-    """The inner sigmas of a stage moved by `k`, the first and last kept. u runs 0..1 along the stage; u' = k u / (1 + (k - 1) u)."""
-    if k == 1.0 or len(sigmas) < 3:
-        return sigmas
-    first, last = sigmas[0], sigmas[-1]
-    span = first - last
-    if float(span.abs()) < 1e-9:
-        return sigmas
-    u = ((first - sigmas) / span).clamp(0.0, 1.0)
-    moved = k * u / (1.0 + (k - 1.0) * u)
-    out = first - span * moved
-    out[0], out[-1] = first, last
-    return out
 
 
 def _parts(t):
@@ -142,7 +112,6 @@ def make(settings):
         total = (len(full) - 1) if full is not None else len(sigmas) - 1
         n0 = total - (len(sigmas) - 1) if stage == 2 else 0                  # global index of this run's first step
         last_stage = stage != 1
-        sigmas = warp(sigmas, settings["spacing_last"] if stage == 2 else settings["spacing_first"])
         steps = len(sigmas) - 1
         log.once(f"turbo:{stage}:{steps}:{n0}", log.INFO, TITLE,
                  f"{'stage ' + str(stage) if stage else 'run'}: {steps} step(s) from step {n0 + 1} of {total}"
@@ -206,7 +175,7 @@ def registered(model, x, sigmas, extra_args=None, callback=None, disable=None, *
 
 def schedule(model_sampling, steps):
     """`funui_turbo` in ComfyUI's scheduler list: the evenly spaced timesteps of `sgm_uniform`, the grid the turbo
-    merges are trained on. The step spacing per stage is applied by the sampler, which knows the stage."""
+    merges are trained on."""
     import comfy.samplers
     return comfy.samplers.normal_scheduler(model_sampling, steps, sgm=True)
 

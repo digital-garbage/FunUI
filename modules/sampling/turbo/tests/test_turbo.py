@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from modules.sampling.turbo import SETTINGS, install, make, step_to, warp
+from modules.sampling.turbo import SETTINGS, install, make, step_to
 from modules._core import dit_hooks
 from modules.sampling.two_stage.tests.test_two_stage import model  # noqa: F401 -- the module-scoped fixture
 
@@ -29,17 +29,6 @@ class Oracle:
     def __call__(self, x, sigma, **kw):
         self.calls.append(float(sigma[0]))
         return self.target.to(x)
-
-
-def test_warp_keeps_the_ends_and_order():
-    s = torch.tensor([1.0, 0.8, 0.6, 0.3, 0.0])
-    assert torch.equal(warp(s, 1.0), s)
-    for k in (0.6, 1.5, 2.0):
-        w = warp(s, k)
-        assert w[0] == s[0] and w[-1] == s[-1] and len(w) == len(s)
-        assert (w[:-1] > w[1:]).all()
-    assert warp(s, 2.0)[1] < s[1]                    # k > 1 pulls the inner steps toward the end of the stage
-    assert warp(s, 0.6)[1] > s[1]
 
 
 def test_eta_zero_is_euler():
@@ -136,14 +125,14 @@ def test_off_installs_nothing(model):
 @pytest.mark.parametrize("sigmas,cut", [((1.0, 0.8, 0.5, 0.25, 0.0), 2), ((1.0, 0.9, 0.7, 0.55, 0.4, 0.2, 0.0), 3),
                                         ((1.0, 0.6, 0.3, 0.0), 1)])
 def test_runs_through_two_stages_with_any_split(model, sigmas, cut):
-    values = {"enabled": True, **_settings(spacing_first=1.3, spacing_last=0.8, polish=0.05)}
+    values = {"enabled": True, **_settings(polish=0.05)}
     note, out, calls = _guided(model, values, sigmas, {"enabled": True, "size": 0.5, "steps": cut})
     assert "fresh noise" in note
     v, a = out.unbind()
     assert torch.isfinite(v).all() and torch.isfinite(a).all()
     assert len(calls) == len(sigmas) - 1 + 1                 # one call per step plus the polish call
     assert calls[cut - 1] != calls[cut] and calls[-1] == pytest.approx(0.05)
-    assert calls[cut] == pytest.approx(sigmas[cut], rel=1e-4) # the hand-over sigma did not move
+    assert calls[cut] == pytest.approx(sigmas[cut], rel=1e-4)
 
 
 def test_without_two_stages_and_without_polish(model):
