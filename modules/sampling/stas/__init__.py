@@ -96,14 +96,16 @@ def target_rows(frames, per_frame, edge=EDGE):
 
 
 def ma_dims(video):
-    """-> (channel indices, their peaks, their peak/mean ratios). `video` is [n, D]."""
+    """-> (channel indices, their peaks, their peak/mean ratios, the strongest ratio of any channel). `video` is [n, D]."""
     peak = torch.maximum(video.amax(dim=0).float().abs(), video.amin(dim=0).float().abs())
     mean = video[::max(1, video.shape[0] // 1024)].float().abs().mean().clamp(min=1e-12)
     ratio = peak / mean
     dims = torch.nonzero(ratio > MA_RATIO).flatten()
+    if not dims.numel():
+        return dims, peak[dims], ratio[dims], float(ratio.max())
     if dims.numel() > MAX_DIMS:
         dims = dims[ratio[dims].topk(MAX_DIMS).indices]
-    return dims, peak[dims], ratio[dims]
+    return dims, peak[dims], ratio[dims], float(ratio.max())
 
 
 def steer(video, rows, dims, peaks, alpha):
@@ -132,10 +134,10 @@ def install(patcher, values, key):
     patch = tuple(getattr(getattr(getattr(patcher, "model", None), "diffusion_model", None),
                           "patch_size", (1, 2, 2)))
     live = {"alpha": float(values.get("alpha", 2.0)), "per_frame": None, "spans": {},
-            "steered": 0, "empty": 0, "dims": None, "why": None}
+            "steered": 0, "empty": 0, "dims": None, "why": None, "best": 0.0}
 
     def fresh():
-        live.update(spans={}, steered=0, empty=0, dims=None, why=None)
+        live.update(spans={}, steered=0, empty=0, dims=None, why=None, best=0.0)
         if manual:
             return log.once(f"{ID}:state", log.INFO, "FunUI STAS",
                             f"manual alpha {live['alpha']:.2f} at block {block}")
@@ -160,7 +162,7 @@ def install(patcher, values, key):
                 captured["b"] = torch.tensor(block)       # an alpha means something per block
         else:
             _say("Inactive | " + (live["why"] or f"no channel at block {block} is over "
-                                  f"{MA_RATIO:.0f}x the mean, nothing steered -- try another block"))
+                                  f"{MA_RATIO:.0f}x the mean (the strongest was {live['best']:.0f}x), nothing steered -- try another block"))
         return out
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, finish)
@@ -201,7 +203,8 @@ def install(patcher, values, key):
             return {"img": out}
         a, count, rows = span
         picture = out[a:a + count]                         # a view: steered in place
-        dims, peaks, ratios = ma_dims(picture)
+        dims, peaks, ratios, strongest = ma_dims(picture)
+        live["best"] = max(live["best"], strongest)
         if not dims.numel():
             live["empty"] += 1
             return {"img": out}

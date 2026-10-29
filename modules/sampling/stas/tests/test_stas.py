@@ -26,7 +26,7 @@ def test_only_channels_far_above_the_mean_are_found_and_capped():
     from modules.sampling.stas import MAX_DIMS, ma_dims
     v = torch.randn(200, 16) * 0.1
     v[3, 5], v[9, 11] = 40.0, -30.0
-    dims, peaks, ratios = ma_dims(v)
+    dims, peaks, ratios, strongest = ma_dims(v)
     assert sorted(dims.tolist()) == [5, 11] and (ratios > 50).all()
     wide = torch.randn(200, 64) * 0.01
     wide[0] = 100.0
@@ -80,7 +80,7 @@ def _block_output(tiny, patched, block):
 
 def test_with_a_massive_channel_the_first_steps_are_steered_and_later_ones_are_not(tiny_h3, monkeypatch):
     from modules.sampling import stas
-    fake = (torch.tensor([2]), torch.tensor([5.0]), torch.tensor([99.0]))
+    fake = (torch.tensor([2]), torch.tensor([5.0]), torch.tensor([99.0]), 99.0)
     monkeypatch.setattr(stas, "ma_dims", lambda video: fake)
     patched, wrap, outer, _ = _load(tiny_h3, mode="manual", alpha=2.0)
     seen = _block_output(tiny_h3, patched, 1)
@@ -103,7 +103,7 @@ def test_a_model_without_massive_channels_says_so(tiny_h3):
 def test_learned_mode_banks_alpha_when_it_steered(tiny_h3, monkeypatch):
     from modules.sampling import stas
     from modules.system.taste import store
-    monkeypatch.setattr(stas, "ma_dims", lambda video: (torch.tensor([2]), torch.tensor([5.0]), torch.tensor([99.0])))
+    monkeypatch.setattr(stas, "ma_dims", lambda video: (torch.tensor([2]), torch.tensor([5.0]), torch.tensor([99.0]), 99.0))
     patched, wrap, outer, _ = _load(tiny_h3)
     _forward(tiny_h3, patched, wrap, outer, 0, torch.tensor([1.0, 0.8, 0.6, 0.4, 0.0]))
     assert store.rate("run-1", "liked")["recorded"] == ["stas"]
@@ -117,3 +117,11 @@ def test_a_block_outside_the_model_is_refused_and_said(tiny_h3):
     log.new_run()
     FunUILoadModifiers.execute(tiny_h3.patcher, {"taste": {"key": "fox"}, "stas": {"enabled": True, "block": 40}})
     assert any("not a block of this model" in e["message"] for e in log.history())
+
+
+def test_the_strongest_channel_is_reported_when_none_passes_the_bar():
+    from modules.sampling.stas import ma_dims
+    v = torch.randn(64, 16)
+    v[0, 3] = 20.0 * v.abs().mean()
+    dims, _peaks, _ratios, strongest = ma_dims(v)
+    assert not dims.numel() and 5 < strongest < 50
