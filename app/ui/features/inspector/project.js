@@ -6,9 +6,9 @@ import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
 
 const BASES = [{ value: "short", label: "Short side" }, { value: "long", label: "Long side" }, { value: "area", label: "Pixel count" }];
-const BASIS_HINT = { short: "The clip's shorter side is the smaller of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1824 × 1024.",
-  long: "The clip's longer side is the larger of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1024 × 576.",
-  area: "The clip has about Width × Height pixels; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1376 × 768." };
+const BASIS_HINT = { short: "With Short side: the clip's shorter side is the smaller of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1824 × 1024.",
+  long: "With Long side: the clip's longer side is the larger of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1024 × 576.",
+  area: "With Pixel count only: the clip has about Width × Height pixels; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1376 × 768." };
 
 /** For a model that fits the scene picture's shape to Width and Height: what those two numbers mean. */
 const basis = (p, slots) => (slots || []).some((s) => (s.roles || []).some((r) => r.at === "project.resolution_basis")) ? c.field.default({ label: "Resolution is the", hint: BASIS_HINT[p.project.resolution_basis] || BASIS_HINT.short,
