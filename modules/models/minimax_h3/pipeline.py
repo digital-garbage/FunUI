@@ -157,6 +157,34 @@ def h3_reference_to_video():
     return slots
 
 
+def h3_fast_simple_r2v():
+    """Reference to Video set up for speed with few settings to think about: MXFP8 weights, block-sparse attention
+    that ramps from 0.7 to 0.9, a DMAD LoRA slot, five steps on the Turbo sampler with the first three on a smaller
+    picture (Two stages) and a polish step, Attention explorer and Shot camera's camera moves on. Every other
+    module is left off. The module values travel in the settings slot, where Engine settings reads them.
+    """
+    import json
+    settings = {
+        "attention_bandit": {"enabled": True},
+        "conditioning_shot_camera": {"camera_moves": True},
+        "two_stage": {"enabled": True, "size": 0.7, "steps": 3},
+        "turbo_sampler": {"enabled": True, "polish": 0.3},
+    }
+    inputs = {
+        "model": {"weight_dtype": "default", "compute_dtype": "default", "attention": "default", "mxfp8": True,
+                  "sla": True, "sla_method": "sla", "sla_engine": "comfy_kitchen", "sla_sparsity": 0.9,
+                  "sla_sparsity_start": 0.7, "sla_dense_steps": "0", "sla_dense_last_steps": 0},
+        "vae": {"decode_vae_name": "sol_h3_vae.safetensors"},
+        "lora": {"strength_model": 0.5, "strength_clip": 0.0},
+        "sampler": {"steps": 5, "sampler_name": "funui_turbo", "scheduler": "ddim_uniform"},
+        "settings": {"settings": json.dumps(settings)},
+    }
+    slots = h3_reference_to_video()
+    for slot in slots:
+        slot["inputs"] = {**slot["inputs"], **inputs.get(slot["id"], {})}
+    return slots
+
+
 def h3_reference_to_video_second_pass():
     """The same pipeline, then a second pass: resample between passes (sharpen
     by default) and a second sampler running a typed schedule as written.
@@ -237,7 +265,10 @@ def optional_nodes():
 def presets():
     return [{"id": "minimax_h3_reference_to_video",
              "title": "MiniMax H3 · Reference to Video",
-             "slots": h3_reference_to_video()}]
+             "slots": h3_reference_to_video()},
+            {"id": "minimax_h3_fast_simple_r2v",
+             "title": "MiniMax H3 · Fast & Simple R2V",
+             "slots": h3_fast_simple_r2v()}]
     # Held back, not offered: h3_reference_to_video_second_pass() builds clean but was never verified on a GPU
     # (it needs a compatible H3 latent upscaler file). Add it back here once it has been.
 

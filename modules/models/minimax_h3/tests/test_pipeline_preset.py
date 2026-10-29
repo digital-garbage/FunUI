@@ -33,7 +33,7 @@ def registered(comfyui):
 def test_the_preset_is_offered(registered):
     from modules.models.minimax_h3.pipeline import presets
     offered = presets()
-    assert [p["id"] for p in offered] == ["minimax_h3_reference_to_video"]      # the second-pass preset is held back
+    assert [p["id"] for p in offered] == ["minimax_h3_reference_to_video", "minimax_h3_fast_simple_r2v"]      # the second-pass preset is held back
     assert all(p["slots"] for p in offered)
 
 
@@ -186,3 +186,20 @@ def test_the_preset_takes_its_size_from_the_aspect_size_alone():
     assert "image_transform" not in slots and slots["aspect"]["node"] == "FunUIAspectSize"
     assert slots["r2v"]["inputs"]["width"] == ["aspect", 0] and slots["r2v"]["inputs"]["height"] == ["aspect", 1]
     assert {"at": "project.resolution_basis", "input": "basis"} in slots["aspect"]["roles"]
+
+
+def test_fast_simple_preset_carries_its_settings_and_builds_clean(registered):
+    import json
+    from core import graph
+    from modules.models.minimax_h3.pipeline import h3_fast_simple_r2v
+
+    slots = {s["id"]: s for s in h3_fast_simple_r2v()}
+    assert slots["model"]["inputs"]["mxfp8"] is True and slots["model"]["inputs"]["sla_sparsity_start"] == 0.7
+    assert slots["sampler"]["inputs"]["steps"] == 5
+    assert slots["vae"]["inputs"]["decode_vae_name"] == "sol_h3_vae.safetensors"
+    values = json.loads(slots["settings"]["inputs"]["settings"])
+    assert values["two_stage"] == {"enabled": True, "size": 0.7, "steps": 3}
+    assert values["turbo_sampler"]["polish"] == 0.3
+    _prompt, problems = graph.build(list(slots.values()))
+    loader_file = ("needs 'model_name'", "needs 'clip_name", "needs 'vae_name'", "decode_vae_name")
+    assert not [p for p in problems if not any(k in p for k in loader_file) and "kjnodes" not in p.lower() and "ImageTransformKJ" not in p], problems
