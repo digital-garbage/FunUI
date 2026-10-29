@@ -118,7 +118,13 @@ def test_the_latent_upscaler_hands_over_the_full_grid(model, upscaler_file):
     assert video.shape == (1, 24, 2, 8, 8) and torch.isfinite(video).all()
     first = stages._CACHE["model"]
     _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "upscaler", "upscaler": upscaler_file})
-    assert stages._CACHE["model"] is first                  # loaded once, kept
+    assert stages._CACHE["model"] is first                  # loaded once, kept while it is the chosen method
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "lanczos"})
+    assert not stages._CACHE                                # switched away: gone from memory
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "upscaler", "upscaler": upscaler_file})
+    assert stages._CACHE
+    _run(model, {"enabled": False})
+    assert not stages._CACHE                                # Two stages off: gone too
 
 
 def test_a_ratio_that_does_not_fit_is_trimmed_to_the_exact_grid(upscaler_file):
@@ -183,3 +189,14 @@ def test_flat_stays_flat_for_the_cubics_too():
     for method in ("mitchell", "catmull-rom"):
         out = stages.resize_video(flat, 7, 9, method)
         assert torch.allclose(out, flat.new_full(out.shape, 2.5), atol=1e-5)
+
+
+@pytest.mark.parametrize("size", [0.4, 0.5, 0.7, 0.9])
+@pytest.mark.parametrize("grid", [(18, 31), (18, 32), (20, 36), (36, 62), (36, 64), (30, 17), (12, 12)])
+def test_the_first_stage_keeps_the_shape_of_the_full_picture(grid, size):
+    from modules.sampling.two_stage.stages import small_grid
+    h, w = grid
+    h1, w1 = small_grid(h, w, size)
+    assert h1 % 2 == 0 and w1 % 2 == 0 and 2 <= h1 <= h and 2 <= w1 <= w
+    assert abs((w1 / h1) / (w / h) - 1) < 0.1
+    assert abs(h1 * w1 / (h * w) - size * size) < 0.2

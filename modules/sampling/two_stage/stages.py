@@ -9,10 +9,17 @@ TITLE = "FunUI Two stages"
 
 
 def small_grid(h, w, size):
-    """The first stage's latent grid: scaled, kept even (H3 patches 2x2) and never larger than the full one."""
-    def side(n):
-        return min(n, max(2, int(round(n * size / 2.0)) * 2))
-    return side(h), side(w)
+    """The first stage's latent grid: about `size` of each side, kept even (H3 patches 2x2), never larger than the full
+    one, and of the SAME shape as the full picture. Rounding each side on its own bent the shape by up to 6 percent
+    (18x31 became 12x22), so the layout was decided in a squashed picture and then stretched."""
+    best = None
+    for h1 in range(2, h + 1, 2):
+        for w1 in range(2, w + 1, 2):
+            shape_error = abs(w1 / h1 - w / h) / (w / h)
+            cost = 4 * shape_error + abs(h1 / h - size) + abs(w1 / w - size)
+            if best is None or cost < best[0]:
+                best = (cost, h1, w1)
+    return (best[1], best[2]) if best else (h, w)
 
 
 def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
@@ -129,6 +136,19 @@ def resize_video(video, h, w, method="bicubic"):
     return x.reshape(b, f, c, h, w).permute(0, 2, 1, 3, 4).to(video.dtype)
 
 
+def release_upscaler():
+    """Called when the setup no longer uses the upscaler (another method chosen, or Two stages off): it leaves memory."""
+    if _CACHE:
+        _CACHE.clear()
+        import gc
+        gc.collect()
+        try:
+            import comfy.model_management
+            comfy.model_management.soft_empty_cache()
+        except Exception:                           # noqa: BLE001 -- nothing to free on a CPU-only box
+            pass
+
+
 def enlarge(video, h, w, upscaler=None, method="bicubic"):
     """The hand-over: the first stage's clean guess at the full grid. With an upscaler, its learned resize at the
     ratio that gets nearest (it works in even steps), then a bicubic trim to the exact grid; without, `method`."""
@@ -216,8 +236,9 @@ def _staged(original, guider, size, steps, resize, method, *args, **kwargs):
     video, audio = comfy.utils.unpack_latents(seen["x0"], shapes1)
     done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
     video, audio = done.unbind()
+    enlarged = enlarge(video, h, w, upscaler, method)
     handed, _ = comfy.utils.pack_latents(
-        (enlarge(video, h, w, upscaler, method).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
+        (enlarged.to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
     guider.conds = raw_conds                        # the first stage encoded the originals for its own size
     shifted = None

@@ -16,7 +16,7 @@ import folder_paths
 
 from ..._core import log
 
-from .stages import METHODS, keep_whole_schedule, make_wrapper
+from .stages import METHODS, release_upscaler, keep_whole_schedule, make_wrapper
 
 ID = "two_stage"
 TITLE = "Two stages"
@@ -82,6 +82,8 @@ SETTINGS = {
 
 
 def install(patcher, values, key):
+    if not values.get("enabled") or values.get("resize") != "upscaler":
+        release_upscaler()                      # "unused" means the method was switched away from the upscaler
     if not values.get("enabled"):
         return None
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
