@@ -44,7 +44,7 @@ def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
     return None
 
 
-FULL = "funui_full_sigmas"
+FULL = dit_hooks.FULL
 
 
 def keep_whole_schedule(executor, guider, sigmas, extra_args, *args, **kwargs):

@@ -195,6 +195,10 @@ def current_step(transformer_options):
 STAGE = "funui_stage"
 
 
+# Set on the guider by Two stages while it runs: the whole schedule, of which a stage sees only its part.
+FULL = "funui_full_sigmas"
+
+
 def stage_of(guider):
     """1 or 2 while a Two stages run is in that stage, None for a plain run."""
     return getattr(guider, STAGE, None)
