@@ -59,7 +59,8 @@ SETTINGS = {
     },
     "resize": {
         "type": "enum", "default": "bicubic",
-        "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "lanczos", "label": "Lanczos"},
+        "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "mitchell", "label": "Mitchell"},
+                    {"value": "catmull-rom", "label": "Catmull-Rom"}, {"value": "lanczos", "label": "Lanczos"},
                     {"value": "bislerp", "label": "Bislerp"}, {"value": "bilinear", "label": "Bilinear"},
                     {"value": "trilinear", "label": "Trilinear"}, {"value": "area", "label": "Area"},
                     {"value": "nearest-exact", "label": "Nearest-exact"},
@@ -68,6 +69,13 @@ SETTINGS = {
         "hint": "The plain methods are free (Trilinear gives the same as Bilinear here: time is never resampled). Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
                 "on the clean guess, so the added detail is learned instead of blurred; it costs one small network pass "
                 "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
+        "when": {"enabled": True},
+    },
+    "match": {
+        "type": "bool", "default": False,
+        "label": "Keep the latent's spread",
+        "hint": "Enlarging smooths the picture and shrinks each channel's spread. This puts every channel back to the "
+                "mean and spread it had before enlarging, whichever method is chosen.",
         "when": {"enabled": True},
     },
     "upscaler": {
@@ -86,9 +94,10 @@ def install(patcher, values, key):
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
     method = values.get("resize") if values.get("resize") in METHODS else "bicubic"
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method))
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, bool(values.get("match"))))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "")
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "") \
+        + (", spread kept" if values.get("match") else "")
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}
