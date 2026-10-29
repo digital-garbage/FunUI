@@ -1,5 +1,5 @@
 // One upscale job from queue to result. Pure of the page.
-import { poll } from "../../shell/renders.js";
+import { waitJob } from "../../shell/renders.js";
 export { keyOf, swap } from "../../shell/renders.js";
 export const UPSCALED = "funui_upscaled";
 export const RTX = "NVIDIA RTX Super Resolution";           // sent as the model name for that engine; the same string as modules/output/render/rtx.py NAME
@@ -18,5 +18,5 @@ export const keepsSize = (q) => q.startsWith("DENOISE_") || q.startsWith("DEBLUR
 
 /** -> the upscaled media, or throws a sentence. `sleep` is injectable so a test need not wait. */
 export async function upscale(api, media, model, sleep, rtx) {
-  return poll(api, await api.queueUpscale(media, model, rtx), sleep);
+  return waitJob(api.upscaleJob, (await api.upscale(media, model, rtx)).job_id, sleep);
 }

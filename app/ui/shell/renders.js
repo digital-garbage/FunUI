@@ -1,18 +1,21 @@
-// What the steps that rewrite a finished render (upscale, interpolate) share: naming a file, waiting for its job, swapping it under every
+// What the steps that rewrite a finished render (upscale, interpolate) share: naming a file, waiting for its background job, swapping it under every
 // scene that plays it, and remembering which steps a file has been through so two "always" modes can never feed each other forever. Pure of the page.
 export const keyOf = (m) => `${m.type || "output"}/${m.subfolder || ""}/${m.filename}`;
 
-/** -> the finished job's first video, or throws a sentence. `sleep` is injectable so a test need not wait. */
-export async function poll(api, id, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
+/** Wait for a FunUI background job. `read(id)` -> {state: running | done | error, media, detail}. -> the media, or throws a sentence. `sleep` is injectable so a test need not wait. */
+export async function waitJob(read, id, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
   let lost = 0;
   for (;;) {
-    await sleep(2000);
-    const r = await api.upscaleResult(id);
-    if (!r) { lost = 0; continue; }
-    if (r.retry) { if (++lost < 30) continue; throw new Error("lost contact with ComfyUI"); }
-    if (r.gone) { if (++lost < 3) continue; throw new Error("the job left ComfyUI's queue without finishing (interrupted or ComfyUI restarted)"); }
-    if (r.error) throw new Error(r.error);
-    return r.videos[0];
+    await sleep(1000);
+    let r;
+    try { r = await read(id); } catch (err) {
+      if (err.status === 404) throw new Error("ComfyUI restarted while it was working");
+      if (++lost < 30) continue;                                    // a dropped reply is not a failed job
+      throw new Error("lost contact with ComfyUI");
+    }
+    lost = 0;
+    if (r.state === "error") throw new Error(r.detail || "failed inside ComfyUI");
+    if (r.state === "done") return r.media;
   }
 }
 

@@ -83,6 +83,21 @@ def routes(table, base, web):
         return web.json_response({"models": upscale.models(), "rtx": {"name": rtx.NAME, "qualities": list(rtx.QUALITIES)} if addons.enabled("nvidia_vsr") else None,
                                   "rtx_offered": any(a["id"] == "nvidia_vsr" for a in addons.listing())})   # offered = this machine could switch it on in Settings ▸ Modules
 
+    @table.post(base + "/upscale")
+    async def _upscale(req):
+        body = await body_of(req)
+        media, model = body.get("media"), body.get("model")
+        if not isinstance(media, dict) or not isinstance(media.get("filename"), str) or not media["filename"] or not isinstance(model, str) or not model:
+            return bad("Send {media: {filename, subfolder, type}, model, rtx_options}.")
+        job = jobs.new()
+        asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError)))
+        return web.json_response({"job_id": job})
+
+    @table.get(base + "/upscale/{job}")
+    async def _upscale_job(req):
+        job = jobs.get(req.match_info["job"])
+        return web.json_response(job) if job else bad("Upscale job not found (ComfyUI restarted?).", 404)
+
     @table.get(base + "/library")
     async def _library(_req):
         return web.json_response(library.payload())

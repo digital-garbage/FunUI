@@ -132,17 +132,9 @@ export const api = {
     return body.prompt_id;
   },
   upscaleModels: () => call("GET", "/api/m/render/upscale_models"),
-  /** The upscale is an ordinary ComfyUI job: queued on /prompt, read back from /history. -> the prompt id. */
-  async queueUpscale(media, model, rtx) {
-    const graph = { 1: { class_type: "FunUIUpscaleVideo", inputs: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output", upscale_model: model, ...(rtx ? { rtx_options: JSON.stringify(rtx) } : {}) } } };
-    const res = await fetch("/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: graph }) });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok || !body.prompt_id) {
-      const nodes = Object.values(body.node_errors || {}).flatMap((n) => (n.errors || []).map((x) => x.message));
-      throw new Error([(body.error || {}).message, ...nodes].filter(Boolean).join("; ") || `ComfyUI refused the job (HTTP ${res.status})`);
-    }
-    return body.prompt_id;
-  },
+  /** The upscale is a background job of FunUI, not a ComfyUI prompt (that would make ComfyUI drop the workflow's loaded models). -> {job_id}. */
+  upscale: (media, model, rtx) => call("POST", "/api/m/render/upscale", { media: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output" }, model, ...(rtx ? { rtx_options: rtx } : {}) }),
+  upscaleJob: (id) => call("GET", `/api/m/render/upscale/${encodeURIComponent(id)}`),
   frameGeneration: () => call("GET", "/api/m/interpolate/frame_generation"),
   /** Interpolation is a background job of FunUI, not a ComfyUI prompt (that would make ComfyUI drop the workflow's loaded models). -> {job_id}. */
   interpolate: (media, options) => call("POST", "/api/m/interpolate/run", { media: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output" }, options }),
@@ -153,22 +145,6 @@ export const api = {
       const q = await (await fetch("/queue", { signal: AbortSignal.timeout(5000) })).json();      // a stalled server: not a hang
       return [...(q.queue_running || []), ...(q.queue_pending || [])].some((r) => (r[3] || {}).funui_project_id === projectId);
     } catch { return false; }
-  },
-  /** null while it is queued or running, else {videos} | {error} | {gone} | {retry} (a dropped reply is not a failed job). */
-  async upscaleResult(promptId) {
-    let entry = null;
-    try { const res = await fetch(`/history/${encodeURIComponent(promptId)}`); entry = res.ok ? (await res.json())[promptId] : null; } catch { return { retry: true }; }
-    if (!entry) {
-      try {
-        const q = await (await fetch("/queue")).json();
-        return [...(q.queue_running || []), ...(q.queue_pending || [])].some((r) => r[1] === promptId) ? null : { gone: true };
-      } catch { return { retry: true }; }
-    }
-    const st = entry.status || {};
-    if (st.status_str === "error") { const m = (st.messages || []).find((x) => x[0] === "execution_error"); return { error: (m && m[1] && m[1].exception_message) || "failed inside ComfyUI" }; }
-    if (!st.completed) return null;
-    const videos = Object.values(entry.outputs || {}).flatMap((o) => o.videos || []);
-    return videos.length ? { videos } : { error: "no video came out, check the ComfyUI terminal" };
   },
   renderLibrary: () => call("GET", "/api/m/render/library"),
   lastFrame: (pid, body) => call("POST", `/api/m/render/projects/${encodeURIComponent(pid)}/last-frame`, body),

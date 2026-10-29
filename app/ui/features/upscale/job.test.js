@@ -11,19 +11,19 @@ test("swap replaces the file under every render and ghost that plays it, and not
   assert.equal(p.scene_renders.c.media.filename, "y.mp4");
 });
 
-test("upscale waits while queued, then returns the video; an error is thrown in words", async () => {
-  const seq = [null, null, { videos: [m("up.mp4", "funui_upscaled")] }];
-  const api = { queueUpscale: async () => "id", upscaleResult: async () => seq.shift() };
+test("upscale waits while it runs, then returns the video; an error is thrown in words", async () => {
+  const seq = [{ state: "running" }, { state: "running" }, { state: "done", media: m("up.mp4", "funui_upscaled") }];
+  const api = { upscale: async () => ({ job_id: "id" }), upscaleJob: async () => seq.shift() };
   assert.equal((await upscale(api, m("x.mp4"), "mdl", async () => {})).filename, "up.mp4");
-  const bad = { queueUpscale: async () => "id", upscaleResult: async () => ({ error: "out of memory" }) };
+  const bad = { upscale: async () => ({ job_id: "id" }), upscaleJob: async () => ({ state: "error", detail: "out of memory" }) };
   await assert.rejects(upscale(bad, m("x.mp4"), "mdl", async () => {}), /out of memory/);
 });
 
-test("a job that vanishes is reported after a few looks, a dropped reply is retried longer", async () => {
-  const gone = { queueUpscale: async () => "id", upscaleResult: async () => ({ gone: true }) };
-  await assert.rejects(upscale(gone, m("x.mp4"), "mdl", async () => {}), /left ComfyUI's queue/);
+test("a restarted ComfyUI is named, a dropped reply is retried longer", async () => {
+  const gone = { upscale: async () => ({ job_id: "id" }), upscaleJob: async () => { throw Object.assign(new Error("x"), { status: 404 }); } };
+  await assert.rejects(upscale(gone, m("x.mp4"), "mdl", async () => {}), /restarted/);
   let n = 0;
-  const flaky = { queueUpscale: async () => "id", upscaleResult: async () => (++n < 5 ? { retry: true } : { videos: [m("u.mp4")] }) };
+  const flaky = { upscale: async () => ({ job_id: "id" }), upscaleJob: async () => { if (++n < 5) throw new Error("net"); return { state: "done", media: m("u.mp4") }; } };
   assert.equal((await upscale(flaky, m("x.mp4"), "mdl", async () => {})).filename, "u.mp4");
 });
 
@@ -44,7 +44,7 @@ test("quality levels read as words, and only denoise and deblur keep the video's
 
 test("the RTX options reach the node as one JSON input, and a model upscale sends none", async () => {
   const seen = [];
-  const api = { queueUpscale: async (...a) => (seen.push(a), "id"), upscaleResult: async () => ({ videos: [m("u.mp4")] }) };
+  const api = { upscale: async (...a) => (seen.push(a), { job_id: "id" }), upscaleJob: async () => ({ state: "done", media: m("u.mp4") }) };
   await upscale(api, m("x.mp4"), "NVIDIA RTX Super Resolution", async () => {}, { quality: "ULTRA" });
   await upscale(api, m("x.mp4"), "mdl", async () => {});
   assert.deepEqual(seen.map((a) => a[2]), [{ quality: "ULTRA" }, undefined]);
