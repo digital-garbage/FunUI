@@ -251,7 +251,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                     notes.append("int8_convrot: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
         if mxfp8:
             mark = len(notes)
-            if weight_dtype != "default":
+            if weight_dtype not in ("default", "bf16"):     # bf16 is what the file holds: the converted layers keep their own storage
                 notes.append(f"mxfp8: skipped, weight dtype is forced to {weight_dtype}")
             elif int8_convrot:
                 notes.append("mxfp8: skipped, int8_convrot already stores the weights")
