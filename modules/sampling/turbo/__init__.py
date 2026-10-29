@@ -59,9 +59,9 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "second_order": {
-        "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05,
+        "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Second order late", "ui": "slider",
-        "hint": "How much the late steps lean on the step before. 0 = off. It fades in over the run.",
+        "hint": "How much the late steps lean on the step before. 0 = off (default: no value tried on a rental was safe). It fades in over the run.",
         "when": {"enabled": True},
     },
     "spacing_first": {
