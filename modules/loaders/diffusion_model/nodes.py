@@ -250,6 +250,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 if compute_dtype != "default":
                     notes.append("int8_convrot: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
         if mxfp8:
+            mark = len(notes)
             if weight_dtype != "default":
                 notes.append(f"mxfp8: skipped, weight dtype is forced to {weight_dtype}")
             elif int8_convrot:
@@ -261,6 +262,8 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 notes.append(note)
                 if compute_dtype != "default":
                     notes.append("mxfp8: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
+            for line in notes[mark:]:                   # the status output is rarely read; the log is
+                log.info("FunUI Diffusion Model Loader", line)
         # Read before the load: comfy may consume the dict.
         gguf = gguf_support.is_gguf(model_name) or misnamed
         stored = None if gguf else stored_weights(state_dict)
