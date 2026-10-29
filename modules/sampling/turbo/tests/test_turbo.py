@@ -147,7 +147,7 @@ def test_runs_through_two_stages_with_any_split(model, sigmas, cut):
 
 
 def test_without_two_stages_and_without_polish(model):
-    values = {"enabled": True, **_settings()}
+    values = {"enabled": True, **_settings(polish=0.0)}
     _, out, calls = _guided(model, values, (1.0, 0.7, 0.3, 0.0))
     assert len(calls) == 3 and torch.isfinite(out.unbind()[0]).all()
 
@@ -167,3 +167,9 @@ def test_registered_in_comfys_lists_and_runs_like_the_module(model):
     latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
     out = guider.sample(noise, latent, comfy.samplers.sampler_object("funui_turbo"), sigmas, seed=1, disable_pbar=True)
     assert torch.isfinite(out.unbind()[0]).all()
+
+
+def test_polish_is_on_by_default_at_a_quarter(model):
+    assert SETTINGS["polish"]["default"] == 0.25
+    _, _, calls = _guided(model, {"enabled": True, **_settings()}, (1.0, 0.7, 0.3, 0.0))
+    assert len(calls) == 4 and calls[-1] == pytest.approx(0.25)

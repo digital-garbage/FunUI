@@ -12,7 +12,7 @@ flow step that has three dials:
   stage, because a Two stages hand-over changes the size.
 * Step spacing per stage: the steps inside a stage are moved earlier or later while the stage's first and
   last sigma stay put, so the hand-over point never moves. 1 = the schedule as given.
-* Polish step (optional): after the last step, noise the finished picture back to a small sigma and let the
+* Polish step (on by default at 0.25): after the last step, noise the finished picture back to a small sigma and let the
   model answer once more at full size. One extra model call, in the last stage only.
 
 The sound is stepped without fresh noise and without second order. Samplers that call the model twice per
@@ -78,9 +78,9 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "polish": {
-        "type": "float", "default": 0.0, "min": 0.0, "max": 0.6, "step": 0.01,
+        "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
-        "hint": "0 = off. Otherwise one extra full-size model call after the last step, from this small noise "
+        "hint": "0 = off. Default 0.25. Otherwise one extra full-size model call after the last step, from this small noise "
                 "level. Costs one step (about 15 to 25% of a run). Around 0.25 to 0.3 has given more natural motion on a rental.",
         "when": {"enabled": True},
     },
