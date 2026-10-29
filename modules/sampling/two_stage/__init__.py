@@ -12,6 +12,8 @@ It installs on the model, so it works with any sampler. Not yet run on a real H3
 
 from comfy.patcher_extension import WrappersMP
 
+import folder_paths
+
 from ..._core import log
 
 from .stages import keep_whole_schedule, make_wrapper
@@ -23,6 +25,18 @@ STAGE = "load"
 CATEGORY = "sampling"
 STATUS = "experimental"
 REQUIRES = ["audio_stream", "adaln_modalities"]
+
+
+def _files():
+    try:
+        return folder_paths.get_filename_list("latent_upscale_models")
+    except Exception:          # noqa: BLE001 -- folder not registered is the same as no files
+        return []
+
+
+def _options():
+    return [{"value": f, "label": f} for f in _files()] or [{"value": "", "label": "No file in models/latent_upscale_models"}]
+
 
 SETTINGS = {
     "enabled": {
@@ -43,6 +57,22 @@ SETTINGS = {
         "hint": "Out of the run's own steps. At least one step is always left for the full size.",
         "when": {"enabled": True},
     },
+    "resize": {
+        "type": "enum", "default": "bicubic",
+        "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "upscaler", "label": "Latent upscaler"}],
+        "label": "How the hand-over is enlarged",
+        "hint": "Bicubic is plain and free. Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
+                "on the clean guess, so the added detail is learned instead of blurred; it costs one small network pass "
+                "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
+        "when": {"enabled": True},
+    },
+    "upscaler": {
+        "type": "enum", "default": (_files() or [""])[0],
+        "options": _options(),
+        "label": "Latent upscaler file",
+        "hint": "The H3 latent upscaler file. The list is read again each time Settings opens.",
+        "when": {"enabled": True, "resize": "upscaler"},
+    },
 }
 
 
@@ -50,9 +80,10 @@ def install(patcher, values, key):
     if not values.get("enabled"):
         return None
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps))
+    resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size"
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else "")
 
 
 PROVIDES = {"modifier": install}

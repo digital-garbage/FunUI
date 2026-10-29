@@ -51,24 +51,51 @@ def keep_whole_schedule(executor, guider, sigmas, extra_args, *args, **kwargs):
     return executor(guider, sigmas, extra_args, *args, **kwargs)
 
 
-def make_wrapper(size, steps):
+_CACHE = {}
+
+
+def _upscaler(name):
+    """Built once per file (and per change of the file on disk); the network sits on the offload device between runs."""
+    import os
+    import folder_paths
+    from ...latent.second_pass.nodes import FOLDER, load_upscaler
+    path = folder_paths.get_full_path_or_raise(FOLDER, name)
+    stamp = (path, os.path.getmtime(path))
+    if _CACHE.get("stamp") != stamp:
+        _CACHE.clear()
+        _CACHE.update(stamp=stamp, model=load_upscaler(name))
+    return _CACHE["model"]
+
+
+def enlarge(video, h, w, upscaler=None):
+    """The hand-over: the first stage's clean guess at the full grid. With an upscaler, its learned 2D resize at the
+    ratio that gets nearest (it works in even steps), then a bicubic trim to the exact grid; without, plain bicubic."""
+    from ...latent.second_pass.nodes import downscale_to, run_upscaler
+    if upscaler is None:
+        return downscale_to(video, h, w)
+    ratio = (h / video.shape[-2] + w / video.shape[-1]) / 2.0
+    if ratio <= 1.0:
+        return video
+    return downscale_to(run_upscaler(upscaler, video, ratio), h, w)
+
+
+def make_wrapper(size, steps, resize=None):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
 
 
-def _staged(original, guider, size, steps, *args, **kwargs):
+def _staged(original, guider, size, steps, resize, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
     import latent_preview
-    from ...latent.second_pass.nodes import downscale_to
 
     noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed = (list(args) + [None] * 8)[:8]
     latent_shapes = kwargs.get("latent_shapes")
@@ -105,6 +132,12 @@ def _staged(original, guider, size, steps, *args, **kwargs):
             nested = lambda t: comfy.nested_tensor.NestedTensor(comfy.utils.unpack_latents(t, shapes1))
             preview(step, nested(x0), nested(x), total)
 
+    upscaler = None
+    if resize:
+        try:
+            upscaler = _upscaler(resize)
+        except Exception as e:                      # noqa: BLE001 -- a missing file must not lose the run
+            log.warning(TITLE, f"latent upscaler not used, bicubic instead: {e}")
     log.info(TITLE, f"first {steps} step(s) at latent {h1}x{w1} instead of {h}x{w}, then {len(second) - 1} at the full size")
     setattr(guider, FULL, sigmas)
     setattr(guider, dit_hooks.STAGE, 1)
@@ -122,7 +155,7 @@ def _staged(original, guider, size, steps, *args, **kwargs):
     done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
     video, audio = done.unbind()
     handed, _ = comfy.utils.pack_latents(
-        (downscale_to(video, h, w).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
+        (enlarge(video, h, w, upscaler).to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
     guider.conds = raw_conds                        # the first stage encoded the originals for its own size
     shifted = None

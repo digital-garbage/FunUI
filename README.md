@@ -168,6 +168,7 @@ I express my deepest gratitude to:
 - PTD few-step support for MiniMax H3 is ported from [ComfyUI-PTD-Compact](https://github.com/Nynxz/ComfyUI-PTD-Compact) by Nynxz (Apache-2.0), which builds on [ComfyUI-PTD](https://github.com/vita-epfl/PTD-inference) by EPFL VITA Lab (Apache-2.0; paper "Parametric Trajectory Distillation for Few-Step Video Generation", arXiv 2610.11498) and on ComfyUI-MiniMaxH3-PTD by taobao-content-ai (Apache-2.0); licence notice in `modules/sampling/ptd`;
 - NVIDIA and the NVIDIA Video Effects SDK (`nvidia-vfx`, NVIDIA's own licence) — RTX Super Resolution in Upscale and RTX Frame Generation in Interpolate run on it; FunUI installs it only when you switch the add-on on;
 - NVIDIA and the authors of Sol-H3 (arXiv 2609.35110, NVlabs/Sana, Apache-2.0) — the MXFP8 loader option (which blocks stay in bf16) and the Two stages setting (the cross-resolution schedule) follow its recipe;
+- LBH-123-AI ([Comfyui_Minimax_h3_latent_Upscaler](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler)) and TripleHeadedMonkey ([ComfyUI-MiniMaxH3_LatentUpscaler](https://github.com/TripleHeadedMonkey/ComfyUI-MiniMaxH3_LatentUpscaler)) — the H3 latent upscaler network (rebuilt from the published weights, not copied) and its use in Second pass and as the Two stages enlarge option;
 
 Without all of you, this project would've been impossible.
 

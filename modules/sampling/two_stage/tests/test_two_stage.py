@@ -90,3 +90,55 @@ def test_the_whole_schedule_lives_where_the_stage_schedule_does():
     keep_whole_schedule(lambda *a, **k: None, guider, stage, extra)
     got = extra["model_options"]["transformer_options"]["sample_sigmas"]
     assert got.device == stage.device and got.dtype == stage.dtype
+
+
+@pytest.fixture
+def upscaler_file(tmp_path, monkeypatch):
+    import folder_paths
+    from safetensors.torch import save_file
+    from modules.models.minimax_h3.latent_upscaler import H3LatentResizer3D
+    torch.manual_seed(0)
+    net = H3LatentResizer3D(channels=32, in_blocks=1, out_blocks=1)
+    save_file(net.state_dict(), str(tmp_path / "h3_up.safetensors"))
+    monkeypatch.setitem(folder_paths.folder_names_and_paths, "latent_upscale_models",
+                        ([str(tmp_path)], {".safetensors"}))
+    folder_paths.filename_list_cache.pop("latent_upscale_models", None)
+    from modules.sampling.two_stage import stages
+    stages._CACHE.clear()
+    return "h3_up.safetensors"
+
+
+def test_the_latent_upscaler_hands_over_the_full_grid(model, upscaler_file):
+    from modules.sampling.two_stage import stages
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2,
+                                    "resize": "upscaler", "upscaler": upscaler_file})
+    assert "enlarged by h3_up.safetensors" in note
+    assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)]
+    video, _audio = out.unbind()
+    assert video.shape == (1, 24, 2, 8, 8) and torch.isfinite(video).all()
+    first = stages._CACHE["model"]
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "upscaler", "upscaler": upscaler_file})
+    assert stages._CACHE["model"] is first                  # loaded once, kept
+
+
+def test_a_ratio_that_does_not_fit_is_trimmed_to_the_exact_grid(upscaler_file):
+    from modules.sampling.two_stage import stages
+    net = stages._upscaler(upscaler_file)
+    video = torch.randn(1, 24, 2, 6, 10)
+    out = stages.enlarge(video, 9, 15, net)                 # 1.5x: the net works in even sizes
+    assert out.shape == (1, 24, 2, 9, 15) and out.dtype == video.dtype
+    assert stages.enlarge(video, 6, 10, net) is video
+
+
+def test_a_missing_upscaler_falls_back_to_bicubic(model, upscaler_file):
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2,
+                                    "resize": "upscaler", "upscaler": "gone.safetensors"})
+    assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)] and torch.isfinite(out.unbind()[0]).all()
+
+
+def test_the_upscaler_follows_the_latents_dtype(upscaler_file):
+    from modules.sampling.two_stage import stages
+    net = stages._upscaler(upscaler_file)
+    video = torch.randn(1, 24, 2, 4, 4, device="cpu", dtype=torch.bfloat16)
+    out = stages.enlarge(video, 8, 8, net)
+    assert out.dtype == torch.bfloat16 and out.device == video.device

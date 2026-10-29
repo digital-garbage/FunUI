@@ -33,19 +33,24 @@ class FunUILatentUpscalerLoader(io.ComfyNode):
 
     @classmethod
     def execute(cls, upscaler_name: str) -> io.NodeOutput:
-        path = folder_paths.get_full_path_or_raise(FOLDER, upscaler_name)
-        sd = comfy.utils.load_torch_file(path, safe_load=True)
-        for spec, provider in registry_mod.current().providers("latent_upscaler"):
-            model = provider(sd)
-            if model is not None:
-                log.info("FunUI Latent Upscaler", f"{upscaler_name}: {spec.title} upscaler")
-                return io.NodeOutput(model)
-        newer = ("It looks like the newer attention-based H3 upscaler, which FunUI cannot build yet: "
-                 "use an older convolution-based H3 upscaler. ") if any(str(k).startswith("base.") for k in sd) else ""
-        raise RuntimeError(
-            f"{upscaler_name} is not an upscaler any installed model module can load. {newer}"
-            f"If it is Lightricks' or Hunyuan's, ComfyUI's own Load Latent Upscale Model "
-            f"loads it.")
+        return io.NodeOutput(load_upscaler(upscaler_name))
+
+
+def load_upscaler(upscaler_name: str):
+    """The upscaler a file holds, built by whichever model module recognises it."""
+    path = folder_paths.get_full_path_or_raise(FOLDER, upscaler_name)
+    sd = comfy.utils.load_torch_file(path, safe_load=True)
+    for spec, provider in registry_mod.current().providers("latent_upscaler"):
+        model = provider(sd)
+        if model is not None:
+            log.info("FunUI Latent Upscaler", f"{upscaler_name}: {spec.title} upscaler")
+            return model
+    newer = ("It looks like the newer attention-based H3 upscaler, which FunUI cannot build yet: "
+             "use an older convolution-based H3 upscaler. ") if any(str(k).startswith("base.") for k in sd) else ""
+    raise RuntimeError(
+        f"{upscaler_name} is not an upscaler any installed model module can load. {newer}"
+        f"If it is Lightricks' or Hunyuan's, ComfyUI's own Load Latent Upscale Model "
+        f"loads it.")
 
 
 def _video_of(samples):
