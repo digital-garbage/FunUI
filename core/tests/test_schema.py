@@ -331,3 +331,15 @@ def test_roles_a_module_acts_through_reach_the_manifest():
     assert validate(announce(roles=["assets.source_image"])).to_manifest()["roles"] == ["assets.source_image"]
     with pytest.raises(SchemaError, match="roles"):
         validate(announce(roles="assets.source_image"))
+
+
+def test_a_hidden_setting_with_a_bad_value_does_not_stop_the_run():
+    from types import SimpleNamespace
+    from core import schema
+    settings = {"method": {"type": "enum", "default": "plain", "options": [{"value": "plain"}, {"value": "file"}]},
+                "file": {"type": "enum", "default": "a.pth", "options": [{"value": "a.pth"}], "when": {"method": "file"}}}
+    spec = SimpleNamespace(id="m", settings=settings, defaults=lambda: {k: v["default"] for k, v in settings.items()})
+    clean, problems = schema.check_values(spec, {"method": "plain", "file": "other.safetensors"})
+    assert problems == [] and clean["file"] == "a.pth"
+    clean, problems = schema.check_values(spec, {"method": "file", "file": "other.safetensors"})
+    assert problems and "m.file must be one of" in problems[0]

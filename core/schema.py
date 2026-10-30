@@ -273,12 +273,20 @@ def check_values(spec, values: Any, keep_bad: bool = False) -> Tuple[Dict[str, A
                      f"{spec.id}: saved setting {key!r} ignored: this module has no such setting")
             continue
         problem = _value_problem(declared, key, value, spec.id)
+        if problem and not _applies(declared, {**spec.defaults(), **values}):
+            continue                    # a setting that is hidden by another one's choice cannot act, so it cannot stop the run: its default stands
         if problem:
             problems.append(problem)
             if not keep_bad:
                 continue
         clean[key] = value
     return clean, problems
+
+
+def _applies(declared: dict, merged: dict) -> bool:
+    """Whether a setting's `when` holds with these values (a setting with none always applies)."""
+    return all(merged.get(other) in (expected if isinstance(expected, list) else [expected])
+               for other, expected in (declared.get("when") or {}).items())
 
 
 def _value_problem(declared: dict, key: str, value: Any, module_id: str):
