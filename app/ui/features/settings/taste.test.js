@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
 
-let taste;
-test.before(async () => { setupDom(); ({ taste } = await import("./taste.js")); });
+let taste, ratedIn;
+test.before(async () => { setupDom(); ({ taste, ratedIn } = await import("./taste.js")); });
 test.after(() => teardownDom());
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -94,4 +94,42 @@ test("a failed status request still shows the switch, so recording can be turned
   assert.ok(toggle, "the switch is still there");
   toggle.click(); await tick(); await tick();
   assert.deepEqual(sets, [true], "recording is opt in: the unknown state shows off, so one click turns it on");
+});
+
+const rated = () => ({ name: "Fox", scenes: [{ id: "a", rating: "liked", rated: { at: 1 } }, { id: "b", rating: "" }],
+  scene_renders: { a: { promptId: "p1" }, b: { media: {} } }, scene_variants: { a: [{ promptId: "p0", rating: "disliked", rated: { at: 2 } }] } });
+
+test("ratedIn lists the run ids of a project's renders and takes, and counts its labels", () => {
+  const { ids, labelled } = ratedIn(rated());
+  assert.deepEqual(ids.sort(), ["p0", "p1"]);
+  assert.equal(labelled, 2);
+  assert.deepEqual(ratedIn(null), { ids: [], labelled: 0 });
+});
+
+test("Clear saved ratings asks first, forgets each clip of this project, and removes the labels", async () => {
+  const sent = [], project = rated();
+  const app = { project: { project, edit: (fn) => fn(project) }, api: { tasteKeys: async () => ({ keys: [] }),
+    rateTaste: async (id, rating, axis) => { sent.push([id, rating, axis]); return {}; } } };
+  const page = taste(app)();
+  document.body.append(page.node);
+  await tick(); await tick();
+  const clear = [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Clear");
+  assert.ok(clear && !clear.disabled);
+  clear.click(); await tick();
+  assert.deepEqual(sent, [], "nothing is cleared before the person confirms");
+  const confirm = document.querySelectorAll(".cx-modal-foot button")[1];
+  confirm.click(); await tick(); await tick(); await tick();
+  assert.deepEqual(sent.map((x) => x.join(",")).sort(), ["p0,,", "p1,,"]);
+  assert.equal(project.scenes[0].rating, "");
+  assert.deepEqual(project.scenes[0].rated, {});
+  assert.equal(project.scene_variants.a[0].rating, "");
+});
+
+test("Clear saved ratings is off when the project holds none", async () => {
+  const project = { scenes: [{ id: "a", rating: "" }], scene_renders: {}, scene_variants: {} };
+  const page = taste({ project: { project }, api: { tasteKeys: async () => ({ keys: [] }) } })();
+  document.body.append(page.node);
+  await tick(); await tick();
+  const clear = [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Clear");
+  assert.ok(clear.disabled);
 });

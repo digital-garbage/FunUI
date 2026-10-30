@@ -2,6 +2,20 @@
 // as a zip, or delete one to start that taste over.
 import { composer as c } from "../../composer/composer.js";
 
+/** Every clip of a project that carries a rating: the run ids its renders and earlier takes came from (what the learned rows
+ *  are filed under) and how many scenes and takes hold a rating label. */
+export function ratedIn(project) {
+  const ids = new Set();
+  let labelled = 0;
+  for (const r of Object.values((project && project.scene_renders) || {})) if (r && r.promptId) ids.add(r.promptId);
+  for (const takes of Object.values((project && project.scene_variants) || {})) for (const t of takes || []) {
+    if (t && t.promptId) ids.add(t.promptId);
+    if (t && t.rating) labelled++;
+  }
+  for (const s of (project && project.scenes) || []) if (s.rating) labelled++;
+  return { ids: [...ids], labelled };
+}
+
 export const taste = (app) => function mount() {
   const page = c.region.stack({ gap: "md" });
   const tell = (text) => c.toast.warn({ text });
@@ -33,13 +47,31 @@ export const taste = (app) => function mount() {
     } catch (err) { tell(err.message); }
     refresh();
   }
+  async function clearRatings() {
+    const open = app.project.project, { ids, labelled } = ratedIn(open);
+    if (!(await c.modal.dialogue({ title: "Clear saved ratings", message: `Forget what ${open.name ? `“${open.name}”` : "this project"} taught (${ids.length} rendered ${ids.length === 1 ? "clip" : "clips"}) and remove its rating labels? Other projects and your keys' other lessons stay. This cannot be undone.`, tone: "danger", confirmLabel: "Clear" }).result)) return;
+    let failed = "";
+    for (const id of ids) { try { await app.api.rateTaste(id, null, null); } catch (err) { failed = err.message; } }
+    app.project.edit((pr) => {
+      for (const s of pr.scenes) { s.rating = ""; s.rated = {}; }
+      for (const takes of Object.values(pr.scene_variants || {})) for (const t of takes || []) { t.rating = ""; t.rated = {}; }
+      return pr;
+    });
+    if (failed) tell(`Some ratings could not be cleared: ${failed}`);
+    else c.toast.good({ text: "Ratings cleared from this project." });
+    draw();
+  }
   function draw() {
+    const open = app.project && app.project.project, rated = ratedIn(open);
     page.set([
       error ? c.banner.warn({ text: `Could not read the keys: ${error}` }) : null,
       keys && !keys.length && !error ? c.emptyState.default({ icon: "✦", title: "No keys yet", hint: "A key appears once you rate a render with learning on." }) : null,
       ...(keys || []).map((name) => c.settingsRow.default({ label: name, hint: "Taste key: what your ratings taught under this name", control: c.toolbar.default({ items: [
         c.button.sm({ label: "⤓ Export", tone: "ghost", onClick: () => exportKey(name) }),
         c.button.sm({ label: "Delete", tone: "danger", onClick: () => remove(name) })] }) })),
+      c.label.section({ text: "This project" }),
+      c.settingsRow.default({ label: "Saved ratings", hint: open ? "Clear this project's ratings: what its clips taught your keys, and the rating labels on its scenes." : "Open a project first.",
+        control: c.button.sm({ label: "Clear", tone: "danger", disabled: !open || !(rated.ids.length || rated.labelled), onClick: clearRatings }) }),
       c.label.section({ text: "Bring a key here" }),
       c.dropzone.default({ label: "Drop or choose an exported key (.zip)", hint: "from another machine", accept: ".zip,application/zip", multiple: false, onFiles: bring }),
     ].filter(Boolean));
