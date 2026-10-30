@@ -78,6 +78,9 @@ class FunUIVAELoader(io.ComfyNode):
         # An audio VAE's own file keeps its model config in the header, and may name its parts as a whole checkpoint does.
         state_dict = comfy.utils.state_dict_prefix_replace(state_dict, {"audio_vae.": "autoencoder."})
         vae = comfy.sd.VAE(sd=state_dict, dtype=DTYPES[dtype], metadata=metadata)
-        vae.throw_exception_if_invalid()
+        if vae.first_stage_model is None:
+            keys = sorted(state_dict)
+            raise RuntimeError(f"ComfyUI did not recognise {vae_name} as a VAE ({len(keys)} weights, first keys: "
+                               f"{', '.join(keys[:6])}; header: {sorted(metadata or {})[:6]})")
         log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
         return vae
