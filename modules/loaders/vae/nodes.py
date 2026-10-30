@@ -62,8 +62,13 @@ class FunUIVAELoader(io.ComfyNode):
         status = f"{vae_name} loaded as {dtype}"
         if decode_vae_name and decode_vae_name != "None":
             # Rides on the VAE object: the decode node prefers it, everything else (encoding) uses this VAE.
-            vae.funui_decode_vae = cls._load(decode_vae_name, dtype)
-            status += f"; {decode_vae_name} decodes the finished picture"
+            try:
+                vae.funui_decode_vae = cls._load(decode_vae_name, dtype)
+                status += f"; {decode_vae_name} decodes the finished picture"
+            except Exception as exc:            # noqa: BLE001 -- a decoder this ComfyUI cannot read must not stop the run
+                log.alert("FunUI VAE Loader", f"{decode_vae_name} could not be loaded ({exc}). The main VAE decodes instead. "
+                          "A ComfyUI that supports this VAE is needed to use it.")
+                status += f"; {decode_vae_name} could not be loaded, {vae_name} decodes"
         return io.NodeOutput(vae, status)
 
     @staticmethod

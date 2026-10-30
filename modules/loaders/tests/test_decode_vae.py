@@ -23,3 +23,16 @@ def test_a_decode_only_vae_rides_on_the_main_one_and_only_the_decode_uses_it(mon
     decode.FunUIDecode.execute(latent, main)
     decode.FunUIDecode.execute(latent, plain.result[0])
     assert seen == ["sol.safetensors", "main.safetensors"]
+
+
+def test_a_decode_only_vae_this_comfyui_cannot_read_falls_back_to_the_main_one(monkeypatch):
+    from modules.loaders.vae import nodes as loader
+
+    def load(name, dtype):
+        if name == "sol.safetensors":
+            raise RuntimeError("VAE is invalid: None")
+        return type("Vae", (), {"name": name})()
+
+    monkeypatch.setattr(loader.FunUIVAELoader, "_load", staticmethod(load))
+    out = loader.FunUIVAELoader.execute("main.safetensors", "bfloat16", "sol.safetensors")
+    assert not hasattr(out.result[0], "funui_decode_vae") and "could not be loaded" in out.result[1]
