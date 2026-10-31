@@ -342,3 +342,48 @@ def test_the_real_sla_override_underneath_still_gets_a_normal_call(tiny_h3, monk
     scaled, state_scaled = run_with(True)
     assert plain and scaled == plain                                  # the same calls, same shapes, strides and flags
     assert state_scaled["failed"] is None and state_scaled["calls"] == state_plain["calls"]
+
+
+def test_spare_sound_keeps_the_sound_rows_and_follows_device_and_dtype():
+    from modules.sampling.attention_bandit import spare_sound
+
+    class Layout:
+        segments = [(0, 2, "text"), (2, 6, "video"), (6, 8, "audio")]
+    options = {"minimax_h3_layout": Layout()}
+    for device, dtype in (("cpu", torch.float32), ("meta", torch.bfloat16)):
+        q = torch.ones(1, 2, 8, 4, device=device, dtype=dtype)
+        out = spare_sound(q, 2.0, options, False, None)
+        assert out.device == q.device and out.dtype == q.dtype
+        if device == "cpu":
+            assert torch.equal(out[:, :, :6], torch.full((1, 2, 6, 4), 0.5)) and torch.equal(out[:, :, 6:], q[:, :, 6:])
+    assert spare_sound(torch.ones(1, 2, 8, 4), 2.0, {}, False, None) is None       # layout unknown: the caller says so
+    # a model with a stream of its own for the sound: its call stays whole, the picture's is cooled
+    assert torch.equal(spare_sound(torch.ones(1, 8, 16), 2.0, {}, True, 16), torch.ones(1, 8, 16))
+    assert torch.equal(spare_sound(torch.ones(1, 8, 32), 2.0, {}, True, 16), torch.full((1, 8, 32), 0.5))
+
+
+def test_with_the_sound_kept_the_sound_is_left_alone_and_the_log_says_so(tiny_h3, monkeypatch):
+    from core import log
+    from modules.sampling import attention_bandit as m
+    base = tiny_h3.run()
+    seen = {}
+
+    def spy(func, q, k, v, *a, **kw):
+        options = kw.get("transformer_options") or {}
+        audio = m._segments(options).get("audio")
+        if audio and q.shape[2] >= audio[1]:
+            seen.setdefault("q", []).append(q[:, :, audio[0]:audio[1]].clone())
+        return func(q, k, v, *a, **kw)
+    from core import dit_hooks
+    probe = tiny_h3.patcher.clone()
+    dit_hooks.add_attention_override(probe, "test.spy", spy)
+    patched, status = _load(type("T", (), {"patcher": probe})(), mode="manual", range=0.5, blocks="0-3", sound=False)
+    assert "sound kept as is" in status and "prompt focus" not in status
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [2] * len(table))
+    log.new_run()
+    outs = _run(_outer(patched), lambda: tiny_h3.run(patched))
+    assert not torch.equal(outs[0], base[0])                      # the picture still changed
+    messages = [e["message"] for e in log.history()]
+    assert any("sound left alone in" in x for x in messages)
+    drawn = [x for x in messages if "clip regions looser" in x]
+    assert drawn and not any("end of the clip, sound" in x for x in drawn)       # the sound is never among the changed regions

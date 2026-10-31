@@ -80,6 +80,12 @@ SETTINGS = {
         "hint": "Also learns the clip's four time bands and its sound separately, so a good part can stay while another changes.",
         "when": {"enabled": True},
     },
+    "sound": {
+        "type": "bool", "default": True,
+        "label": "Change the sound too",
+        "hint": "Off: only the picture's attention changes and the sound is left as the model makes it. Prompt focus then stays off on models that mix picture and sound in one sequence.",
+        "when": {"enabled": True},
+    },
     "blocks": {
         "type": "text", "model_blocks": True, "default": "2-10,29-46",
         "label": "Blocks",
@@ -316,6 +322,20 @@ def region_spans(options):
     return [(edges[i], edges[i + 1]) for i in range(BANDS)] + [seg["audio"]]
 
 
+def spare_sound(q, temperature, options, paired, sound_width):
+    """q cooled by `temperature` on every row but the sound's, or None when this call cannot say which
+    rows are the sound. A model with a stream of its own for the sound: that call is left whole. A packed
+    sequence: the sound's rows are put back as they were."""
+    if paired:
+        return q if int(q.shape[-1]) == sound_width else q / temperature
+    audio = _segments(options).get("audio")
+    if audio is None or q.ndim != 4 or audio[1] > q.shape[2]:
+        return None
+    out = q / temperature
+    out[:, :, audio[0]:audio[1]] = q[:, :, audio[0]:audio[1]]
+    return out
+
+
 def paired_regions(q, factors, video_width, sound_width):
     """q with each clip region's rows asking differently, for a model whose picture and sound attend in
     calls of their own (rows run frame by frame): the picture's self-attention is cut into BANDS equal
@@ -354,6 +374,7 @@ def install(patcher, values, key):
     manual_spread = min(max(float(values.get("range", START_SPREAD)), SPREAD_MIN), SPREAD_MAX)
     focus = bool(values.get("prompt_focus", True))
     regions = bool(values.get("regions", True))
+    sound = bool(values.get("sound", True))
     blocks, problems = dit_hooks.parse_blocks(values.get("blocks"), dit_hooks.block_count(patcher))
     for problem in problems:
         _say(f"ignored {problem}")
@@ -362,7 +383,8 @@ def install(patcher, values, key):
     groups = split(blocks)
     signature = [len(groups), blocks[0], blocks[-1]]
     live = {"factors": {}, "regions": [1.0] * len(REGIONS), "scaled": 0, "calls": 0,
-            "text": 0, "text_wanted": False, "region_hits": 0, "region_wanted": False}
+            "text": 0, "text_wanted": False, "region_hits": 0, "region_wanted": False,
+            "spared": 0, "unsure": 0}
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS)
     dm = getattr(patcher.model, "diffusion_model", None)
@@ -372,6 +394,8 @@ def install(patcher, values, key):
         signature.append(1)            # ratings made on a packed-sequence model (H3) must not teach a paired one
     if focus and paired:
         focus = False                  # the prompt's rows are not one run of the sequence here: that part is H3's
+    if not sound and not paired:
+        focus = False                  # the prompt's keys are read by the sound's rows too, and one call cannot tell them apart
 
     def scoped_for(index):
         def scoped(args, extra):
@@ -395,7 +419,16 @@ def install(patcher, values, key):
         temperature, prompt = scope
         live["scaled"] += 1
         if temperature != 1.0:
-            q = q / temperature
+            if sound:
+                q = q / temperature
+            else:
+                spared = spare_sound(q, temperature, options, paired, sound_width)
+                if spared is None:
+                    live["unsure"] += 1
+                    spared = q / temperature
+                else:
+                    live["spared"] += 1
+                q = spared
         if live["region_wanted"] and paired and q.ndim == 3 and q.shape == k.shape:
             q = paired_regions(q, live["regions"], video_width, sound_width)
             live["region_hits"] += 1
@@ -423,8 +456,10 @@ def install(patcher, values, key):
         plan = make_plan(rows, cond, signature, len(groups), focus, manual_spread if manual else None, regions)
         arms, tarms, rarms, spread = plan["arms"], plan["tarms"], plan["rarms"], plan["spread"]
         tfac = [1.0 + PROMPT_SCALE * spread * ARMS[a] for a in tarms] if focus else [1.0] * len(groups)
+        if regions and not sound:
+            rarms = list(rarms[:-1]) + [STAY]
         rfac = [1.0 + spread * ARMS[a] for a in rarms] if regions else [1.0] * len(REGIONS)
-        live.update(scaled=0, calls=0, text=0, region_hits=0, regions=rfac,
+        live.update(spared=0, unsure=0, scaled=0, calls=0, text=0, region_hits=0, regions=rfac,
                     region_wanted=any(f != 1.0 for f in rfac), text_wanted=any(t != 1.0 for t in tfac),
                     factors={b: (1.0 + spread * ARMS[a], tf)
                              for g, a, tf in zip(groups, arms, tfac) for b in g})
@@ -455,17 +490,21 @@ def install(patcher, values, key):
         elif live["region_wanted"] and not live["region_hits"]:
             _say("clip regions changed nothing this run: this model does not say where the picture and "
                  "sound sit in its sequence.", log.WARNING)
+        elif not sound and live["unsure"]:
+            _say(f"the sound could not be told apart from the picture in {live['unsure']} attention calls, "
+                 "so those changed both.", log.WARNING)
         elif wanted:
             log.once(f"{ID}:applied", log.INFO, "FunUI Attention explorer",
                      f"applied to {live['scaled']} of {live['calls']} attention calls"
                      + (f", prompt keys scaled in {live['text']}" if live["text_wanted"] else "")
-                     + (f", clip regions in {live['region_hits']}" if live["region_wanted"] else ""))
+                     + (f", clip regions in {live['region_hits']}" if live["region_wanted"] else "")
+                     + (f", sound left alone in {live['spared']}" if not sound else ""))
         return out
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.run", run)
     size = f"size {manual_spread:g}" if manual else "size learned from ratings"
     return (f"{len(groups)} depth groups over {len(blocks)} blocks, {size}"
-            + (", prompt focus on" if focus else "") + (", clip regions on" if regions else ""))
+            + (", prompt focus on" if focus else "") + (", clip regions on" if regions else "") + ("" if sound else ", sound kept as is"))
 
 
 PROVIDES = {"modifier": install}
