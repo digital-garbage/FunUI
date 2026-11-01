@@ -44,6 +44,13 @@ SETTINGS = {
         "hint": "Replaces the chosen sampler with a step rule made for few-step turbo runs. No extra model calls "
                 "(except the optional polish step). Works with any step count and with Two stages.",
     },
+    "keep_sampler": {
+        "type": "bool", "default": False,
+        "label": "Keep the chosen sampler",
+        "hint": "The chosen sampler stays in charge of the steps. Turbo adds its fresh noise and its polish step on top. "
+                "Second order late is not used, the sampler has its own.",
+        "when": {"enabled": True},
+    },
     "noise_start": {
         "type": "float", "default": 0.4, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Noise at the start", "ui": "slider",
@@ -60,7 +67,7 @@ SETTINGS = {
         "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Second order late", "ui": "slider",
         "hint": "How much the late steps lean on the step before. 0 = off. It fades in over the run. Strong values can distort the picture.",
-        "when": {"enabled": True},
+        "when": {"enabled": True, "keep_sampler": False},
     },
     "polish": {
         "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
@@ -161,6 +168,70 @@ def make(settings):
     return sample
 
 
+def churn(x, denoised, sigma, eta, noise):
+    """The answer `denoised` of a model call at `sigma` on `x`, changed so that any sampler which steps from it
+    moves toward a point whose noise is `eta` fresh. With D the answer and e = (x - (1 - sigma) D) / sigma the
+    noise it implies, the new answer is D + sigma * (e - e'), e' = sqrt(1 - eta^2) e + eta * noise. For Euler that
+    lands exactly on `(1 - to) D + to e'`, the Turbo step; other samplers read it as a nearby picture guess."""
+    sigma = torch.as_tensor(sigma, device=x.device, dtype=x.dtype).reshape(-1)[0]
+    implied = (x - (1 - sigma) * denoised) / sigma
+    keep = math.sqrt(max(0.0, 1.0 - eta * eta))
+    return denoised + sigma * ((1.0 - keep) * implied - eta * noise)
+
+
+def make_on_top(inner, settings):
+    """`inner` (the chosen sampler's own function) with Turbo's fresh noise on each step's answer and its polish
+    step after the run. The sampler is not replaced; it sees a model whose answers carry the changes."""
+    n_start, n_end, tail = settings["noise_start"], settings["noise_end"], settings["polish"]
+
+    @torch.no_grad()
+    def sample(model, x, sigmas, extra_args=None, callback=None, disable=None, **options):
+        extra_args = {} if extra_args is None else extra_args
+        guider = getattr(model, "inner_model", None)
+        stage = dit_hooks.stage_of(guider)
+        full = getattr(guider, dit_hooks.FULL, None)
+        steps = len(sigmas) - 1
+        total = (len(full) - 1) if full is not None else steps
+        n0 = total - steps if stage == 2 else 0
+        base = int(extra_args.get("seed") or 0)
+        gen = torch.Generator(device=_parts(x)[0].device)
+        gen.manual_seed(base + 1000003 * (n0 + 1))
+        ones = x.new_ones([x.shape[0]])
+        log.once(f"turbo_top:{stage}:{steps}:{n0}", log.INFO, TITLE,
+                 f"{'stage ' + str(stage) if stage else 'run'}: the chosen sampler keeps its steps, fresh noise and polish on top")
+
+        class Churned:
+            def __getattr__(self, name):
+                return getattr(model, name)
+
+            def __call__(self, latent, sigma, **kwargs):
+                answer = model(latent, sigma, **kwargs)
+                s0 = sigma.reshape(-1)[0]
+                hit = torch.nonzero(torch.isclose(sigmas.to(device=s0.device, dtype=s0.dtype), s0, rtol=1e-4))
+                if not len(hit):
+                    return answer                                   # a call between steps (a midpoint): left alone
+                i = int(hit[0])
+                if i >= steps or float(sigmas[i + 1]) == 0.0:
+                    return answer                                   # the last step must land on the clean picture
+                eta = n_start + (n_end - n_start) * ((n0 + i) / max(1, total - 1))
+                if eta <= 0.0:
+                    return answer
+                lx, la = _parts(latent), _parts(answer)
+                la[0] = churn(lx[0], la[0], s0, eta, _noise(lx[0], gen))     # the picture only; the sound gets none
+                return _join(answer, la)
+
+        result = inner(Churned(), x, sigmas, extra_args=extra_args, callback=callback, disable=disable, **options)
+        if tail > 0.0 and stage != 1:
+            noisy = []
+            for p in _parts(result):
+                t = torch.as_tensor(tail, device=p.device, dtype=p.dtype)
+                noisy.append((1 - t) * p + t * _noise(p, gen))
+            t = torch.as_tensor(tail, device=_parts(result)[0].device, dtype=_parts(result)[0].dtype)
+            result = model(_join(result, noisy), t * ones, **extra_args)
+        return result
+    return sample
+
+
 def _settings(values):
     return {name: float(values.get(name, spec["default"])) for name, spec in SETTINGS.items() if name != "enabled"}
 
@@ -198,14 +269,16 @@ def install(patcher, values, key):
         if inner is None:
             log.once("turbo:shape", log.INFO, TITLE, "off this run: the sampler is not a plain sampler function")
             return executor(guider, sigmas, *args, **kwargs)
-        sampler.sampler_function = make(settings)       # swapped for this call and passed ON: later wrappers still run
+        sampler.sampler_function = (make_on_top(inner, settings) if settings["keep_sampler"] else make(settings))   # swapped for this call and passed ON: later wrappers still run
         try:
             return executor(guider, sigmas, *args, **kwargs)
         finally:
             sampler.sampler_function = inner
 
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, key, sampler_sample)
-    return (f"fresh noise {settings['noise_start']:g} to {settings['noise_end']:g}, second order {settings['second_order']:g}"
+    kept = bool(settings["keep_sampler"])
+    return (f"fresh noise {settings['noise_start']:g} to {settings['noise_end']:g}"
+            + ("" if kept else f", second order {settings['second_order']:g}") + (", on the chosen sampler" if kept else "")
             + (f", polish at {settings['polish']:g}" if settings["polish"] > 0 else ""))
 
 

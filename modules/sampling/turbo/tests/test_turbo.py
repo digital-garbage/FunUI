@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from modules.sampling.turbo import SETTINGS, install, make, step_to
+from modules.sampling.turbo import SETTINGS, churn, install, make, make_on_top, step_to
 from modules._core import dit_hooks
 from modules.sampling.two_stage.tests.test_two_stage import model  # noqa: F401 -- the module-scoped fixture
 
@@ -172,3 +172,48 @@ def test_the_switch_takes_over_whatever_sampler_is_chosen(model, sampler):
     note, out, calls = _guided(model, values, (1.0, 0.7, 0.3, 0.0), sampler=sampler)
     assert "fresh noise" in note and len(calls) == 4 and calls[-1] == pytest.approx(0.05)
     assert torch.isfinite(out.unbind()[0]).all()
+
+
+def test_churn_with_no_fresh_noise_changes_nothing_and_follows_dtype_and_device():
+    x, d = torch.randn(1, 3, 2, 4, 4, dtype=torch.float64), torch.randn(1, 3, 2, 4, 4, dtype=torch.float64)
+    n = torch.randn_like(x)
+    sigma = torch.tensor([0.6], dtype=torch.float32)                  # a different dtype from the picture
+    assert torch.equal(churn(x, d, sigma, 0.0, n), d)
+    out = churn(x, d, sigma, 0.5, n)
+    assert out.dtype == torch.float64 and out.device == x.device and not torch.equal(out, d)
+
+
+def test_an_euler_step_from_the_churned_answer_lands_on_the_turbo_step():
+    x, d, n = torch.randn(1, 3, 2, 4, 4), torch.randn(1, 3, 2, 4, 4), torch.randn(1, 3, 2, 4, 4)
+    sigma, to, eta = torch.tensor(0.7), torch.tensor(0.4), 0.45
+    answer = churn(x, d, sigma, eta, n)
+    euler = x + ((x - answer) / sigma) * (to - sigma)                 # what Euler does with an answer
+    assert torch.allclose(euler, step_to(x, d, sigma, to, eta, n), atol=1e-5)
+
+
+def _euler(model, x, sigmas, extra_args=None, callback=None, disable=None, **_):
+    ones = x.new_ones([x.shape[0]])
+    for i in range(len(sigmas) - 1):
+        d = (x - model(x, sigmas[i] * ones, **(extra_args or {}))) / sigmas[i]
+        x = x + d * (sigmas[i + 1] - sigmas[i])
+    return x
+
+
+def test_on_top_of_a_sampler_with_no_fresh_noise_and_no_polish_is_that_sampler():
+    target, sigmas = torch.randn(1, 3, 2, 4, 4), torch.tensor([1.0, 0.7, 0.3, 0.0])
+    noise = torch.randn_like(target)
+    plain = _euler(Oracle(target), noise.clone(), sigmas)
+    top = make_on_top(_euler, _settings(noise_start=0.0, noise_end=0.0, polish=0.0))(Oracle(target), noise.clone(), sigmas)
+    assert torch.equal(plain, top)
+
+
+def test_on_top_of_a_sampler_adds_fresh_noise_before_the_last_step_and_one_polish_call():
+    target, sigmas = torch.randn(1, 3, 2, 4, 4), torch.tensor([1.0, 0.7, 0.3, 0.0])
+    noise = torch.randn_like(target)
+    oracle = Oracle(target)
+    run = make_on_top(_euler, _settings(noise_start=0.5, noise_end=0.5, polish=0.1))
+    a = run(oracle, noise.clone(), sigmas, extra_args={"seed": 3})
+    b = run(Oracle(target), noise.clone(), sigmas, extra_args={"seed": 3})
+    assert torch.equal(a, b)                                          # the same seed gives the same picture
+    assert oracle.calls == pytest.approx([1.0, 0.7, 0.3, 0.1])         # one call per step, then the polish call
+    assert not torch.equal(a, _euler(Oracle(target), noise.clone(), sigmas))
