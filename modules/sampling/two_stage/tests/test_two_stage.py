@@ -74,8 +74,21 @@ def test_a_run_that_cannot_be_cut_is_left_alone(model):
 def test_every_stage_sees_the_whole_schedule(model):
     seen = []
     sigmas = (1.0, 0.9, 0.7, 0.3, 0.0)
-    _run(model, {"enabled": True, "size": 0.5, "steps": 2}, sigmas=sigmas, seen=seen)
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.0}, sigmas=sigmas, seen=seen)
     assert len(seen) == 4 and all(s == pytest.approx(list(sigmas)) for s in seen)
+
+
+def test_backing_up_still_lets_every_call_find_its_step(model):
+    """Step windows find the step by its sigma in the schedule the model sees: the backed-up start must be in it."""
+    from core import dit_hooks
+    found = []
+    import comfy.samplers
+    seen = []
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5}, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), seen=seen)
+    assert len(seen) == 4 and all(len(s) == 5 and abs(s[2] - 0.8) < 1e-3 for s in seen)
+    for i, sig in enumerate([1.0, 0.9, 0.8, 0.3]):
+        where = dit_hooks.current_step({"sample_sigmas": torch.tensor(seen[0]), "sigmas": torch.tensor([sig])})
+        assert where == (i, 4)
 
 
 def test_the_whole_schedule_lives_where_the_stage_schedule_does():

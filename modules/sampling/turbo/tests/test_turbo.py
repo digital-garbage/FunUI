@@ -126,7 +126,7 @@ def test_off_installs_nothing(model):
                                         ((1.0, 0.6, 0.3, 0.0), 1)])
 def test_runs_through_two_stages_with_any_split(model, sigmas, cut):
     values = {"enabled": True, **_settings(polish=0.05)}
-    note, out, calls = _guided(model, values, sigmas, {"enabled": True, "size": 0.5, "steps": cut})
+    note, out, calls = _guided(model, values, sigmas, {"enabled": True, "size": 0.5, "steps": cut, "back_up": 0.0})
     assert "fresh noise" in note
     v, a = out.unbind()
     assert torch.isfinite(v).all() and torch.isfinite(a).all()

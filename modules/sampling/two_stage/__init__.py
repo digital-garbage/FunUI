@@ -58,7 +58,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "back_up": {
-        "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
+        "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Noise added at the hand-over",
         "hint": "How far back the full-size stage starts. 0 continues exactly where the first stage stopped. Higher values add "
                 "fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines.",
@@ -96,7 +96,7 @@ def install(patcher, values, key):
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
     method = values.get("resize") if values.get("resize") in METHODS else "bicubic"
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.0))))
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5))))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
     return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "")
 

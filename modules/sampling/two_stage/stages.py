@@ -232,7 +232,9 @@ def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwa
         except Exception as e:                      # noqa: BLE001 -- a missing file must not lose the run
             log.warning(TITLE, f"latent upscaler not used, bicubic instead: {e}")
     log.info(TITLE, f"first {steps} step(s) at latent {h1}x{w1} instead of {h}x{w}, then {len(second) - 1} at the full size")
-    setattr(guider, FULL, sigmas)
+    whole = sigmas.clone()
+    whole[steps] = second[0]                        # the step index is found by sigma, so the schedule the model sees holds the one it is called at
+    setattr(guider, FULL, whole)
     setattr(guider, dit_hooks.STAGE, 1)
     try:
         run(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
