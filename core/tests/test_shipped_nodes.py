@@ -54,7 +54,7 @@ FROZEN = {
     "FunUILoadModifiers": ["model", "settings"],
     "FunUILatentUpscalerLoader": ["upscaler_name"],
     "FunUICutOpening": ["images", "frames", "fps", "audio"],
-    "FunUISaveVideo": ["images", "audio", "fps", "filename_prefix", "encoder", "codec"],
+    "FunUISaveVideo": ["images", "audio", "fps", "filename_prefix", "encoder", "codec", "quality"],
     "FunUIPromptMarkup": ["text"],
     "FunUINegativeErase": ["positive", "negative", "strength", "mode", "keep_size"],
     "FunUIShotCamera": ["text", "settings", "length", "frame_rate", "project"],
