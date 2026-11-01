@@ -183,12 +183,15 @@ def test_churn_with_no_fresh_noise_changes_nothing_and_follows_dtype_and_device(
     assert out.dtype == torch.float64 and out.device == x.device and not torch.equal(out, d)
 
 
-def test_an_euler_step_from_the_churned_answer_lands_on_the_turbo_step():
+def test_an_euler_step_from_the_churned_answer_moves_along_the_new_noise_direction():
     x, d, n = torch.randn(1, 3, 2, 4, 4), torch.randn(1, 3, 2, 4, 4), torch.randn(1, 3, 2, 4, 4)
     sigma, to, eta = torch.tensor(0.7), torch.tensor(0.4), 0.45
     answer = churn(x, d, sigma, eta, n)
+    implied = (x - (1 - sigma) * d) / sigma
+    fresh = (1 - eta ** 2) ** 0.5 * implied + eta * n
     euler = x + ((x - answer) / sigma) * (to - sigma)                 # what Euler does with an answer
-    assert torch.allclose(euler, step_to(x, d, sigma, to, eta, n), atol=1e-5)
+    assert torch.allclose(euler, x + (fresh - d) * (to - sigma), atol=1e-5)
+    assert torch.allclose(euler, (1 - to) * d + sigma * implied + (to - sigma) * fresh, atol=1e-5)
 
 
 def _euler(model, x, sigmas, extra_args=None, callback=None, disable=None, **_):

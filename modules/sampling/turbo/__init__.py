@@ -169,10 +169,13 @@ def make(settings):
 
 
 def churn(x, denoised, sigma, eta, noise):
-    """The answer `denoised` of a model call at `sigma` on `x`, changed so that any sampler which steps from it
-    moves toward a point whose noise is `eta` fresh. With D the answer and e = (x - (1 - sigma) D) / sigma the
-    noise it implies, the new answer is D + sigma * (e - e'), e' = sqrt(1 - eta^2) e + eta * noise. For Euler that
-    lands exactly on `(1 - to) D + to e'`, the Turbo step; other samplers read it as a nearby picture guess."""
+    """The answer `denoised` of a model call at `sigma` on `x`, changed so that a sampler stepping from it takes in
+    some fresh noise. With D the answer and e = (x - (1 - sigma) D) / sigma the noise it implies, the new answer is
+    D + sigma * (e - e'), e' = sqrt(1 - eta^2) e + eta * noise. A sampler that steps along (x - D) / sigma, Euler for
+    one, then moves along e' - D instead of e - D. This is a nudge like Karras' churn, not the exact Turbo step: the
+    point's old noise stays in x, so the new point carries a little more noise than the Turbo step would give
+    (about 3% more noise at eta 0.2, 13% at 0.45, for a step from 0.7 to 0.4). Other samplers read it as a nearby
+    picture guess."""
     sigma = torch.as_tensor(sigma, device=x.device, dtype=x.dtype).reshape(-1)[0]
     implied = (x - (1 - sigma) * denoised) / sigma
     keep = math.sqrt(max(0.0, 1.0 - eta * eta))
