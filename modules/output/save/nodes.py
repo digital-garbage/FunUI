@@ -128,7 +128,7 @@ class FunUISaveVideo(io.ComfyNode):
 
     @classmethod
     def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high") -> io.NodeOutput:
-        frames = (images * 255).clamp(0, 255).byte().cpu().numpy()
+        frames = (images * 255).round().clamp(0, 255).byte().cpu().numpy()      # rounded: a bare cast cuts every value down, a steady half-level darkening
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
             filename_prefix, folder_paths.get_output_directory(), width, height)
