@@ -93,7 +93,7 @@ def test_follows_the_input_dtype_and_nested_sound_gets_no_noise():
     assert torch.allclose(seen[1], audio * (0.6 / 1.0), atol=1e-9)
 
 
-def _guided(model, values, sigmas, with_two_stages=None):
+def _guided(model, values, sigmas, with_two_stages=None, sampler="euler"):
     import comfy.samplers
     from comfy.nested_tensor import NestedTensor
     patched = model.clone()
@@ -111,7 +111,7 @@ def _guided(model, values, sigmas, with_two_stages=None):
     latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
     noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
     try:
-        out = guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor(sigmas),
+        out = guider.sample(noise, latent, comfy.samplers.sampler_object(sampler), torch.tensor(sigmas),
                             seed=1, disable_pbar=True)
     finally:
         hook.remove()
@@ -161,3 +161,14 @@ def test_polish_is_on_by_default_at_a_quarter(model):
     assert SETTINGS["polish"]["default"] == 0.25
     _, _, calls = _guided(model, {"enabled": True, **_settings()}, (1.0, 0.7, 0.3, 0.0))
     assert len(calls) == 4 and calls[-1] == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize("sampler", ["euler", "er_sde", "dpmpp_2m", "res_multistep", "dflow_ord1", "uni_pc", "ddim"])
+def test_the_switch_takes_over_whatever_sampler_is_chosen(model, sampler):
+    """The same rule runs whichever sampler was picked: one model call per step plus the polish call, and the
+    last call is the polish sigma (a sampler's own loop would make a different number of calls)."""
+    import modules.sampling.distilled_flow  # noqa: F401 -- registers the dflow samplers
+    values = {"enabled": True, **_settings(polish=0.05)}
+    note, out, calls = _guided(model, values, (1.0, 0.7, 0.3, 0.0), sampler=sampler)
+    assert "fresh noise" in note and len(calls) == 4 and calls[-1] == pytest.approx(0.05)
+    assert torch.isfinite(out.unbind()[0]).all()
