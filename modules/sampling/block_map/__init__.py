@@ -86,8 +86,9 @@ def install(patcher, values, key):
             res = measure.result(live["state"])
             if res is not None:
                 measure.save(res)
+                measure.set_enabled(False)              # one profile per switch: later runs follow the map, they do not redo it
                 log.once(f"{ID}:saved:{n}", log.INFO, "FunUI Block map",
-                         f"Active | profile of {n} blocks saved; later runs follow it")
+                         f"Active | profile of {n} blocks saved and the switch turned off; later runs follow it")
             else:
                 measure.problem = "the profile run measured nothing: the model's picture could not be read"
                 log.once(f"{ID}:none", log.INFO, "FunUI Block map", "Inactive | " + measure.problem)

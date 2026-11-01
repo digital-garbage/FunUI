@@ -122,6 +122,7 @@ def test_a_profile_run_writes_a_map_and_returns_the_untouched_answers(tiny_h3, r
     per_point = 2 * len(measure.groups(n))
     assert len(seen) == 4 + 3 * per_point
     assert [bool(t.get("funui_probe")) for t in seen][:1 + per_point] == [False] + [True] * per_point
+    assert not measure.enabled()                                      # one profile per switch
     data = measure.load(n)
     assert data["blocks"] == n and set(measure.KINDS) <= set(data)
     for kind in measure.KINDS:
