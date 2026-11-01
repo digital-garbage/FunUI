@@ -387,3 +387,17 @@ def test_with_the_sound_kept_the_sound_is_left_alone_and_the_log_says_so(tiny_h3
     assert any("sound left alone in" in x for x in messages)
     drawn = [x for x in messages if "clip regions looser" in x]
     assert drawn and not any("end of the clip, sound" in x for x in drawn)       # the sound is never among the changed regions
+
+
+def test_the_block_map_spreads_the_change_between_blocks_around_one():
+    from modules.sampling.attention_bandit import followed
+    from modules.sampling.block_map import measure
+    grid = measure.groups(10)
+    data = {"blocks": 10, "groups": grid, "points": list(measure.POINTS),
+            "attention": {"leverage": [[1.0] * 3, [4.0] * 3], "fragility": [[0.1] * 3, [0.1] * 3]}}
+    options = {"funui_block_map": measure.MapView(data), "sample_sigmas": torch.linspace(1, 0, 5), "sigmas": torch.tensor([0.5])}
+    blocks = [1, 2, 7, 8]
+    low, high = followed((1.2, 1.0), options, 1, blocks), followed((1.2, 1.0), options, 7, blocks)
+    assert low[0] > 1.2 > high[0] > 1.0 and low[1] == high[1] == 1.0       # the sharper change is larger where the block takes it
+    assert followed((1.2, 1.0), {}, 1, blocks) == (1.2, 1.0)                 # no map: as set
+    assert followed((1.0, 1.0), options, 1, blocks) == (1.0, 1.0)

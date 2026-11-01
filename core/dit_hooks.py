@@ -189,6 +189,21 @@ def current_step(transformer_options):
     return int(hit[0]), int(sched.shape[0]) - 1
 
 
+def block_map_value(transformer_options, kind, block, value, blocks) -> float:
+    """The feature's own `value` (its change from neutral: a temperature minus 1, a push strength) for `block`, nudged by the
+    Block map: spread between `blocks` by how much each can take, and softly limited so a very large setting is respected
+    but cannot push a block past what its profile says it handles. `value` as given with no map, a flat one, or an unmeasured kind."""
+    view = (transformer_options or {}).get("funui_block_map")
+    if view is None:
+        return float(value)
+    where = current_step(transformer_options)
+    frac = 0.5 if where is None else where[0] / max(1, where[1] - 1)
+    try:
+        return float(view.adjust(kind, block, frac, blocks, value))
+    except Exception:                                   # noqa: BLE001 -- a bad map never costs the picture
+        return float(value)
+
+
 # Set on the guider by Two stages: 1 while the small first stage runs, 2 while the full-size one does. A
 # SAMPLER_SAMPLE wrapper runs once per stage and reads it (its `model_wrap` is the guider) to do its
 # once-per-run work in stage 1 only.

@@ -120,7 +120,8 @@ def install(patcher, values, key):
             return func(q, k, v, *args, **kwargs)
         # Rotation keeps length, so the rotated rows' size is the natural one's.
         norm = torch.linalg.vector_norm(rows, dim=-1, dtype=torch.float32).mean()
-        scale = torch.where(torch.isfinite(norm) & (norm > 0), norm * strength, torch.zeros_like(norm))
+        push_strength = dit_hooks.block_map_value(to, "attention", block, strength, steer)   # nudged by the Block map
+        scale = torch.where(torch.isfinite(norm) & (norm > 0), norm * push_strength, torch.zeros_like(norm))
         push = (direction.to(device=q.device, dtype=q.dtype).view(heads, 1, dim)
                 * scale.to(q.dtype)).expand(heads, count, dim)
         q = q.clone()

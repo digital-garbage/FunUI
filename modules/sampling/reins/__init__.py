@@ -107,8 +107,10 @@ def install(patcher, values, key):
             if d is None:
                 d = cast[(block, rows.dtype)] = direction.to(device=rows.device, dtype=rows.dtype)
             norm = torch.linalg.vector_norm(rows, dim=-1, dtype=torch.float32).mean()
+            # The Block map (when this model has a profile) nudges the strength per block; a big setting is kept, up to what the block takes.
+            push = dit_hooks.block_map_value(args.get("transformer_options"), "residual", block, strength, steer)
             # No host sync: a bad norm makes the push zero instead of a branch.
-            scale = torch.where(torch.isfinite(norm) & (norm > 0), norm * strength,
+            scale = torch.where(torch.isfinite(norm) & (norm > 0), norm * push,
                                 torch.zeros_like(norm))
             rows += d * scale.to(rows.dtype)
             if isinstance(out, (tuple, list)) and rows.data_ptr() != out[0].data_ptr():

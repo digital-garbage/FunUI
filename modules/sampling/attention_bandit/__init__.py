@@ -284,6 +284,14 @@ def make_plan(rows, cond, signature, n_groups, focus, manual_spread=None, region
             "unknown": sum(1 for s in sims if s is None)}
 
 
+def followed(factors, options, index, blocks):
+    """(temperature, prompt gain) for one block, nudged by the block map when this model has one: each change
+    from 1 is spread by how much that block can take at this point of the run and softly limited."""
+    if (options or {}).get("funui_block_map") is None:
+        return factors
+    return tuple(1.0 + dit_hooks.block_map_value(options, "attention", index, v - 1.0, blocks) for v in factors)
+
+
 def _prompt_of(guider):
     try:
         p = guider.conds["positive"][0]["cross_attn"]
@@ -403,7 +411,7 @@ def install(patcher, values, key):
             if f is None or (f == (1.0, 1.0) and not live["region_wanted"]):
                 return extra["original_block"](args)
             to = dict(args.get("transformer_options") or {})
-            to[_SCOPE] = f
+            to[_SCOPE] = followed(f, to, index, blocks)
             return extra["original_block"]({**args, "transformer_options": to})
         return scoped
 

@@ -64,13 +64,16 @@ def install(patcher, values, key):
     # The widget floor keeps this above zero; the clamp is for API callers.
     temperature = max(1.0 + amount, 0.05)
 
-    def scoped(args, extra):
-        to = dict(args.get("transformer_options") or {})
-        to[_SCOPE] = temperature
-        return extra["original_block"]({**args, "transformer_options": to})
+    def scoped_for(index):
+        def scoped(args, extra):
+            to = dict(args.get("transformer_options") or {})
+            # The Block map (when this model has a profile) spreads the change between the blocks, 1 on average.
+            to[_SCOPE] = max(1.0 + dit_hooks.block_map_value(to, "attention", index, temperature - 1.0, blocks), 0.05)
+            return extra["original_block"]({**args, "transformer_options": to})
+        return scoped
 
     for index in blocks:
-        dit_hooks.add_block_hook(patcher, key, index, scoped)
+        dit_hooks.add_block_hook(patcher, key, index, scoped_for(index))
 
     def override(func, q, k, v, *args, **kwargs):
         t = (kwargs.get("transformer_options") or {}).get(_SCOPE)
