@@ -57,6 +57,9 @@ def install(patcher, values, key):
             if view.has(kind):
                 note.append(f"{kind}: " + ("flat, no effect" if view.flat(kind) else "in use"))
 
+    if note:
+        log.once(f"{ID}:read:{n}:{'|'.join(note)}", log.INFO, "FunUI Block map",
+                 f"following the saved map of {n} blocks ({', '.join(note)})")
     if not measure.enabled():
         measure.problem = None
         return ("block map " + ", ".join(note)) if note else None
