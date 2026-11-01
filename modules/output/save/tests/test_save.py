@@ -69,3 +69,22 @@ def test_nan_sound_is_dropped_and_the_video_still_saves(tmp_path):
     nodes.encode(path, _clip(), 24.0, {"waveform": wave, "sample_rate": 44100}, None, encoder="cpu")
     with av.open(path) as f:
         assert f.streams.video[0].frames == 30 and not f.streams.audio
+
+
+def test_quality_sets_the_constant_quality_number_and_high_is_the_default():
+    for name, key in (("libx264", "crf"), ("h264_nvenc", "cq")):
+        base = (name, {key: "23"})
+        assert nodes._with_quality(base, "standard")[1][key] == "23"
+        assert int(nodes._with_quality(base, "high")[1][key]) < 23
+        assert int(nodes._with_quality(base, "maximum")[1][key]) < int(nodes._with_quality(base, "high")[1][key])
+        assert nodes._with_quality(base, "nonsense")[1][key] == nodes._with_quality(base, "high")[1][key]
+    assert nodes.X264[1]["crf"] == "16"
+
+
+def test_higher_quality_keeps_more_of_the_picture(tmp_path):
+    sizes = {}
+    for q in ("standard", "high"):
+        path = str(tmp_path / f"{q}.mp4")
+        nodes.encode(path, _clip(20), 24.0, encoder="cpu", quality=q)
+        sizes[q] = os.path.getsize(path)
+    assert sizes["high"] > sizes["standard"]

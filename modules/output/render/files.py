@@ -24,6 +24,7 @@ from ..._core import media, video_pipe
 
 ISOBMFF = (".mp4", ".m4v", ".mov")          # containers where moov/mdat order applies
 
+REENCODE_CRF = "16"                         # re-encodes of a finished clip (preview window, trim, stitch): visually clean, not libx264's 23
 AUDIO_RATE = 48000                          # every exported part is made at this rate, so parts can be joined
 
 ClipError, FFMPEG_MISSING, ffmpeg = video_pipe.ClipError, video_pipe.FFMPEG_MISSING, video_pipe.ffmpeg
@@ -121,7 +122,8 @@ def trim(src: str, out: str, start=None, dur=None, *, fast=False, reverse=False,
         cmd += ["-vf", "reverse", "-af", "areverse"]     # after the trim: only the clip is buffered
     if fps:
         cmd += ["-r", str(fps)]                          # parts to be joined must share one rate
-    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
+    # A re-encode of a generation: libx264's own default (crf 23) would stack a second lossy pass on the first.
+    cmd += ["-c:v", "libx264", "-crf", REENCODE_CRF, "-pix_fmt", "yuv420p"]
     if fast:
         cmd += ["-preset", "veryfast"]
     cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", str(AUDIO_RATE), "-ac", "2", "-movflags", "+faststart", out]

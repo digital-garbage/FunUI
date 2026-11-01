@@ -22,10 +22,27 @@ from ..._core import log
 
 ENCODERS = ("auto", "gpu", "cpu")
 CODECS = ("h264", "h265")
-# NVENC's constant-quality mode at libx264's default number (crf 23).
-NVENC = {"h265": ("hevc_nvenc", {"preset": "p5", "rc": "vbr", "cq": "23", "b:v": "0"}),
-         "h264": ("h264_nvenc", {"preset": "p5", "rc": "vbr", "cq": "23", "b:v": "0"})}
-X264 = ("libx264", {"crf": "23"})
+# Constant-quality mode. The number is set by `quality` (QUALITY below). NVENC needs a lower number than
+# libx264 for the same look, so its table is its own. 23 was the old fixed value: fine for a phone clip,
+# but it smears fine texture and shows blocks and mosquito noise on a high-resolution diffusion picture.
+QUALITIES = ("standard", "high", "maximum")
+QUALITY = {"nvenc": {"standard": "23", "high": "16", "maximum": "10"},
+           "x264": {"standard": "23", "high": "16", "maximum": "9"}}
+NVENC = {"h265": ("hevc_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"}),
+         "h264": ("h264_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"})}
+X264 = ("libx264", {"crf": "16", "preset": "medium"})
+
+
+def _with_quality(codec, quality):
+    """-> the (name, options) pair with its constant-quality number set for `quality` (unknown names: high)."""
+    name, options = codec
+    table = QUALITY["nvenc" if "nvenc" in name else "x264"]
+    number = table.get(quality, table["high"])
+    options = dict(options)
+    for key in ("cq", "crf"):
+        if key in options:
+            options[key] = number
+    return name, options
 # FFmpeg's "minimum required driver" line compares the driver library the PROCESS loaded, not what nvidia-smi reports
 _HINT = (" (nvidia-smi can look fine while FFmpeg loads an older or missing libnvidia-encode.so.1; "
          "in a container check it is there and that the NVIDIA 'video' capability is on)")
@@ -59,13 +76,13 @@ def _write(path, frames, fps, audio, metadata, codec):
             out.mux(sound.encode(None))
 
 
-def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="h264"):
+def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="h264", quality="high"):
     """-> which encoder wrote the file. `frames`: uint8 [T, H, W, 3]. GPU first unless "cpu" is chosen;
     a GPU attempt that fails leaves no half file and falls back to CPU H.264 with a Log alert saying why."""
     if audio is not None and not bool(audio["waveform"].isfinite().all()):      # NaN/Inf sound (typically the model loaded in fp16): AAC refuses it, so the video is kept without it
         audio = None
         log.alert("FunUI Save Video", "The audio contains NaN/Inf values, so you are most likely using the wrong precision for this model (fp16?). The audio has been removed; the video was saved without it.")
-    gpu = NVENC[codec]
+    gpu = _with_quality(NVENC[codec], quality)
     why = None
     if encoder != "cpu":
         if gpu[0] not in av.codecs_available:
@@ -78,7 +95,7 @@ def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="
                 if os.path.exists(path):
                     os.remove(path)
                 why = f"the GPU encoder (NVENC) could not start: {exc}{_HINT}"
-    _write(path, frames, fps, audio, metadata, X264)
+    _write(path, frames, fps, audio, metadata, _with_quality(X264, quality))
     if why:                                                    # the video is saved either way; never lose a generation to the encoder
         log.once("save_nvenc", log.ALERT, "FunUI Save Video", f"{why}. Saved as H.264 on the CPU instead.")
     return "H.264 on libx264 (CPU, all cores)"
@@ -101,6 +118,8 @@ class FunUISaveVideo(io.ComfyNode):
                                tooltip="auto and gpu: the GPU encoder (NVENC) when it works, otherwise H.264 on the CPU so the video is still saved. cpu: H.264 (libx264) on every core."),
                 io.Combo.Input("codec", options=list(CODECS), default="h264", optional=True,
                                tooltip="For the GPU encoder. H.264: plays in every browser. H.265: smaller files, but Firefox may not play it."),
+                io.Combo.Input("quality", options=list(QUALITIES), default="high", optional=True,
+                               tooltip="How closely the file keeps the picture. standard: small files, but fine texture smears and blocks show on a sharp high-resolution picture. high: visually clean for a bigger file. maximum: near lossless, large."),
             ],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
             is_output_node=True,
@@ -108,7 +127,7 @@ class FunUISaveVideo(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264") -> io.NodeOutput:
+    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high") -> io.NodeOutput:
         frames = (images * 255).clamp(0, 255).byte().cpu().numpy()
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
@@ -118,6 +137,6 @@ class FunUISaveVideo(io.ComfyNode):
             metadata = {**(cls.hidden.extra_pnginfo or {}), **({"prompt": cls.hidden.prompt} if cls.hidden.prompt is not None else {})} or None
         file = f"{filename}_{counter:05}_.mp4"
         t = time.perf_counter()
-        used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec)
-        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}")
+        used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
+        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}")
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

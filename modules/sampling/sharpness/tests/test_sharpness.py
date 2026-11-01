@@ -53,3 +53,19 @@ def test_a_packed_model_is_edited_on_its_answer_including_the_last_step_and_neve
     for i in (1, 3):
         assert not torch.allclose(unpacked(got[i], shapes)[0], unpacked(answers[i], shapes)[0])
         assert torch.equal(unpacked(got[i], shapes)[1], unpacked(answers[i], shapes)[1])   # sound untouched
+
+
+def test_a_hand_over_to_a_bigger_picture_is_never_compared_with_the_smaller_one_before_it(tiny_h3):
+    """Two stages: the step index counts the whole schedule, and the first call at the full size has nothing of its
+    own size to compare with, so it is not sharpened against the first stage's smaller answer."""
+    _p, wrap, _ = _load(tiny_h3, amount=1.0, last_part=1.0)
+    ts = torch.linspace(1.0, 0.0, 5)
+    small = torch.randn(1, 4, 3, 4, 4)
+    big = torch.randn(1, 4, 3, 8, 8)
+    first = wrap(lambda *a, **k: small, small, ts[0:1], None, None, None, _to(0))
+    second = wrap(lambda *a, **k: small * 0.5, small, ts[1:2], None, None, None, _to(1))
+    assert torch.equal(first, small) and not torch.equal(second, small * 0.5)       # same size: compared
+    handed = wrap(lambda *a, **k: big, big, ts[2:3], None, None, None, _to(2))
+    assert torch.equal(handed, big)                                                  # new size: left as the model said
+    after = wrap(lambda *a, **k: big * 0.5, big, ts[3:4], None, None, None, _to(3))
+    assert not torch.equal(after, big * 0.5)                                         # and sharpening goes on in stage 2

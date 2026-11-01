@@ -347,7 +347,7 @@ def render(project, clips: list[dict]) -> dict:
         cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"]
     name = f"funui_final_{_stamp()}.mp4"
     out = os.path.join(tempdir, name)
-    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
+    cmd += ["-c:v", "libx264", "-crf", files.REENCODE_CRF, "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
     try:
         files.run(cmd)
     except files.ClipError as exc:
@@ -398,7 +398,7 @@ def concat(clips: list[dict]) -> dict:
                     fh.write("file '" + p.replace("'", "'\\''") + "'\n")
             try:
                 files.run([files.ffmpeg(), "-y", "-f", "concat", "-safe", "0", "-i", listing,
-                            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                            "-c:v", "libx264", "-crf", files.REENCODE_CRF, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
                             "-movflags", "+faststart", out])
             finally:
                 for p in parts + [listing]:
