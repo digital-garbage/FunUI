@@ -161,19 +161,30 @@ def enlarge(video, h, w, upscaler=None, method="bicubic"):
     return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
-def make_wrapper(size, steps, resize=None, method="bicubic"):
+def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, back_up, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
 
 
-def _staged(original, guider, size, steps, resize, method, *args, **kwargs):
+def backed_up(sigmas, steps, amount):
+    """The schedule for the full-size stage. The hand-over starts `amount` of the way from the cut back to the sigma
+    before it: the enlarged guess gets more fresh noise, and the model is told the true noise level it now sees."""
+    second = sigmas[steps:].clone()
+    amount = max(0.0, min(1.0, float(amount)))
+    if amount > 0.0 and steps >= 1:
+        before = sigmas[steps - 1].to(device=second.device, dtype=second.dtype)
+        second[0] = second[0] + amount * (before - second[0])
+    return second
+
+
+def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
@@ -198,7 +209,7 @@ def _staged(original, guider, size, steps, resize, method, *args, **kwargs):
         (video_noise[..., :h1, :w1].contiguous(), audio_noise))
     small_image, _ = comfy.utils.pack_latents(
         (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
-    first, second = sigmas[:steps + 1], sigmas[steps:]
+    first, second = sigmas[:steps + 1], backed_up(sigmas, steps, back_up)
     raw_conds = {k: [c.copy() for c in v] for k, v in guider.conds.items()}
 
     seen = {}

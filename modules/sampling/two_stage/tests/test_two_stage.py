@@ -200,3 +200,19 @@ def test_the_first_stage_keeps_the_shape_of_the_full_picture(grid, size):
     assert h1 % 2 == 0 and w1 % 2 == 0 and 2 <= h1 <= h and 2 <= w1 <= w
     assert abs((w1 / h1) / (w / h) - 1) < 0.1
     assert abs(h1 * w1 / (h * w) - size * size) < 0.2
+
+
+def test_backing_up_starts_the_full_size_stage_noisier_and_keeps_the_rest():
+    from modules.sampling.two_stage.stages import backed_up
+    sigmas = torch.tensor([1.0, 0.9, 0.7, 0.4, 0.0], dtype=torch.bfloat16)
+    same = backed_up(sigmas, 2, 0.0)
+    assert same.tolist() == sigmas[2:].tolist()
+    half = backed_up(sigmas, 2, 0.5)
+    assert abs(float(half[0]) - 0.8) < 0.01 and half[1:].tolist() == sigmas[3:].tolist()
+    assert half.dtype == sigmas.dtype and sigmas[2] == 0.7                 # the original schedule is not touched
+    assert float(backed_up(sigmas, 2, 5.0)[0]) == float(sigmas[1])         # never further back than one step
+
+
+def test_a_staged_run_with_backing_up_still_finishes(model):
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5})
+    assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)] and torch.isfinite(out.unbind()[0]).all()
