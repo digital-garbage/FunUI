@@ -133,3 +133,25 @@ test("Clear saved ratings is off when the project holds none", async () => {
   const clear = [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Clear");
   assert.ok(clear.disabled);
 });
+
+test("the block map panel shows the profile switch and the saved maps, and Clear is off with none", async () => {
+  const sets = [];
+  const app = { api: {
+    tasteKeys: async () => ({ keys: [] }),
+    blockInfluence: async () => ({ key: "k", enabled: false, problem: null }),
+    blockInfluenceGroups: async () => ({ key: "k", used: 0, counts: {}, cos: {}, chance: {}, note: "nothing recorded yet" }),
+    blockMap: async () => ({ enabled: true, problem: null, maps: ["50_blocks.json"] }),
+    setBlockMap: async (on) => { sets.push(on); return { enabled: on, maps: [] }; },
+  } };
+  const page = taste(app)();
+  document.body.append(page.node);
+  await tick(); await tick();
+  const text = page.node.textContent;
+  assert.match(text, /Profile the blocks on the next run/);
+  assert.match(text, /50 blocks/);
+  const boxes = [...page.node.querySelectorAll('input[type="checkbox"]')];
+  const mapSwitch = boxes[boxes.length - 1];
+  assert.equal(mapSwitch.checked, true);
+  mapSwitch.click(); await tick(); await tick();
+  assert.deepEqual(sets, [false]);
+});

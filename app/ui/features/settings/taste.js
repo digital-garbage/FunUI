@@ -133,7 +133,36 @@ export const taste = (app) => function mount() {
     }
     research.set(rows);
   }
+  // Block map: one profiling run per model. It nudges each group of blocks and measures how much the picture moves, then later
+  // runs spread the per-block features' strengths by it. The switch is read at the start of each run.
+  const profile = c.region.stack({ gap: "sm" });
+  let mapState = null;
+  async function refreshMap() {
+    mapState = await (async () => app.api.blockMap())().catch((err) => ({ error: err.message }));
+    drawMap();
+  }
+  async function clearMap() {
+    if (!(await c.modal.dialogue({ title: "Clear block maps", message: "Forget the saved block maps? Features then act the same in every block until a new profile is made.", tone: "danger", confirmLabel: "Clear" }).result)) return;
+    try { await app.api.clearBlockMap(); } catch (err) { tell(err.message); }
+    refreshMap();
+  }
+  function drawMap() {
+    const maps = (mapState && mapState.maps) || [];
+    profile.set([
+      c.label.section({ text: "Block map" }),
+      mapState && mapState.error ? c.banner.warn({ text: `Could not read the block map: ${mapState.error}` }) : null,
+      mapState && mapState.problem ? c.banner.warn({ text: mapState.problem }) : null,
+      c.toggle.default({ label: "Profile the blocks on the next run", hint: "On: the next generation takes extra model calls on three of its steps and measures how much each group of blocks can take. Turn it off again afterwards.",
+        checked: !!(mapState && mapState.enabled),
+        onChange: async (on) => { try { await app.api.setBlockMap(on); } catch (err) { tell(err.message); } refreshMap(); } }),
+      c.settingsRow.default({ label: "Saved maps", hint: "One per model size. Features follow a map when one exists for the loaded model.",
+        control: c.toolbar.default({ items: [c.hint.default({ text: maps.length ? maps.map((m) => m.replace("_blocks.json", " blocks")).join(", ") : "none yet" }),
+          c.button.sm({ label: "Clear", tone: "danger", disabled: !maps.length, onClick: clearMap })] }) }),
+    ].filter(Boolean));
+  }
+  const hasMap = !app.hasModule || app.hasModule("block_map");
+  if (hasMap) refreshMap();
   const hasResearch = !app.hasModule || app.hasModule("block_influence");      // its recording is another module's; without it the part is not shown
   draw(); refresh(); if (hasResearch) refreshResearch();
-  return c.region.stack({ gap: "none", children: [page, hasResearch ? research : null] });
+  return c.region.stack({ gap: "none", children: [page, hasResearch ? research : null, hasMap ? profile : null] });
 };
