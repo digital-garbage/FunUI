@@ -227,7 +227,7 @@ def test_h3_only_features_are_not_offered_on_ltx(comfyui):
     from modules.models import ltx
     from modules.models.minimax_h3 import H3_ONLY
     spec = registry.scan().specs["conditioning_shot_camera"]
-    assert "shot_prompts" in spec.requires and set(H3_ONLY) == {"shot_prompts", "sparse_attention"}
+    assert "shot_prompts" in spec.requires and set(H3_ONLY) == {"shot_prompts", "sparse_attention", "frame_carry"}
     have = ltx.probe_traits({"audio_adaln_single.linear.weight"})
     assert traits.missing_for(spec, have) == ["shot_prompts"]
     assert not set(H3_ONLY) & set(have)

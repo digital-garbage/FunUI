@@ -22,7 +22,7 @@ SETTINGS = {
     "carry": {
         "type": "bool", "default": True,
         "label": "Continue from the previous clip",
-        "hint": "A scene set to 'From generated frame' uses the last picture of the clip before it as its next free reference. Off: such a scene gets no picture from the clip before.",
+        "hint": "A scene set to 'From generated frame' uses the last picture of the clip before it as its next free reference. Off: such a scene gets no picture from the clip before. R2V model is strictly recommended, continuity is not guaranteed on T2V/I2V models. Consult with an official prompting guide from MiniMax team for best results.",
     },
     "dark_guard": {
         "type": "bool", "default": True,
