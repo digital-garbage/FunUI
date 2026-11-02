@@ -257,3 +257,14 @@ test("the project's Short side / Long side choice reaches the aspect slot, and a
   assert.deepEqual((await run({ resolution_basis: "area", video: { target_width: 1280, target_height: 720 } })).inputs.a, { width: 1280, height: 720, basis: "area" });
   assert.deepEqual((await run({ resolution_basis: "short", video: { width: 640, target_width: 1280, height: 480 } })).inputs.a, { width: 640, height: 480, basis: "short" });      // the new number wins over a stale one
 });
+
+test("a hook's carried frame takes the next free reference slot, after the scene's own, and is said when no slot is left", async () => {
+  const refs = [{ id: "m", node: "Model" }, ...[1, 2].map((n) => ({ id: `r${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "m", input: `img${n}` } }] }))];
+  const carry = [async () => ({ references: ["frame"], notes: [] })];
+  const run = (scene, extra = {}) => buildInputs({ project: {}, scene, slots: refs, expand: async ({ text }) => ({ text }), hooks: carry, ...extra });
+  const one = await run({ text: "", references: ["mine"] });
+  assert.deepEqual([one.inputs.r1.media_id, one.inputs.r2.media_id, one.unwired], ["mine", "frame", 0]);
+  const full = await run({ text: "", references: ["a", "b"] });
+  assert.deepEqual([full.inputs.r1.media_id, full.inputs.r2.media_id, full.unwired], ["a", "b", 1]);
+  assert.equal(kinds.get("frame"), "image");
+});

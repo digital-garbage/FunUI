@@ -98,8 +98,8 @@ def detect(keys) -> bool:
                for prefix in _PREFIXES)
 
 
-#: Things only H3 has: [Shot N] prompts (shot camera), and the sparse attention SLA was built and validated for.
-H3_ONLY = ("shot_prompts", "sparse_attention")
+#: Things only H3 has: [Shot N] prompts (shot camera), the sparse attention SLA was built and validated for, and the previous clip's last frame as a reference (LTX is decided later).
+H3_ONLY = ("shot_prompts", "sparse_attention", "frame_carry")
 
 
 def probe_blocks(keys):

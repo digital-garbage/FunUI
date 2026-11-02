@@ -22,6 +22,15 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];
   const plan = sceneReferences(scene, project.fixed_references);
+  // Hooks run first: one may add pictures to this run's references (a carried frame takes the next free slot), which the
+  // start and the wiring below must see. What else they return (inputs, notes) is merged further down, where it always was.
+  const outs = [], hookNotes = [];
+  for (const hook of hooks) {
+    let out;
+    try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { hookNotes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
+    outs.push(out);
+    for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); }
+  }
   // A pipeline that takes whole media where it takes a picture (LTX): with no start picked, the first reference is the start:
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
   // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone and is
@@ -116,9 +125,8 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
   if (!textOnly) notes.push(...noVideo);
   else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
-  for (const hook of hooks) {
-    let out;
-    try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { notes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
+  notes.push(...hookNotes);
+  for (const out of outs) {
     for (const [id, fields] of Object.entries(out.inputs || {})) raw[id] = { ...raw[id], ...fields };
     notes.push(...(out.notes || []));
   }
