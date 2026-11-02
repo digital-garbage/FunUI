@@ -24,12 +24,12 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const plan = sceneReferences(scene, project.fixed_references);
   // Hooks run first: one may add pictures to this run's references (a carried frame takes the next free slot), which the
   // start and the wiring below must see. What else they return (inputs, notes) is merged further down, where it always was.
-  const outs = [], hookNotes = [];
+  const outs = [], hookNotes = [], carried = [];
   for (const hook of hooks) {
     let out;
     try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { hookNotes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
     outs.push(out);
-    for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); }
+    for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); carried.push(id); }
   }
   // A pipeline that takes whole media where it takes a picture (LTX): with no start picked, the first reference is the start:
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
@@ -122,10 +122,17 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   }
   // Features that add inputs of their own (a Chat comment for the enhancer, say) say so through a hook: { inputs: {slot: {name: value}}, notes: [text] }.
   const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
+  const told = [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
   if (!textOnly) notes.push(...noVideo);
   else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
   notes.push(...hookNotes);
+  // A picture a hook added to the references: said where it landed (or, if it found no place, by the "did not fit" note).
+  for (const id of carried) {
+    const slotId = Object.keys(overrides).find((k) => overrides[k].media_id === id);
+    const at = slotId && ((slots || []).find((x) => x.id === slotId)?.roles || []).map((r) => /^assets\.reference_(\d+)$/.exec(r.at || "")).find(Boolean);
+    if (at) told.push(`Continuity: the last frame of the clip before it (${id}) went into reference ${at[1]}.`);
+  }
   for (const out of outs) {
     for (const [id, fields] of Object.entries(out.inputs || {})) raw[id] = { ...raw[id], ...fields };
     notes.push(...(out.notes || []));
@@ -134,5 +141,5 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // Judged on what is SENT (a carried frame counts; a picture t2v blanks, or one this pipeline has no input for, does not).
   const picture = (source && (raw[source.slot.id] || {}).media_id) || Object.keys(overrides).length;
   if (prompt && !String((raw[prompt.slot.id] || {})[prompt.role.input] ?? "").trim() && !picture) notes.push("This shot has no text and no start picture, so the model makes whatever it likes.");
-  return { inputs: raw, unwired: unwired + (ignored ? 1 : 0), left, noPrompt: !prompt, notes };
+  return { inputs: raw, unwired: unwired + (ignored ? 1 : 0), left, noPrompt: !prompt, notes, info: told };
 }

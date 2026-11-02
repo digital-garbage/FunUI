@@ -264,7 +264,9 @@ test("a hook's carried frame takes the next free reference slot, after the scene
   const run = (scene, extra = {}) => buildInputs({ project: {}, scene, slots: refs, expand: async ({ text }) => ({ text }), hooks: carry, ...extra });
   const one = await run({ text: "", references: ["mine"] });
   assert.deepEqual([one.inputs.r1.media_id, one.inputs.r2.media_id, one.unwired], ["mine", "frame", 0]);
+  assert.ok(one.info.some((n) => /went into reference 2\./.test(n) && n.includes("frame")));
   const full = await run({ text: "", references: ["a", "b"] });
   assert.deepEqual([full.inputs.r1.media_id, full.inputs.r2.media_id, full.unwired], ["a", "b", 1]);
+  assert.ok(!full.info.some((n) => /went into/.test(n)));
   assert.equal(kinds.get("frame"), "image");
 });
