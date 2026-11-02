@@ -15,7 +15,7 @@ from ..._core import log
 from .. import gguf_support, sla_attention
 from .. import int8_convrot as int8_convrot_module
 from .. import mxfp8 as mxfp8_module
-from ..common import (COMPUTE_DTYPES, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
+from ..common import (COMPUTE_DTYPES, head_bank_metadata, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
                       attention_override, dtype_of, set_fp16_accumulation,
                       slow_int8_build, stored_weights, weight_model_options)
 
@@ -269,6 +269,10 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
         if slow:
             log.alert("FunUI Diffusion Model Loader", slow)
             notes.append(slow)
+        if not gguf:
+            metadata, heads_note = head_bank_metadata(state_dict, metadata)
+            if heads_note:
+                notes.append(heads_note)
         model = comfy.sd.load_diffusion_model_state_dict(
             state_dict, model_options=model_options, metadata=metadata)
         if model is None:

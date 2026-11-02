@@ -10,6 +10,8 @@ which the loader cannot be handed by anyone else. Feature knobs -- strengths,
 sigma windows, anything a modifier owns -- are settings, and never appear here.
 """
 
+import json
+
 import torch
 
 from .._core import log
@@ -183,3 +185,41 @@ def set_fp16_accumulation(enabled):
                   f"now {wanted} for EVERY model in this process, not just this one -- "
                   f"torch has a single process-wide flag")
     return wanted
+
+
+def head_bank_metadata(state_dict, metadata):
+    """File metadata that declares how many output heads a few-step H3 file stacks, or the input untouched.
+
+    A file with several stacked heads per stream normally says so in its safetensors
+    config (`transformer.pdd_steps`). A re-saved copy can lose that line while keeping
+    explicit head sizes, and ComfyUI then builds a single head and fails on the biases.
+    The count is in the weights anyway: the patch projections hold the true per-head
+    width, and the head bias holds that width times the count.
+
+    Reads shapes only, so it works on any device, dtype or quantised storage.
+    """
+    try:
+        bias = state_dict["final_layer.video_out.bias"]
+        abias = state_dict["final_layer.audio_out.bias"]
+        video = state_dict["video_patch_proj.weight"].shape[1]
+        audio = state_dict["audio_patch_proj.weight"].shape[1]
+    except (KeyError, AttributeError, IndexError):
+        return metadata, None
+    if not video or not audio or bias.shape[0] % video or abias.shape[0] % audio:
+        return metadata, None
+    steps = bias.shape[0] // video
+    if steps < 2 or abias.shape[0] // audio != steps:
+        return metadata, None
+    try:
+        config = json.loads((metadata or {}).get("config") or "{}")
+    except ValueError:
+        config = {}
+    transformer = config.setdefault("transformer", {})
+    if transformer.get("pdd_steps", 1) == steps:
+        return metadata, None
+    declared = transformer.get("pdd_steps")
+    transformer["pdd_steps"] = steps
+    fixed = dict(metadata or {})
+    fixed["config"] = json.dumps(config, separators=(",", ":"))
+    return fixed, (f"output heads: the file stacks {steps} per stream but its metadata "
+                   f"{'says ' + str(declared) if declared else 'does not say so'}; using {steps}")
