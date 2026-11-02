@@ -229,3 +229,73 @@ def test_backing_up_starts_the_full_size_stage_noisier_and_keeps_the_rest():
 def test_a_staged_run_with_backing_up_still_finishes(model):
     note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5})
     assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)] and torch.isfinite(out.unbind()[0]).all()
+
+
+# ---- LoRAs meant for one stage ----------------------------------------------------------------------------------
+
+def _stage_lora_run(model, monkeypatch, stage, values=None):
+    """A LoRA file in the Diffusers layout, through the loader node, then a staged run. -> per forward call: (grid, whether
+    the weight the LoRA aims at holds its change)."""
+    import comfy.samplers
+    import comfy.utils
+    import folder_paths
+    from comfy.nested_tensor import NestedTensor
+    from modules.loaders.lora import nodes
+    from modules.sampling.two_stage import install
+
+    gen = torch.Generator().manual_seed(3)
+    lora = {"transformer.transformer_blocks.0.ff.net.2.lora_A.weight": torch.randn(4, 64, generator=gen),
+            "transformer.transformer_blocks.0.ff.net.2.lora_B.weight": torch.randn(64, 4, generator=gen)}
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
+    monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: dict(lora))
+    out = nodes.FunUILoraLoader.execute(model=model, lora_name="x.safetensors", strength_model=1.0, apply_to_stage=stage)
+    loaded = out.result[0]
+
+    model.unpatch_model(unpatch_weights=True)       # an earlier run leaves its patches in the shared weights until the next load
+    patched = loaded.clone()
+    install(patched, values or {"enabled": True, "size": 0.5, "steps": 2}, "funui.two_stage")
+    layer = patched.model.diffusion_model.blocks[0].mlp.fc2
+    plain = layer.weight.detach().clone()
+    seen = []
+    patched.model.diffusion_model.register_forward_pre_hook(
+        lambda m, a: seen.append((tuple(a[0][0].shape[-2:]) if isinstance(a[0], (list, tuple)) else tuple(a[0].shape[-2:]),
+                                  not torch.equal(layer.weight.detach(), plain))))
+    guider = comfy.samplers.CFGGuider(patched)
+    cond = [[torch.randn(1, 5, 48), {}]]
+    guider.set_conds(cond, cond)
+    guider.set_cfg(1.0)
+    latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
+    noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
+    result = guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor((1.0, 0.9, 0.7, 0.3, 0.0)),
+                           seed=1, disable_pbar=True)
+    assert all(torch.isfinite(t).all() for t in result.unbind())
+    assert guider.model_patcher is patched, "the guider must be handed back its own model"
+    return seen
+
+
+def test_a_lora_for_the_second_stage_works_only_there(model, monkeypatch):
+    seen = _stage_lora_run(model, monkeypatch, "Second")
+    assert seen == [((4, 4), False), ((4, 4), False), ((8, 8), True), ((8, 8), True)]
+
+
+def test_a_lora_for_the_first_stage_works_only_there(model, monkeypatch):
+    seen = _stage_lora_run(model, monkeypatch, "First")
+    assert seen == [((4, 4), True), ((4, 4), True), ((8, 8), False), ((8, 8), False)]
+
+
+def test_a_lora_for_both_works_in_both(model, monkeypatch):
+    seen = _stage_lora_run(model, monkeypatch, "Both")
+    assert [applied for _grid, applied in seen] == [True] * 4
+
+
+def test_the_stage_lora_leaves_the_loaded_model_as_it_found_it(model, monkeypatch):
+    _stage_lora_run(model, monkeypatch, "Second")
+    assert not model.patches
+
+
+def test_a_stage_lora_is_not_applied_when_two_stages_is_off_and_it_is_said(model, monkeypatch):
+    import modules.sampling.two_stage as two
+    said = []
+    monkeypatch.setattr(two.log, "once", lambda key, level, source, message: said.append(message))
+    seen = _stage_lora_run(model, monkeypatch, "Second", values={"enabled": False})
+    assert all(not applied for _g, applied in seen) and any("not applied" in m for m in said)

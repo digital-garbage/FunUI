@@ -86,8 +86,8 @@ FROZEN = {
         "sla_tail", "sla_stabilize_motion", "sla_method", "sla_tau", "sla_sparsity_start", "mxfp8",
     ],
     "FunUILoraLoader": [
-        "model", "lora_name", "strength_model", "clip", "strength_clip",
-        *[f"{k}_{n}" for n in range(2, 9) for k in ("lora_name", "strength_model", "strength_clip")],
+        "model", "lora_name", "strength_model", "clip", "strength_clip", "apply_to_stage",
+        *[f"{k}_{n}" for n in range(2, 9) for k in ("lora_name", "strength_model", "strength_clip", "apply_to_stage")],
     ],
     "FunUIVAELoader": ["vae_name", "dtype", "decode_vae_name"],
     "FunUILoadMedia": ["media_id", "blank_width", "blank_height", "blank_frames", "full", "prepare"],

@@ -17,7 +17,7 @@ import comfy.utils
 import folder_paths
 from comfy_api.latest import io
 
-from ..._core import log, sysinfo
+from ..._core import dit_hooks, log, sysinfo
 from .keys import match
 
 
@@ -44,6 +44,11 @@ class FunUILoraLoader(io.ComfyNode):
                 inputs.append(io.Clip.Input("clip", optional=True, tooltip="Leave unwired for model-only LoRAs."))
             inputs.append(io.Float.Input(f"strength_clip{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=True,
                                          tooltip="How strongly the LoRA changes the text encoder. Only used when a clip is wired."))
+            inputs.append(io.Combo.Input(f"apply_to_stage{sfx}", options=list(dit_hooks.STAGES), default="Both", optional=True,
+                                         extra_dict={"funui_needs_module": ["two_stage"]},
+                                         tooltip="Which part of a Two stages run this LoRA works in. First: the smaller picture. "
+                                                 "Second: the full-size steps. Only the model is changed for First or Second; "
+                                                 "the text encoder strength is not used."))
         return io.Schema(
             node_id="FunUILoraLoader",
             display_name="FunUI LoRA Loader",
@@ -68,10 +73,38 @@ class FunUILoraLoader(io.ComfyNode):
                 if n == 1 and not any(kw.get(f"lora_name_{k}", NONE) not in (None, NONE) for k in range(2, MAX_LORAS + 1)):
                     notes.append("no LoRA picked")
                 continue
-            model, clip, note = _apply(model, clip, name, kw.get(f"strength_model{sfx}", 1.0),
-                                       kw.get(f"strength_clip{sfx}", 1.0))
+            stage = kw.get(f"apply_to_stage{sfx}", "Both")
+            if stage in ("First", "Second"):
+                model, note = _apply_to_stage(model, name, kw.get(f"strength_model{sfx}", 1.0), stage)
+            else:
+                model, clip, note = _apply(model, clip, name, kw.get(f"strength_model{sfx}", 1.0),
+                                           kw.get(f"strength_clip{sfx}", 1.0))
             notes.append(note)
         return io.NodeOutput(model, clip, "\n".join(notes))
+
+
+def _apply_to_stage(model, lora_name, strength_model, stage):
+    """One LoRA for one stage of Two stages. The patches ride on the model, unapplied: Two stages puts them on the
+    model of the stage they belong to. Returns (model, status line)."""
+    if strength_model == 0:
+        log.alert("FunUI LoRA Loader", f"{lora_name} has its strength at 0 and was not applied")
+        return model, f"{lora_name}: strength is 0, not applied"
+    path = folder_paths.get_full_path_or_raise("loras", lora_name)
+    lora = comfy.utils.load_torch_file(path, safe_load=True)
+    patches, how, dropped = match(model, None, lora)
+    if not patches:
+        log.alert("FunUI LoRA Loader", f"{lora_name} matched NOTHING in this model, so it does nothing: "
+                  "it is for another model, or names its layers in a way not known here")
+        return model, f"{lora_name}: matched nothing, not applied"
+    if dropped:
+        log.alert("FunUI LoRA Loader", f"{lora_name}: {dropped} of {len(patches) + dropped} weights do not fit this "
+                  "model's shapes and were left out (trained on another variant of it)")
+    patched = model.clone()
+    held = patched.get_attachment(dit_hooks.STAGE_PATCHES) or ()
+    patched.set_attachments(dit_hooks.STAGE_PATCHES, tuple(held) + ((stage, patches, strength_model),))
+    found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "")
+    log.info("FunUI LoRA Loader", f"{lora_name} kept for the {stage.lower()} stage of Two stages (model={strength_model}; {found})")
+    return patched, f"FunUI LoRA Loader | {lora_name} ({stage.lower()} stage only; model={strength_model}; {found})"
 
 
 def _apply(model, clip, lora_name, strength_model, strength_clip):

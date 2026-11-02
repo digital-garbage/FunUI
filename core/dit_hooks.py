@@ -214,6 +214,12 @@ STAGE = "funui_stage"
 FULL = "funui_full_sigmas"
 
 
+# Attached to a model by the LoRA loader for LoRAs meant for one stage only: a tuple of (stage, patches, strength).
+# They are NOT in the model's patches; Two stages puts each on the model of its own stage.
+STAGE_PATCHES = "funui_stage_patches"
+STAGES = ("Both", "First", "Second")
+
+
 def stage_of(guider):
     """1 or 2 while a Two stages run is in that stage, None for a plain run."""
     return getattr(guider, STAGE, None)

@@ -14,7 +14,7 @@ from comfy.patcher_extension import WrappersMP
 
 import folder_paths
 
-from ..._core import log
+from ..._core import dit_hooks, log
 
 from .stages import METHODS, release_upscaler, keep_whole_schedule, make_wrapper
 
@@ -92,6 +92,9 @@ def install(patcher, values, key):
     if not values.get("enabled") or values.get("resize") != "upscaler":
         release_upscaler()                      # "unused" means the method was switched away from the upscaler
     if not values.get("enabled"):
+        if patcher.get_attachment(dit_hooks.STAGE_PATCHES):
+            log.once("two_stage:stage_loras_off", log.WARNING, TITLE,
+                     "LoRAs are set for one stage, but Two stages is off, so they are not applied")
         return None
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None

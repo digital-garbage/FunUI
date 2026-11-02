@@ -59,6 +59,9 @@ def _one(name: str, declared: Any, required: bool) -> Dict[str, Any]:
     # [trait]: the form draws this only for a model that has every one (see core/traits.py).
     if isinstance(options.get("funui_requires"), list):
         widget["requires"] = options["funui_requires"]
+    # [module id]: the form draws this only while each of those modules is loaded and not turned off for the project.
+    if isinstance(options.get("funui_needs_module"), list):
+        widget["needs_module"] = options["funui_needs_module"]
     return widget
 
 

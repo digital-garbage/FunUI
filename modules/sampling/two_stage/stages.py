@@ -184,6 +184,18 @@ def backed_up(sigmas, steps, amount):
     return second
 
 
+def model_for_stage(patcher, stage):
+    """The model a stage samples with. The base one when no LoRA is meant for this stage alone, else a clone with those
+    LoRAs added: ComfyUI re-patches the weights when the next sampling call loads it, the same as for any other clone."""
+    mine = [h for h in (patcher.get_attachment(dit_hooks.STAGE_PATCHES) or ()) if h[0] == stage]
+    if not mine:
+        return patcher
+    staged = patcher.clone()
+    for _stage, patches, strength in mine:
+        staged.add_patches(patches, strength)
+    return staged
+
+
 def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwargs):
     run = original
     import comfy.nested_tensor
@@ -200,6 +212,8 @@ def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwa
             why = "the first stage would be as large as the full picture"
     if why is not None:
         log.once(f"two_stage:{why}", log.INFO, TITLE, f"not used this time: {why}")
+        if guider.model_patcher.get_attachment(dit_hooks.STAGE_PATCHES):
+            log.alert(TITLE, f"not used this time ({why}), so the LoRAs meant for one stage are not applied")
         return run(*args, **kwargs)
 
     video_noise, audio_noise = comfy.utils.unpack_latents(noise, latent_shapes)
@@ -232,14 +246,18 @@ def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwa
         except Exception as e:                      # noqa: BLE001 -- a missing file must not lose the run
             log.warning(TITLE, f"latent upscaler not used, bicubic instead: {e}")
     log.info(TITLE, f"first {steps} step(s) at latent {h1}x{w1} instead of {h}x{w}, then {len(second) - 1} at the full size")
+    base_model = guider.model_patcher
+    first_model, second_model = model_for_stage(base_model, "First"), model_for_stage(base_model, "Second")
     whole = sigmas.clone()
     whole[steps] = second[0]                        # the step index is found by sigma, so the schedule the model sees holds the one it is called at
     setattr(guider, FULL, whole)
     setattr(guider, dit_hooks.STAGE, 1)
+    guider.model_patcher = first_model
     try:
         run(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
              latent_shapes=shapes1)
     except BaseException:
+        guider.model_patcher = base_model
         setattr(guider, FULL, None)
         setattr(guider, dit_hooks.STAGE, None)
         raise
@@ -259,8 +277,10 @@ def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwa
         def shifted(step, x0, x, total):
             return callback(step + steps, x0, x, total + steps)
     setattr(guider, dit_hooks.STAGE, 2)
+    guider.model_patcher = second_model
     try:
         return run(noise, handed, sampler, second, None, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
     finally:
+        guider.model_patcher = base_model
         setattr(guider, FULL, None)
         setattr(guider, dit_hooks.STAGE, None)

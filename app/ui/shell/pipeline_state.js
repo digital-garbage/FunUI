@@ -756,6 +756,8 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
     /** The slots as the controls should show them: a skipped node keeps only the controls its pass-through needs. Read-only; never save this. */
     view: () => (slots && Object.keys(skipped).length ? slots.map(seen) : slots),
     skipped: () => skipped,
+    /** Whether a module is here and switched on for this project (its own feature may still be off in its settings). */
+    hasModule: (id) => Boolean(modulesById[id]) && !isOff(id) && !isQuarantined(id),
     /** The traits the chosen model has (null: not known, so nothing is hidden for it). */
     traits: () => lastTraits || null,
     /** How many transformer blocks the chosen model file has (null: not known). */

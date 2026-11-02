@@ -8,6 +8,10 @@ any delta with the right element count, so a wrong-shaped one merges scrambled (
 and a full-width LoRA on a curve-form H3 checkpoint churned ~25 GB failing per key.
 """
 
+import re
+
+import torch
+
 import comfy.lora
 import comfy.lora_convert
 
@@ -20,6 +24,56 @@ REKEY = (
     ("base_model.model.dit.", "diffusion_model."), ("base_model.model.", "diffusion_model."),
     ("dit.", "diffusion_model."), ("model.dit.", "diffusion_model."), ("transformer.", "diffusion_model."),
 )
+
+
+_DIFFUSERS = re.compile(r"(^|\.)(transformer_blocks|refiner_blocks)\.\d+\.")
+_PART = re.compile(r"^(?P<mod>.+?)(?P<tail>\.(?:lora_[AB]\.weight|lora_[AB]|alpha))$")
+_SUFFIX = (("attn.to_out.0", "attn.out_proj"), ("ff.net.0.proj", "mlp.fc1"), ("ff.net.2", "mlp.fc2"))
+_QKV = ("to_q", "to_k", "to_v")
+
+
+def from_diffusers(lora):
+    """-> (lora, extra key map). A LoRA written against the Diffusers layout of the H3 transformer, renamed to the one
+    ComfyUI loads, or the LoRA unchanged with {} when it is not in that layout.
+
+    Three things differ. The names (`transformer_blocks.N` / `refiner_blocks.N` are `blocks.N` / `token_refiner.blocks.N`;
+    `to_out.0`, `ff.net.0.proj`, `ff.net.2` are `out_proj`, `mlp.fc1`, `mlp.fc2`). Q, K and V are three Linears there and
+    ONE fused `qkv_proj` here, so each is aimed at its own rows of that weight (an offset, which costs no extra rank).
+    And the gated MLP: Diffusers stores the up half before the gate half, ComfyUI the gate half first, so the rows of
+    the `fc1` up-matrix swap halves. Without the swap the file loads, matches, and quietly does the wrong thing."""
+    if not any(_DIFFUSERS.search(k) for k in lora):
+        return lora, {}
+    out, extra, sizes = {}, {}, {}
+    for k, v in lora.items():
+        m = _PART.match(k[len("transformer."):] if k.startswith("transformer.") else k)
+        if not m:
+            out[k] = v
+            continue
+        mod, tail = m.group("mod"), m.group("tail")
+        mod = mod.replace("transformer_blocks.", "blocks.").replace("token_refiner.refiner_blocks.", "token_refiner.blocks.")
+        for old, new in _SUFFIX:
+            if mod.endswith(old):
+                mod = mod[: -len(old)] + new
+                break
+        if mod.endswith(".mlp.fc1") and tail.replace(".weight", "") == ".lora_B":
+            half = v.shape[0] // 2
+            v = torch.cat((v[half:], v[:half]), 0)
+        part = next((q for q in _QKV if mod.endswith(f".attn.{q}")), None)
+        if part is not None:
+            base = mod[: -len(part)] + "qkv_proj"
+            mod = f"{base}@{part}"
+            if tail.endswith("lora_B.weight") or tail == ".lora_B":
+                sizes[mod] = int(v.shape[0])
+        out[mod + tail] = v
+    # Offsets need every part's height: q starts at 0, k after q, v after k.
+    for mod in list(sizes):
+        base, part = mod.split("@")
+        heights = [sizes.get(f"{base}@{q}") for q in _QKV]
+        if None in heights:
+            continue
+        start = sum(heights[: _QKV.index(part)])
+        extra[mod] = (f"diffusion_model.{base}.weight", (0, start, sizes[mod]))
+    return out, extra
 
 
 def _rekey(lora, prefix, replacement):
@@ -47,6 +101,8 @@ def match(model, clip, lora):
     key_map = comfy.lora.model_lora_keys_unet(model.model, {})
     if clip is not None:
         key_map = comfy.lora.model_lora_keys_clip(clip.cond_stage_model, key_map)
+    lora, extra = from_diffusers(lora)
+    key_map.update(extra)
     converted = comfy.lora_convert.convert_lora(lora)
     best, how = comfy.lora.load_lora(converted, key_map, log_missing=False), "as-is"
     for prefix, replacement in REKEY:

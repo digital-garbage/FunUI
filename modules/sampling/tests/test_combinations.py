@@ -46,7 +46,20 @@ def _save_a_map(tmp_path, monkeypatch, n):
     measure.save(res)
 
 
-def _run(model, subset, staged):
+def _stage_lora(model, stage):
+    """The model with a LoRA kept for one stage, the way the LoRA loader leaves it."""
+    from core import dit_hooks
+    from modules.loaders.lora.keys import match
+    gen = torch.Generator().manual_seed(4)
+    lora = {"transformer.transformer_blocks.0.ff.net.2.lora_A.weight": torch.randn(4, 64, generator=gen),
+            "transformer.transformer_blocks.0.ff.net.2.lora_B.weight": torch.randn(64, 4, generator=gen)}
+    patches, _how, _dropped = match(model, None, lora)
+    kept = model.clone()
+    kept.set_attachments(dit_hooks.STAGE_PATCHES, ((stage, patches, 1.0),))
+    return kept
+
+
+def _run(model, subset, staged, stage=None):
     import comfy.samplers
     from comfy.nested_tensor import NestedTensor
     from modules.sampling.modifiers.nodes import FunUILoadModifiers
@@ -55,7 +68,7 @@ def _run(model, subset, staged):
         settings[f] = {"enabled": True, **FEATURES[f]}
     if staged:
         settings["two_stage"] = {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5}
-    patched, status = FunUILoadModifiers.execute(model.clone(), settings).result
+    patched, status = FunUILoadModifiers.execute(_stage_lora(model, stage) if stage else model.clone(), settings).result
     missing = [f for f in subset if f not in status]
     assert not missing, f"never installed (a test that installs nothing proves nothing): {missing}: {status}"
     guider = comfy.samplers.CFGGuider(patched)
@@ -78,3 +91,14 @@ def test_every_combination_finishes_with_a_finite_picture_and_sound(model, tmp_p
     video, audio = _run(model, subset, staged).unbind()
     assert torch.isfinite(video).all() and torch.isfinite(audio).all(), _name(subset)
     assert video.shape == (1, 24, 2, 8, 8)
+
+
+@pytest.mark.parametrize("stage", ["First", "Second"])
+@pytest.mark.parametrize("subset", [(), tuple(FEATURES)], ids=_name)
+def test_a_lora_kept_for_one_stage_runs_with_every_feature(model, tmp_path, monkeypatch, subset, stage):
+    from core import dit_hooks
+    from modules.system.taste import store
+    monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
+    _save_a_map(tmp_path, monkeypatch, dit_hooks.block_count(model))
+    video, audio = _run(model, subset, True, stage).unbind()
+    assert torch.isfinite(video).all() and torch.isfinite(audio).all(), (_name(subset), stage)

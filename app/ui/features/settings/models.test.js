@@ -123,3 +123,22 @@ test("a field only some models have (SLA) is not drawn for a model known to lack
   assert.ok(h3.includes("sla_method") && unknown.includes("sla_method"), "H3, or a model nobody recognised, keeps SLA");
   assert.ok(!ltx.includes("sla_method") && !/\bsla\b/.test(ltx.replace("sla_method", "")), "LTX has none of it");
 });
+
+test("a field that belongs to a module is drawn only while that module is here and not switched off", async () => {
+  const widgets = [{ name: "lora_name", type: "COMBO", choices: ["a"] }, { name: "apply_to_stage", type: "COMBO", choices: ["Both", "First", "Second"], needs_module: ["two_stage"] }];
+  const draw = async (hasModule) => {
+    const slots = [{ id: "lora", node: "XLoader", inputs: { lora_name: "a", apply_to_stage: "Both" } }];
+    const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
+      loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [], queueable: () => true, removedIds: () => [], offered: () => [], hasModule };
+    const page = models({ dom: createDom(), pipeline: ps, api: { describeNodes: async () => ({ nodes: { XLoader: { widgets } } }) } })();
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 0));
+    const tile = page.node.querySelector("[class*=cx-tile]"); if (tile) (tile.closest("button") || tile).click();
+    await new Promise((r) => setTimeout(r, 0));
+    const text = page.node.textContent;
+    page.node.remove();
+    return text;
+  };
+  assert.ok((await draw((id) => id === "two_stage")).includes("apply_to_stage"));
+  assert.ok(!(await draw(() => false)).includes("apply_to_stage"));
+});
