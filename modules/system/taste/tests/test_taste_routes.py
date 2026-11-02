@@ -145,3 +145,16 @@ def test_the_generation_route_forgets_unrated_runs_over_http(server):  # noqa: F
     assert status == 200 and out == {"dropped": 2}
     status, out = _request(server, "POST", "/fun/api/m/taste/rate", {"prompt_id": "p1", "rating": "liked"})
     assert status == 200 and out["recorded"] == [] and "new Generate" in out["why"]
+
+
+def test_a_rating_the_camera_learned_from_is_not_called_untaught(server, tmp_path, monkeypatch):  # noqa: F811
+    """Only Shot camera is on: Taste captured nothing, but the camera keeps its own memory and learned."""
+    from modules.conditioning.shot_camera import memory
+    monkeypatch.setenv("SHOT_CAMERA_MEMORY", str(tmp_path / "m.json"))
+    memory.record_run("c1", {"views": [{"view": "side view", "traits": ["none"]}], "arms": ["a1"]})
+    status, out = _request(server, "POST", "/fun/api/m/taste/rate", {"prompt_id": "c1", "rating": "liked"})
+    assert status == 200 and "why" not in out and "reason" not in out, out
+    assert out["taught"] == ["conditioning_shot_camera"], out
+    assert memory.view_stats()["side view"] == (1.0, 0.0)
+    status, out = _request(server, "POST", "/fun/api/m/taste/rate", {"prompt_id": "nobody", "rating": "liked"})
+    assert out["why"] and out["reason"] == "nothing" and "taught" not in out, out

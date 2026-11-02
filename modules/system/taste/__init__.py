@@ -239,13 +239,22 @@ def routes(table, base, web):
         except (ValueError, AttributeError) as exc:
             return web.json_response({"why": str(exc)}, status=400)
         # any module that learns from ratings (provides "on_rating") hears of it; one failing never loses the rating
+        taught = []
         for spec in _core.registry.current().specs.values():
             hear = spec.provides.get("on_rating")
             if hear:
                 try:
-                    hear(body.get("prompt_id"), body.get("rating"), body.get("axis"))
+                    if hear(body.get("prompt_id"), body.get("rating"), body.get("axis")):
+                        taught.append(spec.id)
                 except Exception as exc:
                     _core.log.once(f"on_rating:{spec.id}", _core.log.ALERT, spec.title, f"could not learn from this rating: {exc}")
+        if taught:
+            # something else learned from it (the camera keeps its own memory): the rating did teach, so the
+            # "captured nothing" notice would be wrong
+            out["taught"] = taught
+            if not out.get("recorded") and not out.get("updated"):
+                out.pop("why", None)
+                out.pop("reason", None)
         return web.json_response(out)
 
     @table.post(base + "/generation")
