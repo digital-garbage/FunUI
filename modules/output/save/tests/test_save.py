@@ -88,3 +88,15 @@ def test_higher_quality_keeps_more_of_the_picture(tmp_path):
         nodes.encode(path, _clip(20), 24.0, encoder="cpu", quality=q)
         sizes[q] = os.path.getsize(path)
     assert sizes["high"] > sizes["standard"]
+
+
+def test_the_last_decoded_picture_is_kept_exactly_for_the_next_shot(tmp_path, monkeypatch):
+    from PIL import Image
+    monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: str(tmp_path / "temp"))
+    frame = np.random.default_rng(1).integers(0, 256, (12, 16, 3), dtype=np.uint8)
+    nodes.keep_last_frame("FunUI_00007_.mp4", frame)
+    name = tmp_path / "temp" / nodes.last_frame_name("FunUI_00007_.mp4")
+    assert name.name == "funui_last_FunUI_00007_.png"
+    assert np.array_equal(np.array(Image.open(name).convert("RGB")), frame)           # lossless: every value as the sampler made it
+    monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: (_ for _ in ()).throw(OSError("no temp")))
+    nodes.keep_last_frame("x.mp4", frame)           # a failure here never fails the save

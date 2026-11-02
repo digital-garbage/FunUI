@@ -146,6 +146,11 @@ def last_frame(src: str, out_png: str, start=0.0, dur=None, fps=25.0, first=Fals
     run([ffmpeg(), "-y", "-ss", f"{at:.3f}", "-i", src, "-frames:v", "1", out_png])
     if not os.path.isfile(out_png) or os.path.getsize(out_png) == 0:
         raise ClipError("the clip has no picture at its end (is the window past the end of the render?)")
+    return judge(out_png)
+
+
+def judge(out_png: str) -> tuple[float, float]:
+    """-> (average brightness, a near-peak brightness) of a picture file, both 0 (black) .. 255."""
     try:
         from PIL import Image, ImageStat
     except ImportError as exc:

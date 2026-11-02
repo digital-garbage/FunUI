@@ -239,6 +239,15 @@ DARK_MEAN, DARK_PEAK = 20.0, 70.0     # a fade-out is dark AND flat: a night sce
 _frames: dict = {}                   # what a window's last frame was saved as: key -> (media id, brightness)
 
 
+def lossless_last(src: str, clip: dict) -> str | None:
+    """The lossless copy Save Video kept of a render's last picture, when the clip ends where the render does; else None."""
+    have = files.duration(src)
+    if not have or float(clip["in"]) + float(clip["dur"] or 0) < have - 1.5 / (clip["fps"] or 25.0):
+        return None                 # trimmed short of the render's end: that picture is not this clip's last
+    found = os.path.join(files.comfy_dir("temp") or "", "funui_last_" + os.path.splitext(os.path.basename(src))[0] + ".png")
+    return found if os.path.isfile(found) and os.path.getsize(found) else None
+
+
 def last_frame(project, scene_id: str, render: dict | None = None, window: dict | None = None, first: bool = False, at_fraction=None) -> dict:
     """The last picture of a scene's render, saved in the media bin: {media_id, brightness, dark}.
 
@@ -252,6 +261,14 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
     hit = _frames.get(key)
     if hit and media.path_for(hit[0]):
         return {"media_id": hit[0], "brightness": hit[1], "dark": hit[1] < DARK_MEAN and hit[2] < DARK_PEAK}
+    exact = None if first or at_fraction is not None else lossless_last(src, clip)
+    if exact:                       # the picture the sampler decoded, not the encoded video's copy of it
+        brightness, peak = files.judge(exact)
+        with open(exact, "rb") as fh:
+            entry = media.save_scratch(f"last_frame_{projects.safe_part(scene_id)[:12]}.png", fh.read(), os.path.dirname(exact))
+        log.info("Continuity", f"took the lossless last frame of scene {projects.safe_part(scene_id)[:40]} -> {entry['filename']} (brightness {brightness:.0f})")
+        _frames[key] = (entry["id"], brightness, peak)
+        return {"media_id": entry["id"], "brightness": brightness, "dark": brightness < DARK_MEAN and peak < DARK_PEAK}
     out = files.temp_file(f"funui_last_{projects.safe_part(project.id)[:8]}_{projects.safe_part(scene_id)}_{int(time.time() * 1000)}.png")
     try:
         brightness, peak = files.last_frame(src, out, clip["in"], clip["dur"], clip["fps"], first, at_fraction)

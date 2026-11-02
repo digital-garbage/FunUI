@@ -48,6 +48,23 @@ _HINT = (" (nvidia-smi can look fine while FFmpeg loads an older or missing libn
          "in a container check it is there and that the NVIDIA 'video' capability is on)")
 
 
+def last_frame_name(video_file: str) -> str:
+    """The lossless copy of a render's last picture, kept in ComfyUI's temp folder (not beside the video: the output folder is the gallery)."""
+    return "funui_last_" + os.path.splitext(os.path.basename(video_file))[0] + ".png"
+
+
+def keep_last_frame(video_file, frame):
+    """Save the last decoded picture exactly as the sampler made it: the next shot can continue from this instead of from
+    the encoded video (which has already lost some of it). Never worth failing the save over."""
+    try:
+        from PIL import Image
+        folder = folder_paths.get_temp_directory()
+        os.makedirs(folder, exist_ok=True)
+        Image.fromarray(frame).save(os.path.join(folder, last_frame_name(video_file)), compress_level=1)
+    except Exception as exc:                                   # noqa: BLE001 -- the video is saved; the next shot falls back to the video's own last picture
+        log.info("FunUI Save Video", f"could not keep the lossless last frame ({exc})")
+
+
 def _write(path, frames, fps, audio, metadata, codec):
     name, options = codec
     # use_metadata_tags keeps the workflow in the file; faststart puts the index first, which the preview player needs to seek
@@ -139,4 +156,5 @@ class FunUISaveVideo(io.ComfyNode):
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
         log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}")
+        keep_last_frame(file, frames[-1])
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

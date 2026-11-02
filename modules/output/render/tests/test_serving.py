@@ -273,3 +273,20 @@ def test_carry_log_route_records_the_slot_in_the_log_and_refuses_junk(comfy, ser
     assert any("reference 3" in r["message"] and entry["id"] in r["message"] for r in log.history())
     for bad in ({"scene_id": "s2", "media_id": "nope", "reference": 3}, {"scene_id": "s2", "media_id": entry["id"], "reference": 0}, {"media_id": entry["id"], "reference": 1}):
         assert _post(server, f"{BASE}/projects/{proj.id}/carry-log", bad)[0] == 400
+
+
+@needs_ffmpeg
+def test_last_frame_takes_the_lossless_copy_when_the_clip_ends_with_the_render(comfy, server):
+    from PIL import Image
+    from core import media
+    make_clip(comfy.output / "a.mp4", 2.5)
+    proj = _project(comfy, frames=50, frames_mode="timeline")         # 0.5 s + 2 s: ends where the 2.5 s render does
+    Image.new("RGB", (32, 24), (200, 40, 40)).save(comfy.temp / "funui_last_a.png")
+    serving._frames.clear()
+    status, a = _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1"})
+    assert status == 200 and a["dark"] is False
+    assert Image.open(media.path_for(a["media_id"])).convert("RGB").getpixel((3, 3)) == (200, 40, 40)           # the kept picture, not an extraction from the video
+    short = _project(comfy, frames=25, frames_mode="timeline")         # trimmed short of the render's end: that picture is not its last
+    serving._frames.clear()
+    b = _post(server, f"{BASE}/projects/{short.id}/last-frame", {"scene_id": "s1"})[1]
+    assert Image.open(media.path_for(b["media_id"])).convert("RGB").getpixel((3, 3)) != (200, 40, 40)
