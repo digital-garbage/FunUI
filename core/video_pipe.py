@@ -144,6 +144,23 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
             dec.kill()
 
 
+def last_frame_name(video_file: str) -> str:
+    """The lossless copy of a render's last picture, kept in ComfyUI's temp folder (Save Video writes it; the carry reads it)."""
+    return "funui_last_" + os.path.splitext(os.path.basename(video_file))[0] + ".png"
+
+
+def inherit_last_frame(old_file: str, new_file: str) -> None:
+    """A file made from `old_file` (upscaled, interpolated) continues from the same picture: the one the sampler made, taken before
+    this step touched it. The copy is under the new file's name so the carry finds it. Nothing to inherit, or no temp folder: nothing happens."""
+    try:
+        folder = comfy_dir("temp")
+        src = os.path.join(folder or "", last_frame_name(old_file))
+        if folder and os.path.isfile(src):
+            shutil.copyfile(src, os.path.join(folder, last_frame_name(new_file)))
+    except OSError:
+        pass
+
+
 def free_name(out_dir, filename, model):
     stem = os.path.splitext(os.path.basename(filename))[0]
     tag = os.path.splitext(os.path.basename(model))[0]

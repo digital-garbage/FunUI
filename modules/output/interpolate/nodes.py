@@ -37,5 +37,6 @@ def interpolate(media, options, interrupted=lambda: None) -> dict:
         frames = video_pipe.stream_file(src, os.path.join(out_dir, name), fn, interrupted, opts["multiplier"])
     except video_pipe.ClipError as exc:
         raise InterpolateError(str(exc)) from exc
+    video_pipe.inherit_last_frame(media["filename"], name)       # the next shot continues from the picture before this step, not after it
     log.info("FunUI Interpolate", f"{media['filename']} x{opts['multiplier']} ({opts['mode']}): {frames} frames -> {SUBFOLDER}/{name}")
     return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "output"}}

@@ -18,7 +18,7 @@ import folder_paths
 from comfy.cli_args import args
 from comfy_api.latest import io, ui
 
-from ..._core import log
+from ..._core import log, video_pipe
 
 ENCODERS = ("auto", "gpu", "cpu")
 CODECS = ("h264", "h265")
@@ -48,9 +48,7 @@ _HINT = (" (nvidia-smi can look fine while FFmpeg loads an older or missing libn
          "in a container check it is there and that the NVIDIA 'video' capability is on)")
 
 
-def last_frame_name(video_file: str) -> str:
-    """The lossless copy of a render's last picture, kept in ComfyUI's temp folder (not beside the video: the output folder is the gallery)."""
-    return "funui_last_" + os.path.splitext(os.path.basename(video_file))[0] + ".png"
+last_frame_name = video_pipe.last_frame_name
 
 
 def keep_last_frame(video_file, frame):

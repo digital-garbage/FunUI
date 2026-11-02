@@ -100,3 +100,21 @@ def test_run_writes_the_upscaled_file_beside_the_original_without_a_comfy_prompt
     assert upscale.probe(str(comfy.output / "funui_upscaled" / "a_rtx_high.mp4"))[:2] == (128, 96)
     with pytest.raises(RuntimeError, match="not in the output folder"):
         upscale.run({"filename": "gone.mp4"}, rtx.NAME)
+
+
+@needs_ffmpeg
+def test_an_upscaled_or_interpolated_file_inherits_the_lossless_last_frame_of_its_source(comfy, monkeypatch):
+    import sys
+    import types
+    from core import video_pipe
+    from modules.output.interpolate import framegen, nodes as interp
+    monkeypatch.setattr(video_pipe, "comfy_dir", lambda kind: str(comfy.output if kind == "output" else comfy.temp))
+    make_clip(str(comfy.output / "a.mp4"), seconds=0.5, size="64x48", rate=10, audio=True)
+    (comfy.temp / "funui_last_a.png").write_bytes(b"png-as-the-sampler-made-it")
+    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output)))
+    monkeypatch.setattr(framegen, "make", lambda o: (lambda prev, cur, i: []))
+    monkeypatch.setattr(video_pipe, "stream_file", lambda src, dst, fn, interrupted, mult: open(dst, "wb").close() or 1)
+    got = interp.interpolate({"filename": "a.mp4", "subfolder": "", "type": "output"}, {"multiplier": 2})["media"]["filename"]
+    assert (comfy.temp / video_pipe.last_frame_name(got)).read_bytes() == b"png-as-the-sampler-made-it"       # the picture from before the step
+    video_pipe.inherit_last_frame("nothing.mp4", "other.mp4")           # no picture to inherit: quietly nothing
+    assert not (comfy.temp / "funui_last_other.png").exists()

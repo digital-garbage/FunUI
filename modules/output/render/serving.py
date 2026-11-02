@@ -19,7 +19,7 @@ import os
 import time
 from collections import OrderedDict
 
-from ..._core import log, projects
+from ..._core import log, projects, video_pipe
 from . import effects, files
 
 try:
@@ -244,7 +244,7 @@ def lossless_last(src: str, clip: dict) -> str | None:
     have = files.duration(src)
     if not have or float(clip["in"]) + float(clip["dur"] or 0) < have - 1.5 / (clip["fps"] or 25.0):
         return None                 # trimmed short of the render's end: that picture is not this clip's last
-    found = os.path.join(files.comfy_dir("temp") or "", "funui_last_" + os.path.splitext(os.path.basename(src))[0] + ".png")
+    found = os.path.join(files.comfy_dir("temp") or "", video_pipe.last_frame_name(src))
     return found if os.path.isfile(found) and os.path.getsize(found) else None
 
 
