@@ -122,16 +122,16 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   }
   // Features that add inputs of their own (a Chat comment for the enhancer, say) say so through a hook: { inputs: {slot: {name: value}}, notes: [text] }.
   const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
-  const told = [];
+  const placed = [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
   if (!textOnly) notes.push(...noVideo);
   else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
   notes.push(...hookNotes);
-  // A picture a hook added to the references: said where it landed (or, if it found no place, by the "did not fit" note).
+  // A picture a hook added to the references: where it landed is recorded in the Log (if it found no place, the "did not fit" note says so).
   for (const id of carried) {
     const slotId = Object.keys(overrides).find((k) => overrides[k].media_id === id);
     const at = slotId && ((slots || []).find((x) => x.id === slotId)?.roles || []).map((r) => /^assets\.reference_(\d+)$/.exec(r.at || "")).find(Boolean);
-    if (at) told.push(`Continuity: the last frame of the clip before it (${id}) went into reference ${at[1]}.`);
+    if (at) placed.push({ media_id: id, reference: Number(at[1]) });
   }
   for (const out of outs) {
     for (const [id, fields] of Object.entries(out.inputs || {})) raw[id] = { ...raw[id], ...fields };
@@ -141,5 +141,5 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // Judged on what is SENT (a carried frame counts; a picture t2v blanks, or one this pipeline has no input for, does not).
   const picture = (source && (raw[source.slot.id] || {}).media_id) || Object.keys(overrides).length;
   if (prompt && !String((raw[prompt.slot.id] || {})[prompt.role.input] ?? "").trim() && !picture) notes.push("This shot has no text and no start picture, so the model makes whatever it likes.");
-  return { inputs: raw, unwired: unwired + (ignored ? 1 : 0), left, noPrompt: !prompt, notes, info: told };
+  return { inputs: raw, unwired: unwired + (ignored ? 1 : 0), left, noPrompt: !prompt, notes, placed };
 }

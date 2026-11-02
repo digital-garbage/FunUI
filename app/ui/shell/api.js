@@ -151,6 +151,7 @@ export const api = {
   },
   renderLibrary: () => call("GET", "/api/m/render/library"),
   lastFrame: (pid, body) => call("POST", `/api/m/render/projects/${encodeURIComponent(pid)}/last-frame`, body),
+  carryLog: (pid, body) => call("POST", `/api/m/render/projects/${encodeURIComponent(pid)}/carry-log`, body),
   suggestionStats: () => call("GET", "/api/shortcuts/suggestion_stats"),
   expandPrompt: (body) => call("POST", "/api/prompt/expand", { ...body, seed: 1 }),
   packs: () => call("GET", "/api/packs"),

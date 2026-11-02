@@ -15,7 +15,7 @@ export default {
       const mine = (app.pipeline.currentValues(slots) || {}).continuity;
       if (!mine) return {};       // the module that holds the choices is not here: this does nothing at all
       const carry = mine.carry !== false, guard = mine.dark_guard !== false;
-      if (!carry || project.generation_mode === "t2v" || ((scene.source || {}).type || "carry") !== "carry" || scene.source_image) return {};
+      if (!carry || project.generation_mode === "t2v" || ((scene.source || {}).type || "carry") !== "carry") return {};      // a picture on the scene is the aspect source here (a pinned one is on every scene), not a start: it does not stop the carry
       const prev = previousClip(project, scene);
       if (!prev.sceneId) return prev.quiet ? {} : { notes: [`Starts without a picture: ${prev.why}.`] };
       let got;

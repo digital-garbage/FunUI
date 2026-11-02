@@ -261,3 +261,15 @@ def test_a_poster_is_a_small_still_made_once_and_a_missing_file_is_a_404(comfy, 
     assert get(server, f"{BASE}/poster?filename=p.mp4&type=output")[2] == body
     assert get(server, f"{BASE}/poster?filename=nope.mp4")[0] == 404
     assert get(server, f"{BASE}/poster?filename=../secret.mp4")[0] == 404
+
+
+def test_carry_log_route_records_the_slot_in_the_log_and_refuses_junk(comfy, server):
+    from core import log, media
+    proj = _project(comfy, frames=50, frames_mode="timeline")
+    entry = media.save_scratch("last_frame_s1.png", b"\x89PNG\r\n\x1a\n", comfy.temp)
+    log._reset()
+    status, out = _post(server, f"{BASE}/projects/{proj.id}/carry-log", {"scene_id": "s2", "media_id": entry["id"], "reference": 3})
+    assert status == 200 and out["ok"] is True
+    assert any("reference 3" in r["message"] and entry["id"] in r["message"] for r in log.history())
+    for bad in ({"scene_id": "s2", "media_id": "nope", "reference": 3}, {"scene_id": "s2", "media_id": entry["id"], "reference": 0}, {"media_id": entry["id"], "reference": 1}):
+        assert _post(server, f"{BASE}/projects/{proj.id}/carry-log", bad)[0] == 400

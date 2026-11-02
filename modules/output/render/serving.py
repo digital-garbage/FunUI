@@ -19,7 +19,7 @@ import os
 import time
 from collections import OrderedDict
 
-from ..._core import projects
+from ..._core import log, projects
 from . import effects, files
 
 try:
@@ -262,6 +262,7 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
             os.remove(out)
         except OSError:
             pass
+    log.info("Continuity", f"took the last frame of scene {projects.safe_part(scene_id)[:40]} -> {entry['filename']} (brightness {brightness:.0f})")
     _frames[key] = (entry["id"], brightness, peak)
     return {"media_id": entry["id"], "brightness": brightness, "dark": brightness < DARK_MEAN and peak < DARK_PEAK}
 

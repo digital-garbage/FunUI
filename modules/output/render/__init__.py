@@ -13,7 +13,7 @@ import asyncio
 import os
 import time
 
-from ..._core import jobs, media, projects
+from ..._core import jobs, log, media, projects
 from . import files, library, rtx, serving, stitch, upscale
 
 try:
@@ -76,6 +76,18 @@ def routes(table, base, web):
             return bad(f"No render for this scene ({exc}).", 404)
         except (files.ClipError, ValueError, OSError) as exc:
             return bad(str(exc), 502)
+
+    @table.post(base + "/projects/{pid}/carry-log")
+    async def _carry_log(req):
+        """The Log's record that a carried last frame went into a reference slot (the page knows the slot; the node does not)."""
+        proj = project_of(req)
+        body = await body_of(req)
+        scene_id, mid, ref = body.get("scene_id"), body.get("media_id"), body.get("reference")
+        if not isinstance(scene_id, str) or not media.is_id(mid) or isinstance(ref, bool) or not isinstance(ref, int) or ref < 1:
+            return bad("Send {scene_id, media_id, reference}.")
+        entry = media.get(mid) or {}
+        log.info("Continuity", f"last frame of the clip before scene {projects.safe_part(scene_id)[:40]} ({proj.id[:8]}) -> reference {ref}: {entry.get('name', mid)} [{mid}]")
+        return web.json_response({"ok": True})
 
     @table.get(base + "/upscale_models")
     async def _upscale_models(_req):
