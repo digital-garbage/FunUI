@@ -4,6 +4,8 @@ import http.client
 import json
 import time
 
+import re
+
 import pytest
 
 pytest.importorskip("aiohttp")
@@ -11,6 +13,7 @@ pytest.importorskip("aiohttp")
 from core import media, projects  # noqa: E402
 from core.tests.test_routes_shortcuts import server  # noqa: E402,F401
 from core import jobs  # noqa: E402
+from modules.output.render import files  # noqa: E402
 from modules.output.render.tests.clips import comfy, make_clip, needs_ffmpeg, probe  # noqa: E402,F401
 
 BASE = "/fun/api/m/render"
@@ -101,6 +104,10 @@ def test_a_clip_imports_into_the_media_library_trimmed_and_named(comfy, server):
     assert probe(media.path_for(out["media"]["id"]))[0] == pytest.approx(1.0, abs=0.15)
     status, whole = call(server, "POST", f"{BASE}/import-clip", {"clip": {"filename": "a.mp4"}})
     assert status == 200 and media.path_for(whole["media"]["id"]).read_bytes() == (comfy.output / "a.mp4").read_bytes()
+    assert re.fullmatch(r"[0-9a-f]{12}\.mp4", whole["media"]["name"]), "no name given: a hash like every saved render, not the project's name"
+    again = call(server, "POST", f"{BASE}/import-clip", {"clip": {"filename": "a.mp4"}})[1]
+    assert again["media"]["name"] == whole["media"]["name"]
+    assert call(server, "POST", f"{BASE}/import-clip", {"clip": {"filename": "a.mp4", "in": 1.0, "dur": 1.0}})[1]["media"]["name"] != whole["media"]["name"]
     assert call(server, "POST", f"{BASE}/import-clip", {"clip": {}})[0] == 400
     status, body = call(server, "POST", f"{BASE}/import-clip", {"clip": {"filename": "gone.mp4"}})
     assert status == 400 and "not on disk" in body["detail"]
@@ -117,3 +124,14 @@ def test_finished_jobs_are_forgotten_past_the_cap(monkeypatch):
     monkeypatch.setattr(jobs, "MAX_JOBS", 3)
     ids = [jobs.new() for _ in range(5)]
     assert jobs.get(ids[0]) is None and jobs.get(ids[4]) is not None
+
+
+@needs_ffmpeg
+def test_render_keeps_the_real_frame_rate_of_interpolated_clips(comfy, server):
+    make_clip(comfy.output / "fast.mp4", 1.0, rate=48)
+    proj = projects.save(projects.Project(width=160, height=120))
+    status, queued = call(server, "POST", f"{BASE}/projects/{proj.id}/render", {"clips": [clip("fast.mp4", fps=24)]})   # the setting says 24, the file runs at 48
+    assert status == 200
+    job = finish(server, f"{BASE}/projects/{proj.id}/render", queued["job_id"])
+    assert job["state"] == "done"
+    assert files.frame_rate(str(comfy.temp / job["media"]["filename"])) == "48/1"

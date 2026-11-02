@@ -268,6 +268,15 @@ def export_canvas(project, clips: list[dict], paths: list[str], fallback: tuple[
     return int(_f(clips[idx].get("w")) or fallback[0]), int(_f(clips[idx].get("h")) or fallback[1])
 
 
+def _rate(text) -> float:
+    """ffprobe's "48/1" -> 48.0; 0.0 when unreadable."""
+    try:
+        num, _, den = str(text).partition("/")
+        return float(num) / float(den or 1)
+    except (ValueError, ZeroDivisionError):
+        return 0.0
+
+
 def render(project, clips: list[dict]) -> dict:
     """Run the final render: -> {"media": {...temp file...}, "clips": n}. Blocking: call it off the event loop."""
     clips = [c for c in clips if _clip_spec_ok(c)] if isinstance(clips, list) else []
@@ -285,6 +294,11 @@ def render(project, clips: list[dict]) -> dict:
         for c in clips:
             c["w"], c["h"] = cw, ch                 # build_filter reads the canvas off the clips
         fps = _f(clips[0].get("fps")) or fps
+        real = [r for r in (_rate(files.frame_rate(p)) for p in paths) if r > 0]
+        if real:                                    # what the files really run at (interpolated renders are faster than the project's setting); the fastest wins so none is thinned
+            fps = max(real)
+            for c in clips:
+                c["fps"] = fps
         for i, (c, p) in enumerate(zip(clips, paths)):
             c["has_audio"] = files.has_audio(p)
             have, want = files.duration(p), _f(c.get("dur"))

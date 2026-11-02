@@ -31,14 +31,14 @@ export default {
       try { await work(); } catch (err) { tell(err.message); } finally { busy = false; draw(); }
     };
     const exportIt = run(async () => {
-      const name = p.project.name, media = await join();         // named for the project it was started in
+      const media = await join();
       if (!media) return;
-      app.dom.download(viewUrl(media), `${name}.mp4`);
+      app.dom.download(viewUrl(media), "");                      // empty: the browser takes the server's hash name, never the project's
     });
     const toBin = run(async () => {
-      const name = p.project.name, media = await join();
+      const media = await join();
       if (!media) return;
-      const { media: entry } = await call("POST", `${RENDER}/import-clip`, { clip: media, name: `${name}.mp4` });
+      const { media: entry } = await call("POST", `${RENDER}/import-clip`, { clip: media });
       app.say("media");
       c.toast.good({ text: `Saved to the media bin as ${entry.name}.` });
     });

@@ -24,7 +24,7 @@ export default {
         await p.flush();
         const state = await runJob(`${RENDER}/projects/${open.id}/render`, { clips });
         if (state.state !== "done") return tell(state.detail || "The render failed.");
-        const { media } = await call("POST", `${RENDER}/import-clip`, { clip: state.media, name: `${open.name}.mp4` });
+        const { media } = await call("POST", `${RENDER}/import-clip`, { clip: state.media });
         if (app.say) app.say("media");                   // the bin shows it now
         c.toast.good({ text: `Rendered: saved to the media bin as ${media.name}.` });
       } catch (err) { tell(err.message); } finally { busy = false; draw(); }

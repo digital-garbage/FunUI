@@ -165,7 +165,9 @@ def routes(table, base, web):
         clip = body.get("clip")
         if not isinstance(clip, dict) or not (clip.get("bin_media_ref") or clip.get("filename")):
             return bad("Missing clip source.")
-        name = str(body.get("name") or "clip.mp4").strip() or "clip.mp4"
+        name = str(body.get("name") or "").strip()
+        if not name:        # no name given: a hash of which video it is, as every other saved render gets (never the project's name)
+            name = serving.saved_name("|".join(str(clip.get(k) or "") for k in ("bin_media_ref", "type", "subfolder", "filename", "in", "dur")), ".mp4")
         if not name.lower().endswith((".mp4", ".webm", ".mov", ".mkv", ".avi")):
             name += ".mp4"
         try:
