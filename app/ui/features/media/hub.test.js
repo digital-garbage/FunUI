@@ -40,7 +40,7 @@ test("the selected scene's references are marked on their tiles, and the menu ta
   const flag = (n) => [...named(n).querySelectorAll(".cx-cell-flag")].map((x) => x.textContent).join();
   assert.deepEqual([flag("dog.png"), flag("cat.png"), flag("owl.png")], ["R1", "R2", "📌R3"]);
   const clear = [...host.querySelectorAll("button")].find((b) => b.textContent.startsWith("Clear references"));
-  assert.ok(clear && !clear.hidden && /\(3\)/.test(clear.textContent), "counts every picture used in any scene, pinned ones too");
+  assert.ok(clear && !clear.hidden && /\(2\)/.test(clear.textContent), "counts every picture in any scene's own list; pins are not counted");
   document.querySelectorAll(".cx-popover").forEach((n) => n.remove());
   named("dog.png").dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   const stop = [...document.querySelectorAll(".cx-menu-item")].find((b) => b.textContent.includes("Stop using as a reference"));
@@ -48,7 +48,7 @@ test("the selected scene's references are marked on their tiles, and the menu ta
   stop.click();
   assert.deepEqual(set, [["s1", "references", ["m1"]]]);
   clear.click();
-  assert.deepEqual([doc.scenes.map((x) => x.references), doc.fixed_references], [[[], []], {}], "one click takes them off every scene and unpins");
+  assert.deepEqual([doc.scenes.map((x) => x.references), doc.fixed_references], [[[], []], { m3: 3 }], "one click empties every scene's list; the pin stays");
 });
 
 test("a changed pin repaints the slot numbers on the tiles even when the list of references is the same", async () => {

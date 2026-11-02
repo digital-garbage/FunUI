@@ -87,10 +87,10 @@ test("removing the first cut of a unit hands its takes to the clip that becomes 
   assert.deepEqual(Object.keys(p.scene_variants), ["b"]);
 });
 
-test("clearReferences empties every scene and the pins, and says how many pictures were in use", async () => {
+test("clearReferences empties every scene's own list, keeps the pins, and says how many pictures were in use", async () => {
   const { clearReferences, allReferences } = await import("../edits.js");
   const p = { fixed_references: { a: 1 }, scenes: [{ id: "x", references: ["b", "c"] }, { id: "y", references: ["b"] }, { id: "z" }] };
-  assert.equal(allReferences(p).size, 3);
-  assert.equal(clearReferences(p), 3);
-  assert.deepEqual([p.scenes.map((s) => s.references || []), p.fixed_references, clearReferences(p)], [[[], [], []], {}, 0]);
+  assert.equal(allReferences(p).size, 2);
+  assert.equal(clearReferences(p), 2);
+  assert.deepEqual([p.scenes.map((s) => s.references || []), p.fixed_references, clearReferences(p)], [[[], [], []], { a: 1 }, 0]);
 });

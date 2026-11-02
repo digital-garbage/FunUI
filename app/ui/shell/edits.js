@@ -18,17 +18,15 @@ export function addScene(p, sourceType = "carry") {
   return sc;
 }
 
-/** Every picture used as a reference anywhere in the project: each scene's own and the pinned ones (which go to every scene). */
+/** Every picture in any scene's own reference list. The pinned ones (project.fixed_references) are a separate setting and are not counted. */
 export function allReferences(p) {
-  return new Set([...Object.keys(p.fixed_references || {}), ...(p.scenes || []).flatMap((s) => s.references || [])]);
+  return new Set((p.scenes || []).flatMap((s) => s.references || []));
 }
 
-/** Stop using any reference picture in the whole project: every scene's list and the pins. -> how many pictures were in use (0: nothing changed). */
+/** Empty every scene's own reference list; the pins stay. -> how many pictures were in use (0: nothing changed). */
 export function clearReferences(p) {
   const n = allReferences(p).size;
-  if (!n) return 0;
   for (const s of p.scenes || []) if ((s.references || []).length) s.references = [];
-  p.fixed_references = {};
   return n;
 }
 

@@ -149,7 +149,7 @@ export default {
     } });
     const controls = { sort, view: view, cols: tileSize };
     bulk.node.hidden = true;
-    const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in every scene, pinned ones too", onClick: () => p.edit(clearReferences) });
+    const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in every scene (pinned ones stay)", onClick: () => p.edit(clearReferences) });
     host.append(c.toolbar.default({ items: [c.text.sm({ text: "Media" })], trailing: [clearRefs, selectBtn, bulk] }).node, drop.node, note.node, seg("Show", FILTERS, "filter").node, sort.node,
       view.node, tileSize.node, shelf.node);
 
