@@ -256,7 +256,7 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
     try:
         brightness, peak = files.last_frame(src, out, clip["in"], clip["dur"], clip["fps"], first, at_fraction)
         with open(out, "rb") as fh:
-            entry = media.save_upload(f"last_frame_{projects.safe_part(scene_id)[:12]}.png", fh.read())
+            entry = media.save_scratch(f"last_frame_{projects.safe_part(scene_id)[:12]}.png", fh.read(), os.path.dirname(out))      # a working file in ComfyUI's temp folder, not an upload in the bin
     finally:
         try:
             os.remove(out)

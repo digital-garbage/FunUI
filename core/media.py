@@ -117,7 +117,7 @@ def listing() -> list[dict]:
     if fresh:
         with _LOCK:
             _save_index(items)
-    out = [it for it in items if (config.MEDIA_DIR / it.get("filename", "")).is_file()]
+    out = [it for it in items if not it.get("scratch") and (config.MEDIA_DIR / it.get("filename", "")).is_file()]      # scratch files are not the user's: never listed
     out.sort(key=lambda i: i.get("added", 0), reverse=True)
     return out
 
@@ -161,6 +161,28 @@ def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
     # read here that raced another upload's write would silently drop it.
     with _LOCK:
         items = _load_index()
+        items.append(entry)
+        _save_index(items)
+    return entry
+
+
+def save_scratch(orig_name: str, data: bytes, folder) -> dict:
+    """A picture the app made for one run (a carried last frame): written into `folder` (ComfyUI's temp folder), answerable by id
+    like any media but never listed in the bin. It goes when the folder is cleared; entries whose file is gone are dropped here."""
+    if not data:
+        raise ValueError("that file is empty")
+    ext = Path(orig_name or "").suffix.lower()
+    if ext not in _IMAGE_EXT:
+        raise ValueError(f"{ext or 'that file type'} is not a picture")
+    mid = uuid.uuid4().hex[:12]
+    target = Path(folder) / (mid + ext)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    # `filename` is the absolute path: MEDIA_DIR / <absolute> is that path, so path_for, delete and the thumbnails need no second case.
+    entry = {"id": mid, "name": (Path(orig_name or "").name or target.name)[:MAX_NAME], "filename": str(target), "kind": "image",
+             "size": len(data), "added": time.time(), "scratch": True}
+    with _LOCK:
+        items = [it for it in _load_index() if not (it.get("scratch") and not Path(it.get("filename", "")).is_file())]
         items.append(entry)
         _save_index(items)
     return entry

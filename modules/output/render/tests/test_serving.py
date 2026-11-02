@@ -232,13 +232,14 @@ def _post(port, path, body):
 
 
 @needs_ffmpeg
-def test_last_frame_route_saves_a_picture_to_the_bin_once_and_flags_a_fade_to_black(comfy, server):
+def test_last_frame_route_saves_a_picture_to_the_temp_folder_once_and_flags_a_fade_to_black(comfy, server):
     from core import media
     moov_at_end(comfy.output / "a.mp4", 4.0)
     proj = _project(comfy, frames=50, frames_mode="timeline")
     serving._frames.clear()
     status, a = _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1"})
     assert status == 200 and a["dark"] is False and media.path_for(a["media_id"])
+    assert media.path_for(a["media_id"]).parent == comfy.temp and a["media_id"] not in [m["id"] for m in media.listing()]      # a working file in temp, never in the user's bin
     assert _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1"})[1]["media_id"] == a["media_id"]     # same window: same file
     subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=160x120:d=2:r=25", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(comfy.output / "black.mp4")], check=True, capture_output=True)
     dark = _project(comfy, frames=50, frames_mode="timeline")
