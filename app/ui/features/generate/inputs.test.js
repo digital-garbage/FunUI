@@ -150,13 +150,14 @@ test("a video picked as the start feeds its frames to what the picture fed, when
   learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
   const mk = (flag) => [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", ...(flag ? { video_frames: true } : {}) }], inputs: {} },
     { id: "anchor", node: "X", inputs: { image: ["src", 0], other: ["src", 1] } }];
-  const run = (slots, id, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", source_image: id }, slots, expand: async () => null });
+  const run = (slots, id, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", references: [id] }, slots, expand: async () => null });
   const on = await run(mk(true), "vid", { video_input: { on: true, skip_first: 3 } });
   assert.equal(on.inputs.src.full, true);
   assert.equal(JSON.parse(on.inputs.src.prepare).skip_first, 3);
   assert.equal((await run(mk(true), "vid")).inputs.src.prepare, undefined);          // no preparation switched on: whole video as before
   assert.equal((await run(mk(false), "vid")).inputs.src.full, undefined);          // the pipeline did not say: first frame only
   assert.equal((await run(mk(true), "pic")).inputs.src.full, undefined);          // a picture stays a picture
+  assert.equal((await buildInputs({ project: { video: {} }, scene: { text: "x", source_image: "vid" }, slots: mk(true), expand: async () => null })).inputs.src.media_id, "");          // the scene's own picture is not a reference: it starts nothing here
   learn([]);
 });
 
@@ -168,7 +169,7 @@ test("a video-in pipeline takes the first video among the references as its star
   const r = await run({ references: ["pic", "vid"] }, { generation_mode: "t2v" });
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
-  assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "pic");          // a picked start wins
+  assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "vid");          // a picture on the scene (the aspect source) neither wins over nor blocks the reference
   assert.ok((await run({ references: ["pic"] })).notes.some((n) => /works from a video/.test(n)));
   learn([]);
 });
@@ -180,7 +181,7 @@ test("an LTX image-to-video pipeline starts from the first reference picture whe
   const run = (scene, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", ...scene }, slots, expand: async () => null });
   assert.equal((await run({ references: ["pic", "pic2"] })).inputs.src.media_id, "pic");
   assert.equal((await run({ references: ["pic", "vid"] })).inputs.src.media_id, "vid");          // a video is the start when there is one
-  assert.equal((await run({ source_image: "pic2", references: ["pic"] })).inputs.src.media_id, "pic2");          // a picked start wins
+  assert.equal((await run({ source_image: "pic2", references: ["pic"] })).inputs.src.media_id, "pic");          // the scene's own picture neither wins over nor blocks the references
   assert.equal((await run({ references: ["pic"] }, { generation_mode: "t2v" })).inputs.src.media_id, "");          // "From a prompt": no picture
   learn([]);
 });
@@ -269,4 +270,22 @@ test("a hook's carried frame takes the next free reference slot, after the scene
   assert.deepEqual([full.inputs.r1.media_id, full.inputs.r2.media_id, full.unwired], ["a", "b", 1]);
   assert.deepEqual(full.placed, []);
   assert.equal(kinds.get("frame"), "image");
+});
+
+test("a picture on the scene (the aspect source) never changes what the references do", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "pic", name: "p.png", kind: "image" }, { id: "vid", name: "v.mp4", kind: "video" }]);
+  const wired = (n) => ({ id: `r${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "m", input: `img${n}` } }] });
+  const sets = {
+    h3: [{ id: "m", node: "Model" }, { id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] }, wired(1), wired(2)],
+    video_in: [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true, video_only: true }] }],
+  };
+  const carry = [async () => ({ references: ["frame"] })];
+  for (const [name, slots] of Object.entries(sets)) {
+    const run = (scene) => buildInputs({ project: { video: {} }, scene: { text: "x", references: ["vid"], ...scene }, slots, expand: async () => null, hooks: carry });
+    const [without, withPic] = [await run({}), await run({ source_image: "pic" })];
+    const refs = (r) => Object.fromEntries(Object.entries(r.inputs).filter(([id]) => id !== "src"));
+    assert.deepEqual([refs(withPic), withPic.unwired, withPic.placed], [refs(without), without.unwired, without.placed], name);
+  }
+  learn([]);
 });
