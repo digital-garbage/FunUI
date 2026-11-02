@@ -18,6 +18,20 @@ export function addScene(p, sourceType = "carry") {
   return sc;
 }
 
+/** Every picture used as a reference anywhere in the project: each scene's own and the pinned ones (which go to every scene). */
+export function allReferences(p) {
+  return new Set([...Object.keys(p.fixed_references || {}), ...(p.scenes || []).flatMap((s) => s.references || [])]);
+}
+
+/** Stop using any reference picture in the whole project: every scene's list and the pins. -> how many pictures were in use (0: nothing changed). */
+export function clearReferences(p) {
+  const n = allReferences(p).size;
+  if (!n) return 0;
+  for (const s of p.scenes || []) if ((s.references || []).length) s.references = [];
+  p.fixed_references = {};
+  return n;
+}
+
 // A scene that had a render leaves a ghost clip behind; one that never rendered just goes.
 function ghostOrDrop(p, sc, afterId, pending) {
   const renders = p.scene_renders || (p.scene_renders = {});

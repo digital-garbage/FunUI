@@ -30,23 +30,25 @@ test("a click on a tile looks at it on the monitor; the context menu's resolutio
 
 test("the selected scene's references are marked on their tiles, and the menu takes one back off", async () => {
   const set = [];
-  const project = { selected: { id: "s1", references: ["m2", "m1"] }, setScene: (...a) => set.push(a) };
+  const doc = { fixed_references: { m3: 3 }, scenes: [{ id: "s1", references: ["m2", "m1"] }, { id: "s2", references: ["m1"] }] };
+  const project = { selected: doc.scenes[0], project: doc, setScene: (...a) => set.push(a), edit: (fn) => fn(doc) };
   const api = { media: async () => ({ media: [{ id: "m1", name: "cat.png", kind: "image" }, { id: "m2", name: "dog.png", kind: "image" }, { id: "m3", name: "owl.png", kind: "image" }] }) };
   const host = document.createElement("div");
   hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
   await new Promise((r) => setTimeout(r, 10));
   const named = (n) => [...host.querySelectorAll(".cx-cell")].find((x) => x.textContent.includes(n));
   const flag = (n) => [...named(n).querySelectorAll(".cx-cell-flag")].map((x) => x.textContent).join();
-  assert.deepEqual([flag("dog.png"), flag("cat.png"), flag("owl.png")], ["R1", "R2", ""]);
+  assert.deepEqual([flag("dog.png"), flag("cat.png"), flag("owl.png")], ["R1", "R2", "📌R3"]);
   const clear = [...host.querySelectorAll("button")].find((b) => b.textContent.startsWith("Clear references"));
-  assert.ok(clear && !clear.hidden && /\(2\)/.test(clear.textContent), "one click takes them all off");
+  assert.ok(clear && !clear.hidden && /\(3\)/.test(clear.textContent), "counts every picture used in any scene, pinned ones too");
   document.querySelectorAll(".cx-popover").forEach((n) => n.remove());
   named("dog.png").dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   const stop = [...document.querySelectorAll(".cx-menu-item")].find((b) => b.textContent.includes("Stop using as a reference"));
   assert.ok(stop && !stop.disabled, "not greyed: it can be taken off");
   stop.click();
+  assert.deepEqual(set, [["s1", "references", ["m1"]]]);
   clear.click();
-  assert.deepEqual(set, [["s1", "references", ["m1"]], ["s1", "references", []]]);
+  assert.deepEqual([doc.scenes.map((x) => x.references), doc.fixed_references], [[[], []], {}], "one click takes them off every scene and unpins");
 });
 
 test("a changed pin repaints the slot numbers on the tiles even when the list of references is the same", async () => {

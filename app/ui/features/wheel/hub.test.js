@@ -79,6 +79,10 @@ test("the wheel offers Clear references and the guidance switch, both opt-in, an
     assert.equal(camera, true);
     assert.equal(find("camera-off").label, "Enable camera move enhancements");
     assert.ok(!find("clear-refs").when(), "nothing to clear without references");
+    project.project.scenes.push({ id: "other", references: ["m9"] });
+    assert.ok(find("clear-refs").when(), "a reference in any scene counts, not only the selected one");
+    await find("clear-refs").run();
+    assert.ok(project.project.scenes.every((s) => !(s.references || []).length) && !find("clear-refs").when());
   } finally { off(); }
 });
 

@@ -1,6 +1,7 @@
 // The picker wheel: press the middle mouse button anywhere and every offered action fans out under the pointer; release on one to run it.
 import { composer as c } from "../../composer/composer.js";
 import { offer } from "../../shell/actions.js";
+import { allReferences, clearReferences } from "../../shell/edits.js";
 
 // Saved with the project (a new rental has an empty browser); the browser copy is only the starting point for a project that has no choice yet. enabled null = everything offered except the opt-in actions.
 const KEY = "funui_wheel";
@@ -43,8 +44,8 @@ export default {
         when: () => Boolean(app.runner && app.runner.quickAB && pipe() && pipe().setAllOff),
         run: () => app.runner.quickAB() }),
       offer(app, { id: "clear-refs", optIn: true, label: "Clear references", icon: "⌧",
-        when: () => Boolean(p() && p().selected && (p().selected.references || []).length),
-        run: async () => { await p().setScene(p().selected.id, "references", []); say("References cleared for this scene"); } }),
+        when: () => Boolean(p() && p().project && allReferences(p().project).size),
+        run: async () => { p().edit(clearReferences); say("References cleared for every scene"); } }),
       offer(app, { id: "fix-seed", optIn: true, icon: "⚄", get label() { return p().pref("random_seed", true) === false ? "Fresh seed each run" : "Fix the seed"; },
         when: () => Boolean(p() && p().pref),
         run: () => { const fix = p().pref("random_seed", true) !== false; p().setPref("random_seed", !fix); say(fix ? "Seed fixed: the seed node's own number is used" : "A fresh seed on every Generate"); } }),

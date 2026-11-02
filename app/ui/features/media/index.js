@@ -3,6 +3,7 @@ import { composer as c } from "../../composer/composer.js";
 import { learn } from "../../shell/bin.js";
 import { MAX_REFERENCES, referenceNumbers, sceneReferences } from "../../shell/reference_wiring.js";
 import { MEDIA_DRAG } from "../../shell/dnd.js";
+import { allReferences, clearReferences } from "../../shell/edits.js";
 
 const base = (id) => `/fun/api/media/${encodeURIComponent(id)}`;
 
@@ -148,7 +149,7 @@ export default {
     } });
     const controls = { sort, view: view, cols: tileSize };
     bulk.node.hidden = true;
-    const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in the selected scene", onClick: () => p.selected && p.setScene(p.selected.id, "references", []) });
+    const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in every scene, pinned ones too", onClick: () => p.edit(clearReferences) });
     host.append(c.toolbar.default({ items: [c.text.sm({ text: "Media" })], trailing: [clearRefs, selectBtn, bulk] }).node, drop.node, note.node, seg("Show", FILTERS, "filter").node, sort.node,
       view.node, tileSize.node, shelf.node);
 
@@ -164,7 +165,7 @@ export default {
     function draw(force) {
       if (adopt()) force = true;
       const sc = p.selected, plan = sc ? sceneReferences(sc, (p.project || {}).fixed_references) : { ids: [], pins: {} }, refs = plan.ids, nums = referenceNumbers(refs, plan.pins);
-      const key = `${(sc || {}).source_image}|${refs}|${nums}|${JSON.stringify(plan.pins)}|${items.map((m) => m.id)}|${selecting}|${[...chosen]}|${show.filter}`;
+      const key = `${allReferences(p.project || {}).size}|${(sc || {}).source_image}|${refs}|${nums}|${JSON.stringify(plan.pins)}|${items.map((m) => m.id)}|${selecting}|${[...chosen]}|${show.filter}`;
       if (!force && key === drawn) return;           // typing elsewhere must not rebuild the thumbnails
       drawn = key;
       const visible = new Set(items.filter((m) => show.filter === "all" || m.kind === show.filter).map((m) => m.id));
@@ -185,8 +186,9 @@ export default {
       bulk.node.hidden = !selecting;
       bulk.setLabel(`Delete (${chosen.size})`);
       bulk.setDisabled(!chosen.size);
-      clearRefs.node.hidden = !refs.length;
-      clearRefs.setLabel(`Clear references (${refs.length})`);
+      const inUse = allReferences(p.project || {}).size;
+      clearRefs.node.hidden = !inUse;
+      clearRefs.setLabel(`Clear references (${inUse})`);
     }
     async function refresh() {
       try {
