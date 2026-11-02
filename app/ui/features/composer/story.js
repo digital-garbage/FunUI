@@ -70,8 +70,18 @@ export function applyStory(p, parts) {
     });
   }
   if (p.timeline_manually_ordered && Array.isArray(p.timeline_order)) {
-    const have = new Set(p.timeline_order);
-    p.timeline_order = p.timeline_order.filter((id) => p.scenes.some((s) => s.id === id)).concat([...made.values()].filter((s) => !have.has(s.id)).map((s) => s.id));
+    // A new scene sits where the story puts it: right after the nearest earlier part's last scene on the timeline, else
+    // right before the nearest later part's first one (appending would turn a new first scene into the last).
+    const order = p.timeline_order.filter((id) => p.scenes.some((s) => s.id === id));
+    const idsOf = (i) => (kept[i] ? unitOf(kept[i]).map((s) => s.id) : [made.get(i).id]).filter((id) => order.includes(id));
+    parts.forEach((_, i) => {
+      if (!made.has(i) || order.includes(made.get(i).id)) return;
+      let at = -1;
+      for (let k = i - 1; k >= 0 && at < 0; k -= 1) { const ids = idsOf(k); if (ids.length) at = Math.max(...ids.map((id) => order.indexOf(id))) + 1; }
+      for (let k = i + 1; k < parts.length && at < 0; k += 1) { const ids = idsOf(k); if (ids.length) at = Math.min(...ids.map((id) => order.indexOf(id))); }
+      order.splice(at < 0 ? order.length : at, 0, made.get(i).id);
+    });
+    p.timeline_order = order;
   }
   return JSON.stringify(p) !== before;
 }

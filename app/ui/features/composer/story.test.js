@@ -76,3 +76,27 @@ test("clash finds a scene whose own text contains a cut word", () => {
   assert.equal(clash(p, ["qcut"]).id, "b");
   assert.equal(clash(p, ["other"]), null);
 });
+
+const manual = (ids, extra = {}) => ({ scenes: ids.map((id) => ({ id, text: id })), scene_renders: {}, scene_ghosts: [], timeline_manually_ordered: true, timeline_order: [...ids], ...extra });
+const shown = (p) => p.timeline_order.map((id) => p.scenes.find((s) => s.id === id)?.text ?? `?${id}`);
+
+test("a manually ordered timeline gets new scenes where the story puts them, not at the end", () => {
+  const p = manual(["two"]);
+  applyStory(p, ["one", "two", "three", "four"]);
+  assert.deepEqual(p.scenes.map((s) => s.text), ["one", "two", "three", "four"]);
+  assert.deepEqual(shown(p), ["one", "two", "three", "four"]);
+});
+
+test("a manually ordered timeline keeps its own order for old scenes while new ones sit next to their story neighbours", () => {
+  const p = manual(["a", "b", "c"], { timeline_order: ["c", "a", "b"] });
+  applyStory(p, ["a", "new", "b", "c"]);
+  assert.deepEqual(shown(p), ["c", "a", "new", "b"]);
+});
+
+test("a first scene typed gradually stays first (cut word added, then the second scene)", () => {
+  const p = manual(["one"]);
+  applyStory(p, ["one", ""]);
+  applyStory(p, ["one", "two"]);
+  applyStory(p, ["one", "two", "three"]);
+  assert.deepEqual(shown(p), ["one", "two", "three"]);
+});
