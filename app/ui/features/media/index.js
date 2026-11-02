@@ -1,7 +1,7 @@
 // The media bin: files brought in (reference images, clips), kept apart from what runs produce.
 import { composer as c } from "../../composer/composer.js";
 import { learn } from "../../shell/bin.js";
-import { referenceNumbers, sceneReferences } from "../../shell/reference_wiring.js";
+import { MAX_REFERENCES, referenceNumbers, sceneReferences } from "../../shell/reference_wiring.js";
 import { MEDIA_DRAG } from "../../shell/dnd.js";
 
 const base = (id) => `/fun/api/media/${encodeURIComponent(id)}`;
@@ -37,6 +37,37 @@ export default {
       p.setScene(sc.id, "source_image", item.id);
       draw();
     };
+    const inform = (text) => c.toast.info({ text });
+    /** Pin a picture as the aspect ratio source of every scene, and of each scene added later; or take the pin off (scenes keep what they have). */
+    const resAll = (it) => {
+      const item = items.find((m) => m.id === it.id);
+      if (!item || item.kind !== "image") return tell("Only an image can be a scene's aspect ratio source.");
+      if ((p.project || {}).fixed_source_image === item.id) {
+        p.edit((pr) => { pr.fixed_source_image = null; return true; });
+        inform("Unpinned. Scenes keep the aspect ratio source they have now.");
+      } else {
+        let n = 0, all = 0;
+        p.edit((pr) => { pr.fixed_source_image = item.id; for (const s of pr.scenes || []) { all += 1; if (s.source_image !== item.id) { s.source_image = item.id; n += 1; } } return true; });
+        inform(`Pinned as the aspect ratio source for all scenes (${n} of ${all} changed). New scenes start with it.`);
+      }
+      draw(true);
+    };
+    /** Every scene gets this as a reference. A scene that already has it (also as a pinned one) or has no free slot is skipped; what a model can take is checked when the run is made. */
+    const refAll = (it) => {
+      let n = 0, have = 0, full = 0;
+      p.edit((pr) => {
+        const fx = pr.fixed_references || {};
+        for (const s of pr.scenes || []) {
+          const plan = sceneReferences(s, fx);
+          if (plan.ids.includes(it.id)) { have += 1; continue; }
+          if (plan.ids.length >= MAX_REFERENCES) { full += 1; continue; }
+          s.references = [...(s.references || []), it.id]; n += 1;
+        }
+        return n > 0;
+      });
+      inform(`Added as a reference to ${n} scene${n === 1 ? "" : "s"}.${have ? ` ${have} already had it.` : ""}${full ? ` ${full} had no free reference slot.` : ""}`);
+      draw();
+    };
     /** The slot number this picture holds in the selected scene, and whether it is pinned there: null when it is not one of its references. */
     const slotOf = (id) => {
       const sc = p.selected;
@@ -49,6 +80,8 @@ export default {
     const context = (it, e) => c.menu.context({ x: e.clientX, y: e.clientY, onPick: (id) => (act[id] ? act[id](it) : extras(it).find((x) => x.id === id)?.run()),
       items: [{ id: "look", label: "Look at it on the monitor" }, ...(p.selected && p.selected.source_image === it.id ? [{ id: "unres", label: "Stop using as the selected scene's aspect ratio source" }]
           : [{ id: "res", label: "Use as the selected scene's aspect ratio source", disabled: !p.selected || it.kind === "audio" || !items.some((m) => m.id === it.id && m.kind === "image") }]),
+        { id: "resall", label: (p.project || {}).fixed_source_image === it.id ? "Unpin as the aspect ratio source for all scenes" : "Pin as the aspect ratio source for all scenes", disabled: !items.some((m) => m.id === it.id && m.kind === "image") },
+        { id: "refall", label: "Use as a reference for all scenes" },
         p.selected && (p.selected.references || []).includes(it.id) ? { id: "unref", label: "Stop using as a reference for the selected scene" }
           : { id: "ref", label: "Use as a reference for the selected scene", disabled: !p.selected || !!(slotOf(it.id) || {}).pinned }, ...pinItem(it), { id: "rename", label: "Rename…" },
         { id: "export", label: "Save to your computer", disabled: !items.some((m) => m.id === it.id && m.kind !== "audio") }, ...extras(it).map(({ id, label, disabled }) => ({ id, label, disabled })), { separator: true }, { id: "delete", label: "Delete from the bin", danger: true }] });
@@ -60,6 +93,7 @@ export default {
       } catch (err) { tell(`${err.message}${dead.size ? ` (${dead.size} of ${ids.length} were deleted)` : ""}`); }
       try {
         p.edit((pr) => {
+          if (dead.has(pr.fixed_source_image)) pr.fixed_source_image = null;
           const fx = pr.fixed_references || {}, stale = Object.keys(fx).filter((id) => dead.has(id));
           if (stale.length) pr.fixed_references = Object.fromEntries(Object.entries(fx).filter(([id]) => !dead.has(id)));
           return stale.length > 0 | pr.scenes.reduce((hit, s) => {
@@ -74,7 +108,7 @@ export default {
       await refresh();
     }
     const act = {
-      look: (it) => peek(it), res: (it) => pick(it),
+      look: (it) => peek(it), res: (it) => pick(it), resall: resAll, refall: refAll,
       ref: (it) => p.setScene(p.selected.id, "references", [...(p.selected.references || []), it.id]),
       pinref: (it) => {                                  // pin at the number it holds now, for every scene, or take the pin off
         const s = slotOf(it.id);

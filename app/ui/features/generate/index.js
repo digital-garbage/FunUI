@@ -76,6 +76,7 @@ export default {
         const bin = await Promise.resolve().then(() => app.api.media()).then((r) => new Set((r.media || []).map((m) => m.id)), () => null);
         const dead = (id) => bin && id && !bin.has(id);
         const prune = (pr) => {
+          if (dead(pr.fixed_source_image)) pr.fixed_source_image = null;
           const fx = pr.fixed_references || {}, deadFx = Object.keys(fx).filter(dead);      // a fixed slot whose picture is gone goes too, or every scene sends it
           for (const id of deadFx) delete fx[id];
           if (deadFx.length) pr.fixed_references = fx;

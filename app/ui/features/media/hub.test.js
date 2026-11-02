@@ -179,3 +179,40 @@ test("a project that opens after the bin still gets its saved view and sort", as
   assert.equal(host.querySelector("select").value, "added");
   assert.equal([...host.querySelectorAll(".cx-segment.cx-on")].map((b) => b.textContent).join(), "All,List,2×");
 });
+
+function menuTest(name, mediaList, doc, label, check) {
+  test(name, async () => {
+    const project = { selected: doc.scenes[0], project: doc, setScene: () => {}, edit: (fn) => fn(doc) };
+    const api = { media: async () => ({ media: mediaList }) };
+    const host = document.createElement("div");
+    hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
+    await new Promise((r) => setTimeout(r, 10));
+    document.querySelectorAll(".cx-popover, .cx-toast").forEach((n) => n.remove());
+    [...host.querySelectorAll(".cx-cell")].find((x) => x.textContent.includes("cat.png")).dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    [...document.querySelectorAll(".cx-menu-item")].find((b) => b.textContent.includes(label)).click();
+    await check(doc);
+  });
+}
+const cat = [{ id: "m1", name: "cat.png", kind: "image" }, { id: "m2", name: "a.wav", kind: "audio" }];
+
+menuTest("pinning the aspect ratio source sets every scene and is remembered for new ones", cat,
+  { scenes: [{ id: "s1", source_image: "" }, { id: "s2", source_image: "m9" }, { id: "s3", source_image: "m1" }] },
+  "Pin as the aspect ratio source for all scenes", async (d) => {
+    assert.deepEqual(d.scenes.map((s) => s.source_image), ["m1", "m1", "m1"]);
+    assert.equal(d.fixed_source_image, "m1");
+    const { addScene } = await import("../../shell/edits.js");
+    assert.equal(addScene(d).source_image, "m1");
+  });
+
+menuTest("an already pinned picture is unpinned, scenes keep it, new scenes no longer get it", cat,
+  { fixed_source_image: "m1", scenes: [{ id: "s1", source_image: "m1" }] },
+  "Unpin as the aspect ratio source for all scenes", async (d) => {
+    assert.equal(d.fixed_source_image, null);
+    assert.equal(d.scenes[0].source_image, "m1");
+    const { addScene } = await import("../../shell/edits.js");
+    assert.equal(addScene(d).source_image, undefined);
+  });
+
+menuTest("reference for all scenes skips scenes that have it or are full, pinned counts as having it", cat,
+  { fixed_references: { z: 1 }, scenes: [{ id: "s1" }, { id: "s2", references: ["m1"] }, { id: "s3", references: Array.from({ length: 15 }, (_, i) => `r${i}`) }, { id: "s4", references: ["a"] }] },
+  "reference for all scenes", (d) => assert.deepEqual(d.scenes.map((s) => s.references), [["m1"], ["m1"], Array.from({ length: 15 }, (_, i) => `r${i}`), ["a", "m1"]]));

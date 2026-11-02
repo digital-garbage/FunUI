@@ -13,6 +13,7 @@ const index = (p, id) => (p.scenes || []).findIndex((s) => s.id === id);
 /** A fresh, empty scene on the end of the plan. */
 export function addScene(p, sourceType = "carry") {
   const sc = { id: newId(), text: "", transition_to_next: "", source: { type: sourceType }, excluded: false, frames_mode: "project", fps_mode: "project" };
+  if (p.fixed_source_image) sc.source_image = p.fixed_source_image;       // a pinned aspect ratio source goes to every scene, new ones too
   p.scenes.push(sc);
   return sc;
 }

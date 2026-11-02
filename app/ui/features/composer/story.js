@@ -53,7 +53,7 @@ export function applyStory(p, parts) {
   const kept = parts.map((_, i) => (owner[i] >= 0 ? roots[owner[i]] : null));
   kept.forEach((r, i) => { if (r && norm(r.text) !== norm(parts[i])) unitOf(r).forEach((s) => { if (!isSubclip(s)) s.text = parts[i]; }); });      // a cut's first piece shares the prompt
   const made = new Map();
-  parts.forEach((text, i) => { if (!kept[i]) made.set(i, { id: newId(), text, transition_to_next: "", source: { type: "carry" }, excluded: false, frames_mode: "project", fps_mode: "project" }); });
+  parts.forEach((text, i) => { if (!kept[i]) made.set(i, { id: newId(), text, transition_to_next: "", source: { type: "carry" }, excluded: false, frames_mode: "project", fps_mode: "project", ...(p.fixed_source_image ? { source_image: p.fixed_source_image } : {}) }); });
   const owned = owner.filter((o) => o >= 0);
   if (owned.some((o, k) => k && o < owned[k - 1])) {                 // the parts were reordered: whole units move, into the slots the story's scenes held
     const fill = parts.flatMap((_, i) => (kept[i] ? unitOf(kept[i]) : [made.get(i)]));

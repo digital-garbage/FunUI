@@ -463,6 +463,8 @@ class Project:
     continuity_settings: dict = field(default_factory=dict)
     #: Media ids pinned to a slot for every scene: { media id: slot number 1-16 }.
     fixed_references: dict = field(default_factory=dict)
+    #: A picture pinned as the aspect ratio source for every scene; a scene added later starts with it.
+    fixed_source_image: str | None = None
     #: Reference-video preparation for the whole project, and whose wins: "auto" = the project's when it is on,
     #: otherwise the scene's; "project" / "scene" = that one only.
     video_input: dict = field(default_factory=lambda: _clean_video_input(None))
@@ -531,6 +533,7 @@ class Project:
             guide_settings=_blob(d.get("guide_settings"), dict),
             continuity_settings=_blob(d.get("continuity_settings"), dict),
             fixed_references=_pins(d.get("fixed_references")),
+            fixed_source_image=d.get("fixed_source_image") if media.is_id(d.get("fixed_source_image")) else None,
             video_input=_clean_video_input(d.get("video_input")),
             video_input_from=d.get("video_input_from") if d.get("video_input_from") in ("auto", "project", "scene") else "auto",
             generation_meta=_blob(d.get("generation_meta"), dict),

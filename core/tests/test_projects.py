@@ -622,3 +622,9 @@ def test_resolution_basis_old_projects_keep_the_pixel_count_rule_and_new_ones_st
     assert projects.Project.from_dict({"resolution_basis": "weird"}).resolution_basis == "area"
     assert [projects.Project.from_dict({"resolution_basis": b}).resolution_basis for b in ("short", "long", "area")] == ["short", "long", "area"]
     assert projects.Project(name="new").resolution_basis == "short"
+
+
+def test_a_pinned_source_image_survives_a_round_trip_and_a_bad_one_is_dropped():
+    p = projects.Project.from_dict({"fixed_source_image": "111111111111"})
+    assert projects.Project.from_dict(p.to_dict()).fixed_source_image == "111111111111"
+    assert projects.Project.from_dict({"fixed_source_image": "bad"}).fixed_source_image is None
