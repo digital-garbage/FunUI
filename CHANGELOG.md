@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now starts a hair earlier and ends a hair later than the schedule, so torchsde's rounding never lands inside it. The noise itself is unchanged and the picture was never affected.
+
 ### Added
 
 - **LoRA Loader: "Apply to stage"** (First, Second or Both, per slot). Shown only while the Two stages module is present and not switched off for the project; the feature itself may stay off in the sampler settings. A LoRA set to First works only in the smaller first stage, one set to Second only in the full-size steps; Two stages hands each stage the model with its own LoRAs, and ComfyUI re-patches the weights between the stages. Only the model changes for First or Second (the text encoder is encoded before sampling, so its strength is not used). When Two stages is off, or a run cannot be cut in two, those LoRAs are not applied and the Log says so. Both is the old behaviour. Tried on a small model on the CPU with every feature switched on; not on a GPU yet.

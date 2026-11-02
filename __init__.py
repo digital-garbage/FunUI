@@ -31,6 +31,11 @@ else:
     except Exception as exc:        # a broken route must not take ComfyUI down
         log.failed("core.routes", exc)
     from .core import addons
+    try:
+        from .core import brownian
+        brownian.install()          # no torchsde start-rounding warnings on SDE samplers
+    except Exception as exc:        # cosmetic; never take ComfyUI down
+        log.failed("core.brownian", exc)
     addons.install_wanted()         # add-ons switched on in Settings: installed now, before a module imports them
 
 
