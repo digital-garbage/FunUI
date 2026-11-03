@@ -1,6 +1,6 @@
 // ◆ Composer: the floating "prompt craft" window. Opens from the timeline header; its tabs are the ones v4 had.
 import { composer as c } from "../../composer/composer.js";
-import { applyStory, clash, joinStory } from "./story.js";
+import { applyStory, clash, joinStory, shownStory } from "./story.js";
 import { shortcuts } from "./shortcuts.js";
 import { cuts } from "./cuts.js";
 import { enhance } from "./enhance.js";
@@ -14,7 +14,7 @@ const TABS = [{ value: "story", label: "Story" }, { value: "shortcuts", label: "
 // The box follows the scenes; typing in it rewrites them (after a short pause, or when focus leaves).
 const story = (app, own) => {
   const p = app.project;
-  let marker = "qcut", words = ["qcut"], timer = 0, asked = 0, inFlight = Promise.resolve();
+  let shown = null, marker = "qcut", words = ["qcut"], timer = 0, asked = 0, inFlight = Promise.resolve();
   const box = c.textarea.md({ label: "Story", rows: 14, value: p.project ? joinStory(p.project, marker) : "", onInput: (v) => { clearTimeout(timer); timer = setTimeout(() => { timer = 0; apply(v); }, 700); }, onCommit: (v) => { clearTimeout(timer); timer = 0; apply(v); } });
   const area = box.node, warn = c.hint.default({ text: "" });
   function apply(text) { return (inFlight = split(text)); }
@@ -24,7 +24,8 @@ const story = (app, own) => {
     try {
       const { scenes } = await app.api.storySplit(text);
       if (mine !== asked || !p.project || p.project.id !== pid) return;     // typed more meanwhile, or another project opened: not for this one
-      p.edit((pr) => applyStory(pr, scenes));
+      p.edit((pr) => applyStory(pr, scenes, shown));
+      if (p.project) shown = shownStory(p.project);
     } catch (err) { c.toast.warn({ text: `Could not split the story: ${err.message}` }); }
   }
   app.api.storyMarkers().then((r) => { words = r.markers || words; marker = words[0]; sync(); }).catch(() => {});
@@ -33,6 +34,7 @@ const story = (app, own) => {
     if (!p.project || app.dom.focusOn(area) || timer) return;           // never rewrite the box while it is being typed in
     const next = joinStory(p.project, marker);
     if (area.value !== next) box.setValue(next);
+    shown = shownStory(p.project);
   }
   own(app.on(sync));
   // Generate runs what the box shows: text still waiting for its pause, or still being split, lands first.

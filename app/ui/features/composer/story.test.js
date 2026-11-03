@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyStory, clash, joinStory, match, storyRoots } from "./story.js";
+import { applyStory, clash, joinStory, match, shownStory, storyRoots } from "./story.js";
 
 const proj = () => ({ scenes: [{ id: "a", text: "one" }, { id: "b", text: "two" }, { id: "v", text: "", source: { type: "video", media_ref: "m" } }, { id: "c", text: "three" }], scene_renders: {}, scene_ghosts: [] });
 const texts = (p) => p.scenes.map((s) => `${s.id}:${s.text}`);
@@ -99,4 +99,27 @@ test("a first scene typed gradually stays first (cut word added, then the second
   applyStory(p, ["one", "two"]);
   applyStory(p, ["one", "two", "three"]);
   assert.deepEqual(shown(p), ["one", "two", "three"]);
+});
+
+test("scenes are followed by id: edited AND moved scenes keep their render and anchor", () => {
+  const p = { scenes: [{ id: "a", text: "a red fox runs through snow" }, { id: "b", text: "a blue boat drifts on a calm lake" }], scene_renders: { a: { media: { filename: "a.mp4" } }, b: { media: { filename: "b.mp4" } } }, scene_ghosts: [] };
+  const shown = shownStory(p);
+  assert.equal(applyStory(p, ["a blue boat sails on a calm lake at dusk", "a red fox leaps through deep snow"], shown), true);
+  assert.deepEqual(p.scenes.map((s) => s.id), ["b", "a"]);
+  assert.equal(p.scenes[0].text, "a blue boat sails on a calm lake at dusk");
+  assert.deepEqual(p.scene_ghosts, []);
+});
+
+test("two scenes with the same words stay two scenes with their own ids; a changed neighbour does not shift them", () => {
+  const p = { scenes: [{ id: "a", text: "same" }, { id: "b", text: "same" }, { id: "c", text: "other" }], scene_renders: {}, scene_ghosts: [] };
+  assert.equal(applyStory(p, ["same", "same", "other words entirely"], shownStory(p)), true);
+  assert.deepEqual(p.scenes.map((s) => `${s.id}:${s.text}`), ["a:same", "b:same", "c:other words entirely"]);
+});
+
+test("the shown list, not the plan, decides who a part is when the plan moved meanwhile", () => {
+  const p = proj();
+  const shown = shownStory(p);
+  p.scenes = [p.scenes[1], p.scenes[0], p.scenes[2], p.scenes[3]];       // reordered elsewhere
+  applyStory(p, ["one!", "two", "three"], shown);
+  assert.deepEqual(Object.fromEntries(p.scenes.map((s) => [s.id, s.text])), { a: "one!", b: "two", v: "", c: "three" });       // the ids keep their words; the order is what the box showed
 });
