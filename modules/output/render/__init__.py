@@ -117,12 +117,13 @@ def routes(table, base, web):
     @table.post(base + "/projects/{pid}/render")
     async def _render(req):
         proj = project_of(req)
-        clips = (await body_of(req)).get("clips")
+        body = await body_of(req)
+        clips = body.get("clips")
         clips = clips if isinstance(clips, list) else []
         if not clips and not stitch.has_graphics(proj):
             return bad("Nothing to render: add overlays, audio, or generated clips.")
         job = jobs.new()
-        asyncio.create_task(jobs.run(job, stitch.render, proj, clips, error=stitch.RenderError))
+        asyncio.create_task(jobs.run(job, stitch.render, proj, clips, body.get("real_fps") is True, error=stitch.RenderError))
         return web.json_response({"job_id": job})
 
     @table.get(base + "/projects/{pid}/render/{job}")

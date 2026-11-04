@@ -277,8 +277,9 @@ def _rate(text) -> float:
         return 0.0
 
 
-def render(project, clips: list[dict]) -> dict:
-    """Run the final render: -> {"media": {...temp file...}, "clips": n}. Blocking: call it off the event loop."""
+def render(project, clips: list[dict], real_fps: bool = False) -> dict:
+    """Run the final render: -> {"media": {...temp file...}, "clips": n}. Blocking: call it off the event loop.
+    `real_fps`: play at the fastest rate the clip files really run at, not the project's frame rate."""
     clips = [c for c in clips if _clip_spec_ok(c)] if isinstance(clips, list) else []
     blank = not clips
     if blank and not has_graphics(project):
@@ -294,8 +295,8 @@ def render(project, clips: list[dict]) -> dict:
         for c in clips:
             c["w"], c["h"] = cw, ch                 # build_filter reads the canvas off the clips
         fps = _f(clips[0].get("fps")) or fps
-        real = [r for r in (_rate(files.frame_rate(p)) for p in paths) if r > 0]
-        if real:                                    # what the files really run at (interpolated renders are faster than the project's setting); the fastest wins so none is thinned
+        real = [r for r in (_rate(files.frame_rate(p)) for p in paths) if r > 0] if real_fps else []
+        if real:                                    # what the files really run at (interpolated renders are faster than the project's setting); only when asked for; the fastest wins so none is thinned
             fps = max(real)
             for c in clips:
                 c["fps"] = fps

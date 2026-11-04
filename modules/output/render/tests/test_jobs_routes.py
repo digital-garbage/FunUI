@@ -127,11 +127,12 @@ def test_finished_jobs_are_forgotten_past_the_cap(monkeypatch):
 
 
 @needs_ffmpeg
-def test_render_keeps_the_real_frame_rate_of_interpolated_clips(comfy, server):
+def test_render_keeps_the_real_frame_rate_of_interpolated_clips_only_when_asked(comfy, server):
     make_clip(comfy.output / "fast.mp4", 1.0, rate=48)
     proj = projects.save(projects.Project(width=160, height=120))
-    status, queued = call(server, "POST", f"{BASE}/projects/{proj.id}/render", {"clips": [clip("fast.mp4", fps=24)]})   # the setting says 24, the file runs at 48
-    assert status == 200
-    job = finish(server, f"{BASE}/projects/{proj.id}/render", queued["job_id"])
-    assert job["state"] == "done"
-    assert files.frame_rate(str(comfy.temp / job["media"]["filename"])) == "48/1"
+    for body, expected in (({}, "24/1"), ({"real_fps": True}, "48/1")):     # the setting says 24, the file runs at 48
+        status, queued = call(server, "POST", f"{BASE}/projects/{proj.id}/render", {"clips": [clip("fast.mp4", fps=24)], **body})
+        assert status == 200
+        job = finish(server, f"{BASE}/projects/{proj.id}/render", queued["job_id"])
+        assert job["state"] == "done"
+        assert files.frame_rate(str(comfy.temp / job["media"]["filename"])) == expected
