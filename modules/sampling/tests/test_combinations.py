@@ -25,6 +25,9 @@ FEATURES = {
     "decisiveness": {},
     "shot_memory": {},
     "block_map": {},
+    "turbo_sampler": {},
+    "camera_move": {"pan_x": 0.3, "zoom": 1.2},
+    "explore_first_step": {},
 }
 SUBSETS = [()] + [(f,) for f in FEATURES] + list(itertools.combinations(FEATURES, 2)) + [tuple(FEATURES)]
 
