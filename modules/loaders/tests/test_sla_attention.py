@@ -136,6 +136,27 @@ def test_the_step_counter_resets_between_runs():
     assert _run(w, 4) == first
 
 
+def test_a_run_cancelled_in_its_first_step_leaves_nothing_for_the_next_one():
+    """The step counter cannot tell a rerun of step 1 from a second look at step 1, so the run start clears what
+    would otherwise be read as the new run's own: stabilize_motion's memory and a kernel failure."""
+    state = sla.new_state()
+    state["history"][3] = torch.ones(2)
+    state["failed"] = "RuntimeError: from the cancelled run"
+    seen = []
+    sla.make_run_start(state)(lambda *a, **k: seen.append((dict(state["history"]), state["failed"])) or "out", 1, key=2)
+    assert seen == [({}, None)]
+
+
+def test_installing_the_sla_wrappers_twice_does_not_stack_them(comfyui):
+    from comfy.patcher_extension import WrappersMP
+    patched = types.SimpleNamespace(wrappers={}, add_wrapper_with_key=lambda w, k, f: patched.wrappers.setdefault(w, {}).__setitem__(k, [f]))
+    state = sla.new_state()
+    for _ in range(3):
+        sla.add_wrappers(patched, state, _cfg())
+    assert {w: sorted(by) for w, by in patched.wrappers.items()} == {
+        WrappersMP.OUTER_SAMPLE: ["funui_sla_run"], "diffusion_model": ["funui_sla_state"]}
+
+
 def test_dense_last_steps_zero_never_forces_dense():
     state = sla.new_state()
     w = sla.make_wrapper(state, _cfg(dense_last_steps=0))

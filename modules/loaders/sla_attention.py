@@ -512,6 +512,26 @@ def make_wrapper(state, cfg):
     return wrapper
 
 
+def make_run_start(state):
+    """OUTER_SAMPLE wrapper: what must not outlive a sampling call is dropped when the next one begins. The step
+    counter above resets itself from the schedule, but a run cancelled during its first step leaves the next run
+    looking like the same step, so its stabilize_motion memory (the cancelled run's block choices) and a kernel
+    failure would be read as its own. Only these two are cleared: a Two stages run enters this once per stage and
+    the stage's own bookkeeping has to carry over."""
+    def outer(executor, *args, **kwargs):
+        state["history"].clear()
+        state["failed"] = None
+        return executor(*args, **kwargs)
+    return outer
+
+
+def add_wrappers(patched, state, cfg):
+    """The per-step wrapper and the per-run one, under keys, so installing again on a clone replaces rather than stacks."""
+    from comfy.patcher_extension import WrappersMP
+    patched.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, "funui_sla_run", make_run_start(state))
+    patched.add_wrapper_with_key("diffusion_model", "funui_sla_state", make_wrapper(state, cfg))
+
+
 def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None, min_seq_len=None,
                 dense_last_steps=None, protect_audio=None, enabled=None,
                 dense_fn=None, dense_label=None, engine=None, dense_steps=None,
@@ -587,7 +607,7 @@ def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None
     to = patched.model_options.get("transformer_options", {}).copy()
     to["optimized_attention_override"] = make_override(state, cfg, dense_fn=dense_fn, dense_label=dense_label)
     patched.model_options["transformer_options"] = to
-    patched.add_wrapper_with_key("diffusion_model", "funui_sla_state", make_wrapper(state, cfg))
+    add_wrappers(patched, state, cfg)
 
     blk = cfg["block_size"] if cfg["engine"] == "triton" else 64
     how = f"tau={cfg['tau']:.2f}" if cfg["method"] == "sol-attn" else f"sparsity={cfg['sparsity_ratio']:.2f}"
