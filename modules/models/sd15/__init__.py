@@ -66,7 +66,7 @@ def text_to_image():
          "roles": [{"at": "project.video", "input": "amount", "label": "Length", "drives": "frames"}],
          "inputs": {"image": ["decode", 0], "amount": 1}},
         {"id": "save", "group": "Render", "node": "FunUISaveVideo", "roles": [video],
-         "inputs": {"images": ["hold", 0], "fps": 24.0, "filename_prefix": "FunUI"}},
+         "inputs": {"images": ["hold", 0], "fps": 24.0, "filename_prefix": "FunUI", "settings": ["settings", 0]}},
     ]
 
 

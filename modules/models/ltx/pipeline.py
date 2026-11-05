@@ -50,7 +50,7 @@ def _common(latent_slots, latent_source, positive_source, negative_source, decod
             "samples": list(decode_source), "vae": ["vae", 0], "model": ["model", 0], "audio_vae": ["audio_vae", 0]}},
         {"id": "save", "group": "Render", "node": "FunUISaveVideo",
          "roles": [{"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}],
-         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI"}},
+         "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "fps": 25.0, "filename_prefix": "FunUI", "settings": ["settings", 0]}},
     ]
 
 

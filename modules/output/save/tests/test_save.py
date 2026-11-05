@@ -146,25 +146,102 @@ def test_chunked_conversion_equals_one_go_and_off_equals_the_plain_cast():
     import torch
     x = torch.rand(nodes._CHUNK * 2 + 3, 16, 16, 3)
     plain = (x * 255).round().clamp(0, 255).byte().numpy()
-    assert (nodes.to_frames(x, "off") == plain).all()
+    assert (nodes.to_frames(x) == plain).all()
     whole = (nodes.smooth(x, "strong") * 255).round().clamp(0, 255).byte().numpy()
-    assert (nodes.to_frames(x, "strong") == whole).all()
+    assert (nodes.to_frames(x, {"smoothing": "strong"}) == whole).all()
 
 
-def test_every_smoothing_saves_with_every_encoder_codec_and_quality(tmp_path):
-    # registry-driven: the cross product of what the node offers; no NVENC here, so "auto"/"gpu" are the NVENC -> CPU fallback
+def _combos():
+    """Every on/off combination of the declared Post settings (a slider: its two ends and its neutral value)."""
     import itertools
-    x = _staircase()
-    for smoothing, encoder, codec, quality in itertools.product(nodes.SMOOTHINGS, nodes.ENCODERS, nodes.CODECS, nodes.QUALITIES):
-        path = str(tmp_path / f"{smoothing}_{encoder}_{codec}_{quality}.mp4")
-        frames = nodes.to_frames(x, smoothing)
-        used = nodes.encode(path, frames, 24.0, encoder=encoder, codec=codec, quality=quality)
-        assert used and os.path.getsize(path) > 0
+    from modules.output import save
+    choices = []
+    for key, spec in save.SETTINGS.items():
+        choices.append([(key, v) for v in ([o["value"] for o in spec["options"]] if spec["type"] == "enum" else [False, True] if spec["type"] == "bool" else [spec["min"], spec["default"], spec["max"]])])
+    return [dict(c) for c in itertools.product(*choices)]
+
+
+def test_every_post_combination_saves_and_every_encoder_codec_quality_takes_the_all_on_look(tmp_path):
+    # registry-driven: no NVENC here, so "auto"/"gpu" are the NVENC -> CPU fallback
+    import itertools
+    x = _dull()
+    for n, values in enumerate(_combos()):
+        path = str(tmp_path / f"c{n}.mp4")
+        assert nodes.encode(path, nodes.to_frames(x, values), 24.0, encoder="auto") and os.path.getsize(path) > 0
+    everything = {"smoothing": "strong", "auto_contrast": True, "auto_brightness": True, "saturation": 1.5}
+    frames = nodes.to_frames(x, everything)
+    for encoder, codec, quality in itertools.product(nodes.ENCODERS, nodes.CODECS, nodes.QUALITIES):
+        path = str(tmp_path / f"{encoder}_{codec}_{quality}.mp4")
+        assert nodes.encode(path, frames, 24.0, encoder=encoder, codec=codec, quality=quality)
         with av.open(path) as f:
-            assert f.streams.video[0].width == 32
+            assert f.streams.video[0].width == 16
 
 
-def test_smoothing_is_a_node_input_defaulting_to_off():
-    schema = nodes.FunUISaveVideo.define_schema()
-    combo = next(i for i in schema.inputs if i.id == "smoothing")
-    assert combo.default == "off" and list(combo.options) == list(nodes.SMOOTHINGS)
+def test_the_node_reads_its_settings_from_the_pipelines_settings_object():
+    assert nodes._values(None) == nodes.DEFAULTS
+    assert nodes._values({"output_save": {"smoothing": "light", "saturation": 1.2}})["smoothing"] == "light"
+    assert nodes._values({"output_save": {"smoothing": "bogus"}})["smoothing"] == "off"          # wrong value: default, said
+
+
+def test_post_settings_are_declared_off_and_never_become_node_sockets():
+    from modules.output import save
+    assert {k: v["default"] for k, v in save.SETTINGS.items()} == nodes.DEFAULTS
+    assert "smoothing" not in [i.id for i in nodes.FunUISaveVideo.define_schema().inputs]
+    assert "settings" in [i.id for i in nodes.FunUISaveVideo.define_schema().inputs]
+
+
+def _dull():
+    import torch
+    torch.manual_seed(0)
+    return (0.3 + 0.2 * torch.rand(20, 16, 16, 3))               # a flat, grey, dark clip: levels 0.3..0.5
+
+
+def test_auto_contrast_stretches_one_fixed_curve_for_the_whole_clip():
+    import torch
+    x = _dull()
+    look = nodes.clip_look(x, {"auto_contrast": True})
+    assert look["lo"] == 0.15 and look["hi"] == 0.85               # capped: a dull clip is stretched only so far
+    out = nodes.finish(x, {"auto_contrast": True}, look)
+    assert out.std() > x.std()
+    same = nodes.finish(x[:3], {"auto_contrast": True}, look)       # a chunk gets the same curve as the whole: nothing is per frame
+    assert torch.equal(same, out[:3])
+    assert nodes.clip_look(x, {}) == {"lo": 0.0, "hi": 1.0, "gamma": 1.0}
+
+
+def test_auto_brightness_moves_the_midtones_toward_the_middle_within_limits():
+    import torch
+    dark, bright = _dull() * 0.3, 0.7 + 0.3 * _dull()
+    gd, gb = nodes.clip_look(dark, {"auto_brightness": True})["gamma"], nodes.clip_look(bright, {"auto_brightness": True})["gamma"]
+    assert gd == 0.75 and gb > 1.0 and gb <= 1.33
+    assert nodes.finish(dark, {"auto_brightness": True}, {"lo": 0.0, "hi": 1.0, "gamma": gd}).mean() > dark.mean()
+    assert nodes.clip_look(torch.zeros(0, 4, 4, 3), {"auto_contrast": True})["gamma"] == 1.0      # an empty clip is not measured
+
+
+def test_saturation_mutes_and_boosts_and_neutral_changes_nothing():
+    import torch
+    x = torch.rand(2, 8, 8, 3)
+    look = {"lo": 0.0, "hi": 1.0, "gamma": 1.0}
+    grey = nodes.finish(x, {"saturation": 0.5}, look)
+    assert (grey.max(-1).values - grey.min(-1).values).mean() < (x.max(-1).values - x.min(-1).values).mean()
+    assert torch.equal(nodes.finish(x, {"saturation": 1.0}, look), x)
+
+
+def test_every_look_follows_the_device_and_dtype_of_its_input():
+    import torch
+    values = {"smoothing": "strong", "auto_contrast": True, "auto_brightness": True, "saturation": 1.3}
+    for dtype in (torch.float16, torch.bfloat16, torch.float32):
+        x = _dull().to(dtype)
+        out = nodes.finish(x, values, nodes.clip_look(x, values))
+        assert out.dtype == dtype and out.shape == x.shape
+    meta = torch.empty(2, 16, 16, 3, device="meta", dtype=torch.float16)
+    out = nodes.finish(meta, {**values}, {"lo": 0.1, "hi": 0.9, "gamma": 0.9})
+    assert out.device.type == "meta" and out.dtype == torch.float16
+
+
+def test_saved_pipelines_get_the_settings_link_and_a_saved_pipeline_keeps_its_own():
+    from modules.output import save
+    slots = [{"id": "s", "node": "FunUIModifierSettings", "inputs": {}}, {"id": "v", "node": "FunUISaveVideo", "inputs": {"images": ["x", 0]}}]
+    assert save.upgrade(slots, lambda n: [])[1]["inputs"]["settings"] == ["s", 0]
+    own = [slots[0], {"id": "v", "node": "FunUISaveVideo", "inputs": {"settings": ["other", 0]}}]
+    assert save.upgrade(own, lambda n: [])[1]["inputs"]["settings"] == ["other", 0]
+    assert "settings" not in save.upgrade(slots[1:], lambda n: [])[0]["inputs"]               # nothing to link to

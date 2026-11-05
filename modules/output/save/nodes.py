@@ -9,6 +9,7 @@ CreateVideo step in between only bundled them.
 """
 
 import json
+import math
 import os
 import time
 from fractions import Fraction
@@ -21,7 +22,7 @@ import torch.nn.functional as F
 from comfy.cli_args import args
 from comfy_api.latest import io, ui
 
-from ..._core import log, video_pipe
+from ..._core import log, registry as registry_mod, schema as schema_mod, video_pipe
 
 ENCODERS = ("auto", "gpu", "cpu")
 CODECS = ("h264", "h265")
@@ -34,31 +35,77 @@ QUALITY = {"nvenc": {"standard": "23", "high": "16", "maximum": "10"},
 NVENC = {"h265": ("hevc_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"}),
          "h264": ("h264_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"})}
 X264 = ("libx264", {"crf": "16", "preset": "medium"})
-# Edge smoothing (the FXAA idea): only pixels on a contrasty edge are blended with their 3x3 neighbours, flat areas and
-# texture stay as they are. How much of the blend is kept is `smoothing`. Done on the frames' own device before the
-# encoder, so NVENC, its CPU fallback and every codec see the same picture; spatial only, so frames never smear into each other.
+# The finishing look, from Engine > Post (see __init__.SETTINGS), applied to the frames on their own device before encoding,
+# so NVENC, its CPU fallback and every codec get the same picture. Order: contrast, brightness, saturation, edge smoothing.
+# Contrast and brightness are measured ONCE on a sample of the whole clip and applied as one fixed curve: a per-frame
+# auto-level would pump and flicker as the picture changes.
 SMOOTHINGS = ("off", "light", "strong")
+DEFAULTS = {"smoothing": "off", "auto_contrast": False, "auto_brightness": False, "saturation": 1.0}
 _AMOUNT = {"light": 0.5, "strong": 1.0}
 _CHUNK = 8                                                    # frames per step: the float working copy stays small on a long 4K clip
+_SAMPLE_FRAMES, _SAMPLE_PIXELS = 16, 1_000_000
+_TARGET_MEDIAN, _MAX_STRETCH = 0.45, 0.15                     # brightness aims the median luma here; contrast moves each end by at most this
+
+
+def _luma(f):
+    """f: [T, 3, H, W] -> [T, 1, H, W]."""
+    return f[:, 0:1] * 0.299 + f[:, 1:2] * 0.587 + f[:, 2:3] * 0.114
+
+
+def clip_look(images, values):
+    """-> {"lo", "hi", "gamma"} as plain floats (no tensors, so nothing can sit on the wrong device) measured on a sample of the clip."""
+    look = {"lo": 0.0, "hi": 1.0, "gamma": 1.0}
+    if not (values.get("auto_contrast") or values.get("auto_brightness")) or len(images) == 0:
+        return look
+    n = len(images)
+    pick = sorted({round(i * (n - 1) / max(_SAMPLE_FRAMES - 1, 1)) for i in range(min(_SAMPLE_FRAMES, n))})
+    luma = _luma(images[pick].permute(0, 3, 1, 2).float()).flatten()
+    luma = luma[::max(1, luma.numel() // _SAMPLE_PIXELS)]
+    if values.get("auto_contrast"):
+        lo, hi = (float(v) for v in torch.quantile(luma, luma.new_tensor([0.01, 0.99])))
+        look["lo"], look["hi"] = min(lo, _MAX_STRETCH), max(hi, 1.0 - _MAX_STRETCH)
+        luma = ((luma - look["lo"]) / (look["hi"] - look["lo"])).clamp(0, 1)
+    if values.get("auto_brightness"):
+        mid = min(max(float(luma.median()), 0.02), 0.98)
+        look["gamma"] = min(max(math.log(_TARGET_MEDIAN) / math.log(mid), 0.75), 1.33)
+    return look
 
 
 def smooth(x, level):
-    """x: [T, H, W, 3] floats in 0..1 -> the same shape, dtype and device with edges anti-aliased (`level` "off": x itself)."""
+    """x: [T, H, W, 3] floats in 0..1 -> the same shape, dtype and device with edges anti-aliased (FXAA idea: only pixels on a
+    contrasty edge are blended with their 3x3 neighbours; `level` "off": x itself)."""
     amount = _AMOUNT.get(level)
     if amount is None:
         return x
     f = x.permute(0, 3, 1, 2).float()
-    luma = (f[:, 0:1] * 0.299 + f[:, 1:2] * 0.587 + f[:, 2:3] * 0.114)
-    p = F.pad(luma, (1, 1, 1, 1), mode="replicate")
+    p = F.pad(_luma(f), (1, 1, 1, 1), mode="replicate")
     contrast = F.max_pool2d(p, 3, 1) + F.max_pool2d(-p, 3, 1)          # local max - local min
     edge = ((contrast - 0.04) / 0.16).clamp(0, 1) * amount
     blur = F.avg_pool2d(F.pad(f, (1, 1, 1, 1), mode="replicate"), 3, 1)
     return (f + (blur - f) * edge).permute(0, 2, 3, 1).to(x.dtype)
 
 
-def to_frames(images, smoothing="off"):
-    """-> uint8 [T, H, W, 3] on the CPU. Rounded: a bare cast cuts every value down, a steady half-level darkening."""
-    return np.concatenate([(smooth(x, smoothing) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
+def finish(x, values, look):
+    """One chunk x [T, H, W, 3] through the whole look; the same shape, dtype and device back."""
+    sat = float(values.get("saturation", 1.0))
+    if look["lo"] == 0.0 and look["hi"] == 1.0 and look["gamma"] == 1.0 and sat == 1.0:
+        return smooth(x, values.get("smoothing", "off"))
+    f = x.permute(0, 3, 1, 2).float()
+    if look["lo"] != 0.0 or look["hi"] != 1.0:
+        f = ((f - look["lo"]) / (look["hi"] - look["lo"])).clamp(0, 1)
+    if look["gamma"] != 1.0:
+        f = f.clamp(0, 1) ** look["gamma"]
+    if sat != 1.0:
+        grey = _luma(f)
+        f = (grey + (f - grey) * sat).clamp(0, 1)
+    return smooth(f.permute(0, 2, 3, 1).to(x.dtype), values.get("smoothing", "off"))
+
+
+def to_frames(images, values=None):
+    """-> uint8 [T, H, W, 3] on the CPU, `values` being the Engine > Post settings. Rounded: a bare cast cuts every value down, a steady half-level darkening."""
+    values = values or {}
+    look = clip_look(images, values)
+    return np.concatenate([(finish(x, values, look) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
 
 
 def _with_quality(codec, quality):
@@ -147,6 +194,17 @@ def encode(path, frames, fps, audio=None, metadata=None, encoder="auto", codec="
     return "H.264 on libx264 (CPU, all cores)"
 
 
+def _values(settings):
+    """The Engine > Post settings from the pipeline's settings object, checked against their declaration (a wrong one: default, said)."""
+    spec = registry_mod.current().specs.get("output_save")
+    if spec is None:
+        return dict(DEFAULTS)
+    clean, problems = schema_mod.check_values(spec, (settings or {}).get("output_save"))
+    for problem in problems or ():
+        log.once(f"save_video:{problem}", log.ALERT, "FunUI Save Video", f"setting ignored, default used: {problem}")
+    return clean
+
+
 class FunUISaveVideo(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -166,8 +224,7 @@ class FunUISaveVideo(io.ComfyNode):
                                tooltip="For the GPU encoder. H.264: plays in every browser. H.265: smaller files, but Firefox may not play it."),
                 io.Combo.Input("quality", options=list(QUALITIES), default="high", optional=True,
                                tooltip="How closely the file keeps the picture. standard: small files, but fine texture smears and blocks show on a sharp high-resolution picture. high: visually clean for a bigger file. maximum: near lossless, large."),
-                io.Combo.Input("smoothing", options=list(SMOOTHINGS), default="off", optional=True,
-                               tooltip="Anti-aliasing for jagged edges (like FXAA in games): only edges with strong contrast are softened, flat areas and texture stay. off: untouched. light: half strength. strong: full strength. A small cost on the GPU, a noticeable one on the CPU for 4K clips."),
+                io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
             ],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
             is_output_node=True,
@@ -175,8 +232,9 @@ class FunUISaveVideo(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high", smoothing="off") -> io.NodeOutput:
-        frames = to_frames(images, smoothing)
+    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high", settings=None) -> io.NodeOutput:
+        look = _values(settings)
+        frames = to_frames(images, look)
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
             filename_prefix, folder_paths.get_output_directory(), width, height)
@@ -186,6 +244,6 @@ class FunUISaveVideo(io.ComfyNode):
         file = f"{filename}_{counter:05}_.mp4"
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
-        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + (f", smoothing {smoothing}" if smoothing != "off" else ""))
+        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + "".join(f", {k} {v}" for k, v in look.items() if v != DEFAULTS[k]))
         keep_last_frame(file, frames[-1])
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

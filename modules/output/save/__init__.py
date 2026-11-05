@@ -9,9 +9,36 @@ ID = "output_save"
 TITLE = "Save video"
 STAGE = "post"
 CATEGORY = "post"
+MOUNT = "settings.general"
 STATUS = "proven"
 
 NODES = [FunUISaveVideo]
+
+# Engine > Post. Every one is off (or neutral) by default; the node reads them from the pipeline's settings object.
+SETTINGS = {
+    "smoothing": {
+        "type": "enum", "default": "off",
+        "options": [{"value": "off", "label": "Off"}, {"value": "light", "label": "Light"}, {"value": "strong", "label": "Strong"}],
+        "label": "Smooth jagged edges",
+        "hint": "Anti-aliasing like FXAA in games: only edges with strong contrast are softened, flat areas and texture stay. "
+                "Cheap on a GPU, noticeably slower on a CPU for 4K clips.",
+    },
+    "auto_contrast": {
+        "type": "bool", "default": False,
+        "label": "Auto contrast",
+        "hint": "Stretches the clip's darkest and brightest levels (by at most 15% each) toward black and white. Measured once on the whole clip and applied as one fixed curve, so it never flickers.",
+    },
+    "auto_brightness": {
+        "type": "bool", "default": False,
+        "label": "Auto brightness",
+        "hint": "Lifts or lowers the clip's midtones toward a middle level (within a mild range). Measured once on the whole clip, never per frame.",
+    },
+    "saturation": {
+        "type": "float", "default": 1.0, "min": 0.5, "max": 1.5, "step": 0.05, "ui": "slider",
+        "label": "Colour strength",
+        "hint": "1 leaves the colours as they are; below 1 mutes them, above 1 makes them stronger.",
+    },
+}
 
 
 def _link(v):
@@ -51,6 +78,11 @@ def upgrade(slots, outputs):
         s.update(node="FunUISaveVideo", inputs=new)
         if roles:
             s["roles"] = roles
+    # Engine > Post settings reach the node through the pipeline's settings object; a pipeline saved before that is linked to it.
+    sink = next((s["id"] for s in slots if s["node"] == "FunUIModifierSettings"), None)
+    for s in slots:
+        if sink and s["node"] == "FunUISaveVideo" and "settings" not in (s.get("inputs") or {}):
+            s["inputs"] = {**(s.get("inputs") or {}), "settings": [sink, 0]}
     return [s for s in slots if s["id"] not in drop]
 
 

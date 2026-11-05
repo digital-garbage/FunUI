@@ -133,7 +133,7 @@ def h3_reference_to_video():
          "roles": [{"at": "project.video", "input": "frames", "label": "Cut opening frames"}],
          "inputs": {"images": ["decode", 0], "audio": ["decode", 1], "frames": 0, "fps": 24.0}},
         {"id": "save", "group": "Render", "node": "FunUISaveVideo", "inputs": {
-            "images": ["cut", 0], "audio": ["cut", 1], "fps": 24.0, "filename_prefix": "FunUI"}},
+            "images": ["cut", 0], "audio": ["cut", 1], "fps": 24.0, "filename_prefix": "FunUI", "settings": ["settings", 0]}},
     ]
 
     for n in range(1, MAX_REFERENCES + 1):
