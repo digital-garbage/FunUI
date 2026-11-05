@@ -109,3 +109,62 @@ def test_a_failed_keep_never_leaves_an_older_videos_picture_under_the_name(tmp_p
     monkeypatch.setattr("PIL.Image.Image.save", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
     nodes.keep_last_frame("FunUI_00001_.mp4", np.zeros((4, 4, 3), dtype=np.uint8))
     assert not old.exists()
+
+
+# --- smoothing (edge anti-aliasing) ----------------------------------------------------------------------------------
+
+def _staircase():
+    """A hard diagonal edge (black / white), the picture a jagged edge makes: [T, H, W, 3] floats."""
+    import torch
+    yy, xx = torch.meshgrid(torch.arange(32), torch.arange(32), indexing="ij")
+    return (xx > yy).float()[None, :, :, None].repeat(2, 1, 1, 3)
+
+
+def test_smoothing_off_is_the_old_path_and_the_edge_is_softened_only_where_it_is():
+    import torch
+    x = _staircase()
+    assert nodes.smooth(x, "off") is x
+    light, strong = nodes.smooth(x, "light"), nodes.smooth(x, "strong")
+    assert ((light - x).abs() > 0.05).any() and ((strong - x).abs() > (light - x).abs()).any()
+    assert torch.equal(light[:, 0, -1], x[:, 0, -1]) and torch.equal(light[:, -1, 0], x[:, -1, 0])     # flat corners untouched
+    flat = torch.full((1, 16, 16, 3), 0.4)
+    assert torch.allclose(nodes.smooth(flat, "strong"), flat)
+    assert torch.equal(light[0], light[1])                          # frames never mix: spatial only
+
+
+def test_smoothing_follows_the_device_and_dtype_of_its_input():
+    import torch
+    for dtype in (torch.float16, torch.bfloat16, torch.float32):
+        x = _staircase().to(dtype)
+        assert nodes.smooth(x, "strong").dtype == dtype
+    meta = torch.empty(2, 32, 32, 3, device="meta", dtype=torch.float16)      # the cloud stand-in for "some other device"
+    out = nodes.smooth(meta, "light")
+    assert out.device.type == "meta" and out.dtype == torch.float16 and out.shape == meta.shape
+
+
+def test_chunked_conversion_equals_one_go_and_off_equals_the_plain_cast():
+    import torch
+    x = torch.rand(nodes._CHUNK * 2 + 3, 16, 16, 3)
+    plain = (x * 255).round().clamp(0, 255).byte().numpy()
+    assert (nodes.to_frames(x, "off") == plain).all()
+    whole = (nodes.smooth(x, "strong") * 255).round().clamp(0, 255).byte().numpy()
+    assert (nodes.to_frames(x, "strong") == whole).all()
+
+
+def test_every_smoothing_saves_with_every_encoder_codec_and_quality(tmp_path):
+    # registry-driven: the cross product of what the node offers; no NVENC here, so "auto"/"gpu" are the NVENC -> CPU fallback
+    import itertools
+    x = _staircase()
+    for smoothing, encoder, codec, quality in itertools.product(nodes.SMOOTHINGS, nodes.ENCODERS, nodes.CODECS, nodes.QUALITIES):
+        path = str(tmp_path / f"{smoothing}_{encoder}_{codec}_{quality}.mp4")
+        frames = nodes.to_frames(x, smoothing)
+        used = nodes.encode(path, frames, 24.0, encoder=encoder, codec=codec, quality=quality)
+        assert used and os.path.getsize(path) > 0
+        with av.open(path) as f:
+            assert f.streams.video[0].width == 32
+
+
+def test_smoothing_is_a_node_input_defaulting_to_off():
+    schema = nodes.FunUISaveVideo.define_schema()
+    combo = next(i for i in schema.inputs if i.id == "smoothing")
+    assert combo.default == "off" and list(combo.options) == list(nodes.SMOOTHINGS)

@@ -92,6 +92,10 @@ def _validate_enum(spec: dict, where: str) -> None:
         raise SchemaError(f"{where} has duplicate option values.")
     if spec["default"] not in values:
         raise SchemaError(f"{where}'s default {spec['default']!r} is not one of its options.")
+    # {old value: current option}: an option that was removed, mapped forward when saved settings are read.
+    for old, new in (spec.get("renamed_options") or {}).items():
+        if old in values or new not in values:
+            raise SchemaError(f"{where}'s renamed_options {old!r} -> {new!r} must map a removed value to a current option.")
 
 
 # Accepted as #rgb, #rrggbb or #rrggbbaa. One spelling in, one spelling out --
@@ -272,6 +276,8 @@ def check_values(spec, values: Any, keep_bad: bool = False) -> Tuple[Dict[str, A
             log.once(f"stale_setting:{spec.id}.{key}", log.WARNING, "FunUI settings",
                      f"{spec.id}: saved setting {key!r} ignored: this module has no such setting")
             continue
+        if isinstance(value, str):
+            value = (declared.get("renamed_options") or {}).get(value, value)
         problem = _value_problem(declared, key, value, spec.id)
         if problem and not _applies(declared, {**spec.defaults(), **values}):
             continue                    # a setting that is hidden by another one's choice cannot act, so it cannot stop the run: its default stands

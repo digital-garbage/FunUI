@@ -74,7 +74,7 @@ def _upscaler(name):
     return _CACHE["model"]
 
 
-METHODS = ("bicubic", "mitchell", "catmull-rom", "lanczos", "bislerp", "bilinear", "trilinear", "area", "nearest-exact")
+METHODS = ("bicubic", "mitchell", "catmull-rom", "lanczos", "bislerp", "bilinear", "area", "nearest-exact")
 
 
 def _bc_kernel(B, C):
@@ -123,9 +123,6 @@ def resize_video(video, h, w, method="bicubic"):
         return downscale_to(video, h, w)
     if method in KERNELS:
         return _filtered(video.float(), h, w, method).to(video.dtype)
-    if method == "trilinear":
-        return F.interpolate(video.float(), size=(video.shape[2], h, w), mode="trilinear",
-                             align_corners=False).to(video.dtype)
     b, c, f, hh, ww = video.shape
     x = video.permute(0, 2, 1, 3, 4).reshape(b * f, c, hh, ww).float()
     if method == "bislerp":

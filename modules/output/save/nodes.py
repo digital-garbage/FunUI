@@ -15,6 +15,9 @@ from fractions import Fraction
 
 import av
 import folder_paths
+import numpy as np
+import torch
+import torch.nn.functional as F
 from comfy.cli_args import args
 from comfy_api.latest import io, ui
 
@@ -31,6 +34,31 @@ QUALITY = {"nvenc": {"standard": "23", "high": "16", "maximum": "10"},
 NVENC = {"h265": ("hevc_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"}),
          "h264": ("h264_nvenc", {"preset": "p6", "rc": "vbr", "cq": "16", "b:v": "0"})}
 X264 = ("libx264", {"crf": "16", "preset": "medium"})
+# Edge smoothing (the FXAA idea): only pixels on a contrasty edge are blended with their 3x3 neighbours, flat areas and
+# texture stay as they are. How much of the blend is kept is `smoothing`. Done on the frames' own device before the
+# encoder, so NVENC, its CPU fallback and every codec see the same picture; spatial only, so frames never smear into each other.
+SMOOTHINGS = ("off", "light", "strong")
+_AMOUNT = {"light": 0.5, "strong": 1.0}
+_CHUNK = 8                                                    # frames per step: the float working copy stays small on a long 4K clip
+
+
+def smooth(x, level):
+    """x: [T, H, W, 3] floats in 0..1 -> the same shape, dtype and device with edges anti-aliased (`level` "off": x itself)."""
+    amount = _AMOUNT.get(level)
+    if amount is None:
+        return x
+    f = x.permute(0, 3, 1, 2).float()
+    luma = (f[:, 0:1] * 0.299 + f[:, 1:2] * 0.587 + f[:, 2:3] * 0.114)
+    p = F.pad(luma, (1, 1, 1, 1), mode="replicate")
+    contrast = F.max_pool2d(p, 3, 1) + F.max_pool2d(-p, 3, 1)          # local max - local min
+    edge = ((contrast - 0.04) / 0.16).clamp(0, 1) * amount
+    blur = F.avg_pool2d(F.pad(f, (1, 1, 1, 1), mode="replicate"), 3, 1)
+    return (f + (blur - f) * edge).permute(0, 2, 3, 1).to(x.dtype)
+
+
+def to_frames(images, smoothing="off"):
+    """-> uint8 [T, H, W, 3] on the CPU. Rounded: a bare cast cuts every value down, a steady half-level darkening."""
+    return np.concatenate([(smooth(x, smoothing) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
 
 
 def _with_quality(codec, quality):
@@ -138,6 +166,8 @@ class FunUISaveVideo(io.ComfyNode):
                                tooltip="For the GPU encoder. H.264: plays in every browser. H.265: smaller files, but Firefox may not play it."),
                 io.Combo.Input("quality", options=list(QUALITIES), default="high", optional=True,
                                tooltip="How closely the file keeps the picture. standard: small files, but fine texture smears and blocks show on a sharp high-resolution picture. high: visually clean for a bigger file. maximum: near lossless, large."),
+                io.Combo.Input("smoothing", options=list(SMOOTHINGS), default="off", optional=True,
+                               tooltip="Anti-aliasing for jagged edges (like FXAA in games): only edges with strong contrast are softened, flat areas and texture stay. off: untouched. light: half strength. strong: full strength. A small cost on the GPU, a noticeable one on the CPU for 4K clips."),
             ],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
             is_output_node=True,
@@ -145,8 +175,8 @@ class FunUISaveVideo(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high") -> io.NodeOutput:
-        frames = (images * 255).round().clamp(0, 255).byte().cpu().numpy()      # rounded: a bare cast cuts every value down, a steady half-level darkening
+    def execute(cls, images, fps=24.0, filename_prefix="FunUI", audio=None, encoder="auto", codec="h264", quality="high", smoothing="off") -> io.NodeOutput:
+        frames = to_frames(images, smoothing)
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
             filename_prefix, folder_paths.get_output_directory(), width, height)
@@ -156,6 +186,6 @@ class FunUISaveVideo(io.ComfyNode):
         file = f"{filename}_{counter:05}_.mp4"
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
-        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}")
+        log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + (f", smoothing {smoothing}" if smoothing != "off" else ""))
         keep_last_frame(file, frames[-1])
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

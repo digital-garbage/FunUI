@@ -174,7 +174,7 @@ def test_the_upscaler_list_is_read_again_when_settings_open(upscaler_file, tmp_p
     assert "later.safetensors" in now
 
 
-@pytest.mark.parametrize("method", ["bicubic", "mitchell", "catmull-rom", "lanczos", "bislerp", "bilinear", "trilinear", "area", "nearest-exact"])
+@pytest.mark.parametrize("method", ["bicubic", "mitchell", "catmull-rom", "lanczos", "bislerp", "bilinear", "area", "nearest-exact"])
 def test_every_plain_method_reaches_the_full_grid_and_keeps_dtype(method):
     from modules.sampling.two_stage import stages
     video = torch.randn(1, 24, 2, 5, 7).to(torch.bfloat16)

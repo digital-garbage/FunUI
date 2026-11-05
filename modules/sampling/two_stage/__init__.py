@@ -69,11 +69,12 @@ SETTINGS = {
         "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "mitchell", "label": "Mitchell"},
                     {"value": "catmull-rom", "label": "Catmull-Rom"}, {"value": "lanczos", "label": "Lanczos"},
                     {"value": "bislerp", "label": "Bislerp"}, {"value": "bilinear", "label": "Bilinear"},
-                    {"value": "trilinear", "label": "Trilinear"}, {"value": "area", "label": "Area"},
+                    {"value": "area", "label": "Area"},
                     {"value": "nearest-exact", "label": "Nearest-exact"},
                     {"value": "upscaler", "label": "Latent upscaler"}],
+        "renamed_options": {"trilinear": "bicubic"},   # removed: it was Bilinear here (time is never resampled)
         "label": "How the hand-over is enlarged",
-        "hint": "The plain methods are free (Trilinear gives the same as Bilinear here: time is never resampled). Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
+        "hint": "The plain methods are free. Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
                 "on the clean guess, so the added detail is learned instead of blurred; it costs one small network pass "
                 "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
         "when": {"enabled": True},

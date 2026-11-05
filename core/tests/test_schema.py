@@ -343,3 +343,26 @@ def test_a_hidden_setting_with_a_bad_value_does_not_stop_the_run():
     assert problems == [] and clean["file"] == "a.pth"
     clean, problems = schema.check_values(spec, {"method": "file", "file": "other.safetensors"})
     assert problems and "m.file must be one of" in problems[0]
+
+
+def test_a_removed_enum_option_is_mapped_forward_when_saved_settings_are_read():
+    from types import SimpleNamespace
+    from core import schema
+    s = {"m": {"type": "enum", "default": "a", "options": [{"value": "a", "label": "A"}, {"value": "b", "label": "B"}], "renamed_options": {"gone": "b"}}}
+    spec = SimpleNamespace(id="x", settings=s, defaults=lambda: {"m": "a"})
+    assert schema.check_values(spec, {"m": "gone"}) == ({"m": "b"}, [])
+    assert schema.check_values(spec, {"m": "other"})[1]            # an unknown value is still a problem
+    with pytest.raises(schema.SchemaError):
+        schema.validate_setting("m", {**s["m"], "renamed_options": {"a": "b"}}, s)     # a live option cannot be "removed"
+    with pytest.raises(schema.SchemaError):
+        schema.validate_setting("m", {**s["m"], "renamed_options": {"gone": "zzz"}}, s)
+
+
+def test_two_stages_saved_trilinear_loads_as_the_default_method():
+    from core import schema
+    from modules.sampling import two_stage
+    spec = two_stage.SETTINGS["resize"]
+    assert "trilinear" not in [o["value"] for o in spec["options"]]
+    fake = type("S", (), {"id": "two_stage", "settings": two_stage.SETTINGS, "defaults": lambda self: {k: v["default"] for k, v in two_stage.SETTINGS.items()}})()
+    clean, problems = schema.check_values(fake, {"enabled": True, "resize": "trilinear"})
+    assert problems == [] and clean["resize"] == "bicubic"
