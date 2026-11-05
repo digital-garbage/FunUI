@@ -85,7 +85,7 @@ def test_the_app_can_see_which_branch_it_is_on(server):
     assert body["ok"] is True, body
     assert body["branch"], "no branch reported"
     assert isinstance(body["branches"], list) and body["branches"]
-    assert body["repo"].endswith("FunUI-v5")
+    assert body["repo"] == str(update_mod.REPO_ROOT)
     assert server["restarts"] == [], "reading the status restarted ComfyUI"
 
 
