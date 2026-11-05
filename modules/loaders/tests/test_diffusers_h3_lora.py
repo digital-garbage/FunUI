@@ -134,3 +134,29 @@ def test_a_qkv_pair_of_the_wrong_width_is_dropped_not_merged_scrambled(patcher):
     lora[k] = torch.randn(96, RANK)                                   # 96 rows where this model has 64 per part
     patches, how, dropped = match(patcher, None, lora)
     assert dropped >= 1 and len(patches) == 5
+
+
+def test_a_refiner_layout_file_without_a_wrapper_reaches_the_refiner_blocks(patcher):
+    from modules.loaders.lora.keys import match
+    lora, want = _file("token_refiner.refiner_blocks.0", torch.Generator().manual_seed(0))
+    lora = {k[len("transformer."):]: v for k, v in lora.items()}
+    patches, how, dropped = match(patcher, None, lora)
+    assert dropped == 0 and len(patches) == 6, (how, len(patches))
+    state = patcher.model.state_dict()
+    assert all((k[0] if isinstance(k, tuple) else k) in state for k in patches)
+
+
+def test_a_block_the_model_does_not_have_is_dropped_and_counted_not_reported_as_applied(patcher):
+    from modules.loaders.lora.keys import match
+    lora, _ = _file("transformer_blocks.9", torch.Generator().manual_seed(0))            # the tiny model has 2 blocks
+    patches, how, dropped = match(patcher, None, lora)
+    assert not patches and dropped >= 1
+
+
+def test_a_dense_lokr_on_a_native_weight_is_not_mistaken_for_a_misfit_pair(patcher):
+    from modules.loaders.lora.keys import match
+    gen = torch.Generator().manual_seed(0)
+    lora = {"diffusion_model.blocks.1.attn.out_proj.lokr_w1": torch.randn(8, 8, generator=gen),
+            "diffusion_model.blocks.1.attn.out_proj.lokr_w2": torch.randn(8, 8, generator=gen)}
+    patches, how, dropped = match(patcher, None, lora)
+    assert len(patches) == 1 and dropped == 0

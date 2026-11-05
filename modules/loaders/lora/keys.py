@@ -46,7 +46,7 @@ def from_diffusers(lora):
         return lora, {}
     out, extra, sizes = {}, {}, {}
     for k, v in lora.items():
-        m = _PART.match(_WRAPPER.sub("", k))                      # whatever training wrapper sits in front of the block names
+        m = _PART.match(_WRAPPER.sub("", k, count=1))                      # whatever training wrapper sits in front of the block names
         if not m:
             out[k] = v
             continue
@@ -83,8 +83,17 @@ def _rekey(lora, prefix, replacement):
     return {(replacement + k[len(prefix):] if k.startswith(prefix) else k): v for k, v in lora.items()}
 
 
+def _absent(sd, key):
+    """True when a patch aims at a weight of the diffusion model that this model does not have (a block number past its
+    depth, a renamed layer): ComfyUI skips such a key without a word, so it must not be counted as applied."""
+    name = key[0] if isinstance(key, tuple) else key
+    return str(name).startswith("diffusion_model.") and name not in sd
+
+
 def _misfit(sd, key, adapter):
     """True when a plain LoRA pair cannot make the weight it names (both dimensions, not the count)."""
+    if getattr(adapter, "name", "lora") != "lora":                 # LoKr, LoHa, ... keep other factors in those slots: not an up/down pair
+        return False
     w = getattr(adapter, "weights", None)
     window = key[1] if isinstance(key, tuple) else None            # (dim, start, length): a LoRA aimed at some rows of a fused weight (Q, K, V of qkv_proj)
     target = sd.get(key[0] if isinstance(key, tuple) else key)
@@ -120,7 +129,7 @@ def match(model, clip, lora):
             if len(got) > len(best):
                 best, how = got, f"{prefix} -> {replacement or '(none)'}"
     sd = model.model.state_dict()
-    bad = [k for k, a in best.items() if _misfit(sd, k, a)]
+    bad = [k for k, a in best.items() if _absent(sd, k) or _misfit(sd, k, a)]
     for k in bad:
         best.pop(k)
     return best, how, len(bad)

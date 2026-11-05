@@ -107,3 +107,16 @@ def test_the_noise_dtype_is_the_stock_dtype_for_a_reduced_precision_latent(patch
         want = stock(x, sig.min(), sig.max(), seed=7, cpu=True)(sig[0], sig[1])
     got = patched(x, sig.min(), sig.max(), seed=7, cpu=True)(sig[0], sig[1])
     assert got.dtype == want.dtype
+
+
+def test_a_torchsde_with_other_internals_leaves_the_stock_sampler_in_place(monkeypatch):
+    original = ksampling.BrownianTreeNoiseSampler
+    mod = _brownian()
+    mod._installed = False
+    monkeypatch.setattr(mod, "_internals_present", lambda k: False)
+    mod.install()
+    assert ksampling.BrownianTreeNoiseSampler is original and not mod._installed
+
+
+def test_the_real_internals_are_recognised():
+    assert _brownian()._internals_present(ksampling) is True

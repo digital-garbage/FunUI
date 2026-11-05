@@ -15,6 +15,29 @@ import torch
 _installed = False
 
 
+def _internals_present(ksampling) -> bool:
+    """The replacement reads a few private attributes of ComfyUI's BatchedBrownianTree and torchsde's interval. A version
+    that renamed any of them gets ComfyUI's own sampler left as it is, instead of failing at the first noise draw."""
+    try:
+        tree = ksampling.BatchedBrownianTree(torch.zeros(1, 1), torch.tensor(0.1), torch.tensor(0.9), 1, cpu=True)
+        span = tree.trees[0]._interval
+        float(span._start), float(span._end)
+        tree.sort, tree.cpu_tree, tree.sign, tree.batched
+        tree.trees[0](0.2, 0.3)                          # takes plain numbers
+        return True
+    except Exception:                                    # noqa: BLE001 -- any mismatch means: leave the stock sampler alone
+        return False
+
+
+def _log_skipped():
+    try:
+        from . import log
+        log.warn("FunUI Brownian", "this ComfyUI or torchsde has a different Brownian tree than expected, so the stock sampler is left as it is "
+                 "(SDE samplers may print torchsde's start warnings; the pictures are not affected)")
+    except Exception:                                    # noqa: BLE001 -- a log line is never worth failing the install
+        pass
+
+
 def install():
     """Swap ComfyUI's BrownianTreeNoiseSampler for the widened one. Safe to call twice."""
     global _installed
@@ -23,6 +46,9 @@ def install():
         _installed = True
         return
     original = ksampling.BrownianTreeNoiseSampler
+    if not _internals_present(ksampling):
+        _log_skipped()
+        return
 
     class BrownianTreeNoiseSampler(original):
         _funui_widened = True
