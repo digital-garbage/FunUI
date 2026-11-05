@@ -10,9 +10,8 @@ from __future__ import annotations
 import csv
 import re
 import threading
-import urllib.request
 
-from ..._core import config, log
+from ..._core import config, fetch, log
 
 SOURCE = "FunUI LoRA training"
 FILES = ("model.onnx", "selected_tags.csv")
@@ -65,24 +64,7 @@ def listing() -> list[dict]:
     return rows
 
 
-def _fetch(url: str, dest, progress) -> None:
-    """Stream a URL to a file through a .part name, so a cut connection leaves nothing that looks finished."""
-    req = urllib.request.Request(url, headers={"User-Agent": "FunUI"})
-    part = dest.with_name(dest.name + ".part")
-    with urllib.request.urlopen(req, timeout=60) as res, open(part, "wb") as out:
-        total = int(res.headers.get("Content-Length") or 0)
-        done = 0
-        while True:
-            chunk = res.read(1 << 20)
-            if not chunk:
-                break
-            out.write(chunk)
-            done += len(chunk)
-            progress(done, total)
-    if total and done != total:
-        part.unlink(missing_ok=True)
-        raise OSError(f"the download stopped at {done} of {total} bytes")
-    part.replace(dest)
+_fetch = fetch.to_file
 
 
 def download(tagger_id: str, fetch=None) -> bool:

@@ -77,6 +77,8 @@ export const api = {
   forgetShotMemory: (kind, name) => call("POST", "/api/m/conditioning_shot_camera/forget", { kind, name }),
   tasteKeys: () => call("GET", "/api/m/taste/keys"),
   torchBuild: () => call("GET", "/api/m/loader_diffusion_model/torch"),
+  vedaState: () => call("GET", "/api/m/loader_diffusion_model/veda"),
+  vedaDownload: (id) => call("POST", "/api/m/loader_diffusion_model/veda/download", { id }),
   blockInfluence: (key) => call("GET", `/api/m/block_influence/status?key=${encodeURIComponent(key || "default")}`),
   blockInfluenceGroups: (key) => call("GET", `/api/m/block_influence/groups?key=${encodeURIComponent(key || "default")}`),
   clearBlockInfluence: (key) => call("POST", "/api/m/block_influence/clear", { key: key || "default" }),

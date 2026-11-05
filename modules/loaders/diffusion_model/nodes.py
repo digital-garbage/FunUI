@@ -12,7 +12,7 @@ import folder_paths
 from comfy_api.latest import io
 
 from ..._core import log
-from .. import gguf_support, sla_attention
+from .. import gguf_support, sla_attention, veda_attention
 from .. import int8_convrot as int8_convrot_module
 from .. import mxfp8 as mxfp8_module
 from ..common import (COMPUTE_DTYPES, head_bank_metadata, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
@@ -42,7 +42,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
     # How the form lists them (core/widgets): the file, how it is stored and computed, attention, then SLA in the
     # order its choices narrow it. Not the schema's order, which saved canvas workflows read by position.
     WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "mxfp8", "compute_dtype", "fp16_accumulation", "attention",
-                    "sla", "sla_method", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
+                    "sla", "sla_method", "veda_predictor", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
                     "sla_dense_steps", "sla_dense_last_steps", "sla_min_seq_len", "sla_protect_audio",
                     "sla_references", "sla_tail", "sla_stabilize_motion")
 
@@ -109,7 +109,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                     "text refiner, which must never be sparsified, and "
                                     "low-resolution runs where block selection costs more "
                                     "than it saves."),
-                io.Int.Input("sla_dense_last_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn"])),
+                io.Int.Input("sla_dense_last_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn", "veda"])),
                             default=sla_attention.SLA_DEFAULTS["dense_last_steps"],
                             min=0, max=8, optional=True,
                             tooltip="Run the last N sampling steps at full attention. 0 "
@@ -133,7 +133,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                        "runs instead where it is missing, and the status says so). "
                                        "triton: FunUI's own kernel, the only one with block size and "
                                        "stabilize motion."),
-                io.String.Input("sla_dense_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn"])), default=sla_attention.SLA_DEFAULTS["dense_steps"],
+                io.String.Input("sla_dense_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn", "veda"])), default=sla_attention.SLA_DEFAULTS["dense_steps"],
                                 optional=True,
                                 tooltip="Steps at full attention, counted from 1: '1' is the first "
                                         "step, '1-2' the first two, '1,6' the first and sixth; blank or '0', "
@@ -166,7 +166,12 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                        "comfy_kitchen engine. vsa: video cubes, only for models trained "
                                        "for it (the status says when the model lacks VSA's layers); run "
                                        "by ComfyUI's own Model Sparse Attention, keeping 1 - sla_sparsity "
-                                       "of the cubes."),
+                                       "of the cubes. veda (experimental, Triton kernel untested on a GPU): "
+                                       "a small learned predictor (Veda, arXiv 2605.30325, a file "
+                                       "in models/veda) picks the 128-token tiles at its own trained "
+                                       "budget, 90% for text-to-video; sla_sparsity and the rising "
+                                       "share are not used. Needs CUDA "
+                                       "and Triton."),
                 io.Float.Input("sla_tau", extra_dict=shows(("sla", [True]), ("sla_method", ["sol-attn"])), default=sla_attention.SLA_DEFAULTS["tau"], min=0.0, max=4.0,
                                step=0.05, optional=True,
                                tooltip="sol-attn only: higher skips more. About 1.0 keeps ~16% of key "
@@ -188,6 +193,12 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                          "skipped and the status says so. Slightly different pictures: listen to "
                                          "the sound first, it spoils before the picture does. A LoRA applied to "
                                          "these layers slows them back down."),
+                # Added last: saved workflows store widget values by position.
+                io.Combo.Input("veda_predictor", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), options=veda_attention.predictor_choices(),
+                               default="auto", optional=True,
+                               tooltip="veda: the predictor file in ComfyUI/models/veda. auto takes the text-to-video one "
+                                       "when it is there, else the first. Use the R2VA file for reference-to-video runs. "
+                                       "Not there yet? The row below offers the download."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
@@ -204,7 +215,8 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 sla_engine: str = None, sla_dense_steps: str = None, sla_references: str = None,
                 sla_tail: bool = None, sla_stabilize_motion: bool = None,
                 sla_method: str = None, sla_tau: float = None,
-                sla_sparsity_start: float = None, mxfp8: bool = False) -> io.NodeOutput:
+                sla_sparsity_start: float = None, mxfp8: bool = False,
+                veda_predictor: str = None) -> io.NodeOutput:
         notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
@@ -323,7 +335,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 protect_audio=sla_protect_audio,
                 dense_fn=override, dense_label=attention,
                 engine=sla_engine, dense_steps=sla_dense_steps, references=sla_references,
-                tail=sla_tail, stabilize_motion=sla_stabilize_motion, method=sla_method, tau=sla_tau)
+                tail=sla_tail, stabilize_motion=sla_stabilize_motion, method=sla_method, tau=sla_tau, veda_predictor=veda_predictor)
             notes.append(sla_note)
         if not installed:
             if override is not None:
@@ -338,7 +350,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
         # Never reach into the model's shape to describe it: a log line that
         # assumes structure can fail the load it was only meant to narrate.
         kind = type(getattr(model, "model", model)).__name__
-        applied_attention = "sla_h3" if installed else (
+        applied_attention = ("veda" if sla_method == "veda" else "sla_h3") if installed else (
             attention if override is not None else "default (as launched)")
         # The file's own storage, not the widget: an int8 file loaded at "bf16" still runs int8.
         weights = weight_dtype if not stored else (

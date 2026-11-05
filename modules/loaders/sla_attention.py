@@ -63,12 +63,14 @@ SLA_DEFAULTS = {
     "references": "off",
     "tail": False,
     "stabilize_motion": False,
+    "veda_predictor": "auto",
 }
 ENGINES = ("comfy_kitchen", "triton")
 # sla: each query block keeps the top (1 - sparsity) of key blocks, what SLA turbo LoRAs were distilled against.
 # sol-attn: comfy_kitchen picks per head and block by a threshold (tau), training-free. vsa: FastVideo's cube
 # tiling, for models trained for it -- ComfyUI's own Model Sparse Attention runs it, handed the settings here.
-METHODS = ("sla", "sol-attn", "vsa")
+# veda: a learned predictor picks the tiles (veda_attention.py), its own file in models/veda, Triton kernel.
+METHODS = ("sla", "sol-attn", "vsa", "veda")
 REFERENCES = ("off", "light", "heavy")
 _LIGHT_KEEP = 0.15          # "light": each reference span keeps its best 15% of blocks for every query
 _CK_BLOCK = 64              # sol_attn's fixed key block
@@ -501,7 +503,7 @@ def make_wrapper(state, cfg):
             raise
 
         if counted and state["step"] >= n_steps and not state["summed"]:
-            _summarise(state, cfg)
+            cfg.get("summarise", _summarise)(state, cfg)
             state["summed"] = True
             state["history"].clear()            # only needed step to step, not while the model sits cached
         return out
@@ -512,7 +514,7 @@ def make_wrapper(state, cfg):
 def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None, min_seq_len=None,
                 dense_last_steps=None, protect_audio=None, enabled=None,
                 dense_fn=None, dense_label=None, engine=None, dense_steps=None,
-                references=None, tail=None, stabilize_motion=None, method=None, tau=None):
+                references=None, tail=None, stabilize_motion=None, method=None, tau=None, veda_predictor=None):
     """Give `model` block-sparse H3 attention. Returns (model, status line, installed).
 
     Weights are untouched: this installs an attention override and a per-step wrapper on
@@ -525,7 +527,7 @@ def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None
     given = dict(sparsity_ratio=sparsity_ratio, sparsity_start=sparsity_start, block_size=block_size, min_seq_len=min_seq_len,
                  dense_last_steps=dense_last_steps, protect_audio=protect_audio, enabled=enabled,
                  engine=engine, dense_steps=dense_steps, references=references, tail=tail,
-                 stabilize_motion=stabilize_motion, method=method, tau=tau)
+                 stabilize_motion=stabilize_motion, method=method, tau=tau, veda_predictor=veda_predictor)
     cfg = {key: SLA_DEFAULTS[key] if value is None else value for key, value in given.items()}
 
     if not bool(cfg["enabled"]):
@@ -534,6 +536,9 @@ def install_sla(model, sparsity_ratio=None, sparsity_start=None, block_size=None
         return model, "SLA: off (dense baseline)", False
     if not is_h3_model(model):
         return model, ("SLA: skipped — not a MiniMax H3 model"), False
+    if cfg["method"] == "veda":         # its own kernel and its own checks: neither engine below is used
+        from . import veda_attention
+        return veda_attention.install_veda(model, cfg, dense_fn, dense_label)
     triton_ok, ck_ok = sla_available(), ck_available()
     if not (triton_ok or ck_ok):
         return model, ("SLA: skipped — this machine has neither comfy_kitchen's sol_attn nor CUDA+Triton"), False

@@ -267,7 +267,7 @@ def test_the_defaults_are_the_validated_ones():
                                 "protect_audio": True, "enabled": True,
                                 "engine": "comfy_kitchen", "dense_steps": "1", "method": "sla", "tau": 1.3,
                                 "references": "off",
-                                "tail": False, "stabilize_motion": False}
+                                "tail": False, "stabilize_motion": False, "veda_predictor": "auto"}
 
 
 def test_turning_sla_off_leaves_the_settings_in_place():
@@ -503,6 +503,8 @@ def test_the_loader_draws_each_sla_field_only_in_its_mode():
     assert rules["sla_sparsity_start"]["sla_method"] == ["sla"]       # the rising share is the fixed-share method's
     assert rules["sla_block_size"]["sla_engine"] == ["triton"] and rules["sla_tail"]["sla_engine"] == ["comfy_kitchen"]
     assert all(r.get("sla") == [True] for name, r in rules.items() if name.startswith("sla_"))
+    assert rules["veda_predictor"]["sla_method"] == ["veda"]
+    assert "veda" in rules["sla_dense_steps"]["sla_method"] and "veda" not in rules["sla_references"]["sla_method"]       # veda: trained budget, no references choice
     assert rules["sla"] == {} and rules["int8_convrot"] == {}
 
 

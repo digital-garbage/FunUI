@@ -142,3 +142,43 @@ test("a field that belongs to a module is drawn only while that module is here a
   assert.ok((await draw((id) => id === "two_stage")).includes("apply_to_stage"));
   assert.ok(!(await draw(() => false)).includes("apply_to_stage"));
 });
+
+test("the Veda predictor row appears only for method veda with no file, names the licence beside the buttons, and downloads only on a click", async () => {
+  const widgets = [{ name: "sla", type: "BOOLEAN" }, { name: "sla_method", type: "COMBO", choices: ["sla", "veda"], shows: [{ input: "sla", when: [true] }] },
+    { name: "veda_predictor", type: "COMBO", choices: ["auto"], shows: [{ input: "sla", when: [true] }, { input: "sla_method", when: ["veda"] }] }];
+  const state = { files: [], license: { name: "MiniMax H3 Community License", url: "https://huggingface.co/x/blob/main/LICENSE" },
+    models: [{ id: "t2va", title: "T2VA / FL2VA", hint: "text", file: "a.safetensors", size: 275415648, state: "absent", done: 0, error: "" },
+             { id: "r2va", title: "R2VA", hint: "refs", file: "b.safetensors", size: 275415752, state: "absent", done: 0, error: "" }] };
+  const asked = [], fetched = [];
+  const open = async (inputs) => {
+    const slots = [{ id: "model", node: "FunUIDiffusionModelLoader", inputs }];
+    const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
+      loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [], queueable: () => true, removedIds: () => [], offered: () => [] };
+    const api = { describeNodes: async () => ({ nodes: { FunUIDiffusionModelLoader: { widgets } } }), packProviders: async () => ({}),
+      vedaState: async () => { asked.push(1); return state; }, vedaDownload: async (id) => { fetched.push(id); state.models[0].state = "downloading"; return { started: true }; } };
+    const page = models({ dom: createDom(), pipeline: ps, api })();
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 0));
+    page.node.querySelector(".cx-tile-node").click();
+    await new Promise((r) => setTimeout(r, 5));
+    return page;
+  };
+  let page = await open({ sla: true, sla_method: "sla" });
+  assert.equal(asked.length, 0, "no other method asks, or shows anything");
+  assert.doesNotMatch(page.node.textContent, /Veda needs its predictor/);
+  page.node.remove();
+  page = await open({ sla: true, sla_method: "veda" });
+  assert.match(page.node.textContent, /none is there/);
+  assert.match(page.node.textContent, /By downloading you accept the MiniMax H3 Community License/);
+  assert.match(page.node.textContent, /275 MB|263 MB/);
+  assert.deepEqual(fetched, [], "looking never downloads");
+  [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Download").click();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(fetched, ["t2va"]);
+  assert.ok([...page.node.querySelectorAll("button")].every((b) => b.textContent !== "Download" || b.disabled), "one download at a time");
+  state.files = ["a.safetensors"]; state.models[0].state = "ready";
+  page.node.remove();
+  page = await open({ sla: true, sla_method: "veda" });
+  assert.doesNotMatch(page.node.textContent, /Veda needs its predictor/, "a predictor in the folder: no row");
+  page.node.remove();
+});

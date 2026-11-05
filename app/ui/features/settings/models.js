@@ -123,6 +123,31 @@ export const models = (app) => function mount() {
     return row;
   };
 
+  // The Veda predictor (method veda): shown only while models/veda holds none. The file is not ours to host (MiniMax H3 Community
+  // License), so the one way offered is a fetch from the official Hugging Face address on this click, with the licence beside it.
+  const vedaRow = () => {
+    const row = c.region.stack({ gap: "sm" });
+    let timer = null, fetching = false;
+    const show = async () => {
+      let r;
+      try { r = await api.vedaState(); } catch (err) { return row.set([c.hint.default({ text: `Could not ask about the Veda predictor: ${err.message}` })]); }
+      if (gone) return;
+      if ((r.files || []).length) { if (fetching) { fetching = false; specs = {}; describe().then(draw); } return row.set([]); }      // it arrived: the file list is read again
+      const busy = r.models.some((m) => m.state === "downloading");
+      const mb = (n) => `${Math.round(n / 1048576)} MB`;
+      row.set([c.banner.info({ text: "Veda needs its predictor file in ComfyUI/models/veda, and none is there. You can fetch it straight from Hugging Face; nothing is downloaded until you click." }),
+        ...r.models.map((m) => c.settingsRow.default({ label: `${m.title} · ${mb(m.size)}`, hint: m.state === "error" ? `Failed: ${m.error}` : m.state === "downloading" ? `${Math.floor(100 * m.done / m.size)}%` : m.hint,
+          control: c.button.sm({ label: m.state === "downloading" ? "Downloading…" : m.state === "error" ? "Try again" : "Download", tone: "primary", disabled: busy,
+            onClick: async () => { try { await api.vedaDownload(m.id); fetching = true; } catch (err) { c.toast.warn({ text: err.message }); } show(); } }) })),
+        c.settingsRow.default({ label: `By downloading you accept the ${r.license.name}.`, hint: "FunUI does not host or bundle the file. It has its own terms of use, including who may use it and where.",
+          control: c.button.sm({ label: "Read the licence", tone: "ghost", onClick: () => app.dom.openTab(r.license.url) }) })]);
+      clearTimeout(timer);
+      timer = busy ? setTimeout(() => { if (!gone && row.node && row.node.isConnected) show(); }, 1500) : null;      // a redrawn page leaves its old row behind: that one stops asking
+    };
+    show();
+    return row;
+  };
+
   const slotBlock = (slot) => {
     const spec = specs[slot.node];
     if (spec === undefined) return [c.hint.default({ text: "Loading…" })];
@@ -143,7 +168,9 @@ export const models = (app) => function mount() {
       const canTake = !appOwned && (w.type !== "COMBO" || (w.choices || []).length) && sourcesFor(slot, w.type, slotsNow(), specs).length;
       return canTake ? [row, c.field.default({ label: "↳ or take it from", hint: "Another node's output can drive this value; one Primitive can drive several inputs.", control: wiring(slot, w.name, w.type, null, "A value (typed here)") })] : [row];
     });
-    return [head, structure(slot), ...sockets, ...rows, ...(!rows.length && !sockets.length ? [c.hint.default({ text: "Nothing to configure on this node." })] : [])];
+    const veda = (spec.widgets || []).find((w) => w.name === "veda_predictor");
+    const vedaOn = veda && !gone.has(veda.name) && showing(veda, slot, spec);
+    return [head, structure(slot), ...sockets, ...rows, ...(vedaOn ? [vedaRow()] : []), ...(!rows.length && !sockets.length ? [c.hint.default({ text: "Nothing to configure on this node." })] : [])];
   };
 
   // One node as a card: what it is, the one or two values that matter, and whether it needs attention.
