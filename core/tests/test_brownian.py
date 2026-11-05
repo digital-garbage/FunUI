@@ -111,8 +111,11 @@ def test_the_noise_dtype_is_the_stock_dtype_for_a_reduced_precision_latent(patch
 
 def test_a_torchsde_with_other_internals_leaves_the_stock_sampler_in_place(monkeypatch):
     original = ksampling.BrownianTreeNoiseSampler
+    while getattr(original, "_funui_widened", False):         # an earlier test, or the pack loading, may already have widened it
+        original = original.__mro__[1]
+    monkeypatch.setattr(ksampling, "BrownianTreeNoiseSampler", original)
     mod = _brownian()
-    mod._installed = False
+    monkeypatch.setattr(mod, "_installed", False)
     monkeypatch.setattr(mod, "_internals_present", lambda k: False)
     mod.install()
     assert ksampling.BrownianTreeNoiseSampler is original and not mod._installed
