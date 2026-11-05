@@ -58,7 +58,10 @@ def keep_last_frame(video_file, frame):
         from PIL import Image
         folder = folder_paths.get_temp_directory()
         os.makedirs(folder, exist_ok=True)
-        Image.fromarray(frame).save(os.path.join(folder, last_frame_name(video_file)), compress_level=1)
+        target = os.path.join(folder, last_frame_name(video_file))
+        if os.path.exists(target):
+            os.remove(target)                                  # a failed save below must not leave an older video's picture under this name
+        Image.fromarray(frame).save(target, compress_level=1)
     except Exception as exc:                                   # noqa: BLE001 -- the video is saved; the next shot falls back to the video's own last picture
         log.info("FunUI Save Video", f"could not keep the lossless last frame ({exc})")
 

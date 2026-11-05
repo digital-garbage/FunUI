@@ -122,8 +122,21 @@ def test_the_effects_and_seams_the_timeline_offers(server):
 
 def test_finished_jobs_are_forgotten_past_the_cap(monkeypatch):
     monkeypatch.setattr(jobs, "MAX_JOBS", 3)
-    ids = [jobs.new() for _ in range(5)]
-    assert jobs.get(ids[0]) is None and jobs.get(ids[4]) is not None
+    ids = []
+    for _ in range(5):
+        ids.append(jobs.new())
+        jobs._jobs[ids[-1]] = {"state": "done"}
+    ids.append(jobs.new())
+    assert jobs.get(ids[0]) is None and jobs.get(ids[5]) is not None
+
+
+def test_a_running_job_is_never_forgotten_to_make_room(monkeypatch):
+    monkeypatch.setattr(jobs, "MAX_JOBS", 3)
+    first = jobs.new()
+    jobs._jobs[first] = {"state": "running"}
+    for _ in range(6):
+        jobs._jobs[jobs.new()] = {"state": "done"}
+    assert jobs.get(first) == {"state": "running"}
 
 
 @needs_ffmpeg

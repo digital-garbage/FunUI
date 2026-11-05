@@ -58,7 +58,9 @@ def probe(path):
         raise ClipError("ffprobe was not found on PATH: install ffmpeg to upscale videos.")
     out = subprocess.run([ffprobe, "-v", "error", "-show_entries",
                           "stream=codec_type,width,height,r_frame_rate", "-of", "json", path],
-                         capture_output=True, text=True, check=True)
+                         capture_output=True, text=True)
+    if out.returncode:
+        raise ClipError(f"{os.path.basename(path)} could not be read: {out.stderr.strip()[-300:] or 'ffprobe failed'}")
     streams = json.loads(out.stdout).get("streams") or []
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     if not video:
@@ -115,7 +117,11 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
                 cmd += ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-crf", "16",
                         "-pix_fmt", "yuv420p", "-movflags", "+faststart", dst]
                 enc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-            enc.stdin.write(y.tobytes())
+            try:
+                enc.stdin.write(y.tobytes())
+            except BrokenPipeError:                        # the encoder died: its own message says why
+                enc.wait()
+                raise ClipError(f"ffmpeg could not encode the video: {enc.stderr.read().decode(errors='replace')[-500:]}") from None
             frames += y.shape[0]
         if enc is None:
             raise ClipError(f"no frames could be read from {os.path.basename(src)}")

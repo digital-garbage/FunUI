@@ -118,3 +118,21 @@ def test_an_upscaled_or_interpolated_file_inherits_the_lossless_last_frame_of_it
     assert (comfy.temp / video_pipe.last_frame_name(got)).read_bytes() == b"png-as-the-sampler-made-it"       # the picture from before the step
     video_pipe.inherit_last_frame("nothing.mp4", "other.mp4")           # no picture to inherit: quietly nothing
     assert not (comfy.temp / "funui_last_other.png").exists()
+
+
+@needs_ffmpeg
+def test_an_encoder_that_cannot_write_says_why_not_a_broken_pipe(comfy):
+    from core import video_pipe
+    src = comfy.output / "a.mp4"
+    make_clip(src, seconds=1)
+    with pytest.raises(video_pipe.ClipError) as err:
+        video_pipe.stream_file(str(src), str(comfy.output / "no_such_folder" / "b.mp4"), lambda x: x)
+    assert "Broken pipe" not in str(err.value) and "ffmpeg could not encode" in str(err.value)
+
+
+def test_a_file_ffprobe_cannot_read_is_a_clip_error(tmp_path):
+    from core import video_pipe
+    bad = tmp_path / "x.mp4"
+    bad.write_bytes(b"not a video")
+    with pytest.raises(video_pipe.ClipError):
+        video_pipe.probe(str(bad))

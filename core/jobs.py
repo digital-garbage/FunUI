@@ -13,8 +13,10 @@ _jobs: "OrderedDict[str, dict]" = OrderedDict()
 def new() -> str:
     job = uuid.uuid4().hex
     _jobs[job] = {"state": "queued"}
-    while len(_jobs) > MAX_JOBS:
-        _jobs.popitem(last=False)
+    for old in [k for k, v in _jobs.items() if v.get("state") in ("done", "error")]:
+        if len(_jobs) <= MAX_JOBS:
+            break
+        del _jobs[old]                                 # only finished ones: a running job's poll must keep finding it
     return job
 
 

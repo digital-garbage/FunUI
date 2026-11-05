@@ -100,3 +100,12 @@ def test_the_last_decoded_picture_is_kept_exactly_for_the_next_shot(tmp_path, mo
     assert np.array_equal(np.array(Image.open(name).convert("RGB")), frame)           # lossless: every value as the sampler made it
     monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: (_ for _ in ()).throw(OSError("no temp")))
     nodes.keep_last_frame("x.mp4", frame)           # a failure here never fails the save
+
+
+def test_a_failed_keep_never_leaves_an_older_videos_picture_under_the_name(tmp_path, monkeypatch):
+    monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: str(tmp_path))
+    old = tmp_path / nodes.last_frame_name("FunUI_00001_.mp4")
+    old.write_bytes(b"picture of a deleted video")
+    monkeypatch.setattr("PIL.Image.Image.save", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")))
+    nodes.keep_last_frame("FunUI_00001_.mp4", np.zeros((4, 4, 3), dtype=np.uint8))
+    assert not old.exists()

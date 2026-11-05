@@ -1,6 +1,6 @@
 """Interpolate: more frames for a finished video, with NVIDIA RTX Frame Generation (the nvidia-vfx add-on).
 
-The length and the sound stay, the frame rate goes up (x2 turns 24 fps into 48 fps). It runs beside ComfyUI on the file a
+The sound stays and the length stays to within half a source frame (the last picture has no partner), the frame rate goes up (x2 turns 24 fps into 48 fps). It runs beside ComfyUI on the file a
 render wrote, like Upscale, and is a module of its own. Unlike Upscale it is a background job of the page and not a ComfyUI
 prompt, so it never disturbs ComfyUI's cache of the workflow's loaded models.
 """
