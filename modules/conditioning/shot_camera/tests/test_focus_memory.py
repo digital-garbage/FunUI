@@ -156,6 +156,7 @@ def test_a_choice_survives_cut_openers_and_views_added_to_the_shot():
 # ── rated, trait-aware views ─────────────────────────────────────────────────────────
 # ── several picks per shot, and readable previews ────────────────────────────────────
 def test_several_targets_in_order_become_one_travelling_move():
+    pytest.importorskip("spacy")
     P = "[Shot 1] A woman raises the lamp. Her hand holds a cup near the window."
     opts = sc.focus_options(P)[0]["candidates"]
     assert len(opts) >= 3

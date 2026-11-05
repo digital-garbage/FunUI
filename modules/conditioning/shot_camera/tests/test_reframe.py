@@ -1,5 +1,7 @@
 """Reframe within the shot: a kept shortcut boundary turns the camera in one continuous take, never a cut."""
 
+import pytest
+
 from .. import engine, memory, nodes
 
 DANCE = "She sways her hips from side to side, smiling at the room."
@@ -19,6 +21,7 @@ def test_reframe_turns_the_camera_between_shortcuts_without_a_cut(tmp_path, monk
 
 
 def test_every_reframe_moves_to_a_new_focus_and_the_view_may_stay():
+    pytest.importorskip("spacy")
     text = f"[Shot 1] {DANCE} {DANCE} {DANCE} {DANCE}"
     out, info = engine.add_reframes(text, seed="s", chance=1, pieces=[DANCE])
     targets = [a["target"] for a in info["added"]]
