@@ -53,6 +53,11 @@ def test_a_learned_direction_moves_the_picture_and_never_the_sound(tiny_h3):
     attn = tiny_h3.patcher.model.diffusion_model.blocks[0].attn
     liked = torch.zeros(attn.heads * attn.head_dim)
     liked[::attn.head_dim] = 1.0
+    # The tiny model's weights are so small that attention is near uniform and a pushed query barely reaches the output
+    # (its video moved by float rounding only); sharpened attention in the steered block lets the push show.
+    for block in tiny_h3.patcher.model.diffusion_model.blocks:
+        for p in block.attn.parameters():
+            p.mul_(8)
     for i, (vec, rating) in enumerate([(liked, "liked"), (-liked, "disliked")] * 2):
         store.capture("fox", "q_steer", {3: vec}, prompt_id=f"t{i}")
         store.rate(f"t{i}", rating)
