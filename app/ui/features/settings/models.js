@@ -123,7 +123,7 @@ export const models = (app) => function mount() {
     return row;
   };
 
-  // The Veda predictor (method veda): shown only while models/veda holds none. The file is not ours to host (MiniMax H3 Community
+  // The Veda predictors (method veda): both official files, each with its state. The files are not ours to host (MiniMax H3 Community
   // License), so the one way offered is a fetch from the official Hugging Face address on this click, with the licence beside it.
   const vedaRow = () => {
     const row = c.region.stack({ gap: "sm" });
@@ -132,15 +132,17 @@ export const models = (app) => function mount() {
       let r;
       try { r = await api.vedaState(); } catch (err) { return row.set([c.hint.default({ text: `Could not ask about the Veda predictor: ${err.message}` })]); }
       if (gone) return;
-      if ((r.files || []).length) { if (fetching) { fetching = false; specs = {}; describe().then(draw); } return row.set([]); }      // it arrived: the file list is read again
       const busy = r.models.some((m) => m.state === "downloading");
+      if (fetching && !busy) { fetching = false; specs = {}; describe().then(draw); }      // a download ended: the predictor list is read again
       const mb = (n) => `${Math.round(n / 1048576)} MB`;
-      row.set([c.banner.info({ text: "Veda needs its predictor file in ComfyUI/models/veda, and none is there. You can fetch it straight from Hugging Face; nothing is downloaded until you click." }),
-        ...r.models.map((m) => c.settingsRow.default({ label: `${m.title} · ${mb(m.size)}`, hint: m.state === "error" ? `Failed: ${m.error}` : m.state === "downloading" ? `${Math.floor(100 * m.done / m.size)}%` : m.hint,
-          control: c.button.sm({ label: m.state === "downloading" ? "Downloading…" : m.state === "error" ? "Try again" : "Download", tone: "primary", disabled: busy,
-            onClick: async () => { try { await api.vedaDownload(m.id); fetching = true; } catch (err) { c.toast.warn({ text: err.message }); } show(); } }) })),
-        c.settingsRow.default({ label: `By downloading you accept the ${r.license.name}.`, hint: "FunUI does not host or bundle the file. It has its own terms of use, including who may use it and where.",
-          control: c.button.sm({ label: "Read the licence", tone: "ghost", onClick: () => app.dom.openTab(r.license.url) }) })]);
+      const offered = r.models.some((m) => m.state !== "ready");
+      row.set([...((r.files || []).length ? [] : [c.banner.info({ text: "Veda needs its predictor file in ComfyUI/models/veda, and none is there. You can fetch it straight from Hugging Face; nothing is downloaded until you click." })]),
+        ...r.models.map((m) => c.settingsRow.default({ label: `${m.title} · ${mb(m.size)}`, hint: m.state === "ready" ? "Installed" : m.state === "error" ? `Failed: ${m.error}` : m.state === "downloading" ? `${Math.floor(100 * m.done / m.size)}%` : m.hint,
+          control: m.state === "ready" ? c.button.sm({ label: "Installed", tone: "ghost", disabled: true })
+            : c.button.sm({ label: m.state === "downloading" ? "Downloading…" : m.state === "error" ? "Try again" : "Download", tone: "primary", disabled: busy,
+              onClick: async () => { try { await api.vedaDownload(m.id); fetching = true; } catch (err) { c.toast.warn({ text: err.message }); } show(); } }) })),
+        ...(offered ? [c.settingsRow.default({ label: `By downloading you accept the ${r.license.name}.`, hint: "FunUI does not host or bundle the file. It has its own terms of use, including who may use it and where.",
+          control: c.button.sm({ label: "Read the licence", tone: "ghost", onClick: () => app.dom.openTab(r.license.url) }) })] : [])]);
       clearTimeout(timer);
       timer = busy ? setTimeout(() => { if (!gone && row.node && row.node.isConnected) show(); }, 1500) : null;      // a redrawn page leaves its old row behind: that one stops asking
     };
