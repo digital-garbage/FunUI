@@ -13,7 +13,7 @@ export const engine = (app) => function mount() {
     if (ps.loading()) return page.set([c.hint.default({ text: "Loading…" })]);
     if (ps.loadError()) return page.set([c.banner.warn({ text: `Could not load Engine settings: ${ps.loadError()}` })]);
     if (ps.allOff()) return page.set([c.banner.info({ text: "All enhancements are disabled for this project, so there is nothing to set. Turn them back on in Settings ▸ Modules." })]);
-    const ok = ps.usefulness(), withSettings = ps.activeModules().filter((m) => Object.keys(m.settings || {}).length && ok(m));     // nothing would read the rest
+    const ok = ps.usefulness(), withSettings = ps.activeModules().filter((m) => Object.values(m.settings || {}).some((spec) => spec.home !== "project") && ok(m));     // nothing would read the rest
     const cats = CATEGORIES.filter(([k]) => withSettings.some((m) => (m.category || "") === k));
     const gOff = ps.guidanceOff();
     if (!cats.length) return page.set([c.emptyState.default({ icon: "⚡", title: "Nothing to set", hint: "No installed module exposes a setting for this pipeline." })]);
@@ -31,7 +31,7 @@ export const engine = (app) => function mount() {
         checked: ps.cameraOff(), onChange: (on) => ps.setCameraOff(on).then(draw) }) : null,
       ...(category === "guidance" && gOff ? [c.hint.default({ text: "Guidance enhancements are disabled for this project. Their settings are hidden, not lost." })]
         : withSettings.filter((m) => (m.category || "") === category).flatMap((m) => [c.label.section({ text: m.title || m.id }),
-          ...Object.entries(m.settings).filter(([, spec]) => whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change, ps.blocks?.()))])),
+          ...Object.entries(m.settings).filter(([, spec]) => spec.home !== "project" && whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change, ps.blocks?.()))])),
     ].filter(Boolean));
   }
   draw();

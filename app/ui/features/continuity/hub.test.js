@@ -9,7 +9,7 @@ const make = (values, lastFrame) => { const app = { api: { lastFrame }, pipeline
 
 test("a carry shot gets the previous clip's last frame as an extra reference, also when a picture (the aspect source) is set on it", async () => {
   const calls = [];
-  const hook = make({ carry: true, dark_guard: true }, async (pid, body) => { calls.push([pid, body.scene_id, body.dur]); return { media_id: "m9", dark: false }; });
+  const hook = make({ carry: true }, async (pid, body) => { calls.push([pid, body.scene_id, body.dur]); return { media_id: "m9", dark: false }; });
   const p = project();
   p.scenes[1].source_image = "aspect";
   assert.deepEqual((await hook({ project: p, scene: p.scenes[1], slots })).references, ["m9"]);
@@ -27,10 +27,8 @@ test("nothing happens when it is off or the source is another kind", async () =>
 
 test("a dark last frame, a failed extraction and a missing predecessor each say why the shot starts without a picture", async () => {
   const p = project();
-  const dark = make({ dark_guard: true }, async () => ({ media_id: "m", dark: true }));
+  const dark = make({}, async () => ({ media_id: "m", dark: true }));
   assert.match((await dark({ project: p, scene: p.scenes[1], slots })).notes[0], /fade to black/);
-  const allowed = make({ dark_guard: false }, async () => ({ media_id: "m", dark: true }));
-  assert.deepEqual((await allowed({ project: p, scene: p.scenes[1], slots })).references, ["m"]);
   const broken = make({}, async () => { throw new Error("no ffmpeg"); });
   assert.match((await broken({ project: p, scene: p.scenes[1], slots })).notes[0], /no ffmpeg/);
   assert.deepEqual((await broken({ project: p, scene: p.scenes[0], slots })).notes || [], []);       // the first clip has nothing to continue from: silent

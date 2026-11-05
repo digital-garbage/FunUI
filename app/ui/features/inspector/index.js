@@ -3,7 +3,7 @@ import { composer as c } from "../../composer/composer.js";
 import { effFrames, effFps, genUnitId } from "../../shell/scenes.js";
 import { sceneRows } from "./scene.js";
 import { bin } from "../../shell/bin.js";
-import { projectRows } from "./project.js";
+import { projectRows, homed } from "./project.js";
 import { gridOf, learnGrid } from "../../shell/frame_grid.js";
 
 export default {
@@ -35,11 +35,11 @@ export default {
     function draw(force) {      // not on every keystroke: that would rebuild the box being typed in
       const sc = p.selected, open = p.project, slots = app.pipeline && (app.pipeline.view || app.pipeline.slots)();
       learnGrid(app.api, slots).then((learned) => { if (learned) draw(true); });      // the length arrows follow the model's frame grid once its node is described
-      const next = `${tab}|${open && open.id}|${p.selectedId}|${JSON.stringify(gridOf(slots))}|${Object.keys((app.pipeline && app.pipeline.skipped && app.pipeline.skipped()) || {}).join()}|${tab === "project" && open ? [open.num_frames_per_scene, open.frame_rate, JSON.stringify(open.video || {}), JSON.stringify(open.video_input || {}), open.video_input_from, open.postfix_enabled !== false, open.generation_mode, open.export_size_from, open.width, open.height, open.scenes.map((s) => s.frames_mode === "custom"), Object.keys(open.scene_renders || {}), open.scenes.length] : ""}|${tab === "scene" && sc && open ? [effFrames(sc, open), effFps(sc, open), p.scenes.indexOf(sc), sc.frames_mode, sc.fps_mode, p.scenes.length, sc.source_image, (sc.references || []).join(), JSON.stringify(open.fixed_references || {}), sc.source_in, sc.source_dur, JSON.stringify(sc.video_input || {}), JSON.stringify(open.video_input || {}), open.video_input_from, sc.removed_from_plan, (sc.source || {}).type, sc.excluded, typing() ? shownText : (shownText = sc.text), ((open.scene_renders || {})[sc.id] || {}).durationSec, Boolean(((open.scene_renders || {})[sc.id] || {}).media), bin.version, ...sections.map((s) => { try { return s.key(sc, open); } catch { return ""; } })] : ""}`;
+      const next = `${tab}|${open && open.id}|${p.selectedId}|${JSON.stringify(gridOf(slots))}|${Object.keys((app.pipeline && app.pipeline.skipped && app.pipeline.skipped()) || {}).join()}|${tab === "project" && open ? [open.num_frames_per_scene, open.frame_rate, JSON.stringify(open.video || {}), JSON.stringify(open.video_input || {}), open.video_input_from, open.postfix_enabled !== false, JSON.stringify(homed(app)), open.export_size_from, open.width, open.height, open.scenes.map((s) => s.frames_mode === "custom"), Object.keys(open.scene_renders || {}), open.scenes.length] : ""}|${tab === "scene" && sc && open ? [effFrames(sc, open), effFps(sc, open), p.scenes.indexOf(sc), sc.frames_mode, sc.fps_mode, p.scenes.length, sc.source_image, (sc.references || []).join(), JSON.stringify(open.fixed_references || {}), sc.source_in, sc.source_dur, JSON.stringify(sc.video_input || {}), JSON.stringify(open.video_input || {}), open.video_input_from, sc.removed_from_plan, (sc.source || {}).type, sc.excluded, typing() ? shownText : (shownText = sc.text), ((open.scene_renders || {})[sc.id] || {}).durationSec, Boolean(((open.scene_renders || {})[sc.id] || {}).media), bin.version, ...sections.map((s) => { try { return s.key(sc, open); } catch { return ""; } })] : ""}`;
       titled();
       if (!force && next === key) return;
       key = next;
-      body.set((tab === "scene" ? [...sceneRows(p, app), ...(p.selected ? sections.flatMap((s) => { try { return s.rows(p.selected, p); } catch { return []; } }) : [])] : projectRows(p, slots, app.api))); 
+      body.set((tab === "scene" ? [...sceneRows(p, app), ...(p.selected ? sections.flatMap((s) => { try { return s.rows(p.selected, p); } catch { return []; } }) : [])] : projectRows(p, slots, app.api, app))); 
     }
     draw(true);
     const offSlots = app.pipeline && app.pipeline.subscribe ? app.pipeline.subscribe(() => draw(true)) : null;     // the pipeline arrives after the project

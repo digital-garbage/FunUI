@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Simpler Project and Scene settings.** The rarely used groups (Video input, Source trim, Final render size, Split preview) are folded under "More" and stay open once opened.
+- **"Start shots" is gone.** A scene with no picture and no references is made from the prompt alone; with references it starts from them in the way the model supports (image, video or reference to video).
+- **Continuity moved into Project settings** as "Pass the last frame of previous scene as reference into next scene". The Continuity page left Settings; "Don't continue from a fade to black" is no longer a switch, a shot after a clip that ends dark always starts without a picture.
+
 ### Fixed
 
 - **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now starts a hair earlier and ends a hair later than the schedule, so torchsde's rounding never lands inside it. The noise itself is unchanged and the picture was never affected.

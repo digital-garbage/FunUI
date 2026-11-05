@@ -5,6 +5,7 @@ import { gridOf } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
 import { fold } from "./fold.js";
+import { settingRow, whenSatisfied } from "../settings/field.js";
 
 const BASES = [{ value: "short", label: "Short side" }, { value: "long", label: "Long side" }, { value: "area", label: "Pixel count" }];
 const BASIS_HINT = { short: "With Short side: the clip's shorter side is the smaller of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1824 × 1024.",
@@ -14,8 +15,6 @@ const BASIS_HINT = { short: "With Short side: the clip's shorter side is the sma
 /** For a model that fits the scene picture's shape to Width and Height: what those two numbers mean. */
 const basis = (p, slots) => (slots || []).some((s) => (s.roles || []).some((r) => r.at === "project.resolution_basis")) ? c.field.default({ label: "Resolution is the", hint: BASIS_HINT[p.project.resolution_basis] || BASIS_HINT.short,
   control: c.select.md({ label: "Resolution is the", options: BASES, value: BASES.some((b) => b.value === p.project.resolution_basis) ? p.project.resolution_basis : "area", onChange: (v) => p.setField("resolution_basis", v) }) }) : null;
-
-const STARTS = [{ value: "i2v", label: "From an image" }, { value: "t2v", label: "From a prompt" }];
 
 // What the pipeline lets the project decide (width, length, rate...): one whole-number control per slot input
 // that declares the role. A role that `drives` length or rate edits the number the timeline draws.
@@ -76,7 +75,21 @@ function flip(p, size) {
   }) });
 }
 
-export function projectRows(p, slots, api) {
+/** Module settings that belong in Project settings (they declare `home: "project"`), for the modules acting on this pipeline: [[module, name, spec]]. */
+const homedSettings = (ps) => !ps || !ps.activeModules ? [] : ps.activeModules().filter((m) => ps.useful(m)).flatMap((m) => Object.entries(m.settings || {}).filter(([, spec]) => spec.home === "project").map(([name, spec]) => [m, name, spec]));
+/** The values behind those rows, so the panel redraws when one changes. */
+export const homed = (app) => { const ps = app.pipeline, v = ps && ps.currentValues ? ps.currentValues() : {}; return homedSettings(ps).map(([m, name]) => (v[m.id] || {})[name]); };
+
+/** Continuity's choices, in a card of their own (only while that module acts on the pipeline). */
+function frameCarry(app) {
+  const ps = app.pipeline;
+  if (!ps || !ps.activeModules) return [];
+  const values = ps.currentValues();
+  const rows = homedSettings(ps).filter(([m, , spec]) => whenSatisfied(values, m.id, spec.when)).map(([m, name, spec]) => settingRow(m.id, name, spec, values, (id, n, v) => ps.setModuleValue(id, n, v)));
+  return rows.length ? [c.label.section({ text: "Scenes" }), card(...rows)] : [];
+}
+
+export function projectRows(p, slots, api, app = {}) {
   const open = p.project;
   if (!open) return [c.emptyState.default({ icon: "▭", title: "No project", hint: "Open or create one." })];
   const controls = videoControls(p, slots);
@@ -94,8 +107,8 @@ export function projectRows(p, slots, api) {
       size.length ? c.field.row({ fields: size.map((x) => x.field) }) : null,
       flip(p, size),
       basis(p, slots),
-      ...custom(p, open),
-      c.field.default({ label: "Start shots", hint: "From an image: a scene uses its picture, or the last frame of the clip before it. From a prompt: every scene starts without a picture. (MiniMax H3 takes only the picture's shape.)", control: c.select.md({ label: "Start shots", options: STARTS, value: open.generation_mode === "t2v" ? "t2v" : "i2v", onChange: (v) => p.setField("generation_mode", v) }) })),
+      ...custom(p, open)),
+    ...frameCarry(app),
     c.label.section({ text: "Prompt" }),
     card(c.field.default({ label: "Anchor", hint: "Put in front of every scene's prompt.", control: c.textarea.md({ label: "Anchor", value: p.anchor, rows: 2, onInput: (v) => p.setAnchor(v) }) }),
       c.field.default({ label: "Negative prompt", hint: "What to steer away from. A model that ignores negative prompts (MiniMax H3) uses it only with Shadow negative or Negative erase on.", control: c.textarea.md({ label: "Negative prompt", value: p.negative, rows: 2, onInput: (v) => p.setNegative(v) }) }),

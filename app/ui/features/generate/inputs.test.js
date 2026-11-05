@@ -45,9 +45,10 @@ test("each build draws a fresh seed, and a unit's own length overrides the proje
   assert.deepEqual([a.inputs.n.seed, b.inputs.n.seed, a.inputs.n.length], [1, 2, 49]);
 });
 
-test("starting shots from a prompt sends no picture even when the scene has one", async () => {
-  const { inputs } = await buildInputs({ project: { generation_mode: "t2v" }, scene: { text: "a cat", source_image: "m1" }, slots, expand: async ({ text }) => ({ text }) });
-  assert.equal(inputs.s.media_id, "");
+test("a scene with a picture starts from it, one without starts from the prompt alone", async () => {
+  const run = (scene) => buildInputs({ project: {}, scene: { text: "a cat", ...scene }, slots, expand: async ({ text }) => ({ text }) });
+  assert.equal((await run({ source_image: "m1" })).inputs.s.media_id, "m1");
+  assert.equal((await run({})).inputs.s.media_id, "");
 });
 
 test("a hook's inputs are merged and its notes come back", async () => {
@@ -71,12 +72,12 @@ test("a shot with no text and no start picture is said; text from the project's 
   assert.equal(await said({}, { text: "", source_image: "m1" }), false);
 });
 
-test("the no-text note goes by what is sent: a carried frame counts, a picture t2v blanks does not", async () => {
+test("the no-text note goes by what is sent: a carried frame counts, a scene with nothing does not", async () => {
   const expand = async ({ text }) => ({ text });
   const carry = [async () => ({ inputs: { s: { media_id: "frame" } } })];
   const noted = async (project, scene, hooks = []) => (await buildInputs({ project, scene, slots, expand, hooks })).notes.some((n) => /no text/.test(n));
   assert.equal(await noted({}, { text: "" }, carry), false);
-  assert.equal(await noted({ generation_mode: "t2v" }, { text: "", source_image: "m1" }), true);
+  assert.equal(await noted({}, { text: "" }), true);
 });
 
 test("a fixed seed (seed: null) sends no seed: the seed node's own number runs", async () => {
@@ -96,18 +97,18 @@ test("text-only: a slot that can stand in for the picture is told the size of th
   const s = [{ id: "src", roles: [{ at: "assets.source_image", input: "media_id", blank_like: like }] }, { id: "e", inputs: { use_image: true } },
     { id: "t", inputs: { target_width: 1344, target_height: 768 }, roles: [{ at: "project.video", input: "target_width" }] }];
   const run = (project, scene) => buildInputs({ project, scene, slots: s, expand: async () => null });
-  const t2v = await run({ generation_mode: "t2v", video: { target_width: 640 } }, { source_image: "m1" });
+  const t2v = await run({ video: { target_width: 640 } }, {});
   assert.deepEqual(t2v.inputs.src, { media_id: "", blank_width: 640, blank_height: 768 });
   assert.deepEqual(t2v.inputs.e, { use_image: false });                          // the enhancer is not handed the grey stand-in
-  assert.equal((await run({ generation_mode: "i2v" }, { source_image: "m1" })).inputs.e, undefined);
-  assert.deepEqual((await run({ generation_mode: "i2v" }, { source_image: "m1" })).inputs.src, { media_id: "m1" });
-  assert.deepEqual((await run({ generation_mode: "i2v" }, {})).inputs.src, { media_id: "", blank_width: 1344, blank_height: 768 });
+  assert.equal((await run({}, { source_image: "m1" })).inputs.e, undefined);
+  assert.deepEqual((await run({}, { source_image: "m1" })).inputs.src, { media_id: "m1" });
+  assert.deepEqual((await run({}, {})).inputs.src, { media_id: "", blank_width: 1344, blank_height: 768 });
 });
 
 test("text-only on a pipeline saved before the preset named a stand-in: the resizer slot is enough, no preset change needed", async () => {
   const s = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] }, { id: "e", node: "FunUIEnhancePrompt", inputs: { use_image: true } },
     { id: "t", node: "ImageTransformKJ", inputs: { target_width: 1344, target_height: 768 }, roles: [{ at: "project.video", input: "target_width" }] }];
-  const { inputs } = await buildInputs({ project: { generation_mode: "t2v", video: { target_width: 640 } }, scene: {}, slots: s, expand: async () => null });
+  const { inputs } = await buildInputs({ project: { video: { target_width: 640 } }, scene: {}, slots: s, expand: async () => null });
   assert.deepEqual(inputs.src, { media_id: "", blank_width: 640, blank_height: 768 });
   assert.deepEqual(inputs.e, { use_image: false });
 });
@@ -166,7 +167,7 @@ test("a video-in pipeline takes the first video among the references as its star
   learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
   const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true, video_only: true }], inputs: {} }, { id: "a", node: "X", inputs: { image: ["src", 0] } }];
   const run = (scene, project = {}) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", ...scene }, slots, expand: async () => null });
-  const r = await run({ references: ["pic", "vid"] }, { generation_mode: "t2v" });
+  const r = await run({ references: ["pic", "vid"] });
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
   assert.equal((await run({ source_image: "pic", references: ["vid"] })).inputs.src.media_id, "vid");          // a picture on the scene (the aspect source) neither wins over nor blocks the reference
@@ -182,7 +183,6 @@ test("an LTX image-to-video pipeline starts from the first reference picture whe
   assert.equal((await run({ references: ["pic", "pic2"] })).inputs.src.media_id, "pic");
   assert.equal((await run({ references: ["pic", "vid"] })).inputs.src.media_id, "vid");          // a video is the start when there is one
   assert.equal((await run({ source_image: "pic2", references: ["pic"] })).inputs.src.media_id, "pic");          // the scene's own picture neither wins over nor blocks the references
-  assert.equal((await run({ references: ["pic"] }, { generation_mode: "t2v" })).inputs.src.media_id, "");          // "From a prompt": no picture
   learn([]);
 });
 
@@ -191,7 +191,7 @@ test("a direct video-to-video pipeline saved without the video-only flag is stil
   learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }]);
   const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true }], inputs: {} },
     { id: "enc", node: "VAEEncode", inputs: { pixels: ["src", 1] } }];
-  const r = await buildInputs({ project: { video: {}, generation_mode: "t2v" }, scene: { text: "x", references: ["pic", "vid"] }, slots, expand: async () => null });
+  const r = await buildInputs({ project: { video: {} }, scene: { text: "x", references: ["pic", "vid"] }, slots, expand: async () => null });
   assert.equal(r.inputs.src.media_id, "vid");
   assert.equal(r.inputs.src.full, true);
   learn([]);
@@ -222,7 +222,7 @@ const LTX = {
     { id: "positive", node: "CLIPTextEncode", roles: [{ at: "generation.prompt", input: "text" }], inputs: { text: "" } },
   ],
 };
-const run = (slots, scene, project = {}) => buildInputs({ project: { id: "P", video: { width: 770, height: 500 }, num_frames_per_scene: 100, generation_mode: "i2v", ...project }, scene: { id: "s", text: "hi", ...scene }, slots, expand: async (x) => ({ text: x.text }), nodeInfo: async () => null, frames: 100 });
+const run = (slots, scene, project = {}) => buildInputs({ project: { id: "P", video: { width: 770, height: 500 }, num_frames_per_scene: 100, ...project }, scene: { id: "s", text: "hi", ...scene }, slots, expand: async (x) => ({ text: x.text }), nodeInfo: async () => null, frames: 100 });
 
 test("image to video from references: a picture in References is the start and the timeline picture gives the shape; with neither the anchor is bypassed and a plain picture stands in", async () => {
   kinds.set("pic", "image");

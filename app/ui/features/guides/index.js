@@ -23,7 +23,7 @@ export default {
       if (app.pipeline.allOff?.(slots)) return {};
       const mine = (app.pipeline.currentValues(slots) || {}).guide_frames;
       const slot = guideSlot(slots);
-      if (!mine || !slot || !["middle", "memory"].includes(mine.mode) || project.generation_mode === "t2v") return {};
+      if (!mine || !slot || !["middle", "memory"].includes(mine.mode)) return {};
       const previous = clipsBefore(project, scene, mine.mode === "memory" ? mine.clips || 3 : 1);
       if (!previous.length) return {};
       const want = wanted(mine.mode, mine.clips, previous);
