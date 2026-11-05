@@ -1133,6 +1133,33 @@ def register(routes, prefix=None):
             return web.json_response({"problems": [str(exc)]}, status=400)
         return _library()
 
+    @routes.post(P + "/api/shortcuts/find")
+    async def _shortcuts_find(req):
+        body = await _body(req)
+        if body is None:
+            return web.json_response({"problems": ["send {find, match_case}"]}, status=400)
+        try:
+            return web.json_response(shortcuts_mod.find_replace(body.get("find"), None, body.get("match_case") is True))
+        except ValueError as exc:
+            return web.json_response({"problems": [str(exc)]}, status=400)
+
+    @routes.post(P + "/api/shortcuts/replace")
+    async def _shortcuts_replace(req):
+        # apply false is the preview: the same answer, nothing written.
+        body = await _body(req)
+        if body is None or not isinstance(body.get("replace"), str):
+            return web.json_response({"problems": ["send {find, replace, match_case, apply}"]}, status=400)
+        try:
+            done = shortcuts_mod.find_replace(body.get("find"), body["replace"], body.get("match_case") is True,
+                                              body.get("apply") is True)
+        except ValueError as exc:
+            return web.json_response({"problems": [str(exc)]}, status=400)
+        return web.json_response(dict(json.loads(_library().text), **done))
+
+    @routes.get(P + "/api/shortcuts/phrases")
+    async def _shortcuts_phrases(_req):
+        return web.json_response({"phrases": shortcuts_mod.common_phrases()})
+
     @routes.get(P + "/api/shortcuts/revolver")
     async def _revolver_get(_req):
         return web.json_response(shortcuts_mod.revolver_settings())

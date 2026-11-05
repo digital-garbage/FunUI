@@ -160,3 +160,19 @@ def test_revolver_over_http_only_a_real_run_commits(server):
     assert [ask(False), ask(False), ask(True), ask(True), ask(True)] == ["A", "A", "A", "B", "A"]
     assert _request(server, "GET", "/fun/api/shortcuts/revolver")[1]["enabled"] is True
     assert _request(server, "POST", "/fun/api/shortcuts/revolver", [])[0] == 400
+
+
+def test_find_replace_and_phrases_over_http(server):
+    for name, text in (("A", "soft golden light"), ("B", "golden light, red fox")):
+        _request(server, "POST", "/fun/api/shortcuts", {"name": name, "triggers": [name.lower()], "replacements": [text]})
+    _, found = _request(server, "POST", "/fun/api/shortcuts/find", {"find": "GOLDEN"})
+    assert [m["name"] for m in found["matches"]] == ["A", "B"]
+    assert _request(server, "POST", "/fun/api/shortcuts/find", {"find": ""})[0] == 400
+    _, phrases = _request(server, "GET", "/fun/api/shortcuts/phrases")
+    assert phrases["phrases"][0]["phrase"] == "golden light"
+    status, preview = _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "golden", "replace": "warm", "apply": False})
+    assert status == 200 and preview["changed"] == 2
+    assert [s["replacements"] for s in _request(server, "GET", "/fun/api/shortcuts")[1]["shortcuts"]][0] == ["soft golden light"]
+    _, done = _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "golden", "replace": "warm", "apply": True})
+    assert done["shortcuts"][1]["replacements"] == ["warm light, red fox"]
+    assert _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "x"})[0] == 400

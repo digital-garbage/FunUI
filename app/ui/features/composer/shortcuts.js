@@ -29,11 +29,81 @@ export function shortcuts(app, own) {
     win.setFooter({ actions: [existing ? c.button.sm({ label: "Delete", tone: "danger", onClick: remove }) : null, c.button.sm({ label: "Save", tone: "primary", onClick: save })].filter(Boolean) });
   }
 
+  /** Phrases that repeat across shortcuts; picking one hands it to `onPick`. */
+  async function phrasesWindow(onPick) {
+    let phrases;
+    try { phrases = (await app.api.shortcutPhrases()).phrases || []; } catch (err) { return tell(err.message); }
+    const win = c.modal.stacked({ title: "Common phrases", subtitle: "Phrases used in more than one shortcut. Pick one to look at it or change it everywhere.", size: "md", body: c.filterList.md({
+      items: phrases.map((p) => ({ id: p.phrase, label: p.phrase, hint: `${p.shortcuts} shortcuts, ${p.uses} ${p.uses === 1 ? "line" : "lines"}` })),
+      placeholder: "Search phrases", empty: "No phrase is used in more than one shortcut.",
+      onChange: (phrase) => { win.close("picked"); onPick(phrase); } }) });
+  }
+
+  /** Find a phrase in the text of every shortcut, or replace it in all of them at once. */
+  function findWindow(start = "", mode = "find") {
+    const state = { find: start, replace: "", matchCase: false, mode };
+    const results = c.region.stack({ gap: "sm" });
+    let ticket = 0, timer = null, apply = null;
+    const findBox = c.input.md({ label: "Find", value: start, placeholder: "Find", onInput: (v) => { state.find = v; soon(); } });
+    const replaceBox = c.input.md({ label: "Replace with", value: "", placeholder: "Replace with", onInput: (v) => { state.replace = v; soon(); } });
+    const findField = c.field.default({ label: "Find", control: findBox });
+    const replaceField = c.field.default({ label: "Replace with", hint: "Leave it empty to remove the phrase.", control: replaceBox });
+    const fields = c.region.stack({ gap: "sm", children: state.mode === "replace" ? [findField, replaceField] : [findField] });
+    let found = 0;
+    const sync = () => { apply.setLabel(state.replace === "" ? "Remove everywhere" : "Replace everywhere"); apply.setDisabled(state.mode !== "replace" || !found); };
+    const note = (text) => { found = 0; results.set([c.hint.default({ text })]); sync(); };
+
+    async function look() {
+      const mine = ++ticket;
+      if (!state.find.trim()) return note("Type the phrase to look for. It is matched exactly as typed.");
+      try {
+        const asked = state.mode === "replace" ? await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, false) : await app.api.findShortcuts(state.find, state.matchCase);
+        if (mine !== ticket || !alive) return;
+        const rows = asked.matches || [], names = new Set(rows.map((m) => m.name));
+        if (!rows.length) return note("No shortcut contains that phrase.");
+        found = rows.length;
+        const total = rows.reduce((n, m) => n + m.count, 0);
+        results.set([
+          c.hint.default({ text: `${total} ${total === 1 ? "match" : "matches"} in ${names.size} ${names.size === 1 ? "shortcut" : "shortcuts"}.${(asked.skipped || []).length ? ` ${asked.skipped.length} would be left as they are, because nothing would remain of them.` : ""}` }),
+          c.filterList.md({ items: rows.map((m) => ({ id: `${m.name}#${m.index}`, label: m.name, hint: state.mode === "replace" ? `${m.before} → ${m.after}` : m.before })), placeholder: "Search the matches", empty: "Nothing matches." }),
+        ]);
+        sync();
+      } catch (err) { if (mine === ticket) note(err.message); }
+    }
+    const soon = () => { clearTimeout(timer); timer = setTimeout(look, 200); };
+    own(() => clearTimeout(timer));
+
+    async function commit() {
+      const ok = await c.modal.dialogue({ title: state.replace === "" ? "Remove everywhere" : "Replace everywhere", tone: "danger",
+        message: `Change ${found} ${found === 1 ? "line" : "lines"} in your saved shortcuts? This cannot be undone.`, confirmLabel: state.replace === "" ? "Remove" : "Replace" }).result;
+      if (!ok) return;
+      try {
+        const done = await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, true);
+        draw(done);
+        c.toast.good({ text: `Changed ${done.changed} ${done.changed === 1 ? "shortcut" : "shortcuts"}.` });
+        win.close("done");
+      } catch (err) { tell(err.message); }
+    }
+
+    const win = c.modal.generic({ title: "Find and replace", subtitle: "Searches the replacement text of every shortcut, paused ones too.", size: "lg", body: c.region.stack({ gap: "sm", children: [
+      c.segmented.md({ label: "Mode", value: state.mode, options: [{ value: "find", label: "Find" }, { value: "replace", label: "Replace" }], onChange: (v) => { state.mode = v; fields.set(v === "replace" ? [findField, replaceField] : [findField]); look(); } }),
+      fields,
+      c.toggle.default({ label: "Match upper and lower case", checked: false, onChange: (v) => { state.matchCase = v; look(); } }),
+      c.button.sm({ label: "Common phrases…", onClick: () => phrasesWindow((phrase) => { findBox.setValue(phrase); state.find = phrase; look(); }) }),
+      results,
+    ] }) });
+    apply = c.button.sm({ label: "Replace everywhere", tone: "primary", disabled: true, onClick: commit });
+    win.setFooter({ actions: [apply] });
+    look();
+  }
+
   /** Export / import / new category / delete all. */
   function tools(anchor, lib) {
     const did = (p) => p.then(draw).catch((err) => tell(err.message));
-    c.menu.dropdown({ anchor: anchor || app.dom.body, items: [{ id: "export", label: "Export all…" }, { id: "import", label: "Import…" }, { id: "category", label: "New category…" }, { separator: true }, { id: "clear", label: "Delete all", danger: true, disabled: !(lib.shortcuts || []).length }],
+    c.menu.dropdown({ anchor: anchor || app.dom.body, items: [{ id: "find", label: "Find and replace…", disabled: !(lib.shortcuts || []).length }, { id: "phrases", label: "Common phrases…", disabled: !(lib.shortcuts || []).length }, { separator: true }, { id: "export", label: "Export all…" }, { id: "import", label: "Import…" }, { id: "category", label: "New category…" }, { separator: true }, { id: "clear", label: "Delete all", danger: true, disabled: !(lib.shortcuts || []).length }],
       onPick: async (id) => {
+        if (id === "find") return findWindow();
+        if (id === "phrases") return phrasesWindow((phrase) => findWindow(phrase, "replace"));
         if (id === "export") return app.dom.download("/fun/api/shortcuts/export", "funui_shortcuts.json");
         if (id === "import") {
           const picked = async (file) => {

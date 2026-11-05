@@ -171,6 +171,82 @@ def clear() -> list[Shortcut]:
         return []
 
 
+# --- find / replace / common phrases ------------------------------------------
+# These work on the replacement text only: that is the prose. A trigger is a key, and rewriting
+# triggers in bulk could merge two of them or break the picker's order.
+
+def _finder(query, match_case: bool = False):
+    """The query as a literal (never a pattern) regex; runs of whitespace match the single space the library keeps."""
+    text = re.sub(r"\s+", " ", str(query if query is not None else ""))
+    if not text.strip():
+        raise ValueError("type the phrase to look for")
+    return re.compile(re.escape(text), 0 if match_case else re.IGNORECASE)
+
+
+def find_replace(find, replace=None, match_case: bool = False, apply: bool = False, items=None) -> dict:
+    """-> {matches, changed, skipped}. Finds `find` in every replacement of every shortcut (enabled or not);
+    `replace=None` only looks. Matches are taken left to right and never overlap ("aa" in "aaa" is one).
+    `apply` writes the library. A replacement that would end up empty or longer than the limit is left
+    as it was and named in `skipped`: an empty replacement means "remove this phrase", not "was blanked by accident"."""
+    rx = _finder(find, match_case)
+    new = None if replace is None else re.sub(r"\s+", " ", str(replace))
+    with _LOCK:
+        base = listing() if items is None else items
+        out, matches, skipped, changed = [], [], [], 0
+        for sc in base:
+            lines = list(sc.replacements)
+            touched = False
+            for i, text in enumerate(sc.replacements):
+                count = len(rx.findall(text))
+                if not count:
+                    continue
+                after = None if new is None else rx.sub(lambda _m: new, text)
+                entry = {"name": sc.name, "index": i, "count": count, "before": text, "after": after}
+                if after is not None:
+                    after = after.strip()
+                    if not after or len(after) > MAX_ITEM:
+                        skipped.append({"name": sc.name, "index": i, "reason": "empty" if not after else "too long"})
+                        continue
+                    lines[i], touched, entry["after"] = after, True, after
+                matches.append(entry)
+            out.append(Shortcut.from_dict(dict(sc.to_dict(), replacements=lines)) if touched else sc)
+            changed += touched
+        if apply and new is not None and changed and items is None:
+            _save_all(out)
+        return {"matches": matches, "changed": changed if new is not None else 0, "skipped": skipped}
+
+
+_SEGMENT = re.compile(r"[^\w\s'’-]+|\n")     # punctuation ends a phrase: "red fox, big hat" never makes "fox big"
+
+
+def common_phrases(items=None, min_words: int = 2, min_shortcuts: int = 2, max_words: int = 8, limit: int = 200) -> list[dict]:
+    """Runs of words that appear in the replacements of at least `min_shortcuts` different shortcuts:
+    [{phrase, shortcuts, uses, words}], most shared first. `uses` counts replacement lines (a phrase twice in one
+    line is one use). A phrase is dropped when a longer one around it is in exactly the same places, so
+    "red fox runs" is listed and "red fox" is not, unless "red fox" also lives somewhere else."""
+    seen: dict[str, list] = {}                 # folded phrase -> [as first written, shortcut names, (name, line) pairs]
+    for sc in listing() if items is None else items:
+        for li, text in enumerate(sc.replacements):
+            for seg in _SEGMENT.split(text):
+                words = seg.split()
+                for n in range(min_words, min(max_words, len(words)) + 1):
+                    for i in range(len(words) - n + 1):
+                        shown = " ".join(words[i:i + n])
+                        e = seen.setdefault(shown.casefold(), [shown, set(), set()])
+                        e[1].add(sc.name)
+                        e[2].add((sc.name, li))
+    kept = {k: e for k, e in seen.items() if len(e[1]) >= min_shortcuts}
+    for k, e in list(kept.items()):
+        w = k.split()
+        for child in (" ".join(w[1:]), " ".join(w[:-1])) if len(w) > min_words else ():
+            c = kept.get(child)
+            if c and len(c[1]) == len(e[1]) and len(c[2]) == len(e[2]):
+                del kept[child]
+    rows = [{"phrase": e[0], "shortcuts": len(e[1]), "uses": len(e[2]), "words": len(k.split())} for k, e in kept.items()]
+    rows.sort(key=lambda r: (-r["shortcuts"], -r["words"], -r["uses"], r["phrase"].casefold()))
+    return rows[:limit]
+
+
 # --- categories --------------------------------------------------------------
 
 def _label(v) -> str:
