@@ -72,7 +72,8 @@ def from_diffusers(lora):
         if None in heights:
             continue
         start = sum(heights[: _QKV.index(part)])
-        extra[mod] = (f"diffusion_model.{base}.weight", (0, start, sizes[mod]))
+        plain = re.sub(r"^(?:base_model\.model\.|model\.diffusion_model\.|diffusion_model\.)+", "", base)       # the file's own wrapper is not part of the model's name
+        extra[mod] = (f"diffusion_model.{plain}.weight", (0, start, sizes[mod]))
     return out, extra
 
 
@@ -84,7 +85,9 @@ def _rekey(lora, prefix, replacement):
 
 def _misfit(sd, key, adapter):
     """True when a plain LoRA pair cannot make the weight it names (both dimensions, not the count)."""
-    w, target = getattr(adapter, "weights", None), sd.get(key)
+    w = getattr(adapter, "weights", None)
+    window = key[1] if isinstance(key, tuple) else None            # (dim, start, length): a LoRA aimed at some rows of a fused weight (Q, K, V of qkv_proj)
+    target = sd.get(key[0] if isinstance(key, tuple) else key)
     if not w or len(w) < 2 or target is None or target.dim() < 2:
         return False
     if (len(w) > 3 and w[3] is not None) or (len(w) > 5 and w[5] is not None):   # locon mid / padded target: not modelled
@@ -93,6 +96,9 @@ def _misfit(sd, key, adapter):
         got = (int(w[0].flatten(start_dim=1).shape[0]), int(w[1].flatten(start_dim=1).shape[-1]))
     except Exception:  # noqa: BLE001 -- not a plain pair (LoKr, LoHa, diff): left to ComfyUI
         return False
+    if window is not None:
+        dim, start, length = window
+        return got != (int(length), int(target.shape[1:].numel())) or start + length > int(target.shape[dim])
     return got != (int(target.shape[0]), int(target.shape[1:].numel()))
 
 

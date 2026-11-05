@@ -108,3 +108,24 @@ def test_an_ltx_lora_with_transformer_blocks_names_is_left_as_it_is(tiny_ltx, mo
             name.replace(".weight", ".lora_B.weight"): torch.randn(out_dim, RANK)}
     patches, _how, dropped = keys.match(tiny_ltx.patcher, None, lora)
     assert len(patches) == 1 and dropped == 0
+
+
+@pytest.mark.parametrize("wrapper", ["diffusion_model.", "base_model.model.", "model.diffusion_model."])
+def test_a_wrapped_diffusers_file_still_reaches_the_fused_qkv_rows(patcher, wrapper):
+    from modules.loaders.lora.keys import match
+    lora, want = _file("transformer_blocks.1", torch.Generator().manual_seed(0))
+    lora = {wrapper + k[len("transformer."):]: v for k, v in lora.items()}
+    patches, how, dropped = match(patcher, None, lora)
+    clone = patcher.clone()
+    clone.add_patches(patches, 1.0)
+    got = _delta(clone, "diffusion_model.blocks.1.attn.qkv_proj.weight", (192, 64))
+    assert torch.allclose(got, torch.cat([want["attn.to_q"], want["attn.to_k"], want["attn.to_v"]], 0), atol=1e-5), (how, len(patches))
+
+
+def test_a_qkv_pair_of_the_wrong_width_is_dropped_not_merged_scrambled(patcher):
+    from modules.loaders.lora.keys import match
+    lora, _ = _file("transformer_blocks.1", torch.Generator().manual_seed(0))
+    k = "transformer.transformer_blocks.1.attn.to_q.lora_B.weight"
+    lora[k] = torch.randn(96, RANK)                                   # 96 rows where this model has 64 per part
+    patches, how, dropped = match(patcher, None, lora)
+    assert dropped >= 1 and len(patches) == 5
