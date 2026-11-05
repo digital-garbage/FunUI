@@ -35,6 +35,7 @@ const stage = {
         const dur = segments(p.project).find((s) => s.id === id).dur;
         edit((pr) => edge === "out" ? edits.resize(pr, id, dur + d, gridFor(app)) : d > 0 && edits.trimLeft(pr, id, d, gridFor(app)));   // the left edge only cuts in
       },
+      onNudge: (id, sec) => edit((pr) => edits.nudge(pr, id, sec)),
       onReorder: (id, index) => edit((pr) => {      // the stage counts ghosts and pauses too; the cut counts scenes
         const all = segments(pr).filter((s) => s.id !== id);
         return edits.reorder(pr, id, all.slice(0, index).filter((s) => s.kind === "scene").length, sceneIds(pr));

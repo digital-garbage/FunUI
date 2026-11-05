@@ -3,7 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { card } from "./scene.js";
 import { fold } from "./fold.js";
-import { BLANK, FITS, FROM, RATES, activeVideoInput } from "../../shell/video_input.js";
+import { BLANK, FITS, RATES } from "../../shell/video_input.js";
 
 /** `use`: the settings shown; `save(next)` stores them. `size`: the project's width/height, offered as a one-tap target. */
 function settingsCard(use, save, size) {
@@ -32,24 +32,5 @@ function settingsCard(use, save, size) {
 export function projectVideoInput(p) {
   const open = p.project, use = { ...BLANK, ...(open.video_input || {}) };
   const v = open.video || {}, size = [v.width || v.target_width || open.width, v.height || v.target_height || open.height];
-  return [
-    fold("project-video-input", "Video input", [
-    card(c.field.default({ label: "Reference videos use", hint: "Where the preparation comes from. Automatic: the project's when it is on, otherwise each scene's own.",
-      control: c.select.md({ label: "Reference videos use", options: FROM, value: open.video_input_from || "auto", onChange: (x) => p.setField("video_input_from", x) }) })),
-    settingsCard(use, (next) => p.setField("video_input", next), size[0] && size[1] ? size : null)], use.on ? "On" : "Off"),
-  ];
-}
-
-export function sceneVideoInput(p, sc) {
-  const open = p.project, use = { ...BLANK, ...(sc.video_input || {}) }, live = activeVideoInput(open, sc);
-  const from = open.video_input_from || "auto";
-  return [
-    fold("scene-video-input", "Video input", [
-    from === "project" || (from === "auto" && (open.video_input || {}).on)
-      ? c.hint.default({ text: "The project's video input settings are used; this scene's own are ignored. Change that in Project settings." })
-      : null,
-    settingsCard(use, (next) => p.setScene(sc.id, "video_input", next), null),
-    live ? null : c.hint.default({ text: "Switched off: reference videos load whole at 24 fps." }),
-  ], live ? "On" : "Off"),
-  ];
+  return [fold("project-video-input", "Video input", [settingsCard(use, (next) => p.setField("video_input", next), size[0] && size[1] ? size : null)], use.on ? "On" : "Off")];
 }

@@ -48,7 +48,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // wired input cannot be overridden per run), and that output is the first frame alone until `full` is set.
   if (takesVideo && startId && kinds.get(startId) === "video") {
     put(source.slot, "full", true);
-    const use = activeVideoInput(project, scene);
+    const use = activeVideoInput(project);
     if (use) put(source.slot, "prepare", videoInputJson(use, project, scene));
   }
   // A project saved before the preset said so still has this shape: a picture-resizing slot is enough to know a stand-in fits.
@@ -88,7 +88,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   }
   for (const [id, fields] of Object.entries(overrides)) raw[id] = { ...raw[id], ...fields };
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
-  const prepare = activeVideoInput(project, scene);
+  const prepare = activeVideoInput(project);
   if (prepare) for (const [id, fields] of Object.entries(overrides)) if (fields.full && fields.media_id && kinds.get(fields.media_id) === "video") raw[id].prepare = videoInputJson(prepare, project, scene);
   // Nothing to feed the model (no picture or video where the pipeline looks for one): a role can say what to change so the
   // clip is made from the prompt alone -- bypass the anchor, run the whole schedule -- and a plain picture stands in.

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { addScene, removeScene, removeFromPlan, restoreToPlan, reorder, resize, trimLeft, slip, split } from "../edits.js";
+import { addScene, removeScene, removeFromPlan, restoreToPlan, reorder, resize, trimLeft, slip, split, nudge } from "../edits.js";
 import { seconds, segments } from "../scenes.js";
 
 const mk = (extra = {}) => ({
@@ -93,4 +93,18 @@ test("clearReferences empties every scene's own list, keeps the pins, and says h
   assert.equal(allReferences(p).size, 2);
   assert.equal(clearReferences(p), 2);
   assert.deepEqual([p.scenes.map((s) => s.references || []), p.fixed_references, clearReferences(p)], [[[], [], []], { a: 1 }, 0]);
+});
+
+test("nudge: a clip dropped later leaves a pause before it, dropped back it closes, and the first clip stays at zero", () => {
+  const p = { frame_rate: 25, num_frames_per_scene: 50, scenes: [{ id: "a" }, { id: "b" }, { id: "c" }], scene_renders: {} };
+  const at = (id) => segments(p).find((s) => s.id === id).start;
+  assert.equal(at("b"), 2);
+  assert.equal(nudge(p, "b", 3.5), true);
+  assert.equal(p.scenes[0].gap_after_sec, 1.5);
+  assert.equal(at("b"), 3.5);
+  assert.equal(at("c"), 5.5);                               // what follows moves along
+  assert.equal(nudge(p, "b", 3.5), false);                  // nothing changed
+  assert.equal(nudge(p, "b", 1), true);                     // cannot start before the clip in front of it ends
+  assert.equal(p.scenes[0].gap_after_sec, 0);
+  assert.equal(nudge(p, "a", 4), false);                    // the first clip has nothing before it to hold a pause
 });

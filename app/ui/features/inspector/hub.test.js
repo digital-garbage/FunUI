@@ -48,15 +48,17 @@ test("typing in the Prompt box, then pressing a button in the panel, does not re
   host.remove();
 });
 
-test("the scene's Video input card switches on, shows its controls, and says when the project's settings win", async () => {
+test("the project's Video input card switches on and shows its controls, and the scene has none of its own", async () => {
   let fire;
   const calls = [];
   const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
-  const p = { project: doc, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
-    setText: () => {}, setScene: (id, key, value) => { calls.push([key, value]); doc.scenes[0][key] = value; fire("change"); }, edit: (fn) => fn(doc) };
+  const p = { project: doc, video: {}, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, setField: (k, v) => { calls.push([k, v]); doc[k] = v; fire("change"); }, setVideo: () => {}, edit: (fn) => fn(doc) };
   const host = document.createElement("div");
   document.body.append(host);
   hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {} } });
+  assert.ok(!host.textContent.includes("Video input"), "nothing about it on the Scene tab");
+  [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
   assert.ok(host.textContent.includes("Video input"));
   assert.ok(!host.textContent.includes("Every Nth frame"));
   const sw = [...host.querySelectorAll("input[role=switch]")].find((i) => i.closest(".cx-toggle-row").textContent.includes("Prepare video inputs"));
@@ -64,8 +66,6 @@ test("the scene's Video input card switches on, shows its controls, and says whe
   assert.equal(calls[0][0], "video_input");
   assert.equal(calls[0][1].on, true);
   assert.ok(host.textContent.includes("Every Nth frame") && host.textContent.includes("Skip first") && host.textContent.includes("Cut last"));
-  doc.video_input = { on: true }; fire("change");
-  assert.ok(host.textContent.includes("project's video input settings are used"));
   host.remove();
 });
 
@@ -133,11 +133,12 @@ test("a group opened in the panel stays open when the panel redraws", async () =
   const host = document.createElement("div");
   document.body.append(host);
   hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {} } });
+  [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
   const group = () => [...host.querySelectorAll("details")].find((d) => d.textContent.includes("Video input"));
   assert.equal(group().open, false, "closed to begin with");
   group().open = true;
   group().dispatchEvent(new window.Event("toggle"));
-  doc.scenes[0].excluded = true; fire("change");
+  doc.name = "renamed"; fire("change");
   assert.equal(group().open, true);
   host.remove();
 });

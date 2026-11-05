@@ -126,23 +126,20 @@ test("a video reference reaches the model's video input from a preset that says 
   learn([]);
 });
 
-test("a reference video is prepared as the project says, else as the scene says, and untouched when nothing is on", async () => {
+test("a reference video is prepared as the project says, and untouched when it is off", async () => {
   const { learn } = await import("../../shell/bin.js");
   learn([{ id: "vid", name: "v.mp4", kind: "video" }]);
   const s = [{ id: "ref1", node: "Loader", roles: [{ at: "assets.reference_1", input: "media_id", wireTo: { slot: "r2v", input: "ref_images.ref_image_0" } }] }, { id: "r2v", node: "Model", inputs: {} }];
   const info = { Model: { inputs: { "ref_videos.ref_video_0": "IMAGE" }, outputs: [] }, Loader: { inputs: {}, outputs: ["IMAGE", "IMAGE", "AUDIO"] } };
   const run = async (project, scene) => (await buildInputs({ project: { video: {}, frame_rate: 24, ...project }, scene: { text: "x", references: ["vid"], ...scene }, slots: s, expand: async () => null, nodeInfo: async (c) => info[c] })).inputs.ref1;
   assert.equal((await run({}, {})).prepare, undefined);
-  const scene = { video_input: { on: true, skip_first: 5, every_nth: 2 } };
-  const sc = JSON.parse((await run({}, scene)).prepare);
-  assert.equal(sc.skip_first, 5);
-  assert.equal(sc.every_nth, 2);
-  assert.equal(sc.fps, 24);          // "the project's FPS"
-  const both = { video_input: { on: true, skip_first: 9, fps_from: "source" } };
-  assert.equal(JSON.parse((await run(both, scene)).prepare).skip_first, 9);          // auto: the project's wins when on
-  assert.equal(JSON.parse((await run(both, scene)).prepare).fps, 0);
-  assert.equal(JSON.parse((await run({ ...both, video_input_from: "scene" }, scene)).prepare).skip_first, 5);
-  assert.equal((await run({ video_input_from: "project", video_input: { on: false } }, scene)).prepare, undefined);
+  const on = { video_input: { on: true, skip_first: 5, every_nth: 2 } };
+  const got = JSON.parse((await run(on, {})).prepare);
+  assert.equal(got.skip_first, 5);
+  assert.equal(got.every_nth, 2);
+  assert.equal(got.fps, 24);          // "the project's FPS"
+  assert.equal(JSON.parse((await run({ video_input: { on: true, fps_from: "source" } }, {})).prepare).fps, 0);
+  assert.equal((await run({}, { video_input: { on: true, skip_first: 9 } })).prepare, undefined);          // a scene's old own settings are not read
   learn([]);
 });
 

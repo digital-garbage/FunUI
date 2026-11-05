@@ -5,6 +5,7 @@
 //   clip:  { id, start, dur, title?, head?: [text], badge?, body?, thumbs?: [url],
 //            actions?: [{ label, title, onClick }], selected?, focus?, excluded?, ghost?, rating?, trim? }
 //   callbacks: onSeek(sec) onSelect(id, { additive, range }) onTrim(id, "in"|"out", deltaSec) onReorder(id, index) onMove(id, deltaSec)
+//              onNudge(id, startSec): a `nudge` lane's clip dropped at the same place in the order but another time (the pause before it follows)
 
 import { define } from "../internals/register.js";
 import { el } from "../internals/el.js";
@@ -23,7 +24,7 @@ const clock = (s) => {
   return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
 };
 
-define("timeline", "stage", ({ pxPerSecond = 80, label = "Timeline", lanes: initial = [], onSeek, onSelect, onTrim, onReorder, onMove } = {}) => {
+define("timeline", "stage", ({ pxPerSecond = 80, label = "Timeline", lanes: initial = [], onSeek, onSelect, onTrim, onReorder, onMove, onNudge } = {}) => {
   let px = pxPerSecond;
   let lanes = initial;
   let playhead = 0;
@@ -54,6 +55,18 @@ define("timeline", "stage", ({ pxPerSecond = 80, label = "Timeline", lanes: init
   const SNAP_PX = 10;
   const anchorsFor = (clip) => [0, playhead, ...lanes.flatMap((l) => l.clips.filter((c) => c.id !== clip.id).flatMap((c) => [c.start, c.start + c.dur]))];
   const snapped = (clip, edges, dxSec, event) => (event && event.shiftKey ? dxSec : snapDelta(dxSec, edges, anchorsFor(clip), SNAP_PX / px));
+
+  // Where a clip dropped on a `nudge` lane starts: its left edge, or its right edge, sticks to a neighbour's edge, the playhead or zero.
+  const landing = (clip, dxSec, event) => {
+    const want = Math.max(0, clip.start + dxSec);
+    if (event && event.shiftKey) return want;
+    let best = null;
+    for (const a of anchorsFor(clip)) for (const edge of [0, clip.dur]) {
+      const off = a - (want + edge);
+      if (Math.abs(off) < SNAP_PX / px && (best === null || Math.abs(off) < Math.abs(best))) best = off;
+    }
+    return best === null ? want : Math.max(0, want + best);
+  };
 
   function clipNode(lane, clip) {
     const parts = [];
@@ -113,6 +126,7 @@ define("timeline", "stage", ({ pxPerSecond = 80, label = "Timeline", lanes: init
         if (moved === null) return;
         if (Math.abs(dx) >= MOVE_THRESHOLD_PX && (lane.reorder || lane.move)) moved = true;
         if (moved && lane.move) dx = snapped(clip, [clip.start, clip.start + clip.dur], dx / px, event) * px;
+        if (moved && lane.nudge) dx = (landing(clip, dx / px, event) - clip.start) * px;
         if (moved) cell.style.transform = `translateX(${dx}px)`;
       },
       onEnd: ({ dx, event, cancelled }) => {
@@ -127,6 +141,7 @@ define("timeline", "stage", ({ pxPerSecond = 80, label = "Timeline", lanes: init
         const mid = clip.start + clip.dur / 2 + dx / px;
         const others = lane.clips.filter((c) => c.id !== clip.id);
         const index = others.filter((c) => c.start + c.dur / 2 < mid).length;
+        if (lane.nudge && onNudge && index === others.filter((c) => c.start + c.dur / 2 < clip.start + clip.dur / 2).length) { onNudge(clip.id, landing(clip, dx / px, event)); draw(); return; }          // same place in the order: only the time moved
         if (onReorder) onReorder(clip.id, index);
         draw();
       },

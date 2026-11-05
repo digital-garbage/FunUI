@@ -2,6 +2,7 @@
 // Each mutates in place and answers truthy when it changed something. They know what a scene IS (gen units,
 // ghosts, the cut order) and nothing about the screen.
 import { trackFor } from "./audio.js";
+import { segments } from "./scenes.js";
 import {
   genUnitId, isVideoClip, isSubclip, effFps, effFrames, seconds, snapFrames, LTX_GRID,
 } from "./scenes.js";
@@ -102,6 +103,24 @@ export function reorder(p, id, to, order) {
   if (ids.every((x, i) => x === order[i])) return false;
   p.timeline_order = ids;
   p.timeline_manually_ordered = true;     // from now on an edit to the plan must keep this order
+  return true;
+}
+
+/** Start a clip at `startSec` on the timeline: the pause before it (kept on the clip's predecessor) grows or shrinks, and what follows
+ *  moves along. A clip cannot start before the one in front of it ends, and the first clip stays at zero. */
+export function nudge(p, id, startSec) {
+  const segs = segments(p), at = segs.findIndex((s) => s.id === id && s.kind === "scene");
+  if (at < 0) return false;
+  let i = at - 1;
+  while (i >= 0 && segs[i].kind === "gap") i--;                // the pause already in front of it
+  const held = i >= 0 ? segs.slice(0, i + 1).reverse().find((s) => s.kind === "scene") : null;       // the pause lives on the last scene before it (ghosts sit between)
+  if (!held) return false;
+  const before = segs[at - 1] && segs[at - 1].kind === "gap" ? segs[at - 1].dur : 0;
+  const ends = segs[at].start - before;
+  const gap = Math.round(Math.max(0, startSec - ends) * 100) / 100;
+  const sc = p.scenes.find((x) => x.id === held.id);
+  if (!sc || (Number(sc.gap_after_sec) || 0) === gap) return false;
+  sc.gap_after_sec = gap;
   return true;
 }
 
