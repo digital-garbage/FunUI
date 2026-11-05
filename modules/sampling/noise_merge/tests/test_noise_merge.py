@@ -187,3 +187,9 @@ def test_mixed_noise_follows_the_dtype_and_device_of_the_noise_it_meets():
         a = torch.randn(2, 3, dtype=dtype)
         out = mix_noise(a, torch.randn(2, 3, dtype=torch.float32), 0.3)
         assert out.dtype == dtype and out.device == a.device
+
+
+def test_mixed_noise_brings_the_other_noise_to_the_first_ones_device():
+    from modules.sampling.noise_merge import mix_noise
+    out = mix_noise(torch.empty(2, 3, device="meta"), torch.randn(2, 3), 0.3)       # a meta noise stands in for another device
+    assert out.device.type == "meta" and out.dtype == torch.float32
