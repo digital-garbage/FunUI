@@ -25,6 +25,11 @@ NONE = "None"
 MAX_LORAS = 8
 
 
+def _picked(name):
+    """A condition for the form (core/widgets, `funui_shows`): the file input `name` holds a LoRA."""
+    return {"input": name, "not": [NONE]}
+
+
 class FunUILoraLoader(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -33,19 +38,22 @@ class FunUILoraLoader(io.ComfyNode):
         for n in range(1, MAX_LORAS + 1):
             sfx = "" if n == 1 else f"_{n}"
             first = n == 1
+            mine = {"funui_shows": [_picked(f"lora_name{sfx}")]}        # a slot's settings are drawn once its LoRA is chosen
+            # A slot's picker is drawn once the one before it has a LoRA (or it has one itself, so a filled slot never hides).
+            ask = {} if first else {"funui_shows": [{"either": [_picked(f"lora_name_{n - 1}" if n > 2 else "lora_name"), _picked(f"lora_name{sfx}")]}]}
             inputs += [
-                io.Combo.Input(f"lora_name{sfx}", options=files, default=NONE, optional=not first,
+                io.Combo.Input(f"lora_name{sfx}", options=files, default=NONE, optional=not first, extra_dict=ask or None,
                                tooltip="None leaves the model untouched." if first
                                else "Another LoRA, applied after the ones above it. None skips this slot."),
-                io.Float.Input(f"strength_model{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=not first,
+                io.Float.Input(f"strength_model{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=not first, extra_dict=mine,
                                tooltip="How strongly the LoRA changes the model. 0 = not at all, negative = the opposite."),
             ]
             if first:   # the original order: clip sits between slot 1's two strengths
                 inputs.append(io.Clip.Input("clip", optional=True, tooltip="Leave unwired for model-only LoRAs."))
-            inputs.append(io.Float.Input(f"strength_clip{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=True,
+            inputs.append(io.Float.Input(f"strength_clip{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=True, extra_dict=mine,
                                          tooltip="How strongly the LoRA changes the text encoder. Only used when a clip is wired."))
             inputs.append(io.Combo.Input(f"apply_to_stage{sfx}", options=list(dit_hooks.STAGES), default="Both", optional=True,
-                                         extra_dict={"funui_needs_module": ["two_stage"]},
+                                         extra_dict={**mine, "funui_needs_module": ["two_stage"]},
                                          tooltip="Which part of a Two stages run this LoRA works in. First: the smaller picture. "
                                                  "Second: the full-size steps. Only the model is changed for First or Second; "
                                                  "the text encoder strength is not used."))

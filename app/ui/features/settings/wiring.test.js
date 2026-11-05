@@ -36,3 +36,15 @@ test("a field shows only in the mode it belongs to: every rule it names must hol
   assert.deepEqual(drawn({ sla: true, sla_method: "sol-attn" }), ["sla", "sla_method", "sla_tau"]);
   assert.deepEqual(shownValues({ inputs: { sla: true, sla_method: "sol-attn" } }, spec), { sla_tau: 1.3 });
 });
+
+test("a field that names `not` or `either` is drawn by what the other inputs hold", async () => {
+  const { showing } = await import("./wiring.js");
+  const spec = { widgets: [{ name: "a", type: "COMBO", choices: ["None", "x"], default: "None" }, { name: "b", type: "COMBO", choices: ["None", "y"], default: "None" }] };
+  const settings = { shows: [{ input: "a", not: ["None"] }] };
+  assert.equal(showing(settings, { inputs: {} }, spec), false);
+  assert.equal(showing(settings, { inputs: { a: "x" } }, spec), true);
+  const next = { shows: [{ either: [{ input: "a", not: ["None"] }, { input: "b", not: ["None"] }] }] };
+  assert.equal(showing(next, { inputs: {} }, spec), false);
+  assert.equal(showing(next, { inputs: { b: "y" } }, spec), true);
+  assert.equal(showing(next, { inputs: { a: "x" } }, spec), true);
+});

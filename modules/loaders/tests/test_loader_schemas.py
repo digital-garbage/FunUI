@@ -58,3 +58,16 @@ def test_a_default_is_actually_one_of_the_options(schemas):
                     f"{node.__name__}.{name} defaults to {options['default']!r}, "
                     f"which is not one of its options"
                 )
+
+
+def test_the_lora_loader_asks_for_one_slot_at_a_time(comfyui):
+    """No LoRA picked: only the first picker. A picked LoRA brings its own settings and the next slot's picker."""
+    from modules.loaders.lora.nodes import FunUILoraLoader as L
+    rules = {i.id: (i.extra_dict or {}).get("funui_shows", []) for i in L.define_schema().inputs}
+    assert rules["lora_name"] == []
+    assert rules["strength_model"] == [{"input": "lora_name", "not": ["None"]}]
+    assert rules["strength_clip_3"] == [{"input": "lora_name_3", "not": ["None"]}]
+    assert rules["apply_to_stage_2"] == [{"input": "lora_name_2", "not": ["None"]}]
+    ask = rules["lora_name_2"][0]["either"]
+    assert [c["input"] for c in ask] == ["lora_name", "lora_name_2"]          # after slot 1, or already filled
+    assert [c["input"] for c in rules["lora_name_4"][0]["either"]] == ["lora_name_3", "lora_name_4"]

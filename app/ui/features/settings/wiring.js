@@ -26,10 +26,13 @@ const shownParents = (slot, spec) => Object.fromEntries(((spec && spec.widgets) 
  *  these are the values to send so that what runs is what is seen. */
 /** Whether a field is drawn: every input its `shows` names ([{input, when}]: a dynamic dropdown's choice, or a
  *  node's own rule) holds one of the listed values -- as set, else as the form shows it by default. */
-export const showing = (w, slot, spec) => (w.shows || []).every(({ input, when }) => {
-  const parent = ((spec && spec.widgets) || []).find((x) => x.name === input);
-  const picked = slot.inputs && slot.inputs[input] !== undefined ? slot.inputs[input] : parent && (parent.default !== undefined ? parent.default : parent.type === "BOOLEAN" ? false : (parent.choices || [])[0]);
-  return when.includes(picked);
+export const showing = (w, slot, spec) => (w.shows || []).every((entry) => {
+  const holds = ({ input, when, not }) => {
+    const parent = ((spec && spec.widgets) || []).find((x) => x.name === input);
+    const picked = slot.inputs && slot.inputs[input] !== undefined ? slot.inputs[input] : parent && (parent.default !== undefined ? parent.default : parent.type === "BOOLEAN" ? false : (parent.choices || [])[0]);
+    return not ? !not.includes(picked) && picked != null && picked !== "" : (when || []).includes(picked);          // `not`: the input holds something other than these (an empty choice counts as none)
+  };
+  return entry.either ? entry.either.some(holds) : holds(entry);          // `either`: any one of the conditions
 });
 
 export function shownValues(slot, spec, onlyInput) {

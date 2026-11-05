@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **LoRA Loader shows one slot at a time.** With no LoRA picked it shows only the first picker. Once a LoRA is chosen its strengths (and stage) appear, together with the picker for the next slot, and so on up to eight. A slot that already holds a LoRA never hides.
 - **Simpler Project and Scene settings.** The rarely used groups (Video input, Source trim, Final render size, Split preview) are folded under "More" and stay open once opened.
 - **"Start shots" is gone.** A scene with no picture and no references is made from the prompt alone; with references it starts from them in the way the model supports (image, video or reference to video).
 - **Scene settings lost what the timeline already does.** "Pause after this clip" is gone: drag a clip along the video lane and it lands where you drop it, with its edges sticking to neighbouring clips, the playhead and zero (Shift holds it free); the pause before it follows and what comes after moves along. "Source trim" is gone too (the clip's edges trim it, Alt on the left edge slides what plays), and so is the scene's "Source" choice, which is now decided by what the scene has.
