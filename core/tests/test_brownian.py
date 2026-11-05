@@ -56,9 +56,26 @@ def test_install_twice_does_not_stack(patched):
     assert ksampling.BrownianTreeNoiseSampler is before
 
 
-def test_widened_follows_dtype_and_device():
+def test_the_noise_of_a_seed_is_the_stock_noise(patched):
+    """The warning is silenced without moving the tree: same seed, same noise as ComfyUI's own sampler."""
+    stock = patched.__mro__[1]
+    for schedule in (SIGMAS, [1.0, 0.5, 0.25, 0.0], [0.9, 0.7, 0.5, 0.3, 0.1, 0.0]):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            want = _run(stock, torch.float32, schedule)
+        got = _run(patched, torch.float32, schedule)
+        assert all(torch.equal(a, b) for a, b in zip(want, got))
+
+
+def test_a_query_is_clamped_on_its_own_device_and_never_rounded_out_of_the_span():
     mod = _brownian()
-    for dtype in (torch.float32, torch.float64, torch.bfloat16):
-        lo, hi = mod.widened(torch.tensor(0.4465445876, dtype=dtype), torch.tensor(0.99, dtype=dtype))
-        assert lo.dtype == hi.dtype == dtype
-        assert float(lo) < 0.4465445876 - 5e-7 and float(hi) > 0.99 or dtype == torch.bfloat16
+    for dtype in (torch.float32, torch.bfloat16):
+        for device in ("cpu", "meta"):
+            t = torch.tensor(0.4465445876, dtype=dtype, device="cpu")
+            if device == "meta":
+                t = t.to("meta")
+                continue                                      # float() needs data: the meta stand-in cannot be read
+            out = mod.clamped(t, 0.4475, 0.99)               # bf16 holds 0.4473 for it: below the bound, so it is lifted to the bound itself
+            assert out.device == t.device and float(out) == 0.4475
+    inside = torch.tensor(0.6)
+    assert mod.clamped(inside, 0.446545, 0.99) is inside

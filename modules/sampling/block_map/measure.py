@@ -124,8 +124,10 @@ def block_hook(state, block):
         out = extra["original_block"](args)
         if state.kind == "residual" and state.active() and torch.is_tensor(before):
             after = out.get("img") if isinstance(out, dict) else None
-            if torch.is_tensor(after) and after.shape == before.shape:
-                out = {**out, "img": before + (1.0 + DELTA) * (after - before)}
+            video = after[0] if isinstance(after, (tuple, list)) and after else after       # an audio+video block hands back (video, audio)
+            if torch.is_tensor(video) and video.shape == before.shape:
+                nudged = before + (1.0 + DELTA) * (video - before)
+                out = {**out, "img": type(after)([nudged, *after[1:]]) if isinstance(after, (tuple, list)) else nudged}
         return out
     return hook
 
@@ -234,7 +236,7 @@ class MapView:
         lev, frg = self._fields(kind, frac)
         raw = {}
         for b in blocks:
-            if b >= self.n or lev[b] is None or frg[b] is None:
+            if b >= self.n or lev[b] is None or frg[b] is None or lev[b] <= 1e-9:      # a block the probe saw no effect from is unmeasured, not infinitely cheap
                 raw[b] = None
                 continue
             raw[b] = max(0.05, 1.0 - frg[b]) ** 2 / max(lev[b], 1e-6)
@@ -257,7 +259,7 @@ class MapView:
         lev, frg = self._fields(kind, frac)
         b = int(block)
         known = sorted(v for v in lev if v is not None and v > 0)
-        if b >= self.n or lev[b] is None or frg[b] is None or not known:
+        if b >= self.n or lev[b] is None or frg[b] is None or lev[b] <= 1e-9 or not known:
             return value * m
         cap = REFERENCE * HEADROOM * known[len(known) // 2] / (max(lev[b], 1e-6) * (1.0 + 2.0 * frg[b]))
         x = abs(value) * m

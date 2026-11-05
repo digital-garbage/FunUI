@@ -289,7 +289,7 @@ def followed(factors, options, index, blocks):
     from 1 is spread by how much that block can take at this point of the run and softly limited."""
     if (options or {}).get("funui_block_map") is None:
         return factors
-    return tuple(1.0 + dit_hooks.block_map_value(options, "attention", index, v - 1.0, blocks) for v in factors)
+    return tuple(max(0.05, 1.0 + dit_hooks.block_map_value(options, "attention", index, v - 1.0, blocks)) for v in factors)       # never zero or negative: that would flip the query
 
 
 def _prompt_of(guider):

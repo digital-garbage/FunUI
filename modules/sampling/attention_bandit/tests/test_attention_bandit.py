@@ -401,3 +401,15 @@ def test_the_block_map_spreads_the_change_between_blocks_around_one():
     assert low[0] > 1.2 > high[0] > 1.0 and low[1] == high[1] == 1.0       # the sharper change is larger where the block takes it
     assert followed((1.2, 1.0), {}, 1, blocks) == (1.2, 1.0)                 # no map: as set
     assert followed((1.0, 1.0), options, 1, blocks) == (1.0, 1.0)
+
+
+def test_a_block_map_can_never_turn_a_temperature_to_zero_or_negative():
+    from modules.sampling.attention_bandit import followed
+    from modules.sampling.block_map import measure
+    grid = measure.groups(10)
+    lev = [[0.1] * 3] + [[1.0] * 3]                               # the first blocks barely move the picture: the biggest spread
+    data = {"blocks": 10, "groups": grid, "points": list(measure.POINTS),
+            "attention": {"leverage": lev, "fragility": [[0.0] * 3, [0.0] * 3]}}
+    options = {"funui_block_map": measure.MapView(data), "sample_sigmas": torch.linspace(1, 0, 5), "sigmas": torch.tensor([0.5])}
+    for size in (0.2, 0.35, 0.5, 0.9):
+        assert min(followed((1.0 - size, 1.0 - size), options, 1, [1, 7])) >= 0.05

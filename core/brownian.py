@@ -3,29 +3,25 @@
 torchsde rounds a BrownianTree's start to 6 decimals (its default tolerance) and then compares the first query
 against the ROUNDED start. A schedule whose smallest sigma has a 7th decimal of 5 or more (0.4465445876 rounds to
 0.446545) is therefore queried "before" the tree starts and torchsde prints
-`Should have ta>=t0 but got ta=... and t0=...`. The query is clamped by 4e-7, so the picture is not hurt, but the
-log fills with warnings on every SDE-type sampler, and Two stages / Turbo hand such sigmas to the sampler.
+`Should have ta>=t0 but got ta=... and t0=...`, then clamps the query to the start itself. The picture is not hurt,
+but the log fills with warnings on every SDE-type sampler, and Two stages / Turbo hand such sigmas to the sampler.
 
-ComfyUI builds its trees from `sigmas[sigmas > 0].min()` and `sigmas.max()`. The class below widens that span to
-the next 6-decimal value outside it (plus one more step of margin) before the tree rounds, so the start is never
-above the first query and the end never below the last. Noise inside the span is unchanged.
+The class below builds the tree exactly as ComfyUI does (so the noise of a seed is the stock noise) and clamps a
+query to the tree's own span BEFORE torchsde sees it, which is the very same clamp torchsde would apply, silently.
 """
-
-import math
 
 import torch
 
-_SCALE = 1e6            # torchsde's default tol=1e-6 rounds to 6 decimals
 _installed = False
 
 
-def widened(lo, hi):
-    """(lo, hi) as tensors of the same device and dtype as the inputs, pushed outwards past torchsde's rounding."""
-    lo, hi = torch.as_tensor(lo), torch.as_tensor(hi)
-    new_lo = math.floor(float(lo) * _SCALE) / _SCALE - 1.0 / _SCALE
-    new_hi = math.ceil(float(hi) * _SCALE) / _SCALE + 1.0 / _SCALE
-    return (torch.as_tensor(new_lo).to(device=lo.device, dtype=lo.dtype),
-            torch.as_tensor(new_hi).to(device=hi.device, dtype=hi.dtype))
+def clamped(t, lo, hi):
+    """`t` limited to [lo, hi] (python floats) on t's own device; a value already inside comes back untouched.
+    The bound is held in float64 so a bf16 query is not rounded back out of the span."""
+    v = float(t)
+    if lo <= v <= hi:
+        return t
+    return torch.tensor(min(max(v, lo), hi), dtype=torch.float64, device=t.device)
 
 
 def install():
@@ -40,12 +36,12 @@ def install():
     class BrownianTreeNoiseSampler(original):
         _funui_widened = True
 
-        def __init__(self, x, sigma_min, sigma_max, seed=None, transform=lambda v: v, cpu=False):
-            super().__init__(x, sigma_min, sigma_max, seed=seed, transform=transform, cpu=cpu)
-            t0, t1 = self.transform(torch.as_tensor(sigma_min)), self.transform(torch.as_tensor(sigma_max))
-            lo, hi = (t0, t1) if t0 < t1 else (t1, t0)
-            lo, hi = widened(lo, hi)
-            self.tree = ksampling.BatchedBrownianTree(x, lo, hi, seed, cpu=cpu)
+        def __call__(self, sigma, sigma_next):
+            t0, t1 = self.transform(torch.as_tensor(sigma)), self.transform(torch.as_tensor(sigma_next))
+            tree = self.tree.trees[0]._interval
+            lo, hi = float(tree._start), float(tree._end)
+            noise = self.tree(clamped(t0, lo, hi), clamped(t1, lo, hi)).to(dtype=tree.dtype)      # a float64 bound must not widen the noise
+            return noise / (t1 - t0).abs().sqrt()
 
     ksampling.BrownianTreeNoiseSampler = BrownianTreeNoiseSampler
     _installed = True

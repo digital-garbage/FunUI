@@ -83,18 +83,17 @@ def install(patcher, values, key):
 
     def outer(executor, *args, **kwargs):
         live["state"] = measure.Probe(n)
-        try:
-            return executor(*args, **kwargs)
-        finally:
-            res = measure.result(live["state"])
-            if res is not None:
-                measure.save(res)
-                measure.set_enabled(False)              # one profile per switch: later runs follow the map, they do not redo it
-                log.once(f"{ID}:saved:{n}", log.INFO, "FunUI Block map",
-                         f"Active | profile of {n} blocks saved and the switch turned off; later runs follow it")
-            else:
-                measure.problem = "the profile run measured nothing: the model's picture could not be read"
-                log.once(f"{ID}:none", log.INFO, "FunUI Block map", "Inactive | " + measure.problem)
+        out = executor(*args, **kwargs)                 # cancelled or failed: nothing is saved and the switch stays on, so the next run profiles again
+        res = measure.result(live["state"])
+        if res is not None:
+            measure.save(res)
+            measure.set_enabled(False)                  # one profile per switch: later runs follow the map, they do not redo it
+            log.once(f"{ID}:saved:{n}", log.INFO, "FunUI Block map",
+                     f"Active | profile of {n} blocks saved and the switch turned off; later runs follow it")
+        else:
+            measure.problem = "the profile run measured nothing: the model's picture could not be read"
+            log.once(f"{ID}:none", log.INFO, "FunUI Block map", "Inactive | " + measure.problem)
+        return out
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, outer)
 

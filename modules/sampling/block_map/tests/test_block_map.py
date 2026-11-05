@@ -193,3 +193,38 @@ def test_adjust_leaves_neutral_and_flat_settings_alone_and_follows_the_run():
     view = _view([[1.0] * 3, [4.0] * 3])
     assert view.adjust("attention", 3, 0.5, [2, 3], 0.0) == 0.0
     assert view.adjust("residual", 3, 0.1, [2, 3], 0.3) != view.adjust("attention", 8, 0.1, [2, 3], 0.3)
+
+
+def test_a_cancelled_profile_saves_nothing_and_leaves_the_switch_on(tiny_h3, root, monkeypatch):
+    measure.set_enabled(True)
+    patched, wrap, outer = _load(tiny_h3)
+    real, calls = tiny_h3.run, [0]
+
+    def cancelled(*a, **k):
+        calls[0] += 1
+        if calls[0] > 5:
+            raise KeyboardInterrupt
+        return real(*a, **k)
+    monkeypatch.setattr(tiny_h3, "run", cancelled)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tiny_h3, patched, wrap, outer)
+    n = len(tiny_h3.patcher.model.diffusion_model.blocks)
+    assert measure.enabled() and measure.load(n) is None              # the next run profiles again, from the start
+
+
+def test_a_group_the_probe_saw_no_effect_from_is_unmeasured_not_free():
+    lev = [[0.0] * 3, [1.0] * 3]
+    view = _view(lev)
+    assert view.adjust("attention", 1, 0.5, [1, 7], 0.5) == 0.5       # no 3x on a block nobody measured
+    assert view.multipliers("attention", 0.5, [1, 7]) == {1: 1.0, 7: 1.0}
+
+
+def test_an_audio_video_block_that_hands_back_a_pair_is_still_nudged():
+    state = measure.Probe(2)
+    state.kind, state.group = "residual", (0, 2)
+    state.points = getattr(state, "points", None)
+    before, after, audio = torch.ones(1, 3, 4), torch.full((1, 3, 4), 2.0), torch.zeros(1, 2, 4)
+    hook = measure.block_hook(state, 0)
+    out = hook({"img": before}, {"original_block": lambda args: {"img": (after, audio)}})
+    assert isinstance(out["img"], tuple) and out["img"][1] is audio
+    assert not torch.equal(out["img"][0], after)
