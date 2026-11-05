@@ -14,7 +14,7 @@ from modules.sampling.tests.test_combinations import EXEMPT, FEATURES as H3_FEAT
 FEATURES = {
     "alg": {}, "dynashift": {}, "momentum": {}, "output_guidance": {}, "prompt_nudge": {}, "score_slider": {},
     "trajectory_guidance": {}, "velocity_bias": {}, "reins": {"blocks": "1"}, "attention_bandit": {},
-    "attention_temperature": {"temperature": 1.1}, "noise_merge": {"seed": 5}, "sharpness": {}, "decisiveness": {},
+    "attention_temperature": {"temperature": 1.1}, "noise_merge": {"seed": 5}, "sharpness": {}, "run_meter": {}, "decisiveness": {},
     "shot_memory": {}, "turbo_sampler": {}, "camera_move": {"pan_x": 0.3}, "explore_first_step": {},
     "audio_coupling": {"scale": 1.5}, "temporal_style": {"style": "pulse"}, "identity_bank": {"blocks": "1,2"},
 }

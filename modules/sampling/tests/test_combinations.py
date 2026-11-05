@@ -30,6 +30,7 @@ FEATURES = {
     "stas": {"block": 1},
     "noise_merge": {"seed": 5},
     "sharpness": {},
+    "run_meter": {},
     "late_branch": {"block": 2},
     "decisiveness": {},
     "shot_memory": {},
