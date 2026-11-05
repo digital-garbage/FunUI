@@ -11,7 +11,9 @@ export const jobsRunning = () => active.size;
 /** -> a function that stops listening. */
 export const onJobs = (fn) => { listeners.push(fn); return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }; };
 /** The Stop button: ask every job this page is waiting for to stop, each through its own module's route. */
-export const stopJobs = () => Promise.all([...active].map(([id, stop]) => { asked.add(id); return Promise.resolve(stop(id)).catch(() => {}); }));
+export const stopJobs = () => Promise.all([...active].map(async ([id, stop]) => {
+  try { const r = await stop(id); if (r && r.stopped) asked.add(id); } catch { /* the request failed: the job runs on, and a real failure later is still a failure */ }
+}));
 /** What waitJob throws for a job that was stopped: not a failure, so callers say "stopped" and not "failed". */
 export class JobStopped extends Error { constructor() { super("Stopped."); this.stopped = true; } }
 

@@ -214,3 +214,22 @@ def test_the_stop_route_answers_whether_it_stopped_anything(comfy, server):
 def test_a_job_whose_work_never_checks_cannot_be_stopped():
     job = jobs.new()                                              # a final render or an export: it runs to its end
     assert jobs.stop(job) is False
+
+
+@needs_ffmpeg
+def test_a_stop_that_lands_after_the_last_chunk_still_removes_the_file(comfy):
+    from core import video_pipe
+    src = comfy.output / "a.mp4"
+    make_clip(src, seconds=1)
+    counted = []
+    video_pipe.stream_file(str(src), str(comfy.output / "count.mp4"), lambda x: x, lambda: counted.append(1))
+    dst = comfy.output / "out.mp4"
+    calls = []
+
+    def stop_at_the_last_check():
+        calls.append(1)
+        if len(calls) >= len(counted) - 1:                 # the checks after the loop: before closing, and after the encoder flushed
+            raise jobs.Stopped()
+    with pytest.raises(jobs.Stopped):
+        video_pipe.stream_file(str(src), str(dst), lambda x: x, stop_at_the_last_check)
+    assert not dst.exists()

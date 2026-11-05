@@ -52,7 +52,7 @@ test("Stop: a job being waited for can be stopped, ends as stopped (not failed, 
   const off = onJobs(() => heard.push(jobsRunning()));
   let polls = 0;
   const read = async () => (++polls < 2 ? { state: "running" } : { state: "stopped" });
-  const waiting = waitJob(read, "j1", async () => { if (polls === 0) await stopJobs(); }, (id) => stopped.push(id));
+  const waiting = waitJob(read, "j1", async () => { if (polls === 0) await stopJobs(); }, (id) => (stopped.push(id), { stopped: true }));
   await assert.rejects(waiting, (err) => err instanceof JobStopped && err.stopped === true && err.message === "Stopped.");
   assert.deepEqual(stopped, ["j1"]);
   assert.deepEqual(heard, [1, 0]);                 // shown while it waits, hidden when it ends
@@ -67,6 +67,11 @@ test("Stop: a stopped job that is read once more is still there (no 404 turned i
 test("Stop: a chunk that fails while the stop is landing ends as stopped, not as a failure (nothing 'always' follows it)", async () => {
   let polls = 0;
   const read = async () => (++polls < 2 ? { state: "running" } : { state: "error", detail: "out of memory" });
-  await assert.rejects(waitJob(read, "j3", async () => { if (polls === 0) await stopJobs(); }, () => {}), (err) => err.stopped === true);
+  await assert.rejects(waitJob(read, "j3", async () => { if (polls === 0) await stopJobs(); }, () => ({ stopped: true })), (err) => err.stopped === true);
+  // a stop request that failed, or found the job already over, does not turn a real failure into a stop
+  for (const stop of [() => { throw new Error("network"); }, () => ({ stopped: false })]) {
+    let n = 0;
+    await assert.rejects(waitJob(async () => (++n < 2 ? { state: "running" } : { state: "error", detail: "out of memory" }), "j5", async () => { if (n === 0) await stopJobs(); }, stop), /out of memory/);
+  }
   await assert.rejects(waitJob(async () => ({ state: "error", detail: "boom" }), "j4", async () => {}), /boom/);
 });

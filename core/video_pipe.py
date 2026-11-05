@@ -125,10 +125,12 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
             frames += y.shape[0]
         if enc is None:
             raise ClipError(f"no frames could be read from {os.path.basename(src)}")
+        interrupted()                                      # a stop that came during the last read is still a stop
         enc.stdin.close()
         err = enc.stderr.read().decode(errors="replace")
         if enc.wait() != 0:
-            raise ClipError(f"ffmpeg could not encode the upscaled video: {err[-500:]}")
+            raise ClipError(f"ffmpeg could not encode the video: {err[-500:]}")
+        interrupted()                                      # ... and one that came while the encoder flushed: the file is removed below
         return frames
     except BaseException:
         for p in (dec, enc):
