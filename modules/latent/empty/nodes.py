@@ -152,7 +152,7 @@ class FunUIEmptyLatent(io.ComfyNode):
 
 
 #: How the project's Width and Height become the clip's size: "area" keeps their pixel count (the original rule: a
-#: 1024x1024 budget gives 1312x768 for a 16:9 picture), "short" makes the clip's shorter side the smaller of the two,
+#: 1024x1024 budget gives 1376x768 for a 16:9 picture), "short" makes the clip's shorter side the smaller of the two,
 #: "long" makes its longer side the larger.
 ASPECT_BASES = ("area", "short", "long")
 

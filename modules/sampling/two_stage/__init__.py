@@ -60,8 +60,8 @@ SETTINGS = {
     "back_up": {
         "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Noise added at the hand-over",
-        "hint": "How far back the full-size stage starts. 0 continues exactly where the first stage stopped. Higher values add "
-                "fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines.",
+        "hint": "How far back the full-size stage starts. 0 starts at the noise level where the first stage stopped; higher values start "
+                "earlier, adding more fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines.",
         "when": {"enabled": True},
     },
     "resize": {

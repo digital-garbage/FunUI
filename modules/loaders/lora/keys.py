@@ -101,7 +101,9 @@ def match(model, clip, lora):
     key_map = comfy.lora.model_lora_keys_unet(model.model, {})
     if clip is not None:
         key_map = comfy.lora.model_lora_keys_clip(clip.cond_stage_model, key_map)
-    lora, extra = from_diffusers(lora)
+    extra = {}
+    if any(".attn.qkv_proj." in str(v) for v in key_map.values()):         # only the H3 transformer is renamed: other models use `transformer_blocks` as they are
+        lora, extra = from_diffusers(lora)
     key_map.update(extra)
     converted = comfy.lora_convert.convert_lora(lora)
     best, how = comfy.lora.load_lora(converted, key_map, log_missing=False), "as-is"

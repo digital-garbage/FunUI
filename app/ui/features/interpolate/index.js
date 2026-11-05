@@ -32,6 +32,7 @@ export default {
       if (pick) app.openSettings(pick);
     }
 
+    let told = false;
     async function run(media, pressed = false) {
       if (!media || wentThrough(media, "interpolate")) return;                // never interpolate twice
       const key = keyOf(media), pid = p.project.id;
@@ -40,7 +41,7 @@ export default {
       try {
         // Only counts when this machine has it on right now: a project saved elsewhere may still say "always"
         if (!(await app.api.frameGeneration().then((r) => Boolean(r.rtx)).catch(() => false)))
-          return void (pressed ? suggest() : c.toast.warn({ text: `${RTX} is not available on this machine (or is switched off in Settings ▸ Modules).` }));
+          return void (pressed ? suggest() : told || (told = true, c.toast.warn({ text: `${RTX} is not available on this machine (or is switched off in Settings ▸ Modules). Interpolate "always" is skipped.` })));       // once, not at every render
         c.toast.info({ text: `Interpolating with ${RTX}…` });
         const out = await interpolate(app.api, media, opts());
         derived(media, out, "interpolate");

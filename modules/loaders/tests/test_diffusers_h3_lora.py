@@ -93,3 +93,18 @@ def test_conversion_keeps_device_and_dtype_of_every_tensor(dtype):
         assert len(out) == len(src)
         first = next(iter(src.values()))
         assert all(v.dtype == first.dtype and v.device == first.device for v in out.values())
+
+
+def test_an_ltx_lora_with_transformer_blocks_names_is_left_as_it_is(tiny_ltx, monkeypatch):
+    """`transformer_blocks` is LTX's own name too: only the H3 transformer's LoRAs are renamed to H3's layout."""
+    from modules.loaders.lora import keys
+    sd = tiny_ltx.patcher.model.state_dict()
+    name = "diffusion_model.transformer_blocks.0.attn1.to_q.weight"
+    assert name in sd
+    out_dim, in_dim = sd[name].shape
+    monkeypatch.setattr(keys.comfy.lora, "model_lora_keys_unet",           # the tiny stand-in has no model config to derive Diffusers names from
+                        lambda model, key_map: {**key_map, **{k[:-len(".weight")]: k for k in sd if k.endswith(".weight")}})
+    lora = {name.replace(".weight", ".lora_A.weight"): torch.randn(RANK, in_dim),
+            name.replace(".weight", ".lora_B.weight"): torch.randn(out_dim, RANK)}
+    patches, _how, dropped = keys.match(tiny_ltx.patcher, None, lora)
+    assert len(patches) == 1 and dropped == 0
