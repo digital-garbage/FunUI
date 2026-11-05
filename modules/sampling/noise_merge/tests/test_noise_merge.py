@@ -179,3 +179,11 @@ def test_a_second_run_goes_from_step_one_to_the_last_named_step_and_blends_only_
     assert len(seen) == 4 + 3 and len(probes) == 3            # B runs on steps 1, 2 and 3; step 4 is yours alone
     assert len([e for e in log.history() if "second pass took" in e["message"]]) - before == 2
     assert not torch.allclose(probes[0], probes[1])           # B's input moves on with its own answers
+
+
+def test_mixed_noise_follows_the_dtype_and_device_of_the_noise_it_meets():
+    from modules.sampling.noise_merge import mix_noise
+    for dtype in (torch.float32, torch.bfloat16):
+        a = torch.randn(2, 3, dtype=dtype)
+        out = mix_noise(a, torch.randn(2, 3, dtype=torch.float32), 0.3)
+        assert out.dtype == dtype and out.device == a.device

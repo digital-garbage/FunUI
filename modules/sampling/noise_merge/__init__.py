@@ -22,6 +22,8 @@ learning feature records it.
 import random
 import time
 
+import math
+
 import torch
 from comfy.model_management import InterruptProcessingException
 from comfy.patcher_extension import WrappersMP
@@ -143,7 +145,7 @@ def mix_noise(noise, other, strength):
     """cos(t) noise + sin(t) other, t = strength * 90 degrees: two independent unit-variance noises
     stay unit variance (a plain average would shrink to 71% at an even mix, and the model reads that as a calmer, blurrier start)."""
     theta = strength * torch.pi / 2
-    return (torch.cos(torch.tensor(theta)) * noise + torch.sin(torch.tensor(theta)) * other).to(noise.dtype)
+    return (math.cos(theta) * noise + math.sin(theta) * other.to(device=noise.device, dtype=noise.dtype)).to(noise.dtype)       # plain numbers: no tensor to put on a device
 
 
 def install_noise(patcher, values, key):
