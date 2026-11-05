@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { interpolate, modeLabel } from "./job.js";
-import { derived, swap, wentThrough } from "../../shell/renders.js";
+import { derived, gaveUp, onGaveUp, swap, wentThrough } from "../../shell/renders.js";
 
 const m = (f, sub = "") => ({ filename: f, subfolder: sub, type: "output" });
 
@@ -38,4 +38,11 @@ test("a file that went through a step is never offered it again, whichever order
 test("the interpolated file replaces the render everywhere it played", () => {
   const p = { scene_renders: { a: { media: m("x.mp4") } }, scene_ghosts: [] };
   assert.equal(swap(p, m("x.mp4"), m("fi.mp4", "funui_interpolated")), 1);
+});
+
+test("a step that gave up is announced, so a step waiting behind it can go on without it", () => {
+  const heard = [];
+  onGaveUp((media, step) => heard.push([media.filename, step]));
+  gaveUp(m("r.mp4"), "upscale");
+  assert.deepEqual(heard, [["r.mp4", "upscale"]]);
 });

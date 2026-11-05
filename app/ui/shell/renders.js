@@ -37,3 +37,7 @@ const doneOf = (m) => new Set([...(steps.get(keyOf(m)) || []), ...Object.keys(FO
 export const wentThrough = (media, step) => doneOf(media).has(step);
 /** `to` came out of `from` by `step`: it has been through all of `from`'s steps and this one. */
 export const derived = (from, to, step) => { steps.set(keyOf(to), doneOf(from).add(step)); };
+const gaveUpWatchers = [];
+/** A step that was due on `media` (an "always" mode) could not run: whoever waited for it may go on without it. */
+export const gaveUp = (media, step) => { for (const fn of gaveUpWatchers) fn(media, step); };
+export const onGaveUp = (fn) => { gaveUpWatchers.push(fn); };

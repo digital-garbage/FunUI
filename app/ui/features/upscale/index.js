@@ -2,7 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
-import { derived, wentThrough } from "../../shell/renders.js";
+import { derived, gaveUp, wentThrough } from "../../shell/renders.js";
 import { RTX, RTX_DEFAULTS, keepsSize, keyOf, qualityLabel, swap, upscale } from "./job.js";
 
 export default {
@@ -44,16 +44,16 @@ export default {
       try {
         // RTX only counts when this machine has it on right now: a project saved elsewhere may still say "rtx"
         if (rtxOn() && !(await app.api.upscaleModels().then((r) => Boolean(r.rtx)).catch(() => false)))
-          return void c.toast.warn({ text: `${RTX} is not available on this machine (or is switched off in Settings ▸ Modules). Pick Upscale model as the Engine in Settings ▸ Editor.` });
+          return void (gaveUp(media, "upscale"), c.toast.warn({ text: `${RTX} is not available on this machine (or is switched off in Settings ▸ Modules). Pick Upscale model as the Engine in Settings ▸ Editor.` }));
         const model = rtxOn() ? RTX : p.pref("upscaleModel", "");
-        if (!model) return void (pressed ? suggest() : c.toast.warn({ text: "Upscale: pick a model or NVIDIA RTX Super Resolution in Settings ▸ Editor." }));
+        if (!model) return void (pressed ? suggest() : (gaveUp(media, "upscale"), c.toast.warn({ text: "Upscale: pick a model or NVIDIA RTX Super Resolution in Settings ▸ Editor." })));
         c.toast.info({ text: `Upscaling with ${model}…` });
         const out = await upscale(app.api, media, model, undefined, rtxOn() ? rtxOpts() : undefined);
         derived(media, out, "upscale");
         const swapped = await p.editFor(pid, (pr) => swap(pr, media, out) > 0);
         if (!swapped) c.toast.warn({ text: "Upscaled, but that render was replaced meanwhile, so nothing was swapped." });
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
-      } catch (err) { c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
+      } catch (err) { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       finally { busy.delete(key); draw(); }
     }
 

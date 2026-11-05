@@ -2,7 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
-import { derived, keyOf, swap, wentThrough } from "../../shell/renders.js";
+import { derived, keyOf, onGaveUp, swap, wentThrough } from "../../shell/renders.js";
 import { DEFAULTS, RTX, interpolate, modeLabel } from "./job.js";
 
 export default {
@@ -58,6 +58,9 @@ export default {
       put(c.button.sm({ label: working ? "Interpolating…" : done ? "Interpolated" : "Interpolate", tone: "ghost", disabled: working || done,
         title: "Add in-between frames to this video with NVIDIA RTX Frame Generation; it replaces the render", onClick: () => run(media, true) }).node);
     }
+
+    // Upscale goes first when both are on "always"; when it cannot (no model, no RTX, an error) the render is interpolated as it is
+    onGaveUp((media, step) => { if (step === "upscale" && p.pref("interpolateMode", "never") === "always") run(media); });
 
     // "Always": a render that appears after the project was opened is interpolated. What was there on open is left alone.
     let seen = null, obj = null;
