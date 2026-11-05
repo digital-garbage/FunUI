@@ -168,11 +168,10 @@ export const models = (app) => function mount() {
         : c.settingsRow.default({ label: w.name, hint: w.tooltip || "", control: widgetControl(w, value, setInput(slot, w.name)) });
       const appOwned = (slot.roles || []).some((r) => r.input === w.name && r.at !== "project.video");       // the app writes it: wiring it elsewhere would make every Generate refuse
       const canTake = !appOwned && (w.type !== "COMBO" || (w.choices || []).length) && sourcesFor(slot, w.type, slotsNow(), specs).length;
-      return canTake ? [row, c.field.default({ label: "↳ or take it from", hint: "Another node's output can drive this value; one Primitive can drive several inputs.", control: wiring(slot, w.name, w.type, null, "A value (typed here)") })] : [row];
+      const under = w.name === "veda_predictor" ? [vedaRow()] : [];          // the download goes right under the file it fills
+      return canTake ? [row, ...under, c.field.default({ label: "↳ or take it from", hint: "Another node's output can drive this value; one Primitive can drive several inputs.", control: wiring(slot, w.name, w.type, null, "A value (typed here)") })] : [row, ...under];
     });
-    const veda = (spec.widgets || []).find((w) => w.name === "veda_predictor");
-    const vedaOn = veda && !gone.has(veda.name) && showing(veda, slot, spec);
-    return [head, structure(slot), ...sockets, ...rows, ...(vedaOn ? [vedaRow()] : []), ...(!rows.length && !sockets.length ? [c.hint.default({ text: "Nothing to configure on this node." })] : [])];
+    return [head, structure(slot), ...sockets, ...rows, ...(!rows.length && !sockets.length ? [c.hint.default({ text: "Nothing to configure on this node." })] : [])];
   };
 
   // One node as a card: what it is, the one or two values that matter, and whether it needs attention.

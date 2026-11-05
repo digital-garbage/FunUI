@@ -145,7 +145,8 @@ test("a field that belongs to a module is drawn only while that module is here a
 
 test("the Veda predictor row appears only for method veda with no file, names the licence beside the buttons, and downloads only on a click", async () => {
   const widgets = [{ name: "sla", type: "BOOLEAN" }, { name: "sla_method", type: "COMBO", choices: ["sla", "veda"], shows: [{ input: "sla", when: [true] }] },
-    { name: "veda_predictor", type: "COMBO", choices: ["auto"], shows: [{ input: "sla", when: [true] }, { input: "sla_method", when: ["veda"] }] }];
+    { name: "veda_predictor", type: "COMBO", choices: ["auto"], shows: [{ input: "sla", when: [true] }, { input: "sla_method", when: ["veda"] }] },
+    { name: "after_it", type: "INT", min: 0, max: 9, default: 1 }];
   const state = { files: [], license: { name: "MiniMax H3 Community License", url: "https://huggingface.co/x/blob/main/LICENSE" },
     models: [{ id: "t2va", title: "T2VA / FL2VA", hint: "text", file: "a.safetensors", size: 275415648, state: "absent", done: 0, error: "" },
              { id: "r2va", title: "R2VA", hint: "refs", file: "b.safetensors", size: 275415752, state: "absent", done: 0, error: "" }] };
@@ -169,6 +170,9 @@ test("the Veda predictor row appears only for method veda with no file, names th
   page.node.remove();
   page = await open({ sla: true, sla_method: "veda" });
   assert.match(page.node.textContent, /none is there/);
+  const text = page.node.textContent;
+  assert.ok(text.indexOf("veda_predictor") < text.indexOf("none is there") && text.indexOf("none is there") < text.indexOf("after_it"),
+    "the download sits right under the predictor selector, before the next field, not at the bottom of the page");
   assert.match(page.node.textContent, /By downloading you accept the MiniMax H3 Community License/);
   assert.match(page.node.textContent, /275 MB|263 MB/);
   assert.deepEqual(fetched, [], "looking never downloads");

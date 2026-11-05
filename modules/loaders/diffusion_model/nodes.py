@@ -197,8 +197,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 io.Combo.Input("veda_predictor", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), options=veda_attention.predictor_choices(),
                                default="auto", optional=True,
                                tooltip="veda: the predictor file in ComfyUI/models/veda. auto takes the text-to-video one "
-                                       "when it is there, else the first. Use the R2VA file for reference-to-video runs. "
-                                       "Not there yet? The row below offers the download."),
+                                       "when it is there, else the first. Use the R2VA file for reference-to-video runs."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
