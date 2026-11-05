@@ -204,6 +204,37 @@ def test_the_real_h3_layout_maps_to_a_target_grid_and_row_major_references(comfy
         core.describe_layout(types.SimpleNamespace())
 
 
+# ── the cheap wins keep the numbers, and the timing and the Two stages line say what happened ───────────────────────
+
+def test_the_cached_tile_work_changes_nothing_in_the_numbers():
+    """The bresenham pattern, the head groups and the list width are kept between calls; a call that finds them cached
+    must give exactly what a call that builds them gives, and the list's width (a bound from the layout, no device read)
+    must hold every row's kept tiles."""
+    spec, (q, k, v) = _spec(), _qkv(152)
+    args = (0, spec, _plan_for((3, 5, 6)), _bundle(), ((0.3, None), (0.3, None)), core.reference_attend)
+    cache = {}
+    first = core.attention(q, k, v, *args, cache, {})
+    again = core.attention(q, k, v, *args, cache, {})
+    fresh = core.attention(q, k, v, 0, spec, _plan_for((3, 5, 6)), _bundle(), ((0.3, None), (0.3, None)), core.reference_attend, {}, {})
+    assert torch.equal(first, again) and torch.equal(first, fresh)
+    lay = core.build_layout([(40, (1, 4, 4), (1, 8, 16)), (62, (3, 5, 6), (4, 4, 8))], 152)
+    blocks = core.column_blocks(lay, (0.3, None), (0.3, None))
+    mask = core.block_mask(*core.select(torch.randn(2, lay.n_video, lay.n_video), lay, blocks), lay)
+    exact_index, count = core.tile_index_list(mask)
+    bound_index, same_count = core.tile_index_list(mask, lay.widest)
+    assert torch.equal(count, same_count) and bound_index.shape[-1] >= exact_index.shape[-1] == lay.widest
+    keep = torch.arange(bound_index.shape[-1]) < count[..., None]
+    assert torch.equal(bound_index[:, :, :exact_index.shape[-1]][keep[:, :, :exact_index.shape[-1]]], exact_index[keep[:, :, :exact_index.shape[-1]]])
+
+
+def test_the_phase_timer_covers_every_phase_and_adds_nothing_to_the_answer():
+    spec, (q, k, v) = _spec(), _qkv(152)
+    timer = core.PhaseTimer("cpu")
+    args = (0, spec, _plan_for((3, 5, 6)), _bundle(), ((0.3, None), (0.3, None)), core.reference_attend, {}, {})
+    assert torch.equal(core.attention(q, k, v, *args, timer), core.attention(q, k, v, *args))
+    assert set(timer.totals()) == {"gather", "score", "select", "kernel", "scatter"} and all(ms >= 0 for ms in timer.totals().values())
+
+
 # ── device and dtype follow the input (the meta device stands in for a GPU) ─────────────────────────────────────
 
 @pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
@@ -431,6 +462,35 @@ def test_install_says_why_it_skipped_and_hands_the_backend_back(monkeypatch, fol
     assert "gone.safetensors is not in" in _install(tiny, veda_predictor="gone.safetensors")[1]
 
 
+def test_timing_is_off_unless_asked_and_then_adds_one_line_with_every_phase(veda_on, folder, comfyui, tiny_h3, caplog):
+    _write_predictor(folder, ratio=0.5)
+    tiny = _big(tiny_h3)
+    with caplog.at_level(logging.INFO):
+        plain = _last_step(tiny, _install(tiny)[0])[0]
+    assert "time in each phase" not in caplog.text
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        timed = _last_step(tiny, _install(tiny, veda_timing=True)[0])[0]
+    line = next(r.getMessage() for r in caplog.records if "time in each phase" in r.getMessage())
+    assert all(name in line for name in ("gather", "score", "select", "kernel", "scatter")) and "total" in line
+    assert torch.equal(plain, timed)                                                   # a clock changes no number
+
+
+def test_two_stages_in_one_run_give_one_line_that_names_both_sizes(veda_on, folder, comfyui, tiny_h3, caplog):
+    """Two stages hands the model the WHOLE schedule for both stages, so it is one run for the wrappers: one Veda line, as the
+    SLA line is one. The line has to name the size and plan of each stage, not only the last."""
+    _write_predictor(folder, ratio=0.5)
+    tiny = _big(tiny_h3)
+    patched, _, _ = _install(tiny)
+    schedule = torch.tensor([1.0, 0.75, 0.5, 0.25, 0.0])
+    with caplog.at_level(logging.INFO):
+        for step, sigma in enumerate(schedule[:-1].tolist()):
+            tiny.video = torch.randn(1, 24, 10, 16, 16).to(torch.bfloat16) if step < 2 else torch.randn(1, 24, 10, 24, 24).to(torch.bfloat16)
+            tiny.run(patched, sigma=sigma, sigmas=schedule)
+    lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("[FunUI Veda] triton-int8")]
+    assert len(lines) == 1 and "256x256, 0.9 s, tile plan: trained for this size" in lines[0] and "384x384, 0.9 s, tile plan: nearest trained size" in lines[0]
+
+
 def test_a_predictor_made_for_other_heads_runs_dense_and_the_log_says_why(veda_on, folder, comfyui, tiny_h3, caplog):
     _write_predictor(folder, heads=4, dim=32)
     tiny = _big(tiny_h3)
@@ -473,7 +533,7 @@ def test_float32_and_short_sequences_stay_with_the_backend(veda_on, folder, comf
 def test_the_loader_passes_the_predictor_through_and_names_it(veda_on, folder, comfyui, tiny_h3, monkeypatch):
     from modules.loaders.diffusion_model.nodes import FunUIDiffusionModelLoader as L
     ids = [i.id for i in L.define_schema().inputs]
-    assert ids[-1] == "veda_predictor"                                              # added last: saved workflows read by position
+    assert ids[-2:] == ["veda_predictor", "veda_timing"]                                              # added last: saved workflows read by position
     _write_predictor(folder, "a.safetensors")
     _write_predictor(folder, "b.safetensors", ratio=0.2)
     _, note, installed = _install(_big(tiny_h3), veda_predictor="b.safetensors")

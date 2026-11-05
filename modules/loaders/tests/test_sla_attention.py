@@ -267,7 +267,7 @@ def test_the_defaults_are_the_validated_ones():
                                 "protect_audio": True, "enabled": True,
                                 "engine": "comfy_kitchen", "dense_steps": "1", "method": "sla", "tau": 1.3,
                                 "references": "off",
-                                "tail": False, "stabilize_motion": False, "veda_predictor": "auto"}
+                                "tail": False, "stabilize_motion": False, "veda_predictor": "auto", "veda_timing": False}
 
 
 def test_turning_sla_off_leaves_the_settings_in_place():

@@ -112,10 +112,12 @@ def make_override(state, cfg, bundle, attend, dense_fn=None, dense_label=None):
             plan = veda["plans"].get(spec[1][1])
             if plan is None:
                 plan = veda["plans"][spec[1][1]] = core.choose_plan(bundle.plans, spec[1][1])
+            if cfg["timing"] and veda["timer"] is None:
+                veda["timer"] = core.PhaseTimer(q.device)
             with sla.pause_malloc_graph():          # the cached tile layouts outlive the call: made outside ComfyUI's compiler graph
                 out = core.attention(q[0].transpose(0, 1), k[0].transpose(0, 1), v[0].transpose(0, 1), layer, spec, plan[0], bundle,
-                                     (bundle.generated, bundle.reference), fn, veda["tiles"], veda["stats"])
-            veda["geometry"] = (spec, plan[2])
+                                     (bundle.generated, bundle.reference), fn, veda["tiles"], veda["stats"], veda["timer"] or core._NO_TIMER)
+            veda["geometry"][spec[1][1]] = plan[2]          # every size this run met (Two stages meets two), and the plan each got
             state["calls"] += 1
             state["seq"] = q.shape[2]
             return out.transpose(0, 1).unsqueeze(0) if skip_output_reshape else out.reshape(1, q.shape[2], -1)
@@ -138,14 +140,17 @@ def summarise(state, cfg):
         # Same fields in the same order as the "[FunUI SLA]" line, so the two read side by side. Tile pairs are the video x
         # video ones, counted over the whole run (SLA counts its last step); the global tiles (text, audio) are always exact.
         _fold(veda)
-        spec, how = veda["geometry"]
+        sizes = veda["geometry"]
         done = min(1.0, veda["run"]["work"] / veda["run"]["dense"]) if veda["run"]["dense"] else 0.0
         kept, pinned = veda["last"]
         logging.info("[FunUI Veda] %s | %d calls | S=%d | video tile pairs %.1f%% kept in the last step (%.1f%% sparse, asked %s) | %d global tiles pinned "
-                     "| %d dense fall-throughs%s | displaced %s | computed %.1f%% of full attention | video %s, tile plan: %s | %s",
+                     "| %d dense fall-throughs%s | displaced %s | computed %.1f%% of full attention | video %s | %s",
                      veda["kernel"], state["calls"], state["seq"], kept * 100.0, (1.0 - kept) * 100.0, cfg["asked"], pinned,
-                     state["dense"], f" ({why})" if why else "", state["backend"] or "?", done * 100.0, core.describe_grid(spec[1][1]), how,
+                     state["dense"], f" ({why})" if why else "", state["backend"] or "?", done * 100.0, "; ".join(f"{core.describe_grid(g)}, tile plan: {how}" for g, how in sizes.items()),
                      cfg["predictor_name"])
+        if veda["timer"] is not None:
+            phases = veda["timer"].totals()
+            logging.info("[FunUI Veda] time in each phase this run (ms): %s | total %.0f", ", ".join(f"{k} {v:.0f}" for k, v in phases.items()), sum(phases.values()))
         logging.info("[FunUI Veda] full attention on %s of %d", f"steps {sla._runs(state['dense_at'])}" if state["dense_at"] else "no step", state["n"])
         if state["failed"] is not None:
             logging.warning("[FunUI Veda] the kernel fell back to dense at least once: %s", state["failed"])
@@ -153,6 +158,8 @@ def summarise(state, cfg):
     veda["run"].update(work=0.0, dense=0.0)
     veda["step"] = None
     veda["tiles"].clear()
+    veda["geometry"].clear()
+    veda["timer"] = None
     veda["why"].clear()
     veda["specs"].clear()
 
@@ -174,13 +181,13 @@ def install_veda(model, cfg, dense_fn=None, dense_label=None, attend=None):
                               ("sla_sparsity_start", float(cfg["sparsity_start"]) > 0.0), ("sla_references", cfg["references"] != "off")) if on]
     cfg = {**cfg, "sparsity_ratio": sla.SLA_DEFAULTS["sparsity_ratio"], "sparsity_start": 0.0, "references": "off",
            "min_seq_len": int(cfg["min_seq_len"]), "dense_last_steps": int(cfg["dense_last_steps"]),
-           "predictor_name": path.name, "engine": "veda", "summarise": summarise}
+           "predictor_name": path.name, "engine": "veda", "summarise": summarise, "timing": bool(cfg.get("veda_timing"))}
     cfg["dense_steps"], bad = sla.parse_steps(cfg["dense_steps"])
     notes = [f"dense_steps: ignored {', '.join(bad)} (steps count from 1: '1' is the first, '1-2' the first two)"] if bad else []
     if unused:
         notes.append(f"{', '.join(unused)}: not used by veda, which runs at the predictor's trained budget")
     state = sla.new_state()
-    state["veda"] = {"stats": {}, "tiles": {}, "specs": {}, "plans": {}, "checked": {}, "why": collections.Counter(), "geometry": None, "step": None, "run": {"work": 0.0, "dense": 0.0}, "last": (1.0, 0), "kernel": "triton-int8" if attend is None else "stand-in kernel"}
+    state["veda"] = {"stats": {}, "tiles": {}, "specs": {}, "plans": {}, "checked": {}, "why": collections.Counter(), "geometry": {}, "timer": None, "step": None, "run": {"work": 0.0, "dense": 0.0}, "last": (1.0, 0), "kernel": "triton-int8" if attend is None else "stand-in kernel"}
     patched = sla.patching.clone(model)
     to = patched.model_options.get("transformer_options", {}).copy()
     to["optimized_attention_override"] = make_override(state, cfg, bundle, attend, dense_fn, dense_label)

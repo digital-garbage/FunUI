@@ -10,10 +10,12 @@ Pure torch, no ComfyUI import: it runs and is tested on any device. The kernel t
 kept tiles is a callable handed in (veda_kernel.attend on a GPU, `reference_attend` in tests).
 Every tensor made here is built on, or moved to, the device of the tensor it meets.
 """
+import contextlib
 import functools
 import json
 import math
 import os
+import time
 from types import SimpleNamespace
 
 import torch
@@ -126,7 +128,8 @@ def build_layout(spans, seq_len, device="cpu"):
         n_video=n_video, n_ref=sum(t.shape[0] for t in tiles[:-1]), n_global=n_global, n_tiles=n_video + n_global,
         ref_tokens=sum(g[0] * g[1] * g[2] for _, g, _ in spans[:-1]),
         target_tokens=spans[-1][1][0] * spans[-1][1][1] * spans[-1][1][2], seq_len=seq_len,
-        valid_count=on(count), gather_index=on(perm.clamp(min=0)), scatter_index=on(torch.where(perm < 0, seq_len, perm)),
+        widest=int((count > 0).sum()),      # an upper bound on the kept tiles of any row (a global row sees every tile): no device read needed
+        bres={}, valid_count=on(count), gather_index=on(perm.clamp(min=0)), scatter_index=on(torch.where(perm < 0, seq_len, perm)),
         pad_slots=on(torch.nonzero(perm < 0).view(-1)), partial_video=on(partial[partial < n_video]),
         kv_ok=on(count > 0), slot_valid=on((perm >= 0).to(torch.int32)))
 
@@ -201,7 +204,10 @@ def select(scores, lay, blocks):
         s.scatter_(-1, col, torch.where(own, float("inf"), s.gather(-1, col)))
         lo, hi, frac = _split(_per_row(budget, real, n), n)
         vals, idx = torch.topk(s, hi, dim=-1, sorted=True)
-        allowed = lo + _bresenham(nv, float(frac)).to(device=dev, dtype=torch.long)
+        extra = lay.bres.get((nv, float(frac), str(dev)))          # built on the host once, then kept on the device with the layout
+        if extra is None:
+            extra = lay.bres[(nv, float(frac), str(dev))] = _bresenham(nv, float(frac)).to(device=dev, dtype=torch.long)
+        allowed = lo + extra
         idxs.append(idx + start)
         keeps.append((torch.arange(hi, device=dev)[None, None, :] < allowed[None, :, None]) & (vals > float("-inf")))
     return torch.cat(idxs, -1), torch.cat(keeps, -1)
@@ -218,10 +224,12 @@ def block_mask(index, keep, lay):
     return mask
 
 
-def tile_index_list(mask):
-    """A mask as the per-row list of kept tiles: (index [H', n, widest] int32 ascending, count [H', n] int32)."""
+def tile_index_list(mask, widest=None):
+    """A mask as the per-row list of kept tiles: (index [H', n, widest] int32 ascending, count [H', n] int32). Entries past a row's
+    count are never read, so `widest` may be any upper bound (a layout knows one); None reads the exact widest from the device."""
     count = mask.sum(-1, dtype=torch.int32)
-    widest = int(count.max().item()) if count.numel() else 0
+    if widest is None:
+        widest = int(count.max().item()) if count.numel() else 0
     order = torch.argsort(mask.to(torch.int8), dim=-1, descending=True, stable=True)
     return order[..., :widest].to(torch.int32).contiguous(), count
 
@@ -301,12 +309,13 @@ def choose_plan(plans, grid):
     return best, False, f"nearest trained size: {describe_grid(best.grid)} (this video: {describe_grid(grid)})"
 
 
-def head_groups(plan, layer):
-    """[(shape, heads int64 CPU)] of one layer: heads that share a tile shape. Cached on the plan."""
-    if layer not in plan.groups:
+def head_groups(plan, layer, device="cpu"):
+    """[(shape, heads int64 on `device`)] of one layer: heads that share a tile shape. Cached on the plan, per device."""
+    key = (layer, str(device))
+    if key not in plan.groups:
         row = torch.tensor(plan.head_shape[layer])
-        plan.groups[layer] = [(plan.shapes[i], torch.nonzero(row == i).view(-1)) for i in sorted(set(plan.head_shape[layer]))]
-    return plan.groups[layer]
+        plan.groups[key] = [(plan.shapes[i], torch.nonzero(row == i).view(-1).to(device)) for i in sorted(set(plan.head_shape[layer]))]
+    return plan.groups[key]
 
 
 def _budget_of(meta, prefix, fallback):
@@ -386,10 +395,42 @@ def describe_bundle(b):
     return f"{os.path.basename(b.path)}, {b.layers} layers x {b.heads} heads, trained {trained}"
 
 
+class PhaseTimer:
+    """Opt-in time per phase, summed over a run and read once at its end. CUDA events on a GPU (the work is asynchronous there);
+    plain clock time elsewhere. `with timer("score"): ...`"""
+
+    def __init__(self, device):
+        self.cuda = torch.device(device).type == "cuda"
+        self.spans = {}
+
+    @contextlib.contextmanager
+    def __call__(self, name):
+        if self.cuda:
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            yield
+            b.record()
+            self.spans.setdefault(name, []).append((a, b))
+        else:
+            t = time.perf_counter()
+            yield
+            self.spans.setdefault(name, []).append(time.perf_counter() - t)
+
+    def totals(self):
+        """{phase: milliseconds}; reads the device once."""
+        if self.cuda:
+            torch.cuda.synchronize()
+            return {k: sum(a.elapsed_time(b) for a, b in v) for k, v in self.spans.items()}
+        return {k: 1000.0 * sum(v) for k, v in self.spans.items()}
+
+
+_NO_TIMER = lambda name: contextlib.nullcontext()
+
+
 # ── one layer ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 @torch.no_grad()
-def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats):
+def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats, timer=_NO_TIMER):
     """One layer of Veda attention. q, k, v: [S, H, D] (post QK-norm and RoPE, any strides, any device).
     For each group of heads sharing a tile shape, in memory-bounded chunks: gather to tile order, pool, score, select,
     build the block mask, `attend(q_t, k_t, v_t, mask, layout)`, scatter back. Returns [S, H, D] in q's dtype.
@@ -399,8 +440,15 @@ def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats)
     generated, reference = budgets
     tile_refs = not keeps_all(reference)
     out = q.new_zeros(seq_len + 1, heads, dim)
-    pq, pk = bundle.proj_q[layer].to(dev), bundle.proj_k[layer].to(dev)
-    for shape, group in head_groups(plan, layer):
+    pq, pk = bundle.proj_q[layer], bundle.proj_k[layer]
+    if dev.type == "cuda" and not pq.is_pinned():          # pinned host memory: the copy below does not stop the host
+        try:
+            pq = bundle.proj_q[layer] = pq.pin_memory()
+            pk = bundle.proj_k[layer] = pk.pin_memory()
+        except RuntimeError:
+            pass
+    pq, pk = pq.to(dev, non_blocking=True), pk.to(dev, non_blocking=True)
+    for shape, group in head_groups(plan, layer, dev):
         key = (spec, shape, tile_refs, str(dev))
         if key not in cache:
             spans = [(s, g, least_padding_shape(g)) for s, g in spec[2]] if tile_refs else []
@@ -408,10 +456,13 @@ def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats)
         lay = cache[key]
         blocks = column_blocks(lay, generated, reference)
         step = max(1, _CHUNK_BYTES // (lay.n_tiles * TILE * dim * q.element_size()))
-        for hs in group.to(dev).split(step):
-            q_t, k_t = gather(q, lay, hs), gather(k, lay, hs)
-            scores = logits(pool(q_t, lay), pool(k_t, lay), pq.index_select(0, hs), pk.index_select(0, hs))
-            index, keep = select(scores, lay, blocks)
+        for hs in group.split(step):
+            with timer("gather"):
+                q_t, k_t = gather(q, lay, hs), gather(k, lay, hs)
+            with timer("score"):
+                scores = logits(pool(q_t, lay), pool(k_t, lay), pq.index_select(0, hs), pk.index_select(0, hs))
+            with timer("select"):
+                index, keep = select(scores, lay, blocks)
             del scores
             kept = keep.sum()
             stats["kept"] = stats.get("kept", 0) + kept
@@ -419,7 +470,12 @@ def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats)
             stats["work"] = stats.get("work", 0) + kept + len(hs) * lay.n_global * (lay.n_tiles + lay.n_video)
             stats["dense"] = stats.get("dense", 0) + len(hs) * (seq_len / TILE) ** 2
             stats["global"] = lay.n_global
-            mask = block_mask(index, keep, lay)
-            o_t = attend(q_t, k_t, gather(v, lay, hs), mask, lay)
-            scatter_(out, o_t, lay, hs)
+            with timer("select"):
+                mask = block_mask(index, keep, lay)
+            with timer("gather"):
+                v_t = gather(v, lay, hs)
+            with timer("kernel"):
+                o_t = attend(q_t, k_t, v_t, mask, lay)
+            with timer("scatter"):
+                scatter_(out, o_t, lay, hs)
     return out[:seq_len]

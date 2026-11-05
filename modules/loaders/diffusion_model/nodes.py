@@ -42,7 +42,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
     # How the form lists them (core/widgets): the file, how it is stored and computed, attention, then SLA in the
     # order its choices narrow it. Not the schema's order, which saved canvas workflows read by position.
     WIDGET_ORDER = ("model_name", "weight_dtype", "int8_convrot", "mxfp8", "compute_dtype", "fp16_accumulation", "attention",
-                    "sla", "sla_method", "veda_predictor", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
+                    "sla", "sla_method", "veda_predictor", "veda_timing", "sla_engine", "sla_sparsity", "sla_sparsity_start", "sla_tau", "sla_block_size",
                     "sla_dense_steps", "sla_dense_last_steps", "sla_min_seq_len", "sla_protect_audio",
                     "sla_references", "sla_tail", "sla_stabilize_motion")
 
@@ -198,6 +198,9 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                default="auto", optional=True,
                                tooltip="veda: the predictor file in ComfyUI/models/veda. auto takes the text-to-video one "
                                        "when it is there, else the first. Use the R2VA file for reference-to-video runs."),
+                io.Boolean.Input("veda_timing", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), default=False, optional=True,
+                                 tooltip="veda: also log how long each phase of its attention took this run (gather, score, select, "
+                                         "kernel, scatter). Changes nothing in the picture; the clock waits for the GPU once per run."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),
@@ -215,7 +218,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 sla_tail: bool = None, sla_stabilize_motion: bool = None,
                 sla_method: str = None, sla_tau: float = None,
                 sla_sparsity_start: float = None, mxfp8: bool = False,
-                veda_predictor: str = None) -> io.NodeOutput:
+                veda_predictor: str = None, veda_timing: bool = False) -> io.NodeOutput:
         notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
@@ -334,7 +337,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 protect_audio=sla_protect_audio,
                 dense_fn=override, dense_label=attention,
                 engine=sla_engine, dense_steps=sla_dense_steps, references=sla_references,
-                tail=sla_tail, stabilize_motion=sla_stabilize_motion, method=sla_method, tau=sla_tau, veda_predictor=veda_predictor)
+                tail=sla_tail, stabilize_motion=sla_stabilize_motion, method=sla_method, tau=sla_tau, veda_predictor=veda_predictor, veda_timing=veda_timing)
             notes.append(sla_note)
         if not installed:
             if override is not None:

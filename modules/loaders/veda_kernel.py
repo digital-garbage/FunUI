@@ -85,7 +85,7 @@ def attend(q, k, v, mask, lay):
     """The block-sparse attention callable veda_core.attention takes. q, k, v: [N, H', D] contiguous, bf16/fp16, tile order;
     mask: [H', n_tiles, n_tiles] bool. Returns [N, H', D] in q's dtype."""
     slots, heads, dim = q.shape
-    index, count = tile_index_list(mask & lay.kv_ok)
+    index, count = tile_index_list(mask & lay.kv_ok, lay.widest)         # no read of the device to size the list
     sub = TILE // KEY_BLOCK                          # kept tiles -> kept key blocks, the kernel's unit
     blocks = ((index.to(torch.int32) * sub)[..., None] + torch.arange(sub, device=q.device, dtype=torch.int32)).flatten(-2).contiguous()
     valid = (lay.valid_count[:, None] - torch.arange(sub, device=q.device) * KEY_BLOCK).clamp_(0, KEY_BLOCK).flatten().to(torch.int32).contiguous()
