@@ -90,6 +90,10 @@ def _memory():
     try:
         import app.logger as comfy_log
     except Exception:  # noqa: BLE001
+        # Without ComfyUI on the path, `app` resolves to our own folder (a namespace package) and stays cached,
+        # which would later hide ComfyUI's real `app` package. Forget it.
+        if getattr(sys.modules.get("app"), "__file__", True) is None:
+            sys.modules.pop("app", None)
         return None
     logs = comfy_log.logs
     if logs is not None and not isinstance(logs, Kept):
