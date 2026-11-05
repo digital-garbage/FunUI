@@ -474,8 +474,9 @@ def attention(q, k, v, layer, spec, plan, bundle, budgets, attend, cache, stats,
                 mask = block_mask(index, keep, lay)
             with timer("gather"):
                 v_t = gather(v, lay, hs)
-            with timer("kernel"):
-                o_t = attend(q_t, k_t, v_t, mask, lay)
+            with timer("kernel"):          # a kernel that can split its own time takes the timer too; the others are called as before
+                o_t = attend(q_t, k_t, v_t, mask, lay, timer=timer) if timer is not _NO_TIMER and getattr(attend, "times_itself", False) \
+                    else attend(q_t, k_t, v_t, mask, lay)
             with timer("scatter"):
                 scatter_(out, o_t, lay, hs)
     return out[:seq_len]

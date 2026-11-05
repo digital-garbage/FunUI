@@ -16,6 +16,8 @@ What differs from upstream, as in Veda's fork:
   * a tile is two key blocks of 64 (upstream's block), expanded on the host so the loop stays flat;
   * tile-ordered [N, H, D] tensors throughout. Veda's optional TMA path (off by default there) is not ported.
 """
+import contextlib
+
 import torch
 import triton
 import triton.language as tl
@@ -81,22 +83,30 @@ def _quant(x, block, pre_scale=1.0):
     return out, scale
 
 
-def attend(q, k, v, mask, lay):
+def attend(q, k, v, mask, lay, timer=None):
     """The block-sparse attention callable veda_core.attention takes. q, k, v: [N, H', D] contiguous, bf16/fp16, tile order;
-    mask: [H', n_tiles, n_tiles] bool. Returns [N, H', D] in q's dtype."""
+    mask: [H', n_tiles, n_tiles] bool. Returns [N, H', D] in q's dtype. `timer` (veda_timing) splits the call into
+    kernel.index (the lists the kernel walks), kernel.quantize (INT8 q and k) and kernel.attend (the kernel itself)."""
+    t = timer or (lambda name: contextlib.nullcontext())
     slots, heads, dim = q.shape
-    index, count = tile_index_list(mask & lay.kv_ok, lay.widest)         # no read of the device to size the list
-    sub = TILE // KEY_BLOCK                          # kept tiles -> kept key blocks, the kernel's unit
-    blocks = ((index.to(torch.int32) * sub)[..., None] + torch.arange(sub, device=q.device, dtype=torch.int32)).flatten(-2).contiguous()
-    valid = (lay.valid_count[:, None] - torch.arange(sub, device=q.device) * KEY_BLOCK).clamp_(0, KEY_BLOCK).flatten().to(torch.int32).contiguous()
-    q8, q_scale = _quant(q, TILE, dim ** -0.5 * LOG2E)
-    k8, k_scale = _quant(k, KEY_BLOCK)
-    v16, out = v.to(torch.float16), torch.empty_like(q)
-    _attend[(slots // TILE, heads)](
-        q8, k8, v16, q_scale, k_scale, blocks, (count * sub).contiguous(), valid, out, q.stride(0), q.stride(1), v16.stride(0),
-        v16.stride(1), q_scale.stride(0), k_scale.stride(0), blocks.stride(0), blocks.stride(1), n_q_tiles=slots // TILE, D=dim,
-        BLK=KEY_BLOCK, BLOCK_M=TILE, num_warps=WARPS, num_stages=STAGES)
+    with t("kernel.index"):
+        index, count = tile_index_list(mask & lay.kv_ok, lay.widest)         # no read of the device to size the list
+        sub = TILE // KEY_BLOCK                          # kept tiles -> kept key blocks, the kernel's unit
+        blocks = ((index.to(torch.int32) * sub)[..., None] + torch.arange(sub, device=q.device, dtype=torch.int32)).flatten(-2).contiguous()
+        valid = (lay.valid_count[:, None] - torch.arange(sub, device=q.device) * KEY_BLOCK).clamp_(0, KEY_BLOCK).flatten().to(torch.int32).contiguous()
+    with t("kernel.quantize"):
+        q8, q_scale = _quant(q, TILE, dim ** -0.5 * LOG2E)
+        k8, k_scale = _quant(k, KEY_BLOCK)
+        v16, out = v.to(torch.float16), torch.empty_like(q)
+    with t("kernel.attend"):
+        _attend[(slots // TILE, heads)](
+            q8, k8, v16, q_scale, k_scale, blocks, (count * sub).contiguous(), valid, out, q.stride(0), q.stride(1), v16.stride(0),
+            v16.stride(1), q_scale.stride(0), k_scale.stride(0), blocks.stride(0), blocks.stride(1), n_q_tiles=slots // TILE, D=dim,
+            BLK=KEY_BLOCK, BLOCK_M=TILE, num_warps=WARPS, num_stages=STAGES)
     return out
+
+
+attend.times_itself = True
 
 
 def check(device, dtype=torch.bfloat16):

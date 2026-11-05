@@ -474,6 +474,19 @@ def test_timing_is_off_unless_asked_and_then_adds_one_line_with_every_phase(veda
     line = next(r.getMessage() for r in caplog.records if "time in each phase" in r.getMessage())
     assert all(name in line for name in ("gather", "score", "select", "kernel", "scatter")) and "total" in line
     assert torch.equal(plain, timed)                                                   # a clock changes no number
+    caplog.clear()
+
+    def splitter(q, k, v, mask, lay, timer):
+        with timer("kernel.index"):
+            pass
+        with timer("kernel.attend"):
+            return core.reference_attend(q, k, v, mask, lay)
+    splitter.times_itself = True
+    veda_on.attend = splitter
+    with caplog.at_level(logging.INFO):
+        _last_step(tiny, _install(tiny, veda_timing=True)[0])
+    line = next(r.getMessage() for r in caplog.records if "time in each phase" in r.getMessage())
+    assert "kernel " in line and "(index " in line and ", attend " in line and line.count("total") == 1       # a kernel's own parts are shown, not added twice
 
 
 def test_two_stages_in_one_run_give_one_line_that_names_both_sizes(veda_on, folder, comfyui, tiny_h3, caplog):

@@ -149,8 +149,13 @@ def summarise(state, cfg):
                      state["dense"], f" ({why})" if why else "", state["backend"] or "?", done * 100.0, "; ".join(f"{core.describe_grid(g)}, tile plan: {how}" for g, how in sizes.items()),
                      cfg["predictor_name"])
         if veda["timer"] is not None:
-            phases = veda["timer"].totals()
-            logging.info("[FunUI Veda] time in each phase this run (ms): %s | total %.0f", ", ".join(f"{k} {v:.0f}" for k, v in phases.items()), sum(phases.values()))
+            phases = veda["timer"].totals()          # a phase with a dot is a part of the one before it: not added again
+            top = [k for k in phases if "." not in k]
+            text = []
+            for k in top:
+                inner = ["%s %.0f" % (n.split(".")[1], v) for n, v in phases.items() if n.startswith(k + ".")]
+                text.append("%s %.0f%s" % (k, phases[k], " (%s)" % ", ".join(inner) if inner else ""))
+            logging.info("[FunUI Veda] time in each phase this run (ms): %s | total %.0f", ", ".join(text), sum(phases[k] for k in top))
         logging.info("[FunUI Veda] full attention on %s of %d", f"steps {sla._runs(state['dense_at'])}" if state["dense_at"] else "no step", state["n"])
         if state["failed"] is not None:
             logging.warning("[FunUI Veda] the kernel fell back to dense at least once: %s", state["failed"])
@@ -192,7 +197,7 @@ def install_veda(model, cfg, dense_fn=None, dense_label=None, attend=None):
     to = patched.model_options.get("transformer_options", {}).copy()
     to["optimized_attention_override"] = make_override(state, cfg, bundle, attend, dense_fn, dense_label)
     patched.model_options["transformer_options"] = to
-    patched.add_wrapper_with_key("diffusion_model", "funui_sla_state", sla.make_wrapper(state, cfg))
+    sla.add_wrappers(patched, state, cfg)
     cfg["asked"] = f"trained ({core.describe_budget(bundle.generated)})"
     return patched, "\n".join([
         f"SLA on | veda (EXPERIMENTAL, Triton kernel untested on a GPU) | predictor {core.describe_bundle(bundle)} | sparsity {cfg['asked']} | "
