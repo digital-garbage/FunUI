@@ -48,7 +48,7 @@ export default {
         const swapped = await p.editFor(pid, (pr) => swap(pr, media, out) > 0);
         if (!swapped) c.toast.warn({ text: "Interpolated, but that render was replaced meanwhile, so nothing was swapped." });
         else c.toast.good({ text: `Interpolated: the render now plays at ${opts().multiplier} times the frames.` });
-      } catch (err) { c.toast.warn({ text: `Interpolate failed: ${err.message}` }); }
+      } catch (err) { c.toast[err.stopped ? "info" : "warn"]({ text: err.stopped ? "Interpolate stopped. The render stays as it was." : `Interpolate failed: ${err.message}` }); }
       finally { busy.delete(key); draw(); }
     }
 

@@ -53,7 +53,10 @@ export default {
         const swapped = await p.editFor(pid, (pr) => swap(pr, media, out) > 0);
         if (!swapped) c.toast.warn({ text: "Upscaled, but that render was replaced meanwhile, so nothing was swapped." });
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
-      } catch (err) { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
+      } catch (err) {
+        if (err.stopped) c.toast.info({ text: "Upscale stopped. The render stays as it was." });
+        else { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
+      }
       finally { busy.delete(key); draw(); }
     }
 

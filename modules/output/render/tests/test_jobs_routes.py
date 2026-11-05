@@ -149,3 +149,63 @@ def test_render_keeps_the_real_frame_rate_of_interpolated_clips_only_when_asked(
         job = finish(server, f"{BASE}/projects/{proj.id}/render", queued["job_id"])
         assert job["state"] == "done"
         assert files.frame_rate(str(comfy.temp / job["media"]["filename"])) == expected
+
+
+def test_a_running_job_asked_to_stop_ends_stopped_and_stays_pollable(monkeypatch):
+    import asyncio
+    import threading
+    monkeypatch.setattr(jobs, "MAX_JOBS", 3)
+    started, seen = threading.Event(), []
+
+    def long_job(interrupted):
+        started.set()
+        while True:
+            interrupted()                                   # between chunks, as stream_file does
+            seen.append(1)
+            threading.Event().wait(0.01)
+
+    async def go():
+        job = jobs.new()
+        task = asyncio.create_task(jobs.run(job, long_job, error=RuntimeError, stoppable=True))
+        while not started.is_set():
+            await asyncio.sleep(0.01)
+        assert jobs.stop(job) is True
+        await task
+        return job
+
+    job = asyncio.run(go())
+    assert jobs.get(job) == {"state": "stopped"}              # a poll finds it: no 404, so no "ComfyUI restarted"
+    assert jobs.stop(job) is False and jobs.stop("nope") is False
+
+
+def test_a_job_stopped_before_it_started_never_runs():
+    import asyncio
+    ran = []
+    job = jobs.new()
+    assert jobs.stop(job) is True
+    asyncio.run(jobs.run(job, lambda interrupted: ran.append(1), error=RuntimeError, stoppable=True))
+    assert not ran and jobs.get(job) == {"state": "stopped"}
+
+
+@needs_ffmpeg
+def test_a_stopped_stream_leaves_no_half_written_file(comfy):
+    from core import video_pipe
+    src = comfy.output / "a.mp4"
+    make_clip(src, seconds=1)
+    dst = comfy.output / "out.mp4"
+    calls = []
+
+    def stop_after_first_chunk():
+        calls.append(1)
+        if len(calls) > 1:
+            raise jobs.Stopped()
+    with pytest.raises(jobs.Stopped):
+        video_pipe.stream_file(str(src), str(dst), lambda x: x, stop_after_first_chunk)
+    assert not dst.exists()
+
+
+def test_the_stop_route_answers_whether_it_stopped_anything(comfy, server):
+    job = jobs.new()
+    status, body = call(server, "POST", f"{BASE}/jobs/{job}/stop")
+    assert status == 200 and body == {"stopped": True}
+    assert call(server, "POST", f"{BASE}/jobs/nope/stop")[1] == {"stopped": False}

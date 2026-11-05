@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { interpolate, modeLabel } from "./job.js";
-import { derived, gaveUp, onGaveUp, swap, wentThrough } from "../../shell/renders.js";
+import { derived, gaveUp, onGaveUp, swap, wentThrough, waitJob, jobsRunning, onJobs, stopJobs, JobStopped } from "../../shell/renders.js";
 
 const m = (f, sub = "") => ({ filename: f, subfolder: sub, type: "output" });
 
@@ -45,4 +45,21 @@ test("a step that gave up is announced, so a step waiting behind it can go on wi
   onGaveUp((media, step) => heard.push([media.filename, step]));
   gaveUp(m("r.mp4"), "upscale");
   assert.deepEqual(heard, [["r.mp4", "upscale"]]);
+});
+
+test("Stop: a job being waited for can be stopped, ends as stopped (not failed, not restarted), and the Stop button hears about it", async () => {
+  const stopped = [], heard = [];
+  const off = onJobs(() => heard.push(jobsRunning()));
+  let polls = 0;
+  const read = async () => (++polls < 2 ? { state: "running" } : { state: "stopped" });
+  const waiting = waitJob(read, "j1", async () => { if (polls === 0) await stopJobs((id) => stopped.push(id)); });
+  await assert.rejects(waiting, (err) => err instanceof JobStopped && err.stopped === true && err.message === "Stopped.");
+  assert.deepEqual(stopped, ["j1"]);
+  assert.deepEqual(heard, [1, 0]);                 // shown while it waits, hidden when it ends
+  assert.equal(jobsRunning(), 0);
+  off();
+});
+
+test("Stop: a stopped job that is read once more is still there (no 404 turned into 'ComfyUI restarted')", async () => {
+  await assert.rejects(waitJob(async () => ({ state: "stopped" }), "j2", async () => {}), (err) => err.stopped === true);
 });

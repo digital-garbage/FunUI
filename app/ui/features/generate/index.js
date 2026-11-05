@@ -2,6 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { isGenerative, isVideoClip, genUnitId, unitRoot, effFrames, effFps } from "../../shell/scenes.js";
 import { QUEUED, RUNNING } from "../../shell/run.js";
+import { jobsRunning, onJobs, stopJobs } from "../../shell/renders.js";
 import { inPlace } from "../../shell/place.js";
 import { buildInputs, rolesAt } from "./inputs.js";
 import { offer } from "../../shell/actions.js";
@@ -201,15 +202,18 @@ export default {
     let drawn = "";
     function draw() {
       const open = p.project;
-      const picked = open ? pickedScenes().length : 0, key = `${busy}|${held}|${g.state().phase}|${Boolean(open)}|${picked}`;
+      const picked = open ? pickedScenes().length : 0, key = `${busy}|${held}|${g.state().phase}|${Boolean(open)}|${picked}|${jobsRunning()}`;
       if (key === drawn) return;          // progress ticks must not rebuild the buttons
       drawn = key;
       const working = busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING;     // also a run this page did not start
       const go = c.button.sm({ label: working ? "Generating…" : "▶ Generate", tone: "primary", disabled: working || !open, title: "Generate every scene on the timeline, except left-out scenes, video clips and Auto Montage pieces. An earlier render of a scene stays as a take.",
         onClick: () => runUnits(unitsOf(p.scenes)) });
       const one = c.button.sm({ label: picked > 1 ? `Selected (${picked})` : "Selected", title: "Generate only the picked scenes", disabled: working || !picked, onClick: () => runUnits(unitsOf(pickedScenes())) });
-      const stop = c.button.sm({ label: "■ Stop", tone: "danger", title: "Stop the run that is going", onClick: () => { stopped = true; g.cancel(); } });
-      stop.node.hidden = !working;
+      const stop = c.button.sm({ label: "■ Stop", tone: "danger", title: "Stop the run that is going, and any Upscale or Interpolate in progress", onClick: () => {
+        stopJobs(app.api.stopJob);
+        if (working) { stopped = true; g.cancel(); }
+      } });
+      stop.node.hidden = !working && !jobsRunning();
       put(go.node, one.node, stop.node);
     }
     // A run found after a reload belongs to this page's last session: its result still goes on its clips.
@@ -244,11 +248,11 @@ export default {
       });
     });
     draw();
-    const offRun = g.subscribe(draw);
+    const offRun = g.subscribe(draw), offJobs = onJobs(draw);          // the Stop button also shows while an Upscale or Interpolate runs
     const offApp = app.on((what) => { if (what === "generate.scene" && p.selected) runUnits(unitsOf([p.selected]));
       else if (what === "generate.selected" && pickedScenes().length) runUnits(unitsOf(pickedScenes())); else draw(); });
     const offers = [offer(app, { id: "generate-all", label: "Generate", icon: "▶", run: () => { if (p.project) runUnits(unitsOf(p.scenes)); } }),
       offer(app, { id: "generate-selected", label: "Generate selected", icon: "▶", run: () => { if (pickedScenes().length) runUnits(unitsOf(pickedScenes())); } })];
-    return () => { offRun(); offApp(); offers.forEach((f) => f()); };
+    return () => { offRun(); offJobs(); offApp(); offers.forEach((f) => f()); };
   },
 };

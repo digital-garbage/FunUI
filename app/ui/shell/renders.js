@@ -2,21 +2,37 @@
 // scene that plays it, and remembering which steps a file has been through so two "always" modes can never feed each other forever. Pure of the page.
 export const keyOf = (m) => `${m.type || "output"}/${m.subfolder || ""}/${m.filename}`;
 
-/** Wait for a FunUI background job. `read(id)` -> {state: running | done | error, media, detail}. -> the media, or throws a sentence. `sleep` is injectable so a test need not wait. */
+const active = new Set();                                      // ids of the Upscale / Interpolate jobs this page is waiting for
+const listeners = [];
+const changed = () => { for (const fn of listeners) { try { fn(); } catch { /* one listener must not stop the others */ } } };
+/** How many jobs the Stop button can stop right now. */
+export const jobsRunning = () => active.size;
+/** -> a function that stops listening. */
+export const onJobs = (fn) => { listeners.push(fn); return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }; };
+/** The Stop button: ask every job this page is waiting for to stop. `stop(id)` is the API call. */
+export const stopJobs = (stop) => Promise.all([...active].map((id) => Promise.resolve(stop(id)).catch(() => {})));
+/** What waitJob throws for a job that was stopped: not a failure, so callers say "stopped" and not "failed". */
+export class JobStopped extends Error { constructor() { super("Stopped."); this.stopped = true; } }
+
+/** Wait for a FunUI background job. `read(id)` -> {state: running | done | error | stopped, media, detail}. -> the media, or throws a sentence (a JobStopped when it was stopped). `sleep` is injectable so a test need not wait. */
 export async function waitJob(read, id, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
   let lost = 0;
-  for (;;) {
-    await sleep(1000);
-    let r;
-    try { r = await read(id); } catch (err) {
-      if (err.status === 404) throw new Error("ComfyUI restarted while it was working");
-      if (++lost < 30) continue;                                    // a dropped reply is not a failed job
-      throw new Error("lost contact with ComfyUI");
+  active.add(id); changed();
+  try {
+    for (;;) {
+      await sleep(1000);
+      let r;
+      try { r = await read(id); } catch (err) {
+        if (err.status === 404) throw new Error("ComfyUI restarted while it was working");
+        if (++lost < 30) continue;                                    // a dropped reply is not a failed job
+        throw new Error("lost contact with ComfyUI");
+      }
+      lost = 0;
+      if (r.state === "stopped") throw new JobStopped();
+      if (r.state === "error") throw new Error(r.detail || "failed inside ComfyUI");
+      if (r.state === "done") return r.media;
     }
-    lost = 0;
-    if (r.state === "error") throw new Error(r.detail || "failed inside ComfyUI");
-    if (r.state === "done") return r.media;
-  }
+  } finally { active.delete(id); changed(); }
 }
 
 /** One file backs a whole chain run, so every scene render and ghost that plays `from` gets `to`. -> how many were swapped. */
