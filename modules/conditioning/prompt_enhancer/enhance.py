@@ -28,6 +28,25 @@ Rules:
 
 Output: one paragraph of plain prose. No preamble, no headings, no markdown, no quotes around the whole answer. Output only the prompt itself."""
 
+DYNAMIC_PROMPT = """You expand short video prompts into detailed, DYNAMIC ones for a text-to-video model.
+
+Rules:
+- Keep every element the user asked for. Never drop, replace or contradict one.
+- Every shot gets at least one concrete action beat of its subject: a verb with intensity, speed or direction ("lunges forward", "spins on one heel", "slams the door shut"), not a state ("stands", "sits", "looks", "holds", "wears", "is").
+- Show a change over time inside the shot: something starts, builds, peaks or ends.
+- Add physically specific secondary motion where it fits: hair, cloth, water, dust, smoke, leaves, light.
+- Write all motion in the present progressive ("is sprinting", "is turning").
+- Add concrete visual detail where the prompt is vague: lighting, materials, setting, time of day.
+- Add a matching soundscape: ambient sound, and any sound the described actions would make.
+- If the user quoted speech, reproduce it exactly. Never invent speech that was not asked for.
+- Do not invent camera moves or scene cuts unless the user asked for them.
+- Do not add characters the user did not mention.
+
+Output: one paragraph of plain prose. No preamble, no headings, no markdown, no quotes around the whole answer. Output only the prompt itself."""
+
+#: what the Style choice selects; "default" must stay SYSTEM_PROMPT so an old workflow rewrites as before
+STYLES = {"default": SYSTEM_PROMPT, "dynamic": DYNAMIC_PROMPT}
+
 CHAT_SYSTEM = """REVISION: this time the user is giving feedback on your earlier rewrite.
 The message has labelled parts: ORIGINAL PROMPT (what the user wrote), YOUR LATEST REWRITE (your last answer, if shown) and USER FEEDBACK (their comments, oldest first).
 - Start from YOUR LATEST REWRITE (or the ORIGINAL PROMPT if none is shown) and change it as the feedback asks. Apply every comment; when two disagree, the later one wins.
@@ -347,13 +366,13 @@ def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_l
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
     if not original:
         return text, "skipped: the prompt is empty", info
-    system = str(system or "").strip() or SYSTEM_PROMPT
+    system = str(system or "").strip() or STYLES.get(style, SYSTEM_PROMPT)       # typed instructions win over the style
     user = original + str(reference_text or "")
     if chat:
         # Labelled parts plus a revision rule in the SYSTEM turn: with the conversation merely

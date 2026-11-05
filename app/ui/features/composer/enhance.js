@@ -34,6 +34,7 @@ export function enhance(app, own) {
     if (!sl) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const v = sl.inputs || {}, val = (n, d) => (v[n] === undefined ? d : v[n]);
     const on = val("enabled", false), greedy = val("greedy", false);
+    const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     page.set([
       c.label.section({ text: "Prompt enhancer" }),
       c.hint.default({ text: "A language model rewrites the finished prompt before it is encoded. Off, or if it fails, your prompt is used as typed. (word:1.5) and [a@2-4] markup does not survive a rewrite." }),
@@ -41,7 +42,8 @@ export function enhance(app, own) {
       ...(!on ? readout() : [
         pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here."),
         ...((val("encoder_file", "") && choices("encoder_family").length) ? [pick("encoder_family", "Encoder family", "", "Which family that file is for.", "stable_diffusion")] : []),
-        field("Instructions", c.textarea.md({ label: "Instructions", rows: 6, value: val("instructions", ""), placeholder: defaults ? defaults.instructions : "(built-in instructions)", onCommit: (x) => set("instructions", x) }), "Empty uses the built-in instructions."),
+        field("Style", c.select.md({ label: "Style", value: style, options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot. Instructions typed below override it."),
+        field("Instructions", c.textarea.md({ label: "Instructions", rows: 6, value: val("instructions", ""), placeholder: defaults ? (defaults.styles || {})[style] || defaults.instructions : "(built-in instructions)", onCommit: (x) => set("instructions", x) }), "Empty uses the built-in instructions of the Style above."),
         num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be."),
         c.toggle.default({ label: "Use the picture", hint: "Sends the scene's picture to the model along with the prompt.", checked: val("use_image", true), onChange: (x) => set("use_image", x) }),
         c.toggle.default({ label: "Thinking", hint: "Let a thinking model reason first. Its reasoning eats the token budget.", checked: val("thinking", false), onChange: (x) => set("thinking", x) }),

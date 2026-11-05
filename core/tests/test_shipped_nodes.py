@@ -61,7 +61,7 @@ FROZEN = {
     "FunUIEnhancePrompt": [
         "clip", "text", "enabled", "instructions", "max_length", "greedy", "temperature", "top_p",
         "top_k", "min_p", "repetition_penalty", "presence_penalty", "seed", "thinking", "encoder_file", "encoder_family", "image", "use_image",
-        "shortcuts", "lorebooks", "reference_intro", "chat",
+        "shortcuts", "lorebooks", "reference_intro", "chat", "style",
     ],
     "FunUIApplyPromptMarkup": ["model", "clip", "positive", "latent", "markup"],
     "FunUILatentResample": ["latent", "upscaler", "operation", "scale", "positive", "negative"],

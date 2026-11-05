@@ -85,6 +85,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The line above the reference entries. Empty uses the built-in one."),
                 io.String.Input("chat", multiline=True, default="", optional=True,
                                 tooltip="Your comments on earlier rewrites (Composer > Chat)."),
+                io.Combo.Input("style", options=list(en.STYLES), default="default", optional=True,
+                               tooltip="default: the built-in instructions. dynamic: the same rules, but every shot gets a concrete action beat, a change over time and secondary motion. Typed Instructions override both."),
             ],
             outputs=[io.String.Output(display_name="enhanced"),
                      io.String.Output(display_name="status")],
@@ -100,7 +102,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -129,7 +131,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             rounds = []
         out, status, info = en.enhance(
             clip, text, system=instructions,
-            reference_text=en.reference(text, groups, reference_intro), chat=en.chat_block(rounds),
+            reference_text=en.reference(text, groups, reference_intro), chat=en.chat_block(rounds), style=style,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,

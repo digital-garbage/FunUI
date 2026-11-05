@@ -63,3 +63,18 @@ test("the Encoder pick lists the encoder files, and its family shows only once a
   await new Promise((r) => setTimeout(r, 0));
   assert.match(again.node.textContent, /Encoder family/);
 });
+
+test("Style picks the built-in instructions shown as the placeholder, and choosing Dynamic saves it", async () => {
+  const saved = [];
+  const slot = { id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } };
+  const ps = { slots: () => [slot], ensureLoaded: async () => {}, save: async (...a) => { saved.push(a); }, subscribe: () => () => {} };
+  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }),
+    enhancerDefaults: async () => ({ instructions: "DEFAULT TEXT", reference_intro: "", styles: { default: "DEFAULT TEXT", dynamic: "DYNAMIC TEXT" } }) };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.match(page.node.textContent, /Style/);
+  assert.match(page.node.textContent, /Dynamic \(more motion\)/);
+  const area = [...page.node.querySelectorAll("textarea")].find((t) => t.placeholder === "DEFAULT TEXT");
+  assert.ok(area, "the default style shows the default instructions");
+});

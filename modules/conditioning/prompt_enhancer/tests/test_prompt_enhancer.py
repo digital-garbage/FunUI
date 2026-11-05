@@ -201,6 +201,65 @@ def test_chat_revision_goes_in_the_system_turn_and_an_echo_is_cut():
     assert "ORIGINAL PROMPT:\na fox" in clip.seen["text"] and info["sent"]
 
 
+# --- style -------------------------------------------------------------------
+
+def test_dynamic_asks_for_motion_and_keeps_every_guard_of_the_default():
+    e = en()
+    assert e.STYLES["default"] is e.SYSTEM_PROMPT and e.STYLES["dynamic"] is e.DYNAMIC_PROMPT
+    d = e.DYNAMIC_PROMPT
+    assert "action beat" in d and "change over time" in d and "present progressive" in d
+    assert "Never drop, replace or contradict" in d and "Do not invent camera moves or scene cuts unless the user asked" in d
+    assert "reproduce it exactly. Never invent speech" in d and "Do not add characters the user did not mention" in d
+
+
+@pytest.mark.parametrize("style", ["default", "dynamic", "nonsense"])
+@pytest.mark.parametrize("typed", ["", "Make it blue."])
+@pytest.mark.parametrize("with_chat", [False, True])
+@pytest.mark.parametrize("with_reference", [False, True])
+def test_style_matrix_typed_instructions_win_then_style_then_default(style, typed, with_chat, with_reference):
+    e = en()
+    clip = FakeClip("A fox runs.")
+    chat = e.chat_block([{"rewrites": {"whole": "old"}, "comment": "faster"}]) if with_chat else ""
+    ref = "\n\nREF" if with_reference else ""
+    out, _, info = e.enhance(clip, "a fox", system=typed, style=style, chat=chat, reference_text=ref)
+    assert out == "A fox runs." and info["ok"]
+    sent = clip.seen["text"]
+    want = typed or e.STYLES.get(style, e.SYSTEM_PROMPT)           # an unknown style falls back to the default
+    assert sent.startswith(want)
+    other = e.DYNAMIC_PROMPT if want is not e.DYNAMIC_PROMPT else e.SYSTEM_PROMPT
+    assert other not in sent
+    assert (e.CHAT_SYSTEM in sent) is with_chat and ("REF" in sent) is with_reference and "a fox" in sent
+
+
+def test_the_node_has_a_style_input_last_and_passes_it_on(node):
+    schema = node.FunUIEnhancePrompt.define_schema()
+    assert [i.id for i in schema.inputs][-1] == "style"
+    clip = FakeClip("A fox sprints.")
+    node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
+    assert en().DYNAMIC_PROMPT in clip.seen["text"]
+    clip = FakeClip("A fox walks.")
+    node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3)
+    assert clip.seen["text"].startswith(en().SYSTEM_PROMPT), "a workflow saved before Style rewrites as before"
+
+
+def test_the_defaults_route_lists_the_styles():
+    from modules.conditioning import prompt_enhancer as mod
+    table = {}
+
+    class T:
+        def get(self, path):
+            return lambda fn: table.setdefault(path, fn)
+
+    class W:
+        @staticmethod
+        def json_response(d):
+            return d
+    mod.routes(T(), "/m", W)
+    import asyncio
+    got = asyncio.run(table["/m/defaults"](None))
+    assert set(got["styles"]) == {"default", "dynamic"} and got["instructions"] == got["styles"]["default"]
+
+
 # --- the node ---------------------------------------------------------------
 
 @pytest.fixture

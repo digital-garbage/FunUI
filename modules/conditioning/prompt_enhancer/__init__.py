@@ -32,7 +32,8 @@ def routes(table, base, web):
         """What an empty field means, so the Composer can show it."""
         from . import enhance
         return web.json_response({"instructions": enhance.SYSTEM_PROMPT,
-                                  "reference_intro": enhance.REFERENCE_INTRO})
+                                  "reference_intro": enhance.REFERENCE_INTRO,
+                                  "styles": enhance.STYLES})
 
     @table.get(base + "/runs")
     async def _runs(req):
