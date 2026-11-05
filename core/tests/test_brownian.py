@@ -67,19 +67,25 @@ def test_the_noise_of_a_seed_is_the_stock_noise(patched):
         assert all(torch.equal(a, b) for a, b in zip(want, got))
 
 
-def test_a_query_is_clamped_in_the_dtype_it_meets_and_stays_inside_after_float32():
-    mod = _brownian()
-    for dtype in (torch.float32, torch.float64, torch.bfloat16):
-        t = torch.tensor(0.1, dtype=dtype)
-        out = mod.clamped(t, 0.4465455, 0.99)
-        assert out.device == t.device and out.dtype == (dtype if dtype != torch.bfloat16 else torch.float32)
-        assert float(out.float()) >= 0.4465455                  # the cast a CPU tree applies cannot put it back outside
-    inside = torch.tensor(0.6)
-    assert mod.clamped(inside, 0.446545, 0.99) is inside
-    meta = torch.empty((), device="meta")
-    assert meta.device.type == "meta"                          # the helper reads the value, so a meta tensor is refused loudly, not guessed
-    with pytest.raises(Exception):
-        mod.clamped(meta, 0.1, 0.9)
+@pytest.mark.parametrize("cpu", [True, False])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("top", [1.0, 14.6146421])
+def test_whole_runs_equal_the_stock_noise_without_warnings_for_any_schedule_height(patched, cpu, dtype, top):
+    stock = patched.__mro__[1]
+    schedule = [top, top * 0.6, top * 0.4465445876, 0.0]
+    sig = torch.tensor(schedule, dtype=dtype)
+    pos = sig[sig > 0]
+
+    def run(cls):
+        s = cls(torch.zeros(1, 2, 3, dtype=dtype), pos.min(), sig.max(), seed=7, cpu=cpu)
+        return [s(a, b) for a, b in zip(pos[:-1], pos[1:])]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        want = run(stock)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        got = run(patched)
+    assert all(torch.equal(a, b) and a.dtype == b.dtype for a, b in zip(want, got))
 
 
 def test_random_schedules_on_the_cpu_tree_never_warn(patched):

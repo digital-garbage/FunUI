@@ -27,6 +27,7 @@ REKEY = (
 
 
 _DIFFUSERS = re.compile(r"(^|\.)(transformer_blocks|refiner_blocks)\.\d+\.")
+_WRAPPER = re.compile(r"^.*?(?=(?:token_refiner\.)?(?:transformer_blocks|refiner_blocks)\.\d+\.)")
 _PART = re.compile(r"^(?P<mod>.+?)(?P<tail>\.(?:lora_[AB]\.weight|lora_[AB]|alpha))$")
 _SUFFIX = (("attn.to_out.0", "attn.out_proj"), ("ff.net.0.proj", "mlp.fc1"), ("ff.net.2", "mlp.fc2"))
 _QKV = ("to_q", "to_k", "to_v")
@@ -45,7 +46,7 @@ def from_diffusers(lora):
         return lora, {}
     out, extra, sizes = {}, {}, {}
     for k, v in lora.items():
-        m = _PART.match(k[len("transformer."):] if k.startswith("transformer.") else k)
+        m = _PART.match(_WRAPPER.sub("", k))                      # whatever training wrapper sits in front of the block names
         if not m:
             out[k] = v
             continue
@@ -72,8 +73,7 @@ def from_diffusers(lora):
         if None in heights:
             continue
         start = sum(heights[: _QKV.index(part)])
-        plain = re.sub(r"^(?:base_model\.model\.|model\.diffusion_model\.|diffusion_model\.)+", "", base)       # the file's own wrapper is not part of the model's name
-        extra[mod] = (f"diffusion_model.{plain}.weight", (0, start, sizes[mod]))
+        extra[mod] = (f"diffusion_model.{base}.weight", (0, start, sizes[mod]))
     return out, extra
 
 
