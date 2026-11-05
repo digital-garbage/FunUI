@@ -42,9 +42,14 @@ def routes(table, base, web):
             framegen.options((body or {}).get("options") or {})            # refuse a bad value now, by name, not after the job was queued
         except ValueError as exc:
             return bad(str(exc))
-        job = jobs.new()
+        job = jobs.new(stoppable=True)
         asyncio.create_task(jobs.run(job, nodes.interpolate, media, body.get("options") or {}, error=nodes.InterpolateError, stoppable=True))
         return web.json_response({"job_id": job})
+
+    @table.post(base + "/jobs/{job}/stop")
+    async def _stop(req):
+        """The page's Stop button, for this module's own jobs (a module stands on its own: no help from Render)."""
+        return web.json_response({"stopped": jobs.stop(req.match_info["job"])})
 
     @table.get(base + "/jobs/{job}")
     async def _job(req):

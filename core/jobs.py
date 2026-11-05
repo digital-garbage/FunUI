@@ -9,6 +9,7 @@ MAX_JOBS = 50                         # finished jobs are kept this long for the
 
 _jobs: "OrderedDict[str, dict]" = OrderedDict()
 _stop: set = set()                    # ids asked to stop; the job notices between chunks
+_can_stop: set = set()                # ids whose work checks for it
 
 
 class Stopped(Exception):
@@ -18,7 +19,7 @@ class Stopped(Exception):
 def stop(job: str) -> bool:
     """Ask a queued or running job to stop. False when there is no such job or it already ended."""
     entry = _jobs.get(job)
-    if not entry or entry.get("state") not in ("queued", "running"):
+    if job not in _can_stop or not entry or entry.get("state") not in ("queued", "running"):
         return False
     _stop.add(job)
     return True
@@ -30,9 +31,12 @@ def check(job: str) -> None:
         raise Stopped()
 
 
-def new() -> str:
+def new(stoppable: bool = False) -> str:
+    """`stoppable`: the work calls its `interrupted()` hook, so a stop request will end it."""
     job = uuid.uuid4().hex
     _jobs[job] = {"state": "queued"}
+    if stoppable:
+        _can_stop.add(job)
     for old in [k for k, v in _jobs.items() if v.get("state") in ("done", "error", "stopped")]:
         if len(_jobs) <= MAX_JOBS:
             break
@@ -49,6 +53,7 @@ async def run(job: str, fn, *args, error, stoppable: bool = False) -> None:
     exception class whose message is meant for the person; anything else is reported plainly."""
     if job in _stop:                                        # stopped while it was still queued
         _stop.discard(job)
+        _can_stop.discard(job)
         _jobs[job] = {"state": "stopped"}
         return
     _jobs[job] = {"state": "running"}
@@ -63,3 +68,4 @@ async def run(job: str, fn, *args, error, stoppable: bool = False) -> None:
         _jobs[job] = {"state": "error", "detail": f"{type(exc).__name__}: {exc}"}
     finally:
         _stop.discard(job)
+        _can_stop.discard(job)

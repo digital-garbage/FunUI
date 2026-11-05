@@ -225,6 +225,6 @@ def test_an_audio_video_block_that_hands_back_a_pair_is_still_nudged():
     state.points = getattr(state, "points", None)
     before, after, audio = torch.ones(1, 3, 4), torch.full((1, 3, 4), 2.0), torch.zeros(1, 2, 4)
     hook = measure.block_hook(state, 0)
-    out = hook({"img": before}, {"original_block": lambda args: {"img": (after, audio)}})
+    out = hook({"img": (before, audio)}, {"original_block": lambda args: {"img": (after, audio)}})       # the block is handed a pair too
     assert isinstance(out["img"], tuple) and out["img"][1] is audio
     assert not torch.equal(out["img"][0], after)

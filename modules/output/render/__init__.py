@@ -101,13 +101,13 @@ def routes(table, base, web):
         media, model = body.get("media"), body.get("model")
         if not isinstance(media, dict) or not isinstance(media.get("filename"), str) or not media["filename"] or not isinstance(model, str) or not model:
             return bad("Send {media: {filename, subfolder, type}, model, rtx_options}.")
-        job = jobs.new()
+        job = jobs.new(stoppable=True)
         asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True))
         return web.json_response({"job_id": job})
 
     @table.post(base + "/jobs/{job}/stop")
     async def _stop_job(req):
-        """Stop an Upscale or Interpolate job (the page's Stop button). Both ride this module's job list."""
+        """Stop an Upscale job (the page's Stop button); only jobs that check for it can be stopped."""
         return web.json_response({"stopped": jobs.stop(req.match_info["job"])})
 
     @table.get(base + "/upscale/{job}")

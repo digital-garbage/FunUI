@@ -165,7 +165,7 @@ def test_a_running_job_asked_to_stop_ends_stopped_and_stays_pollable(monkeypatch
             threading.Event().wait(0.01)
 
     async def go():
-        job = jobs.new()
+        job = jobs.new(stoppable=True)
         task = asyncio.create_task(jobs.run(job, long_job, error=RuntimeError, stoppable=True))
         while not started.is_set():
             await asyncio.sleep(0.01)
@@ -181,7 +181,7 @@ def test_a_running_job_asked_to_stop_ends_stopped_and_stays_pollable(monkeypatch
 def test_a_job_stopped_before_it_started_never_runs():
     import asyncio
     ran = []
-    job = jobs.new()
+    job = jobs.new(stoppable=True)
     assert jobs.stop(job) is True
     asyncio.run(jobs.run(job, lambda interrupted: ran.append(1), error=RuntimeError, stoppable=True))
     assert not ran and jobs.get(job) == {"state": "stopped"}
@@ -205,7 +205,12 @@ def test_a_stopped_stream_leaves_no_half_written_file(comfy):
 
 
 def test_the_stop_route_answers_whether_it_stopped_anything(comfy, server):
-    job = jobs.new()
+    job = jobs.new(stoppable=True)
     status, body = call(server, "POST", f"{BASE}/jobs/{job}/stop")
     assert status == 200 and body == {"stopped": True}
     assert call(server, "POST", f"{BASE}/jobs/nope/stop")[1] == {"stopped": False}
+
+
+def test_a_job_whose_work_never_checks_cannot_be_stopped():
+    job = jobs.new()                                              # a final render or an export: it runs to its end
+    assert jobs.stop(job) is False

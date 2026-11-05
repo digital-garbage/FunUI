@@ -119,6 +119,8 @@ def block_hook(state, block):
             return extra["original_block"](args)
         state.block = block
         before = args.get("img")
+        if isinstance(before, (tuple, list)) and before:
+            before = before[0]                   # an audio+video block is handed (video, audio): the video is the picture
         if state.kind == "residual" and state.active() and torch.is_tensor(before):
             before = before.clone()              # a block may add to its input in place: keep the input as it was
         out = extra["original_block"](args)

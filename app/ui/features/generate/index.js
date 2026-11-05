@@ -210,7 +210,7 @@ export default {
         onClick: () => runUnits(unitsOf(p.scenes)) });
       const one = c.button.sm({ label: picked > 1 ? `Selected (${picked})` : "Selected", title: "Generate only the picked scenes", disabled: working || !picked, onClick: () => runUnits(unitsOf(pickedScenes())) });
       const stop = c.button.sm({ label: "■ Stop", tone: "danger", title: "Stop the run that is going, and any Upscale or Interpolate in progress", onClick: () => {
-        stopJobs(app.api.stopJob);
+        stopJobs();
         if (working) { stopped = true; g.cancel(); }
       } });
       stop.node.hidden = !working && !jobsRunning();

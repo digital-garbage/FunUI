@@ -52,7 +52,7 @@ test("Stop: a job being waited for can be stopped, ends as stopped (not failed, 
   const off = onJobs(() => heard.push(jobsRunning()));
   let polls = 0;
   const read = async () => (++polls < 2 ? { state: "running" } : { state: "stopped" });
-  const waiting = waitJob(read, "j1", async () => { if (polls === 0) await stopJobs((id) => stopped.push(id)); });
+  const waiting = waitJob(read, "j1", async () => { if (polls === 0) await stopJobs(); }, (id) => stopped.push(id));
   await assert.rejects(waiting, (err) => err instanceof JobStopped && err.stopped === true && err.message === "Stopped.");
   assert.deepEqual(stopped, ["j1"]);
   assert.deepEqual(heard, [1, 0]);                 // shown while it waits, hidden when it ends
@@ -62,4 +62,11 @@ test("Stop: a job being waited for can be stopped, ends as stopped (not failed, 
 
 test("Stop: a stopped job that is read once more is still there (no 404 turned into 'ComfyUI restarted')", async () => {
   await assert.rejects(waitJob(async () => ({ state: "stopped" }), "j2", async () => {}), (err) => err.stopped === true);
+});
+
+test("Stop: a chunk that fails while the stop is landing ends as stopped, not as a failure (nothing 'always' follows it)", async () => {
+  let polls = 0;
+  const read = async () => (++polls < 2 ? { state: "running" } : { state: "error", detail: "out of memory" });
+  await assert.rejects(waitJob(read, "j3", async () => { if (polls === 0) await stopJobs(); }, () => {}), (err) => err.stopped === true);
+  await assert.rejects(waitJob(async () => ({ state: "error", detail: "boom" }), "j4", async () => {}), /boom/);
 });

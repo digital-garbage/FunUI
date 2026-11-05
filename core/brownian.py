@@ -15,13 +15,27 @@ import torch
 _installed = False
 
 
+def _inside32(lo, hi):
+    """(lo, hi) moved inwards to the nearest float32 values: ComfyUI's CPU trees cast a query to float32, which
+    must not land outside the span again."""
+    import numpy as np
+    a, b = np.float32(lo), np.float32(hi)
+    if float(a) < lo:
+        a = np.nextafter(a, np.float32(np.inf))
+    if float(b) > hi:
+        b = np.nextafter(b, np.float32(-np.inf))
+    return float(a), float(b)
+
+
 def clamped(t, lo, hi):
-    """`t` limited to [lo, hi] (python floats) on t's own device; a value already inside comes back untouched.
-    The bound is held in float64 so a bf16 query is not rounded back out of the span."""
+    """`t` limited to [lo, hi] (python floats) on t's own device and in t's dtype (float32 when t is narrower, so the
+    bound is not rounded back out of the span); a value already inside comes back untouched."""
     v = float(t)
     if lo <= v <= hi:
         return t
-    return torch.tensor(min(max(v, lo), hi), dtype=torch.float64, device=t.device)
+    lo32, hi32 = _inside32(lo, hi)
+    dtype = t.dtype if t.dtype in (torch.float32, torch.float64) else torch.float32
+    return torch.tensor(min(max(v, lo32), hi32), dtype=dtype, device=t.device)
 
 
 def install():
@@ -40,7 +54,7 @@ def install():
             t0, t1 = self.transform(torch.as_tensor(sigma)), self.transform(torch.as_tensor(sigma_next))
             tree = self.tree.trees[0]._interval
             lo, hi = float(tree._start), float(tree._end)
-            noise = self.tree(clamped(t0, lo, hi), clamped(t1, lo, hi)).to(dtype=tree.dtype)      # a float64 bound must not widen the noise
+            noise = self.tree(clamped(t0, lo, hi), clamped(t1, lo, hi)).to(dtype=t0.dtype)      # the dtype the stock sampler hands back
             return noise / (t1 - t0).abs().sqrt()
 
     ksampling.BrownianTreeNoiseSampler = BrownianTreeNoiseSampler

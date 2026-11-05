@@ -67,15 +67,37 @@ def test_the_noise_of_a_seed_is_the_stock_noise(patched):
         assert all(torch.equal(a, b) for a, b in zip(want, got))
 
 
-def test_a_query_is_clamped_on_its_own_device_and_never_rounded_out_of_the_span():
+def test_a_query_is_clamped_in_the_dtype_it_meets_and_stays_inside_after_float32():
     mod = _brownian()
-    for dtype in (torch.float32, torch.bfloat16):
-        for device in ("cpu", "meta"):
-            t = torch.tensor(0.4465445876, dtype=dtype, device="cpu")
-            if device == "meta":
-                t = t.to("meta")
-                continue                                      # float() needs data: the meta stand-in cannot be read
-            out = mod.clamped(t, 0.4475, 0.99)               # bf16 holds 0.4473 for it: below the bound, so it is lifted to the bound itself
-            assert out.device == t.device and float(out) == 0.4475
+    for dtype in (torch.float32, torch.float64, torch.bfloat16):
+        t = torch.tensor(0.1, dtype=dtype)
+        out = mod.clamped(t, 0.4465455, 0.99)
+        assert out.device == t.device and out.dtype == (dtype if dtype != torch.bfloat16 else torch.float32)
+        assert float(out.float()) >= 0.4465455                  # the cast a CPU tree applies cannot put it back outside
     inside = torch.tensor(0.6)
     assert mod.clamped(inside, 0.446545, 0.99) is inside
+    meta = torch.empty((), device="meta")
+    assert meta.device.type == "meta"                          # the helper reads the value, so a meta tensor is refused loudly, not guessed
+    with pytest.raises(Exception):
+        mod.clamped(meta, 0.1, 0.9)
+
+
+def test_random_schedules_on_the_cpu_tree_never_warn(patched):
+    gen = torch.Generator().manual_seed(3)
+    for _ in range(60):
+        top = float(torch.rand(1, generator=gen)) * 0.99 + 0.01
+        schedule = sorted((top * float(r) for r in torch.rand(5, generator=gen)), reverse=True) + [0.0]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            _run(patched, torch.float32, schedule)
+
+
+def test_the_noise_dtype_is_the_stock_dtype_for_a_reduced_precision_latent(patched):
+    stock = patched.__mro__[1]
+    x = torch.zeros(1, 2, 3, dtype=torch.bfloat16)
+    sig = torch.tensor([0.9876543, 0.6, 0.4465445876])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        want = stock(x, sig.min(), sig.max(), seed=7, cpu=True)(sig[0], sig[1])
+    got = patched(x, sig.min(), sig.max(), seed=7, cpu=True)(sig[0], sig[1])
+    assert got.dtype == want.dtype

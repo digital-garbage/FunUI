@@ -2,22 +2,23 @@
 // scene that plays it, and remembering which steps a file has been through so two "always" modes can never feed each other forever. Pure of the page.
 export const keyOf = (m) => `${m.type || "output"}/${m.subfolder || ""}/${m.filename}`;
 
-const active = new Set();                                      // ids of the Upscale / Interpolate jobs this page is waiting for
+const active = new Map();                                      // id -> its stop call, for the Upscale / Interpolate jobs this page is waiting for
+const asked = new Set();                                       // ids Stop was pressed for: whatever ends them afterwards is a stop
 const listeners = [];
 const changed = () => { for (const fn of listeners) { try { fn(); } catch { /* one listener must not stop the others */ } } };
 /** How many jobs the Stop button can stop right now. */
 export const jobsRunning = () => active.size;
 /** -> a function that stops listening. */
 export const onJobs = (fn) => { listeners.push(fn); return () => { const i = listeners.indexOf(fn); if (i >= 0) listeners.splice(i, 1); }; };
-/** The Stop button: ask every job this page is waiting for to stop. `stop(id)` is the API call. */
-export const stopJobs = (stop) => Promise.all([...active].map((id) => Promise.resolve(stop(id)).catch(() => {})));
+/** The Stop button: ask every job this page is waiting for to stop, each through its own module's route. */
+export const stopJobs = () => Promise.all([...active].map(([id, stop]) => { asked.add(id); return Promise.resolve(stop(id)).catch(() => {}); }));
 /** What waitJob throws for a job that was stopped: not a failure, so callers say "stopped" and not "failed". */
 export class JobStopped extends Error { constructor() { super("Stopped."); this.stopped = true; } }
 
 /** Wait for a FunUI background job. `read(id)` -> {state: running | done | error | stopped, media, detail}. -> the media, or throws a sentence (a JobStopped when it was stopped). `sleep` is injectable so a test need not wait. */
-export async function waitJob(read, id, sleep = (ms) => new Promise((r) => setTimeout(r, ms))) {
+export async function waitJob(read, id, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), stop = () => {}) {
   let lost = 0;
-  active.add(id); changed();
+  active.set(id, stop); changed();
   try {
     for (;;) {
       await sleep(1000);
@@ -28,11 +29,11 @@ export async function waitJob(read, id, sleep = (ms) => new Promise((r) => setTi
         throw new Error("lost contact with ComfyUI");
       }
       lost = 0;
-      if (r.state === "stopped") throw new JobStopped();
+      if (r.state === "stopped" || (r.state === "error" && asked.has(id))) throw new JobStopped();       // a chunk that failed while Stop was landing is still a stop
       if (r.state === "error") throw new Error(r.detail || "failed inside ComfyUI");
       if (r.state === "done") return r.media;
     }
-  } finally { active.delete(id); changed(); }
+  } finally { active.delete(id); asked.delete(id); changed(); }
 }
 
 /** One file backs a whole chain run, so every scene render and ghost that plays `from` gets `to`. -> how many were swapped. */

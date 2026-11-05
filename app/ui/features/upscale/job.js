@@ -18,5 +18,5 @@ export const keepsSize = (q) => q.startsWith("DENOISE_") || q.startsWith("DEBLUR
 
 /** -> the upscaled media, or throws a sentence. `sleep` is injectable so a test need not wait. */
 export async function upscale(api, media, model, sleep, rtx) {
-  return waitJob(api.upscaleJob, (await api.upscale(media, model, rtx)).job_id, sleep);
+  return waitJob(api.upscaleJob, (await api.upscale(media, model, rtx)).job_id, sleep, api.stopJob);
 }

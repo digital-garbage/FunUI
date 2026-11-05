@@ -9,5 +9,5 @@ export const modeLabel = (m) => MODE[m] || m;
 
 /** -> the interpolated media, or throws a sentence. `sleep` is injectable so a test need not wait. */
 export async function interpolate(api, media, opts, sleep) {
-  return waitJob(api.interpolateJob, (await api.interpolate(media, opts)).job_id, sleep);
+  return waitJob(api.interpolateJob, (await api.interpolate(media, opts)).job_id, sleep, api.stopInterpolateJob);
 }
