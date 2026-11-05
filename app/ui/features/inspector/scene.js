@@ -5,6 +5,7 @@ import { effFrames, effFps, genUnitId, isSubclip, seconds, snapFrames } from "..
 import { gridOf } from "../../shell/frame_grid.js";
 import { restoreToPlan } from "../../shell/edits.js";
 import { sceneVideoInput } from "./videoinput.js";
+import { fold } from "./fold.js";
 
 const SOURCES = [{ value: "image", label: "Image · i2v anchor" }, { value: "carry", label: "From generated frame" }, { value: "video", label: "Video clip" }];
 const MODES = [{ value: "project", label: "Project default" }, { value: "timeline", label: "Timeline trim" }, { value: "custom", label: "Custom" }];
@@ -38,11 +39,11 @@ function drift(sc, open) {
 /** The slip: where in the rendered file this clip starts and how much of it plays. Only a clip that has a render has one. */
 function trimRows(p, sc, open) {
   if (!((open.scene_renders || {})[sc.id] || {}).media) return [];
-  return [c.label.section({ text: "Source trim (slip)" }), card(c.field.row({ fields: [
+  return [fold("scene-trim", "Source trim", [card(c.field.row({ fields: [
     c.field.default({ label: "Source in (s)", control: c.number.md({ label: "Source in", value: sc.source_in || 0, min: 0, step: 0.05, onChange: (v) => p.setScene(sc.id, "source_in", v) }) }),
     c.field.default({ label: "Source dur (s, 0 = full)", control: c.number.md({ label: "Source duration", value: sc.source_dur != null ? sc.source_dur : 0, min: 0, step: 0.05,
       snap: (v, was) => (v > 0 && v < 0.1 ? (v < was ? 0 : 0.1) : v), onChange: (v) => p.setScene(sc.id, "source_dur", v > 0 ? v : null) }) })] }),       // 0 = full; nothing shorter than 0.1 s
-  c.button.sm({ label: "Reset source trim", tone: "ghost", disabled: !sc.source_in && sc.source_dur == null, onClick: () => { p.setScene(sc.id, "source_in", 0); p.setScene(sc.id, "source_dur", null); } }))];
+  c.button.sm({ label: "Reset source trim", tone: "ghost", disabled: !sc.source_in && sc.source_dur == null, onClick: () => { p.setScene(sc.id, "source_in", 0); p.setScene(sc.id, "source_dur", null); } }))])];
 }
 
 /** A group of fields on one rounded card. */
@@ -53,7 +54,6 @@ export function sceneRows(p, app) {
   if (!sc) return [c.emptyState.default({ icon: "▭", title: "No scene", hint: "Add one on the timeline." })];
   const cuts = p.scenes.filter((s) => genUnitId(s) === genUnitId(sc)).length > 1;
   return [
-    c.banner.info({ text: "Made with the project's pipeline and Engine settings", action: { label: "Engine settings →", onClick: () => app.openSettings && app.openSettings("engine") } }),
     ...(sc.removed_from_plan ? [c.banner.info({ text: "Removed from plan — its generated clip stays on the timeline.", action: { label: "Restore to plan", onClick: () => p.edit((pr) => restoreToPlan(pr, sc.id)) } })] : []),
     ...(cuts ? [c.hint.default({ text: "This scene has editorial cuts — Generate regens the whole uncut scene." })] : []),
     ...(isSubclip(sc) ? [c.hint.default({ text: "This is a cut: its prompt and source belong to the first part." })] : [card(
@@ -64,7 +64,6 @@ export function sceneRows(p, app) {
     card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture (or a video's first frame). Its shape sets this scene's aspect ratio (the project's Width/Height set the scale). A model that starts from a picture, such as LTX image-to-video, also begins the clip from it; the prompt enhancer can read it.",
       key: "source_image", multiple: false, kinds: ["image", "video"], empty: "— choose aspect ratio source —" }),
     mediaField(app, p, sc, { label: "References", key: "references", multiple: true, kinds: ["image", "video", "audio"], empty: "+ Add reference" })),
-    ...sceneVideoInput(p, sc),
     c.label.section({ text: "Length" }),
     card(c.field.row({ fields: [
       lengthField(p, sc, "Frames", "frames_mode", "frames", effFrames(sc, open), gridOf(app.pipeline && (app.pipeline.view || app.pipeline.slots)())),
@@ -72,7 +71,10 @@ export function sceneRows(p, app) {
     ] }),
     drift(sc, open),
     c.button.md({ label: "Generate this scene", tone: "primary", onClick: () => app.say("generate.scene") })),
+    c.label.section({ text: "More" }),
     ...trimRows(p, sc, open),
+    ...sceneVideoInput(p, sc),
     card(c.checkboxRow.default({ label: "Exclude from full generation", hint: "Generate leaves this scene out.", checked: Boolean(sc.excluded), onChange: (v) => p.setScene(sc.id, "excluded", v) })),
+    c.banner.info({ text: "Made with the project's pipeline and Engine settings", action: { label: "Engine settings →", onClick: () => app.openSettings && app.openSettings("engine") } }),
   ];
 }

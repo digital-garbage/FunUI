@@ -124,3 +124,20 @@ test("the Project tab offers Short side / Long side only when the pipeline fits 
   assert.ok(shown.includes("1344") && shown.includes("768"), "the size saved under the old name shows");
   host.remove();
 });
+
+test("a group opened in the panel stays open when the panel redraws", async () => {
+  let fire;
+  const doc = { id: "P", frame_rate: 25, num_frames_per_scene: 49, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  const p = { project: doc, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, edit: (fn) => fn(doc) };
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {} } });
+  const group = () => [...host.querySelectorAll("details")].find((d) => d.textContent.includes("Video input"));
+  assert.equal(group().open, false, "closed to begin with");
+  group().open = true;
+  group().dispatchEvent(new window.Event("toggle"));
+  doc.scenes[0].excluded = true; fire("change");
+  assert.equal(group().open, true);
+  host.remove();
+});

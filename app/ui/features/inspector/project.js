@@ -4,6 +4,7 @@ import { DRIVEN, isVideoClip, segments, snapFrames } from "../../shell/scenes.js
 import { gridOf } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
+import { fold } from "./fold.js";
 
 const BASES = [{ value: "short", label: "Short side" }, { value: "long", label: "Long side" }, { value: "area", label: "Pixel count" }];
 const BASIS_HINT = { short: "With Short side: the clip's shorter side is the smaller of Width and Height; the scene's picture sets the shape. 1024 × 1024 and a 16:9 picture make 1824 × 1024.",
@@ -94,17 +95,16 @@ export function projectRows(p, slots, api) {
       flip(p, size),
       basis(p, slots),
       ...custom(p, open),
-      c.field.default({ label: "Final render size", hint: "The size of the exported video: the first clip's, the project's, or any rendered clip's own.", control: c.select.md({ label: "Final render size", options: sizes(open), value: open.export_size_from || "",
-        onChange: (v) => p.setField("export_size_from", v) }) }),
       c.field.default({ label: "Start shots", hint: "From an image: a scene uses its picture, or the last frame of the clip before it. From a prompt: every scene starts without a picture. (MiniMax H3 takes only the picture's shape.)", control: c.select.md({ label: "Start shots", options: STARTS, value: open.generation_mode === "t2v" ? "t2v" : "i2v", onChange: (v) => p.setField("generation_mode", v) }) })),
-    ...projectVideoInput(p),
     c.label.section({ text: "Prompt" }),
     card(c.field.default({ label: "Anchor", hint: "Put in front of every scene's prompt.", control: c.textarea.md({ label: "Anchor", value: p.anchor, rows: 2, onInput: (v) => p.setAnchor(v) }) }),
       c.field.default({ label: "Negative prompt", hint: "What to steer away from. A model that ignores negative prompts (MiniMax H3) uses it only with Shadow negative or Negative erase on.", control: c.textarea.md({ label: "Negative prompt", value: p.negative, rows: 2, onInput: (v) => p.setNegative(v) }) }),
       c.toggle.default({ label: "Postfix", hint: "Appended to every scene (a style or quality tag, say).", checked: open.postfix_enabled !== false, onChange: (v) => p.setField("postfix_enabled", v) }),
       c.textarea.md({ label: "Postfix", value: p.postfix, rows: 2, disabled: open.postfix_enabled === false, onInput: (v) => p.setPostfix(v) })),
-    c.collapsible.default({ label: "ADVANCED PROJECT SETTINGS", body: c.region.stack({ gap: "sm", children: [
-      c.collapsible.default({ label: "Split preview (generation prompt)", body: splitPreview(p, api) }),
-    ] }) }),
+    c.label.section({ text: "More" }),
+    fold("project-export", "Final render size", [card(c.field.default({ label: "Final render size", hint: "The size of the exported video: the first clip's, the project's, or any rendered clip's own.", control: c.select.md({ label: "Final render size", options: sizes(open), value: open.export_size_from || "",
+      onChange: (v) => p.setField("export_size_from", v) }) }))]),
+    ...projectVideoInput(p),
+    fold("project-split", "Split preview (generation prompt)", [splitPreview(p, api)]),
   ];
 }
