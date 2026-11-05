@@ -256,3 +256,47 @@ def test_no_saved_map_is_a_plain_run_with_every_feature(model, tmp_path, monkeyp
     monkeypatch.setattr(measure, "SWITCH", tmp_path / "block_map.enabled")
     monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
     _check(_run(model, subset, True, sampler=sampler), (_name(subset), sampler))
+
+
+# --- LoRA slots: the loader node itself, up to three slots, each for the first stage, the second or both --------------------
+
+def _lora_file(block, seed):
+    gen = torch.Generator().manual_seed(seed)
+    return {f"transformer.transformer_blocks.{block}.ff.net.2.lora_A.weight": torch.randn(4, 64, generator=gen),
+            f"transformer.transformer_blocks.{block}.ff.net.2.lora_B.weight": torch.randn(64, 4, generator=gen)}
+
+
+SLOT_SETS = {
+    "one-both": ("Both",),
+    "first-and-second": ("First", "Second"),
+    "all-three": ("Both", "First", "Second"),
+    "both-twice": ("Both", "Both"),
+}
+
+
+def _loaded(model, stages, monkeypatch):
+    from modules.loaders.lora import nodes
+    files = {f"l{i}.safetensors": _lora_file(i % 2, i) for i in range(len(stages))}
+    monkeypatch.setattr(nodes.folder_paths, "get_full_path_or_raise", lambda kind, name: name)
+    monkeypatch.setattr(nodes.comfy.utils, "load_torch_file", lambda path, safe_load=True: dict(files[path]))
+    kw = {}
+    for i, stage in enumerate(stages, 1):
+        sfx = "" if i == 1 else f"_{i}"
+        kw[f"lora_name{sfx}"], kw[f"strength_model{sfx}"], kw[f"apply_to_stage{sfx}"] = f"l{i - 1}.safetensors", 1.0, stage
+    out = nodes.FunUILoraLoader.execute(model=model.clone(), **kw)
+    patched, _clip, status = out[0], out[1], out[2]
+    assert "matched nothing" not in status and "not applied" not in status, status
+    return patched
+
+
+@pytest.mark.parametrize("slots", SLOT_SETS, ids=list(SLOT_SETS))
+@pytest.mark.parametrize("subset", [(), tuple(FEATURES)], ids=_name)
+def test_lora_slots_with_stages_and_features_run_and_change_the_picture(fresh, monkeypatch, slots, subset):
+    stages = SLOT_SETS[slots]
+    torch.manual_seed(0)
+    plain = _run(fresh, subset, True)
+    with_loras = _loaded(fresh, stages, monkeypatch)
+    torch.manual_seed(0)
+    out = _run(with_loras, subset, True)
+    _check(out, (slots, _name(subset)))
+    assert any(not torch.equal(a, b) for a, b in zip(out.unbind(), plain.unbind())), f"the LoRAs ({slots}) changed nothing"

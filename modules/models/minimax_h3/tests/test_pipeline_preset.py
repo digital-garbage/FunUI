@@ -71,9 +71,6 @@ def test_the_preset_builds_a_real_graph_with_no_structural_problems(registered):
     """
     from core import graph
 
-    if "ImageTransformKJ" not in registered.NODE_CLASS_MAPPINGS:
-        pytest.skip("ComfyUI-KJNodes is not installed on this machine")
-
     from modules.models.minimax_h3.pipeline import h3_reference_to_video
 
     _prompt, problems = graph.build(h3_reference_to_video())
@@ -108,9 +105,6 @@ def test_a_picked_references_wire_target_resolves_and_builds_clean(registered):
     from core import graph
     from modules.models.minimax_h3.pipeline import h3_reference_to_video
 
-    if "ImageTransformKJ" not in registered.NODE_CLASS_MAPPINGS:
-        pytest.skip("ComfyUI-KJNodes is not installed on this machine")
-
     slots = h3_reference_to_video()
     ref_slot = next(s for s in slots if s["id"] == "ref_source_1")
     role = ref_slot["roles"][0]
@@ -142,9 +136,6 @@ def test_no_reference_slot_is_pre_wired_into_r2v():
 
 def test_the_second_pass_preset_builds_clean_and_decodes_pass_two(registered):
     from core import graph
-
-    if "ImageTransformKJ" not in registered.NODE_CLASS_MAPPINGS:
-        pytest.skip("ComfyUI-KJNodes is not installed on this machine")
 
     from modules.models.minimax_h3.pipeline import h3_reference_to_video_second_pass
 
