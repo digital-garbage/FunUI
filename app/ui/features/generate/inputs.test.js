@@ -248,6 +248,19 @@ test("video to video, direct: with no video the whole schedule runs over a grey 
   assert.ok(!r.notes.some((n) => /works from a video/.test(n)));
 });
 
+test("video to video, direct: the scene's own picture is named as unused, not dropped; a video as the start leaves nothing to name", async () => {
+  kinds.set("pic", "image");
+  kinds.set("vid", "video");
+  let r = await run(LTX.direct, { source_image: "pic" });
+  assert.ok(!r.inputs.source_image.media_id);
+  assert.deepEqual(r.left, [{ id: "pic", at: "assets.source_image", why: "this pipeline starts from a video, not a picture" }]);
+  r = await run(LTX.direct, { source_image: "pic", references: ["vid"] });
+  assert.equal(r.inputs.source_image.media_id, "vid");
+  assert.deepEqual(r.left.map((x) => x.id), ["pic"]);
+  r = await run(LTX.direct, { references: ["vid"] });
+  assert.deepEqual(r.left, []);
+});
+
 test("the project's Short side / Long side choice reaches the aspect slot, and a size saved under an older name still counts", async () => {
   const s = [{ id: "a", node: "FunUIAspectSize", roles: [{ at: "project.video", input: "width", was: "target_width" }, { at: "project.video", input: "height", was: "target_height" }, { at: "project.resolution_basis", input: "basis" }], inputs: { width: 1344, height: 768, basis: "short" } }];
   const run = (project) => buildInputs({ project, scene: {}, slots: s, expand: async () => null });
