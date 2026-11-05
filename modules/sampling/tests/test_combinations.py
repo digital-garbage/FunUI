@@ -38,6 +38,8 @@ FEATURES = {
     "explore_first_step": {},
     "alg": {},
     "block_influence": {},
+    "phrase_probe": {},
+    "block_repeat": {"blocks": "1-2"},
     "dynashift": {},
     "momentum": {},
     "output_guidance": {},
@@ -53,8 +55,6 @@ LTX_ONLY = {"audio_coupling", "context_windows", "identity_bank", "sharpen", "te
 #: Modifiers that cannot run here, and why. Said loudly: a feature in this list is not proven on this machine.
 EXEMPT = {
     "ptd": "needs a PTD adapter file in ComfyUI/models/ptd (none on this Mac)",
-    "block_repeat": "repeats a block range of the real model; the tiny model has too few blocks (its own tests run it)",
-    "phrase_probe": "an analysis tool run on request, it installs no hook (its own tests cover it)",
     "taste": "always present: it is the rating store every other feature reads",
     "two_stage": "a dimension of every run here, not a feature in the subsets",
     "block_map": "follows a saved map, there is no switch to put in a subset: every run here has a map saved, test_block_map_is_wired_only_when_a_map_is_saved and the bare run below cover no map",
@@ -158,8 +158,14 @@ def _check(out, label):
 @pytest.fixture
 def fresh(model, tmp_path, monkeypatch):
     from core import dit_hooks
+    from modules.sampling.block_influence import measure as influence
+    from modules.sampling.phrase_probe import measure as probe
     from modules.system.taste import store
     monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
+    monkeypatch.setattr(influence, "SWITCH", tmp_path / "block_influence.enabled")       # the two recording tools act only while recording is on
+    monkeypatch.setattr(probe, "SWITCH", tmp_path / "phrase_probe.enabled")
+    influence.set_enabled(True)
+    probe.set_enabled(True)
     _save_a_map(tmp_path, monkeypatch, dit_hooks.block_count(model))
     return model
 
@@ -181,19 +187,31 @@ def test_every_modifier_a_module_provides_is_in_the_matrix_or_exempt_with_a_reas
             found.add(mod.ID)
     listed = set(FEATURES) | LTX_ONLY | set(EXEMPT)
     assert found <= listed, f"add these to FEATURES, LTX_ONLY or EXEMPT (with the reason): {sorted(found - listed)}"
-    assert listed - found <= {"phrase_probe"}, f"listed but no module provides it: {sorted(listed - found)}"
+    assert listed - found <= set(), f"listed but no module provides it: {sorted(listed - found)}"
     assert all(EXEMPT[k] for k in EXEMPT)
 
 
-#: Installed, but wires nothing until its own switch (recording) is on at run time.
-NOT_WIRED_UNTIL_USED = {"block_influence": "measures per-block movement only when recording is on"}
+RECORDING_TOOLS = ("block_influence", "phrase_probe")        # they hook the model only while recording is switched on
+#: Installed and active, but they record during the run and leave nothing to see on the patcher (their own tests run them).
+NOTHING_TO_SEE_BEFORE_THE_RUN = ("block_influence",)
 
 
-@pytest.mark.parametrize("feature", [f for f in FEATURES if f not in NOT_WIRED_UNTIL_USED])
+@pytest.mark.parametrize("feature", [f for f in FEATURES if f not in NOTHING_TO_SEE_BEFORE_THE_RUN])
 def test_a_feature_alone_is_really_wired_in(fresh, feature):
+    from modules.sampling.block_influence import measure as influence
+    from modules.sampling.phrase_probe import measure as probe
+    influence.set_enabled(False)                         # the baseline has no recording tool hooked in
+    probe.set_enabled(False)
     base, _ = _load(fresh, (), None)
-    patched, status = _load(fresh, (feature,), None)
+    if feature in RECORDING_TOOLS:
+        {"block_influence": influence, "phrase_probe": probe}[feature].set_enabled(True)
+    patched, status = _load(fresh, (feature,), None) if feature not in RECORDING_TOOLS else _load_recording(fresh, feature)
     assert _fingerprint(patched) != _fingerprint(base), f"{feature} switched on and changed nothing the model is wired with: {_status_line(status, feature)}"
+
+
+def _load_recording(model, feature):
+    """The recording tools say 'off' unless recording is on, which is the point: they are loaded with it on."""
+    return _load(model, (feature,), None)
 
 
 #: Features that act on this tiny model without ratings: they must change the picture, not just install.
@@ -250,11 +268,17 @@ def test_block_map_is_wired_only_when_a_map_is_saved(model, tmp_path, monkeypatc
 @pytest.mark.parametrize("sampler", SAMPLERS)
 @pytest.mark.parametrize("subset", [(), tuple(FEATURES)], ids=_name)
 def test_no_saved_map_is_a_plain_run_with_every_feature(model, tmp_path, monkeypatch, subset, sampler):
+    from modules.sampling.block_influence import measure as influence
     from modules.sampling.block_map import measure
+    from modules.sampling.phrase_probe import measure as probe
     from modules.system.taste import store
     monkeypatch.setattr(measure, "FOLDER", tmp_path / "maps")
     monkeypatch.setattr(measure, "SWITCH", tmp_path / "block_map.enabled")
     monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
+    monkeypatch.setattr(influence, "SWITCH", tmp_path / "block_influence.enabled")
+    monkeypatch.setattr(probe, "SWITCH", tmp_path / "phrase_probe.enabled")
+    influence.set_enabled(True)
+    probe.set_enabled(True)
     _check(_run(model, subset, True, sampler=sampler), (_name(subset), sampler))
 
 
