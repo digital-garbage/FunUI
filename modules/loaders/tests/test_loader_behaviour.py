@@ -418,6 +418,8 @@ def test_the_vae_loader_hands_the_file_header_to_the_vae(comfyui, tmp_path, monk
     seen = {}
 
     class Vae:
+        first_stage_model = object()        # the loader refuses a VAE that built no model
+
         def __init__(self, sd=None, dtype=None, metadata=None, **kw):
             seen.update(keys=list(sd), metadata=metadata)
 
