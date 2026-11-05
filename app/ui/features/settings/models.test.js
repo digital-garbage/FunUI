@@ -185,13 +185,36 @@ test("the Veda predictor row appears only for method veda with no file, names th
   page = await open({ sla: true, sla_method: "veda" });
   const buttons = () => [...page.node.querySelectorAll("button")].map((b) => b.textContent);
   assert.doesNotMatch(page.node.textContent, /none is there/);
-  assert.deepEqual(buttons().filter((t) => /Installed|Download/.test(t)), ["Installed", "Download"], "one installed, the other still offered");
+  assert.deepEqual(buttons().filter((t) => /Installed|Download/.test(t)), ["Download"], "one installed: only the missing one is offered");
   assert.match(page.node.textContent, /By downloading you accept/, "the licence stays while a button is shown");
   page.node.remove();
   state.files = ["a.safetensors", "b.safetensors"]; state.models[1].state = "ready";
   page = await open({ sla: true, sla_method: "veda" });
-  assert.deepEqual(buttons().filter((t) => /Installed|Download/.test(t)), ["Installed", "Installed"], "both installed, no download button");
-  assert.match(page.node.textContent, /T2VA \/ FL2VA/);
-  assert.match(page.node.textContent, /R2VA/);
+  assert.doesNotMatch(page.node.textContent, /Installed|Download|By downloading|none is there/, "both installed: nothing to offer, so nothing is shown");
+  page.node.remove();
+});
+
+test("a redrawn Veda row paints the last answer at once, so it does not empty and fill again", async () => {
+  const widgets = [{ name: "sla", type: "BOOLEAN" }, { name: "sla_method", type: "COMBO", choices: ["sla", "veda"], shows: [{ input: "sla", when: [true] }] },
+    { name: "veda_predictor", type: "COMBO", choices: ["auto"], shows: [{ input: "sla", when: [true] }, { input: "sla_method", when: ["veda"] }] }];
+  const state = { files: [], license: { name: "MiniMax H3 Community License", url: "https://x/LICENSE" },
+    models: [{ id: "t2va", title: "T2VA / FL2VA", hint: "", file: "a", size: 275415648, state: "absent", done: 0, error: "" },
+             { id: "r2va", title: "R2VA", hint: "", file: "b", size: 275415752, state: "absent", done: 0, error: "" }] };
+  let hang = false;
+  const slots = [{ id: "model", node: "FunUIDiffusionModelLoader", inputs: { sla: true, sla_method: "veda" } }];
+  const ps = { slots: () => slots, snapshot: () => ({ slots }), ensureLoaded: async () => {}, subscribe: () => () => {}, restore: async () => ({ refused: [] }),
+    loading: () => false, loadError: () => null, saveNotes: () => [], incomplete: () => [], refused: () => [], queueable: () => true, removedIds: () => [], offered: () => [] };
+  const api = { describeNodes: async () => ({ nodes: { FunUIDiffusionModelLoader: { widgets } } }), packProviders: async () => ({}),
+    vedaState: () => (hang ? new Promise(() => {}) : Promise.resolve(state)) };
+  const page = models({ dom: createDom(), pipeline: ps, api })();
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 0));
+  page.node.querySelector(".cx-tile-node").click();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.match(page.node.textContent, /By downloading you accept/);
+  hang = true;                                                                  // the server is slow now: a redraw must not wait for it
+  [...page.node.querySelectorAll("button")].find((b) => b.textContent.startsWith("‹")).click();
+  page.node.querySelector(".cx-tile-node").click();
+  assert.match(page.node.textContent, /By downloading you accept/, "painted from the last answer, in the same tick");
   page.node.remove();
 });
