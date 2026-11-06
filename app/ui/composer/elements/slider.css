@@ -2,29 +2,29 @@
 
 .cx-range {
   appearance: none; -webkit-appearance: none;
-  flex: 1; min-width: 80px; height: 18px; background: transparent; cursor: pointer;
+  flex: 1; min-width: var(--slider-min-w); height: var(--ctl-h-icon); background: transparent; cursor: pointer;
   /* --fill is written by the element as the value changes, so the filled part
    * of the track follows the theme's accent without JS naming a colour. */
   --fill: 0%;
 }
 .cx-range::-webkit-slider-runnable-track {
-  height: 4px; border-radius: var(--r-pill);
+  height: var(--sp-2); border-radius: var(--r-pill);
   background: linear-gradient(to right, var(--accent) var(--fill), var(--line) var(--fill));
 }
 .cx-range::-moz-range-track {
-  height: 4px; border-radius: var(--r-pill);
+  height: var(--sp-2); border-radius: var(--r-pill);
   background: linear-gradient(to right, var(--accent) var(--fill), var(--line) var(--fill));
 }
 .cx-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; margin-top: -5px;
+  width: var(--thumb-size); height: var(--thumb-size); margin-top: -5px;
   border-radius: var(--r-pill); background: var(--elev-1);
-  border: 2px solid var(--accent);
+  border: var(--bw-2) solid var(--accent);
   transition: transform var(--dur-1) var(--ease-standard);
 }
 .cx-range::-moz-range-thumb {
-  width: 14px; height: 14px; border-radius: var(--r-pill);
-  background: var(--elev-1); border: 2px solid var(--accent);
+  width: var(--thumb-size); height: var(--thumb-size); border-radius: var(--r-pill);
+  background: var(--elev-1); border: var(--bw-2) solid var(--accent);
 }
 .cx-range:hover::-webkit-slider-thumb { transform: scale(1.12); }
 .cx-range:focus-visible { outline: none; }
@@ -32,7 +32,7 @@
 .cx-range:focus-visible::-moz-range-thumb { box-shadow: var(--focus-ring); }
 .cx-range:disabled { opacity: var(--disabled-opacity); cursor: default; }
 
-.cx-slider-sm .cx-range { height: 14px; }
+.cx-slider-sm .cx-range { height: var(--thumb-size); }
 
 .cx-readout {
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;

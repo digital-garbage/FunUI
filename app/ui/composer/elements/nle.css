@@ -55,5 +55,5 @@
 
 .cx-nle-playhead {
   position: absolute; inset-block: 0; inline-size: 0; z-index: 2; pointer-events: none;
-  border-inline-start: 2px solid var(--accent-hi);
+  border-inline-start: var(--bw-2) solid var(--accent-hi);
 }

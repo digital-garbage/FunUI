@@ -36,7 +36,6 @@ export default [
   "./features/preview/lanes.js",
   "./features/preview/peek.js",
   "./features/preview/fx.js",
-  "./features/montage/index.js",
   "./features/generate/warn.js",
   "./features/generate/progress.js",
   "./features/continuity/index.js",

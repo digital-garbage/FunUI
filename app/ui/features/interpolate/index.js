@@ -7,7 +7,7 @@ import { DEFAULTS, RTX, interpolate, modeLabel } from "./job.js";
 
 export default {
   id: "interpolate",
-  mount: "timeline.actions",
+  mount: "timeline.toolbar.end",
   needs: ["project", "api", "selection"],
   modules: ["interpolate"],
   setup({ host, app }) {

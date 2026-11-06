@@ -7,15 +7,15 @@
 
 .cx-check { display: inline-flex; }
 .cx-check-box {
-  width: 16px; height: 16px; flex: none;
+  width: var(--sp-7); height: var(--sp-7); flex: none;
   border: var(--bw) solid var(--line); border-radius: var(--r-2);
   background: var(--elev-2);
   display: inline-flex; align-items: center; justify-content: center;
   transition: background var(--dur-1) var(--ease-standard), border-color var(--dur-1) var(--ease-standard);
 }
 .cx-check-box::after {
-  content: ""; width: 9px; height: 5px;
-  border-left: 2px solid var(--on-accent); border-bottom: 2px solid var(--on-accent);
+  content: ""; width: var(--tick-w); height: var(--tick-h);
+  border-left: var(--bw-2) solid var(--on-accent); border-bottom: var(--bw-2) solid var(--on-accent);
   transform: rotate(-45deg) translateY(-1px) scale(.6);
   opacity: 0; transition: opacity var(--dur-1) var(--ease-standard), transform var(--dur-1) var(--ease-standard);
 }
@@ -23,7 +23,7 @@
 .cx-check-input:checked + .cx-check-face .cx-check-box::after { opacity: 1; transform: rotate(-45deg) translateY(-1px) scale(1); }
 .cx-check-input:indeterminate + .cx-check-face .cx-check-box { background: var(--accent); border-color: var(--accent); }
 .cx-check-input:indeterminate + .cx-check-face .cx-check-box::after {
-  opacity: 1; width: 8px; height: 0; border-bottom: 2px solid var(--on-accent);
+  opacity: 1; width: var(--sp-4); height: 0; border-bottom: var(--bw-2) solid var(--on-accent);
   border-left: 0; transform: none;
 }
 .cx-check-input:focus-visible + .cx-check-face .cx-check-box { border-color: var(--accent); box-shadow: var(--focus-ring); }
@@ -47,7 +47,7 @@
 .cx-check-label { font-size: var(--fs-4); line-height: var(--lh-4); color: var(--text); }
 .cx-checklist {
   display: flex; flex-direction: column;
-  max-height: 200px; overflow-y: auto;
+  max-height: var(--listbox-max-h); overflow-y: auto;
   border: var(--bw) solid var(--line); border-radius: var(--r-3);
   padding: var(--sp-3) var(--sp-4);
 }
@@ -55,12 +55,12 @@
 .cx-radio-group { display: flex; gap: var(--sp-4); }
 .cx-radio-vertical { flex-direction: column; gap: var(--sp-2); }
 .cx-radio-dot {
-  width: 16px; height: 16px; flex: none; border-radius: var(--r-pill);
+  width: var(--sp-7); height: var(--sp-7); flex: none; border-radius: var(--r-pill);
   border: var(--bw) solid var(--line); background: var(--elev-2);
   display: inline-flex; align-items: center; justify-content: center;
 }
 .cx-radio-dot::after {
-  content: ""; width: 8px; height: 8px; border-radius: var(--r-pill);
+  content: ""; width: var(--sp-4); height: var(--sp-4); border-radius: var(--r-pill);
   background: var(--accent); transform: scale(0);
   transition: transform var(--dur-1) var(--ease-standard);
 }
@@ -92,17 +92,17 @@
 
 
 .cx-toggle-track {
-  width: 34px; height: 20px; flex: none; border-radius: var(--r-pill);
+  width: var(--toggle-w); height: var(--sp-8); flex: none; border-radius: var(--r-pill);
   background: var(--line); position: relative;
   transition: background var(--dur-1) var(--ease-standard);
 }
 .cx-toggle-knob {
-  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  position: absolute; top: var(--sp-1); left: var(--sp-1); width: var(--sp-7); height: var(--sp-7);
   border-radius: var(--r-pill); background: var(--elev-1);
   transition: transform var(--dur-1) var(--ease-standard);
 }
 .cx-toggle-input:checked + .cx-check-face .cx-toggle-track { background: var(--accent); }
-.cx-toggle-input:checked + .cx-check-face .cx-toggle-track .cx-toggle-knob { transform: translateX(14px); }
+.cx-toggle-input:checked + .cx-check-face .cx-toggle-track .cx-toggle-knob { transform: translateX(calc(var(--toggle-w) - var(--sp-7) - 2 * var(--sp-1))); }
 .cx-toggle-input:focus-visible + .cx-check-face .cx-toggle-track { box-shadow: var(--focus-ring); }
 
 /* Colour: the swatch sized to the control height so it lines up with every
@@ -124,7 +124,7 @@
   cursor: pointer;
 }
 
-.cx-swatch::-webkit-color-swatch-wrapper { padding: 2px; }
+.cx-swatch::-webkit-color-swatch-wrapper { padding: var(--sp-1); }
 .cx-swatch::-webkit-color-swatch { border: 0; border-radius: var(--r-2); }
 .cx-swatch::-moz-color-swatch { border: 0; border-radius: var(--r-2); }
 

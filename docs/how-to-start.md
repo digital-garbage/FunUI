@@ -43,7 +43,7 @@ Click **Composer** and write all scenes in one box, separated by the cut word (s
 
 ## 6. Generate
 
-- **▶ Generate** makes every scene on the timeline (not left-out scenes, video clips or Auto Montage pieces). An earlier render of a scene stays as a take.
+- **▶ Generate** makes every scene on the timeline (not left-out scenes or video clips). An earlier render of a scene stays as a take.
 - **Selected** makes only the picked scene. **Takes ×N** makes the same scene several times, differing only by seed.
 - No picture needed: on H3, a scene with no source image is generated from text alone.
 
@@ -51,7 +51,7 @@ Watch the Log window if nothing happens: any module that fails says why there, a
 
 ## 7. Cut, render, export
 
-Trim and split clips on the timeline. **⚡ Auto Montage** builds a new cut at the end from your rendered clips; your originals stay as they are. **⧉ Render** joins the timeline into one file; **⤓ Export** downloads the picked clip (picture only: a clip whose sound was separated is silent there, Render mixes it).
+Trim and split clips on the timeline. **⧉ Render** joins the timeline into one file; **⤓ Export** downloads the picked clip (picture only: a clip whose sound was separated is silent there, Render mixes it).
 
 ## 8. Teach it your taste (optional)
 

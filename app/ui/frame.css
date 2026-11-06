@@ -2,7 +2,7 @@
 :root { --media-w: clamp(180px, 20vw, 280px); --properties-w: clamp(270px, 28vw, 360px); --timeline-h: clamp(340px, 42vh, 380px); --pad: 10px; --pgap: 10px; }
 .fp-main { flex-direction: column; padding: 0 var(--pad) var(--pad); gap: var(--pgap); }
 /* Narrower windows wrap the timeline's header and toolbar onto more rows, so its fixed height gets more room for the lanes. */
-@media (max-width: 1250px) { :root { --timeline-h: clamp(360px, 44vh, 400px); } }
+@media (max-width: 1250px) { :root { --timeline-h: clamp(380px, 44vh, 440px); } }
 .fp-row { flex: 1 1 auto; flex-direction: row; min-block-size: 0; gap: var(--pgap); }
 .fp-row > *, .fp-main > :nth-child(2) { min-inline-size: 0; border: var(--bw) solid var(--line); border-radius: var(--card-r); overflow: hidden; background: var(--elev-1); }
 .fp-row > :first-child { flex: 0 0 var(--media-w); }
@@ -49,3 +49,21 @@
 :root.fp-peek .fp-peek-strip:hover { color: var(--text); }
 :root.fp-peek.fp-peek-open .fp-peek-strip { display: none; }
 :root.fp-peek .fp-split-bottom { display: none; }
+
+/* The timeline's header is ONE line wherever its controls can physically fit (about 1000px and up). It never spreads
+   its controls apart: the room goes to the text that can give way (hints, the step counter), which truncates, and
+   below the widest layouts a button that has an icon shows only the icon (its label stays for screen readers). */
+@media (min-width: 1000px) {
+  .fp-main > :nth-child(2) > .cx-panel-head { flex-wrap: nowrap; column-gap: var(--sp-3); }
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-panel-actions { flex: 1 1 0; flex-wrap: nowrap; min-inline-size: 0; overflow: hidden; }
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-panel-status { flex: none; flex-wrap: nowrap; gap: var(--sp-2); }
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-toolbar { flex-wrap: nowrap; min-inline-size: 0; }
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-panel-actions > .cx-toolbar { flex: 0 1 auto; }
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-btn, .fp-main > :nth-child(2) > .cx-panel-head .cx-chip { flex: none; }
+  .fp-main > :nth-child(2) > .cx-panel-head :is(.cx-hint, .cx-t) { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (min-width: 1000px) and (max-width: 1500px) {
+  .fp-main > :nth-child(2) > .cx-panel-head .cx-btn:has(.cx-btn-icon) .cx-btn-label {
+    position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}

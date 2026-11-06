@@ -5,7 +5,7 @@ const ZONES = [["assets", "Assets"], ["preview", "Preview"], ["properties", "Pro
 
 export default {
   id: "dock",
-  mount: "timeline.status",
+  mount: "menubar.right",
   needs: ["dock"],
   setup({ host, app }) {
     const tabs = ZONES.map(([zone, label]) => {

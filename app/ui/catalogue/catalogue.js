@@ -19,7 +19,8 @@ const GROUPS = [
   { id: "motion",  title: "Motion",        match: (n) => /^--dur-|^--ease-/.test(n), render: renderMotion },
   { id: "state",   title: "States",        match: (n) => /^--(bw|disabled-opacity)$/.test(n), render: renderState },
   { id: "density", title: "Density",       match: (n) => n.startsWith("--cell-"),  render: renderBar },
-  { id: "layout",  title: "Layout",        match: (n) => /^--menubar-h$/.test(n),  render: renderBar },
+  { id: "layout",  title: "Layout",        match: (n) => /^--(menubar-h|gutter|control-col)$/.test(n),  render: renderBar },
+  { id: "size",    title: "Component sizes", match: (n) => /^--(bw-2|ring-w|blur-|shadow-blur|mark-size|tick-|thumb-size|toggle-w|slider-|list-control-w|wheel-|skeleton-w|tile-|field-min-w|menu-min-w|note-max-w|split-|dialog-w|popover-max-w|drawer-|settings-|modal-h|listbox|textarea|window-field|win-margin|lane-)/.test(n), render: renderBar },
   // Colour is last and greedy: anything left that a browser accepts as a colour.
   { id: "colour",  title: "Colour",        match: isColourName,                    render: renderSwatch },
 ];

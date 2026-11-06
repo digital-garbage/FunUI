@@ -5,7 +5,7 @@
   position: fixed; pointer-events: auto; border-radius: var(--r-pill);
   background: color-mix(in srgb, var(--elev-3) 92%, transparent);
   box-shadow: var(--shadow-3), inset 0 0 0 var(--bw) var(--line);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--blur-sm));
   animation: cx-wheel-in var(--dur-1) var(--ease-standard);
 }
 @keyframes cx-wheel-in { from { opacity: 0; transform: scale(.9); } }
@@ -24,7 +24,7 @@
 .cx-wheel-item {
   position: absolute; transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: var(--sp-1);
-  width: 70px; padding: var(--sp-1) 0; line-height: 1.15; overflow-wrap: anywhere;   /* long names wrap inside the ring instead of sticking out of it */
+  width: var(--wheel-item-w); padding: var(--sp-1) 0; line-height: 1.15; overflow-wrap: anywhere;   /* long names wrap inside the ring instead of sticking out of it */
   background: transparent; border: 0; color: var(--muted);
   font-size: var(--fs-7); cursor: pointer; text-align: center;
   transition: color var(--dur-1) var(--ease-standard),
@@ -59,4 +59,4 @@
 /* Half wheels sit ON the edge: the off-screen half is simply clipped by the
  * viewport, which is what gives the edge-panel silhouette. The flat side gets a
  * straight edge so it reads as pinned rather than cropped by accident. */
-.cx-wheel-half { backdrop-filter: blur(8px); }
+.cx-wheel-half { backdrop-filter: blur(var(--blur-md)); }

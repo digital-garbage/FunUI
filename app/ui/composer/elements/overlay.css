@@ -27,7 +27,7 @@
  * whole app painted twice, side by side, until a window resize forced a
  * repaint. */
 .cx-modal-stacked {
-  box-shadow: 0 20px 48px color-mix(in srgb, var(--shadow-ink) 90%, transparent);
+  box-shadow: 0 var(--sp-8) var(--shadow-blur-lg) color-mix(in srgb, var(--shadow-ink) 90%, transparent);
 }
 @keyframes cx-pop { from { opacity: 0; transform: translateY(-6px) scale(.99); } }
 
@@ -36,7 +36,7 @@
    itself grows and shrinks on every click, which nothing in a real System
    Settings window does. A real height, not a max, holds the frame still;
    .cx-modal-body's own scroll takes the rest. */
-.cx-settings-modal { height: min(660px, 90vh); }  /* v4's own window size, verbatim */
+.cx-settings-modal { height: min(var(--modal-h), 90vh); }  /* v4's own window size, verbatim */
 
 .cx-modal-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-5);
@@ -87,11 +87,11 @@
      repositioning could bring it back: anchor.js can move a box, it cannot
      shrink one. Measured at 1436px inside a 1280px viewport. */
   max-height: 60vh; overflow-y: auto;
-  max-inline-size: min(92vw, 480px);
+  max-inline-size: min(92vw, var(--popover-max-w));
   overflow-wrap: anywhere;
   animation: cx-pop var(--dur-1) var(--ease-standard);
 }
-.cx-popover-menu { min-width: 180px; }
+.cx-popover-menu { min-width: var(--menu-min-w); }
 /* a popover holding a panel (settings, fields), not a list of items, needs room to the sides */
 .cx-popover[role="dialog"] { padding: var(--sp-5) var(--sp-6); }
 
@@ -107,7 +107,7 @@
 .cx-menu-item.cx-danger { color: var(--danger); }
 .cx-menu-label { flex: 1; }
 .cx-menu-hint { font-size: var(--fs-7); color: var(--faint); }
-.cx-menu-icon { width: 16px; text-align: center; color: var(--muted); }
+.cx-menu-icon { width: var(--sp-7); text-align: center; color: var(--muted); }
 .cx-menu-sep { height: 1px; background: var(--line); margin: var(--sp-2) 0; }
 .cx-menu-heading { padding: var(--sp-2) var(--sp-4); font-size: var(--fs-7); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 
@@ -117,10 +117,10 @@
   border: var(--bw) solid var(--line); border-radius: var(--r-2);
   padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-6); box-shadow: var(--shadow-2);
-  max-width: 260px;
+  max-width: var(--note-max-w);
 }
 
-.cx-autocomplete { min-width: 220px; inline-size: min(92vw, 420px); padding: var(--sp-1); }
+.cx-autocomplete { min-width: var(--field-min-w); inline-size: min(92vw, var(--dialog-w)); padding: var(--sp-1); }
 /* a suggestion is one line: the trigger, then as much of its prompt as fits */
 .cx-autocomplete .cx-menu-label { flex: none; max-inline-size: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cx-autocomplete .cx-menu-hint { flex: 1 1 0; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -151,7 +151,7 @@
 .cx-window-body { flex: 1; overflow: auto; padding: var(--sp-5); }
 .cx-rolled .cx-window-body, .cx-rolled .cx-window-grip { display: none; }
 .cx-window-grip {
-  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+  position: absolute; right: 0; bottom: 0; width: var(--sp-7); height: var(--sp-7);
   cursor: nwse-resize;
   background: linear-gradient(135deg, transparent 50%, var(--line) 50%, var(--line) 60%, transparent 60%);
 }
@@ -167,13 +167,13 @@
 .cx-slideover-layer { align-items: stretch; }
 .cx-slideover {
   position: relative; margin-left: auto;
-  width: min(420px, 92vw); display: flex; flex-direction: column;
+  width: min(var(--dialog-w), 92vw); display: flex; flex-direction: column;
   background: var(--elev-1); border-left: var(--bw) solid var(--line);
   box-shadow: var(--shadow-3);
   animation: cx-slide-in var(--dur-2) var(--ease-standard);
 }
 .cx-slideover-left { margin-left: 0; margin-right: auto; border-left: 0; border-right: var(--bw) solid var(--line); }
-@keyframes cx-slide-in { from { transform: translateX(12px); opacity: 0; } }
+@keyframes cx-slide-in { from { transform: translateX(var(--sp-6)); opacity: 0; } }
 .cx-slideover-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: var(--sp-5) var(--sp-6); border-bottom: var(--bw) solid var(--line);

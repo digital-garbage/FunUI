@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Auto Montage is gone** (the button, its window and its code). A saved project that already holds pieces it made loads normally: they stay on the timeline as ordinary copies and are still never regenerated.
 - **"Video detail" (Engine > Post) is gone.** The other Post settings (edge smoothing, auto contrast, auto brightness, colour strength) stay. A project or setting that still holds Video detail loads normally: its values are skipped and the Log says so once.
 - **LoRA Loader shows one slot at a time.** With no LoRA picked it shows only the first picker. Once a LoRA is chosen its strengths (and stage) appear, together with the picker for the next slot, and so on up to eight. A slot that already holds a LoRA never hides.
 - **Simpler Project and Scene settings.** The rarely used groups (Video input, Source trim, Final render size, Split preview) are folded under "More" and stay open once opened.

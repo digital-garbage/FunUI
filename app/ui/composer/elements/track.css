@@ -23,7 +23,7 @@
    insetInlineStart in JS: a clip under the pixel floor must not push every
    clip after it out of step with the ruler and the playhead, which both
    stay in pure seconds*pxPerSecond regardless of any floor. */
-.cx-track-clips { position: relative; min-inline-size: 100%; block-size: 45px; }
+.cx-track-clips { position: relative; min-inline-size: 100%; block-size: var(--lane-h-audio); }
 .cx-track-clip {
   position: absolute; inset-block: 0; padding: 0;
   border: var(--bw) solid var(--line); border-radius: var(--r-2);
@@ -48,6 +48,6 @@
    read as "this is where you are" the way a line through both does. */
 .cx-track-playhead {
   position: absolute; inset-block: 0; inline-size: 0;
-  border-inline-start: 2px solid var(--accent-hi);
+  border-inline-start: var(--bw-2) solid var(--accent-hi);
   pointer-events: none; z-index: 1;
 }

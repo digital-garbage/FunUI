@@ -30,14 +30,16 @@
   font-size: var(--fs-4); line-height: var(--lh-snug);
   resize: vertical; min-height: var(--ctl-h-xl);
 }
+/* In a window the box shares the room with its tabs, hint and folds: it gives way as the screen gets shorter, so the window does not scroll inside itself. */
+.cx-window .cx-textarea { max-block-size: min(28dvh, var(--window-field-max-h)); }
 .cx-autogrow { resize: none; overflow: hidden; }
 .cx-fold { min-height: var(--ctl-h-md); height: var(--ctl-h-md); padding: var(--sp-2) var(--ctl-pad-x-sm); font-size: var(--fs-5); }
-.cx-fold:not(:focus) { padding-block: 0; line-height: calc(var(--ctl-h-md) - 2px); }      /* folded: the first line centred, the rest fully out of sight */
+.cx-fold:not(:focus) { padding-block: 0; line-height: calc(var(--ctl-h-md) - var(--bw-2)); }      /* folded: the first line centred, the rest fully out of sight */
 
 .cx-search { appearance: none; }
 .cx-search::-webkit-search-cancel-button { filter: grayscale(1) opacity(.6); }
 
-.cx-filter { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 220px; }
+.cx-filter { display: flex; flex-direction: column; gap: var(--sp-3); min-width: var(--field-min-w); }
 /* filterList always builds its own search box, which is right everywhere it
    is the ONLY way to narrow the list -- and wrong stacked under a search box
    that already re-queries the server on every keystroke: two boxes doing the
@@ -48,7 +50,7 @@
 .cx-node-picker-results .cx-filter > .cx-search { display: none; }
 .cx-filter-list {
   display: flex; flex-direction: column; gap: 1px;
-  max-height: 240px; overflow-y: auto; overflow-x: hidden;
+  max-height: var(--textarea-max-h); overflow-y: auto; overflow-x: hidden;
   border: var(--bw) solid var(--line); border-radius: var(--r-3);
   background: var(--elev-1); padding: var(--sp-1);
 }
@@ -78,7 +80,7 @@
    kit; there is no path from item data to a raw colour. */
 .cx-filter-icon {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; flex: 0 0 auto; border-radius: var(--r-2);
+  width: var(--ctl-h-chip); height: var(--ctl-h-chip); flex: 0 0 auto; border-radius: var(--r-2);
   background: var(--elev-3); color: var(--text); font-size: var(--fs-6); line-height: 1;
   /* Optical, against the label's cap-height, not the row's own top edge. */
   margin-block-start: 1px;

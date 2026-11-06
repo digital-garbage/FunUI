@@ -26,7 +26,6 @@ A rewrite from scratch, not an update of 4.x. Every feature is a module that ann
 - **Models & Pipeline**: the pipeline as cards, not a graph. Pick files, swap or add nodes (any installed custom node), wire outputs to inputs, import a ComfyUI workflow. The server refuses what would not build and says why.
 - **Modules**: switch each feature on or off in Settings. A pipeline runs without an optional node whose module is missing, and tells you so.
 - **Learning from ratings**: rate a clip and the guidance, steering and prompt modules start acting on your taste once they have enough ratings.
-- **Auto Montage**: builds a new cut from your rendered clips; the originals stay untouched.
 
 The full list of features, and what is proven and what is experimental, is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -71,12 +70,6 @@ Steps, sampler, scheduler, seed and the common switches are one click away from 
 Press the middle mouse button anywhere and your most used actions fan out under the pointer. Release on one to run it. Which actions appear is up to you.
 
 <p align="center"><img src="docs/images/wheel.jpg" alt="Picker wheel" width="900"></p>
-
-### Auto Montage
-
-Builds a new cut at the end of the timeline from your rendered clips. The originals stay as they are.
-
-<p align="center"><img src="docs/images/montage.jpg" alt="Auto Montage" width="900"></p>
 
 ### Train your own LoRA (add-on)
 

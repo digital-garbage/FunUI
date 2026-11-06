@@ -44,7 +44,7 @@ def test_excluded_scenes_and_sub_clips_are_skipped_and_follows_use_timeline_orde
     assert s["follows"] == [["neon", "rain", 1]]
 
 
-def test_auto_montage_pieces_are_not_shots_the_user_wrote():
+def test_reused_copies_are_not_shots_the_user_wrote():
     for n in ("rain", "neon"):
         shortcuts.save({"name": n, "triggers": [n], "replacements": ["r"]})
     scenes = [projects.Scene(id="a", text="rain"), projects.Scene(id="b", text="neon"),

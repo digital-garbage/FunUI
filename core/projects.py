@@ -229,7 +229,7 @@ class Scene:
     #: (cut_offset_frames == 0) owns prompt, rating and source.
     gen_unit_id: str | None = None
     cut_offset_frames: int = 0
-    #: A copy of already-rendered media (Auto Montage pieces): never generated, never part of another clip's unit.
+    #: A copy of already-rendered media (copies made by an older version's Auto Montage, still loaded from saved projects): never generated, never part of another clip's unit.
     reused: bool = False
     guides: list = field(default_factory=list)
     #: Slip edit: where in the generated media this clip starts and how long it runs.

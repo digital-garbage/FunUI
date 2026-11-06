@@ -4,7 +4,7 @@ import { composer as c } from "../../composer/composer.js";
 
 export default {
   id: "generate-warn",
-  mount: "timeline.actions",
+  mount: "timeline.toolbar.end",
   needs: ["pipeline"],
   setup({ host, app }) {
     const chip = c.button.sm({ label: "⚠ Nothing encodes your prompt", tone: "ghost", disabled: true,

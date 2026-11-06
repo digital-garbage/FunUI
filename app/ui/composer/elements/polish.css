@@ -45,7 +45,7 @@ body { -webkit-font-smoothing: antialiased; letter-spacing: -.003em; }
 .cx-filter-list { border-color: var(--line); border-radius: var(--r-4); }
 
 /* hairlines are quieter, rows roomier */
-.cx-segmented { border-color: transparent; background: var(--elev-2); border-radius: var(--r-4); padding: 2px; }
+.cx-segmented { border-color: transparent; background: var(--elev-2); border-radius: var(--r-4); padding: var(--sp-1); }
 .cx-segmented .cx-segment { border-radius: var(--r-3); }
 
 /* timeline: quiet clips, the selected one speaks */

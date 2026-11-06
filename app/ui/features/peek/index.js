@@ -6,7 +6,7 @@ const KEY = "funui_timeline_peek";
 
 export default {
   id: "peek",
-  mount: "timeline.status",
+  mount: "menubar.right",
   needs: ["peek"],
   setup({ host, app }) {
     let on = false;

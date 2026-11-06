@@ -86,6 +86,26 @@
   --win-margin: var(--sp-7);          /* the room a window or popover keeps from the viewport edge */
   --lane-gutter-w: 56px;              /* timeline: label column */
   --lane-h-video: 96px;  --lane-h-audio: 44px;  --lane-h-overlay: 40px;
+
+  /* ── component sizes ─────────────────────────────────────────────────
+     What is not a step of the spacing scale but is still one number in one
+     place. Element CSS writes no pixel value of its own (a 1px hairline is the
+     only exemption, --bw): it names one of these or a --sp-* step. */
+  --bw-2: 2px;                         /* emphasis line: a focus bar, a playhead, a spinner ring */
+  --ring-w: 3px;                       /* a soft halo around a state dot */
+  --blur-sm: 6px;  --blur-md: 8px;  --shadow-blur-lg: 48px;
+  --mark-size: 5px;                    /* the accent dot before a panel title */
+  --tick-w: 9px;  --tick-h: 5px;       /* the check mark */
+  --ctl-icon-xs: 11px;  --ctl-h-chip: 22px;  --ctl-h-menu: 26px;
+  --thumb-size: 14px;                  /* slider thumb */
+  --toggle-w: 34px;                    /* switch track; its knob is --sp-7 */
+  --slider-min-w: 80px;  --list-control-w: 92px;  --wheel-item-w: 70px;  --skeleton-w: 90px;
+  --tile-col: 190px;  --tile-min-h: 84px;  --cell-default: 96px;
+  --cell-glyph-min: 18px;  --cell-glyph-max: 34px;
+  --field-min-w: 220px;  --menu-min-w: 180px;  --note-max-w: 260px;  --split-pane-min: 260px;
+  --dialog-w: 420px;  --popover-max-w: 480px;  --drawer-min-w: 268px;  --drawer-max-w: 360px;
+  --settings-rail-w: 232px;  --modal-h: 660px;  --settings-h: 680px;
+  --window-field-max-h: 200px;  --listbox-max-h: 200px;  --textarea-max-h: 240px;  --split-min-h: 120px;
 }
 
 /* ── dark: the cutting-room palette (default) ─────────────────────────── */

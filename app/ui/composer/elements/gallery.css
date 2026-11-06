@@ -2,7 +2,7 @@
  * 280px panel however wide the window is. */
 .cx-gallery-wrap { container-type: inline-size; width: 100%; }
 .cx-gallery {
-  display: grid; gap: clamp(6px, 2.5cqw, 12px);
+  display: grid; gap: clamp(var(--sp-3), 2.5cqw, var(--sp-6));
   grid-template-columns: repeat(auto-fill, minmax(var(--cell, var(--cell-thumb)), 1fr));
 }
 .cx-gallery[data-cols="1"] { grid-template-columns: repeat(1, minmax(0, 1fr)); }
@@ -23,7 +23,7 @@
   display: flex; align-items: center; justify-content: center;
 }
 .cx-cell-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cx-cell-glyph { font-size: clamp(18px, calc(var(--cell, 96px) * .3), 34px); color: var(--faint); }
+.cx-cell-glyph { font-size: clamp(var(--cell-glyph-min), calc(var(--cell, var(--cell-default)) * .3), var(--cell-glyph-max)); color: var(--faint); }
 .cx-cell-badge, .cx-cell-duration {
   position: absolute; bottom: var(--sp-1); font-size: var(--fs-8);
   padding: 1px var(--sp-2); border-radius: var(--r-1);
@@ -31,10 +31,10 @@
 }
 .cx-cell-badge { left: var(--sp-1); }
 .cx-cell-duration { right: var(--sp-1); font-variant-numeric: tabular-nums; }
-.cx-cell-flags { position: absolute; top: 2px; right: 2px; display: flex; gap: var(--sp-1); pointer-events: none; }
-.cx-cell-flag { font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 4px; border-radius: var(--r-1); background: var(--accent); color: var(--void); }
+.cx-cell-flags { position: absolute; top: var(--sp-1); right: var(--sp-1); display: flex; gap: var(--sp-1); pointer-events: none; }
+.cx-cell-flag { font-size: var(--fs-7); font-weight: 700; line-height: 1; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-1); background: var(--accent); color: var(--void); }
 .cx-cell-name {
-  font-size: clamp(11px, calc(var(--cell, 96px) * .115), 13px);
+  font-size: clamp(var(--fs-7), calc(var(--cell, var(--cell-default)) * .115), var(--fs-4));
   line-height: var(--lh-snug); padding: 0 var(--sp-3) var(--sp-3);
   text-align: left; display: -webkit-box; -webkit-line-clamp: 2;
   -webkit-box-orient: vertical; overflow: hidden;
@@ -62,7 +62,7 @@
 .cx-media-row:hover { border-color: var(--line-hover); background: var(--elev-2); }
 .cx-media-row.cx-on { border-color: var(--accent); background: var(--accent-soft); }
 .cx-media-row-thumb {
-  position: relative; flex: none; inline-size: 40px; aspect-ratio: 16 / 10;
+  position: relative; flex: none; inline-size: var(--sp-11); aspect-ratio: 16 / 10;
   display: flex; align-items: center; justify-content: center;
   background: var(--void); border-radius: var(--r-1); overflow: hidden;
 }
@@ -96,7 +96,7 @@
   /* A floor and a ceiling. A clip grows with its length (flex-grow, set by the
      element), and one clip in a project must not become the whole strip.
      --strip-w is the zoom level, set on .cx-strip itself and inherited. */
-  flex: none; width: var(--strip-w, 72px); min-inline-size: var(--strip-w, 72px);
+  flex: none; width: var(--strip-w, var(--cell-thumb)); min-inline-size: var(--strip-w, var(--cell-thumb));
   max-inline-size: var(--cell-panel);
   aspect-ratio: 16 / 10; padding: 0;
   border: var(--bw) solid var(--line); border-radius: var(--r-2);

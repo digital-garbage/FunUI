@@ -1,6 +1,7 @@
 // Sizes and gaps come from the scale in tokens.css (--sp-*, --ctl-h-*, --lane-*, ...), not from literals in element
-// rules: a literal is a number nobody can change in one place. This is a ratchet: the count of literal pixel values
-// in element CSS may go down, never up. Lowering it is the point; when it does, lower LITERAL_PX here too.
+// rules: a literal is a number nobody can change in one place. There are none left. Exempt by design: a 1px hairline
+// (that is --bw's own value), 0, token definitions (a line starting `--`, where a number belongs), and the width in a
+// @media / @container condition (a custom property cannot be used there; the breakpoints are listed in tokens.css).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -8,17 +9,15 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "elements");
-const LITERAL_PX = 118;
 
-test("element CSS does not grow new literal pixel sizes", () => {
+test("element CSS has no literal pixel sizes", () => {
   let found = 0;
   for (const f of readdirSync(dir).filter((n) => n.endsWith(".css"))) {
     const css = readFileSync(join(dir, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const decl of css.split(/[;{}]/)) {
-      if (/^\s*--/.test(decl)) continue;                          // a token definition is where a number belongs
+      if (/^\s*(--|@media|@container)/.test(decl)) continue;       // a token definition is where a number belongs; a breakpoint cannot use one
       found += (decl.match(/(?<![\w.-])(?:[2-9]|\d{2,})(?:\.\d+)?px\b/g) || []).length;     // 1px lines and 0 are borders and resets
     }
   }
-  assert.ok(found <= LITERAL_PX, `${found} literal px values in element CSS (limit ${LITERAL_PX}): use a token from tokens.css`);
-  if (found < LITERAL_PX) console.log(`lower LITERAL_PX to ${found}`);
+  assert.equal(found, 0, `${found} literal px values in element CSS: use a --sp-* step or a component size from tokens.css`);
 });
