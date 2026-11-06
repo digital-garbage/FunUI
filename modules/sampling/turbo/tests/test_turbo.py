@@ -220,3 +220,18 @@ def test_on_top_of_a_sampler_adds_fresh_noise_before_the_last_step_and_one_polis
     assert torch.equal(a, b)                                          # the same seed gives the same picture
     assert oracle.calls == pytest.approx([1.0, 0.7, 0.3, 0.1])         # one call per step, then the polish call
     assert not torch.equal(a, _euler(Oracle(target), noise.clone(), sigmas))
+
+
+def test_the_polish_call_is_marked_as_after_the_last_step_and_the_steps_are_not():
+    seen = []
+
+    class Watching(Oracle):
+        def __call__(self, x, sigma, **kw):
+            seen.append(dit_hooks.last_step(((kw.get("model_options") or {}).get("transformer_options"))))
+            return super().__call__(x, sigma, **kw)
+
+    target = torch.randn(1, 4, 2, 3, 3)
+    make(_settings(polish=0.05))(Watching(target), torch.randn_like(target), torch.tensor([1.0, 0.5, 0.0]),
+                                 extra_args={"model_options": {"transformer_options": {"other": 1}}})
+    assert seen == [True, True, False]      # no schedule given: each step reads as last, the polish call never
+    assert dit_hooks.after_last(None)["model_options"]["transformer_options"] == {dit_hooks.AFTER_LAST: True}

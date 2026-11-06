@@ -33,7 +33,7 @@ export function shortcuts(app, own) {
   async function phrasesWindow(onPick) {
     let phrases, total = 0;
     try { const got = await app.api.shortcutPhrases(); phrases = got.phrases || []; total = got.total || phrases.length; } catch (err) { return tell(err.message); }
-    const win = c.modal.stacked({ title: "Common phrases", subtitle: `Phrases of two or more words used in more than one shortcut.${total > phrases.length ? ` Showing the ${phrases.length} most shared of ${total}.` : ""} Pick one to look at it or change it everywhere.`, size: "md", body: c.filterList.md({
+    const win = c.modal.stacked({ title: "Common phrases", subtitle: `Words and phrases used in more than one shortcut, longest shared run first within the same count.${total > phrases.length ? ` Showing the ${phrases.length} most shared of ${total}.` : ""} Pick one to look at it or change it everywhere.`, size: "md", body: c.filterList.md({
       items: phrases.map((p) => ({ id: p.phrase, label: p.phrase, hint: `${p.shortcuts} shortcuts, ${p.uses} ${p.uses === 1 ? "line" : "lines"}` })),
       placeholder: "Search phrases", empty: "No phrase is used in more than one shortcut.",
       onChange: (phrase) => { win.close("picked"); onPick(phrase); } }) });

@@ -132,8 +132,8 @@ def test_a_phrase_in_two_shortcuts_is_listed_and_one_in_a_single_shortcut_is_not
     put("a", "soft golden light, a tall man")
     put("b", "SOFT golden light on a hill")
     got = phrases()
-    assert ("soft golden light", 2, 2) in got
-    assert not any(p[0].lower() in ("a tall", "tall man") for p in got)
+    assert ("soft golden light", 2, 2) in got and ("a", 2, 2) in got
+    assert not any(p[0].lower() in ("a tall", "tall man", "tall", "hill") for p in got)
 
 
 def test_the_shorter_phrase_is_dropped_only_when_the_longer_covers_the_same_places(store):
@@ -163,7 +163,7 @@ def test_every_listed_phrase_can_be_found_and_the_counts_agree(store):
     put("a", "soft golden light, red fox")
     put("b", "golden light and red fox")
     for r in shortcuts.common_phrases():
-        hits = shortcuts.find_replace(r["phrase"])["matches"]
+        hits = shortcuts.find_replace(r["phrase"], whole_words=True)["matches"]
         assert len({m["name"] for m in hits}) == r["shortcuts"] and len(hits) == r["uses"]
 
 
@@ -172,6 +172,38 @@ def test_nothing_in_an_empty_library(store):
 
 
 def test_the_phrase_limit_can_be_lifted_so_a_caller_can_say_how_many_there_are(store):
-    for i in range(3):
-        put(f"s{i}", " ".join(f"w{j}" for j in range(8)))
-    assert len(shortcuts.common_phrases(limit=2)) == 2 and len(shortcuts.common_phrases()) > 2
+    put("a", "x y")
+    put("b", "x y z")
+    put("c", "x w")
+    assert len(shortcuts.common_phrases()) == 2 and len(shortcuts.common_phrases(limit=1)) == 1
+
+
+def test_single_words_are_listed_most_shared_first_and_a_long_shared_run_is_one_phrase(store):
+    run = "slow cinematic dolly shot of a lone red fox crossing a frozen river at dawn"
+    put("a", run, "cinematic")
+    put("b", run + " with mist")
+    put("c", "cinematic mood, fox")
+    rows = shortcuts.common_phrases()
+    assert [(r["phrase"], r["shortcuts"]) for r in rows if r["words"] == 1][:2] == [("cinematic", 3), ("fox", 3)]
+    assert any(r["phrase"] == run and r["shortcuts"] == 2 and r["words"] == 15 for r in rows)     # no length limit
+    assert not any(r["phrase"] in ("slow cinematic dolly", "red fox crossing") for r in rows)       # no fragments of it
+    assert rows == sorted(rows, key=lambda r: (-r["shortcuts"], -r["words"], -r["uses"], r["phrase"].casefold()))
+
+
+def test_a_shorter_phrase_that_is_also_shared_elsewhere_still_appears(store):
+    put("a", "red fox runs")
+    put("b", "red fox runs")
+    put("c", "a red fox")
+    got = phrases()
+    assert ("red fox runs", 2, 2) in got and ("red fox", 3, 3) in got
+
+
+def test_a_big_library_is_fast_and_the_limit_only_cuts_the_list(store):
+    import time
+    items = [shortcuts.Shortcut(name=f"s{i}", triggers=[f"t{i}"], replacements=[" ".join(f"w{j}" for j in range(60)), f"unique{i} words here"])
+             for i in range(400)]
+    t = time.time()
+    rows = shortcuts.common_phrases(items)
+    assert time.time() - t < 5
+    assert any(r["words"] == 60 and r["shortcuts"] == 400 for r in rows)
+    assert len(rows) == 2 and len(shortcuts.common_phrases(items, limit=1)) == 1

@@ -35,7 +35,7 @@ SETTINGS = {
         "type": "bool", "default": False,
         "label": "Measure the run",
         "hint": "Logs how grainy the picture is and how much it still changes at each step, and compares with the "
-                "previous run of the same seed. No extra model calls.",
+                "previous run, when that used the same seed, steps and size. No extra model calls.",
     },
 }
 
@@ -166,7 +166,7 @@ def install(patcher, values, key):
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.run", outer)
     patcher.add_wrapper_with_key(WrappersMP.APPLY_MODEL, key, apply_model)
-    return "grain and settling per step, compared with the previous run of the same seed"
+    return "grain and settling per step, compared with the previous run when it used the same seed, steps and size"
 
 
 PROVIDES = {"modifier": install}

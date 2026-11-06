@@ -163,7 +163,7 @@ def make(settings):
                 t = torch.as_tensor(tail, device=up.device, dtype=up.dtype)
                 noisy.append((1 - t) * up + t * _noise(up, gens[k]))
             t = torch.as_tensor(tail, device=parts_like[0].device, dtype=parts_like[0].dtype)
-            used = model(_join(used, noisy), t * ones, **extra_args)
+            used = model(_join(used, noisy), t * ones, **dit_hooks.after_last(extra_args))     # not a step: nothing is captured from it
         return used
     return sample
 
@@ -230,7 +230,7 @@ def make_on_top(inner, settings):
                 t = torch.as_tensor(tail, device=p.device, dtype=p.dtype)
                 noisy.append((1 - t) * p + t * _noise(p, gen))
             t = torch.as_tensor(tail, device=_parts(result)[0].device, dtype=_parts(result)[0].dtype)
-            result = model(_join(result, noisy), t * ones, **extra_args)
+            result = model(_join(result, noisy), t * ones, **dit_hooks.after_last(extra_args))     # not a step: nothing is captured from it
         return result
     return sample
 

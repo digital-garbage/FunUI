@@ -136,3 +136,28 @@ def test_a_file_ffprobe_cannot_read_is_a_clip_error(tmp_path):
     bad.write_bytes(b"not a video")
     with pytest.raises(video_pipe.ClipError):
         video_pipe.probe(str(bad))
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("faststart", [True, False])
+def test_a_video_cut_short_is_refused_and_no_shorter_file_is_left(comfy, faststart):
+    from core import video_pipe
+    src, dst = comfy.output / "a.mp4", comfy.output / "b.mp4"
+    make_clip(src, seconds=2, audio=False, faststart=faststart)
+    data = src.read_bytes()
+    src.write_bytes(data[: int(len(data) * 0.7)])
+    try:
+        video_pipe.probe(str(src))
+    except video_pipe.ClipError:
+        return                                               # ffprobe already refuses this cut: nothing is read at all
+    with pytest.raises(video_pipe.ClipError, match="damaged or cut short"):
+        video_pipe.stream_file(str(src), str(dst), lambda x: x)
+    assert not dst.exists()
+
+
+@needs_ffmpeg
+def test_a_whole_video_still_streams_through(comfy):
+    from core import video_pipe
+    src, dst = comfy.output / "a.mp4", comfy.output / "b.mp4"
+    make_clip(src, seconds=1, audio=False)
+    assert video_pipe.stream_file(str(src), str(dst), lambda x: x) == 25 and dst.exists()

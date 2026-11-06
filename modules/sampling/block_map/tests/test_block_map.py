@@ -228,3 +228,28 @@ def test_an_audio_video_block_that_hands_back_a_pair_is_still_nudged():
     out = hook({"img": (before, audio)}, {"original_block": lambda args: {"img": (after, audio)}})       # the block is handed a pair too
     assert isinstance(out["img"], tuple) and out["img"][1] is audio
     assert not torch.equal(out["img"][0], after)
+
+
+def test_a_probe_picture_with_nan_or_inf_measures_nothing():
+    base = torch.randn(1, 4, 2, 6, 6)
+    bad = base.clone()
+    bad[0, 0, 0, 0, 0] = float("nan")
+    assert measure.response(base, bad) == (0.0, 0.0)
+    bad[0, 0, 0, 0, 0] = float("inf")
+    assert measure.response(base, bad) == (0.0, 0.0)
+
+
+def test_a_map_that_answers_with_nan_or_fails_gives_the_setting_as_typed():
+    from modules._core import dit_hooks
+
+    class View:
+        def __init__(self, answer):
+            self.answer = answer
+
+        def adjust(self, *a):
+            if isinstance(self.answer, Exception):
+                raise self.answer
+            return self.answer
+    for answer in (float("nan"), float("inf"), RuntimeError("boom")):
+        to = {"funui_block_map": View(answer)}
+        assert dit_hooks.block_map_value(to, "attention", 3, 0.7, 10) == 0.7

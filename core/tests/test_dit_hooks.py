@@ -126,3 +126,12 @@ def test_block_replacing_modules_turn_the_compiler_off(tiny_h3, module, settings
     from modules.sampling.modifiers.nodes import FunUILoadModifiers
     patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {module: settings}).result
     assert patched.wrappers.get(WrappersMP.OUTER_SAMPLE), f"{module} left the compiler on"
+
+
+def test_a_huge_range_is_clamped_before_it_is_built_and_still_reported():
+    import time
+    from core import dit_hooks
+    t = time.time()
+    got, problems = dit_hooks.parse_blocks("1-99999999999", 48)
+    assert got == list(range(1, 48)) and len(problems) == 1 and "past" in problems[0]
+    assert time.time() - t < 1.0

@@ -160,3 +160,17 @@ def test_a_dense_lokr_on_a_native_weight_is_not_mistaken_for_a_misfit_pair(patch
             "diffusion_model.blocks.1.attn.out_proj.lokr_w2": torch.randn(8, 8, generator=gen)}
     patches, how, dropped = match(patcher, None, lora)
     assert len(patches) == 1 and dropped == 0
+
+
+@pytest.mark.parametrize("keep", [("to_q",), ("to_k",), ("to_v",), ("to_q", "to_v")])
+def test_a_file_that_trains_only_some_of_q_k_v_puts_each_in_its_own_rows(patcher, keep):
+    from modules.loaders.lora.keys import match
+    lora, want = _file("transformer_blocks.1", torch.Generator().manual_seed(3))
+    lora = {k: v for k, v in lora.items() if not any(f"attn.{q}." in k for q in ("to_q", "to_k", "to_v") if q not in keep)}
+    patches, _how, dropped = match(patcher, None, lora)
+    assert dropped == 0 and len(patches) == 3 + len(keep)
+    clone = patcher.clone()
+    clone.add_patches(patches, 1.0)
+    got = _delta(clone, "diffusion_model.blocks.1.attn.qkv_proj.weight", (192, 64))
+    zero = torch.zeros(64, 64)
+    assert torch.allclose(got, torch.cat([want[f"attn.{q}"] if q in keep else zero for q in ("to_q", "to_k", "to_v")], 0), atol=1e-5)

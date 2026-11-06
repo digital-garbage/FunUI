@@ -80,6 +80,8 @@ def response(base, probed, delta=DELTA):
     ref = base.float()
     size = float(d.norm())
     lev = size / (max(float(ref.norm()), 1e-8) * delta)
+    if not math.isfinite(size) or not math.isfinite(lev):
+        return 0.0, 0.0                                  # a probe picture with NaN/inf in it measured nothing: unmeasured, not poison
     if size <= 1e-12 or d.dim() != 5:
         return lev, 0.0
     b, c, t, h, w = d.shape

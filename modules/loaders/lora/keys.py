@@ -33,7 +33,7 @@ _SUFFIX = (("attn.to_out.0", "attn.out_proj"), ("ff.net.0.proj", "mlp.fc1"), ("f
 _QKV = ("to_q", "to_k", "to_v")
 
 
-def from_diffusers(lora):
+def from_diffusers(lora, fused_rows=None):
     """-> (lora, extra key map). A LoRA written against the Diffusers layout of the H3 transformer, renamed to the one
     ComfyUI loads, or the LoRA unchanged with {} when it is not in that layout.
 
@@ -41,7 +41,11 @@ def from_diffusers(lora):
     `to_out.0`, `ff.net.0.proj`, `ff.net.2` are `out_proj`, `mlp.fc1`, `mlp.fc2`). Q, K and V are three Linears there and
     ONE fused `qkv_proj` here, so each is aimed at its own rows of that weight (an offset, which costs no extra rank).
     And the gated MLP: Diffusers stores the up half before the gate half, ComfyUI the gate half first, so the rows of
-    the `fc1` up-matrix swap halves. Without the swap the file loads, matches, and quietly does the wrong thing."""
+    the `fc1` up-matrix swap halves. Without the swap the file loads, matches, and quietly does the wrong thing.
+
+    A file may train only some of Q, K and V. The offset of each needs every part's height, so `fused_rows(base)` (the
+    row count of the model's own fused weight) fills in the parts the file does not hold, as equal thirds; a file whose
+    parts are not thirds of that is left unrouted as before."""
     if not any(_DIFFUSERS.search(k) for k in lora):
         return lora, {}
     out, extra, sizes = {}, {}, {}
@@ -71,7 +75,10 @@ def from_diffusers(lora):
         base, part = mod.split("@")
         heights = [sizes.get(f"{base}@{q}") for q in _QKV]
         if None in heights:
-            continue
+            rows = fused_rows(base) if fused_rows else None
+            if not rows or rows % 3 or any(h not in (None, rows // 3) for h in heights):
+                continue
+            heights = [rows // 3] * 3
         start = sum(heights[: _QKV.index(part)])
         extra[mod] = (f"diffusion_model.{base}.weight", (0, start, sizes[mod]))
     return out, extra
@@ -117,8 +124,9 @@ def match(model, clip, lora):
     if clip is not None:
         key_map = comfy.lora.model_lora_keys_clip(clip.cond_stage_model, key_map)
     extra = {}
+    sd = model.model.state_dict()
     if any(".attn.qkv_proj." in str(v) for v in key_map.values()):         # only the H3 transformer is renamed: other models use `transformer_blocks` as they are
-        lora, extra = from_diffusers(lora)
+        lora, extra = from_diffusers(lora, lambda base: (lambda w: int(w.shape[0]) if w is not None and w.dim() else None)(sd.get(f"diffusion_model.{base}.weight")))
     key_map.update(extra)
     converted = comfy.lora_convert.convert_lora(lora)
     best, how = comfy.lora.load_lora(converted, key_map, log_missing=False), "as-is"
@@ -128,7 +136,6 @@ def match(model, clip, lora):
             got = comfy.lora.load_lora(variant, key_map, log_missing=False)
             if len(got) > len(best):
                 best, how = got, f"{prefix} -> {replacement or '(none)'}"
-    sd = model.model.state_dict()
     bad = [k for k, a in best.items() if _absent(sd, k) or _misfit(sd, k, a)]
     for k in bad:
         best.pop(k)

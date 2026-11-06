@@ -230,30 +230,57 @@ def find_replace(find, replace=None, match_case: bool = False, apply: bool = Fal
 _SEGMENT = re.compile(r"[^\w\s'’-]+|\n")     # punctuation ends a phrase: "red fox, big hat" never makes "fox big"
 
 
-def common_phrases(items=None, min_words: int = 2, min_shortcuts: int = 2, max_words: int = 6, limit: int | None = None) -> list[dict]:
-    """Runs of words that appear in the replacements of at least `min_shortcuts` different shortcuts:
-    [{phrase, shortcuts, uses, words}], most shared first. `uses` counts replacement lines (a phrase twice in one
-    line is one use). A phrase is dropped when a longer one around it is in exactly the same places, so
-    "red fox runs" is listed and "red fox" is not, unless "red fox" also lives somewhere else."""
-    seen: dict[str, list] = {}                 # folded phrase -> [as first written, shortcut names, (name, line) pairs]
+def common_phrases(items=None, min_shortcuts: int = 2, limit: int | None = None) -> list[dict]:
+    """Runs of words (one word or many, any length) that appear in the replacements of at least `min_shortcuts`
+    different shortcuts: [{phrase, shortcuts, uses, words}], most shared first. `uses` counts replacement lines
+    (a phrase twice in one line is one use). Only the longest shared run is listed: a phrase is dropped when
+    the phrase one word longer, on either side, is in exactly the same shortcuts and lines ("red fox runs" is
+    listed and "red fox" is not, unless "red fox" also lives somewhere else on its own).
+
+    Grown a word at a time from the shared single words, and a phrase is only grown while it is still shared, so the work
+    follows what is actually repeated and not the length of the lines."""
+    segs: list[tuple] = []                 # (shortcut name, (name, line), words as written, words folded)
     for sc in listing() if items is None else items:
         for li, text in enumerate(sc.replacements):
             for seg in _SEGMENT.split(text):
                 words = seg.split()
-                for n in range(min_words, min(max_words, len(words)) + 1):
-                    for i in range(len(words) - n + 1):
-                        shown = " ".join(words[i:i + n])
-                        e = seen.setdefault(shown.casefold(), [shown, set(), set()])
-                        e[1].add(sc.name)
-                        e[2].add((sc.name, li))
-    kept = {k: e for k, e in seen.items() if len(e[1]) >= min_shortcuts}
-    for k, e in list(kept.items()):
-        w = k.split()
-        for child in (" ".join(w[1:]), " ".join(w[:-1])) if len(w) > min_words else ():
-            c = kept.get(child)
-            if c and len(c[1]) == len(e[1]) and len(c[2]) == len(e[2]):
-                del kept[child]
-    rows = [{"phrase": e[0], "shortcuts": len(e[1]), "uses": len(e[2]), "words": len(k.split())} for k, e in kept.items()]
+                if words:
+                    segs.append((sc.name, (sc.name, li), words, [w.casefold() for w in words]))
+
+    def shared(found):
+        out = {}
+        for key, occ in found.items():
+            names = {segs[si][0] for si, _ in occ}
+            if len(names) >= min_shortcuts:
+                out[key] = (occ, len(names), len({segs[si][1] for si, _ in occ}))
+        return out
+
+    grow: dict[tuple, list] = {}
+    for si, (_n, _l, _w, folded) in enumerate(segs):
+        for i, w in enumerate(folded):
+            grow.setdefault((w,), []).append((si, i))
+    level, levels = shared(grow), []
+    while level:
+        levels.append(level)
+        grow = {}
+        for key, (occ, _n, _l) in level.items():
+            for si, i in occ:
+                folded = segs[si][3]
+                if i + len(key) < len(folded):
+                    grow.setdefault(key + (folded[i + len(key)],), []).append((si, i))
+        level = shared(grow)
+    covered: set[tuple] = set()            # phrases that a longer one, with the same counts, already shows
+    for before, after in zip(levels, levels[1:]):
+        for key, (_o, n, l) in after.items():
+            for part in (key[1:], key[:-1]):
+                if part in before and before[part][1:] == (n, l):
+                    covered.add(part)
+    rows = []
+    for level in levels:
+        for key, (occ, n, l) in level.items():
+            if key not in covered:
+                si, i = occ[0]
+                rows.append({"phrase": " ".join(segs[si][2][i:i + len(key)]), "shortcuts": n, "uses": l, "words": len(key)})
     rows.sort(key=lambda r: (-r["shortcuts"], -r["words"], -r["uses"], r["phrase"].casefold()))
     return rows if limit is None else rows[:limit]
 

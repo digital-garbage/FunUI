@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 
 CHUNK = 8                # frames per call, at most
 CHUNK_PIXELS = 2_000_000   # ...and at most this many input pixels per call: a big upscale of 1080p is gigabytes per frame
@@ -95,8 +96,11 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
     frame = w * h * 3
     chunk = max(1, min(CHUNK, CHUNK_PIXELS // max(1, w * h)))
     exe = ffmpeg()
+    # The decoder's complaints go to a file, not away: ffmpeg exits 0 on a video that was cut short, and the only
+    # sign is what it printed ("partial file"). Read after the last frame; a file avoids a full pipe stalling it.
+    problems = tempfile.TemporaryFile()
     dec = subprocess.Popen([exe, "-v", "error", "-i", src, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                           stdout=subprocess.PIPE, stderr=problems)
     enc, frames = None, 0
     try:
         while True:
@@ -123,6 +127,11 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
                 enc.wait()
                 raise ClipError(f"ffmpeg could not encode the video: {enc.stderr.read().decode(errors='replace')[-500:]}") from None
             frames += y.shape[0]
+        dec.wait()
+        problems.seek(0)
+        said = problems.read().decode(errors="replace").strip()
+        if dec.returncode or said:
+            raise ClipError(f"{os.path.basename(src)} is damaged or cut short (read {frames} frame(s) before the problem): {said[-300:] or 'ffmpeg failed'}")
         if enc is None:
             raise ClipError(f"no frames could be read from {os.path.basename(src)}")
         interrupted()                                      # a stop that came during the last read is still a stop
@@ -131,8 +140,10 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
         if enc.wait() != 0:
             raise ClipError(f"ffmpeg could not encode the video: {err[-500:]}")
         interrupted()                                      # ... and one that came while the encoder flushed: the file is removed below
+        problems.close()
         return frames
     except BaseException:
+        problems.close()
         for p in (dec, enc):
             if p is not None and p.poll() is None:
                 p.kill()

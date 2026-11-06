@@ -162,9 +162,8 @@ def parse_blocks(spec, n_blocks: int):
         except ValueError:
             problems.append(f"{part!r} is not a block number or range")
             continue
-        wanted = set(range(lo, hi + 1))
-        kept = {i for i in wanted if 0 <= i < n_blocks}
-        if kept != wanted:
+        kept = set(range(max(lo, 0), min(hi, n_blocks - 1) + 1))        # clamped first: "1-99999999" must not build a set that large
+        if lo < 0 or hi >= n_blocks:
             problems.append(f"{part!r} reaches past this model's blocks 0-{n_blocks - 1}")
         out |= kept
     return sorted(out), problems
@@ -198,10 +197,18 @@ def block_map_value(transformer_options, kind, block, value, blocks) -> float:
         return float(value)
     where = current_step(transformer_options)
     frac = 0.5 if where is None else where[0] / max(1, where[1] - 1)
+    from . import log
     try:
-        return float(view.adjust(kind, block, frac, blocks, value))
-    except Exception:                                   # noqa: BLE001 -- a bad map never costs the picture
+        got = float(view.adjust(kind, block, frac, blocks, value))
+    except Exception as exc:                            # noqa: BLE001 -- a bad map never costs the picture
+        log.once(f"block_map:{kind}:{type(exc).__name__}", log.WARNING, "Block map",
+                 f"the saved map could not be applied to {kind}, so the setting is used as typed: {type(exc).__name__}: {exc}")
         return float(value)
+    if got != got or got in (float("inf"), float("-inf")):      # NaN / inf: a map with a bad number in it
+        log.once(f"block_map:{kind}:nonfinite", log.WARNING, "Block map",
+                 f"the saved map gave a number that is not finite for {kind}, so the setting is used as typed; run Profile again")
+        return float(value)
+    return got
 
 
 # Set on the guider by Two stages: 1 while the small first stage runs, 2 while the full-size one does. A
@@ -247,20 +254,33 @@ def probing(transformer_options) -> bool:
     return bool((transformer_options or {}).get(PROBE))
 
 
+#: Set on a call made AFTER the schedule's last step (Turbo's polish pass, at a sigma the schedule does not hold): it is
+#: not a step, so nothing may be captured from it as "the last step".
+AFTER_LAST = "funui_after_last"
+
+
+def after_last(extra_args):
+    """`extra_args` of a sampler's model call, marked so that call is not taken for the last step."""
+    options = dict((extra_args or {}).get("model_options") or {})
+    options["transformer_options"] = {**(options.get("transformer_options") or {}), AFTER_LAST: True}
+    return {**(extra_args or {}), "model_options": options}
+
+
 def last_step(transformer_options) -> bool:
     """Whether this denoise call is the schedule's final step -- True when that
     cannot be told, so a capture taken "on the last step" still happens. Never
-    during a probe."""
-    if probing(transformer_options):
+    during a probe, nor on a call made after the last step (`after_last`)."""
+    if probing(transformer_options) or (transformer_options or {}).get(AFTER_LAST):
         return False
     where = current_step(transformer_options)
     return where is None or where[0] >= where[1] - 1
 
 
 def late_half(transformer_options, ahead: int = 0) -> float:
-    """0 over the first half of the steps, rising to 1 at the last: the gate
+    """0 over the first half of the steps, then rising in a straight line: the gate
     every learning feature that steers late shares. By step POSITION, so it
-    holds on any schedule -- v4's sigma-based gate was open on 0 of 12 steps
+    holds on any schedule. It reaches (n-2)/n on the last of n steps (0.5 of four, 0.9 of twenty) and so never opens on a
+    two-step run -- v4's sigma-based gate was open on 0 of 12 steps
     of H3's default schedule, silently. 0 when the step cannot be told.
 
     `ahead` reads a LATER step's gate: an edit carried into step i+1's input
