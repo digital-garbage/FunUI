@@ -67,7 +67,7 @@
    of the icon and the label. Centred on the icon: with the hint gone (a
    nav row now, not a compact picker's two-line entry) top-aligning the two
    just looks like a mistake. */
-.cx-filter-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; justify-content: center; }
+.cx-filter-text { display: flex; flex-direction: column; gap: var(--sp-1); flex: 1; min-width: 0; justify-content: center; }
 .cx-filter-label { display: block; }
 .cx-filter-hint { display: block; font-size: var(--fs-7); color: var(--muted); line-height: var(--lh-snug); }
 .cx-filter-empty { padding: var(--sp-5); font-size: var(--fs-6); color: var(--faint); text-align: center; }

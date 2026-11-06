@@ -76,6 +76,16 @@
      its widest OPTION, so one row holding a list of checkpoint filenames was
      264px wide among four that were 140. */
   --control-col: 180px;
+
+  /* ── responsive system ───────────────────────────────────────────────
+     Breakpoints. A custom property cannot sit in a @media query, so these are
+     the agreed numbers, written out in the rules that use them:
+       narrow  <= 1250px   regions give up width, the timeline gets taller to hold wrapped rows
+       compact <=  900px   side zones shrink to their floor
+     Everything below the first breakpoint is built to wrap, never to clip. */
+  --win-margin: var(--sp-7);          /* the room a window or popover keeps from the viewport edge */
+  --lane-gutter-w: 56px;              /* timeline: label column */
+  --lane-h-video: 96px;  --lane-h-audio: 44px;  --lane-h-overlay: 40px;
 }
 
 /* ── dark: the cutting-room palette (default) ─────────────────────────── */

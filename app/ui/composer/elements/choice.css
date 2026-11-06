@@ -43,7 +43,7 @@
 .cx-toggle-face { align-items: center; justify-content: space-between; gap: var(--sp-6); }
 /* min-inline-size, or a long word in a hint pushes the row wider than the panel
    it is in instead of wrapping. */
-.cx-check-text { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.cx-check-text { display: flex; flex-direction: column; gap: var(--sp-1); min-inline-size: 0; }
 .cx-check-label { font-size: var(--fs-4); line-height: var(--lh-4); color: var(--text); }
 .cx-checklist {
   display: flex; flex-direction: column;

@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Dev-only. Users never run npm: the app is served as plain ES modules with no build step.",
   "scripts": {
-    "test": "node --test --test-timeout=60000"
+    "test": "node --test --test-timeout=60000",
+    "test:viewport": "node e2e/viewports.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

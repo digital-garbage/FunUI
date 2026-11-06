@@ -2,7 +2,7 @@
 .cx-nle { block-size: 100%; min-block-size: 0; overflow: auto; background: var(--elev-1); }
 .cx-nle-stage { display: flex; min-inline-size: 100%; position: relative; }
 .cx-nle-gutter {
-  position: sticky; inset-inline-start: 0; z-index: 3; flex: none; inline-size: 56px;
+  position: sticky; inset-inline-start: 0; z-index: 3; flex: none; inline-size: var(--lane-gutter-w);
   background: var(--elev-1); border-inline-end: var(--bw) solid var(--line);
 }
 .cx-nle-gutter-ruler { block-size: var(--sp-9); border-block-end: var(--bw) solid var(--line); }
@@ -10,9 +10,9 @@
   display: flex; align-items: center; justify-content: flex-end; padding-inline-end: var(--sp-3);
   font-size: var(--fs-6); color: var(--faint); border-block-end: var(--bw) solid var(--line);
 }
-.cx-nle-lane-video { block-size: 96px; }
-.cx-nle-lane-audio { block-size: 44px; }
-.cx-nle-lane-overlay { block-size: 40px; }
+.cx-nle-lane-video { block-size: var(--lane-h-video); }
+.cx-nle-lane-audio { block-size: var(--lane-h-audio); }
+.cx-nle-lane-overlay { block-size: var(--lane-h-overlay); }
 
 .cx-nle-content { position: relative; flex: none; min-inline-size: 0; }
 .cx-nle-ruler { position: relative; block-size: var(--sp-9); border-block-end: var(--bw) solid var(--line); }

@@ -42,7 +42,7 @@
   display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-5);
   padding: var(--sp-8) var(--sp-9) var(--sp-7); border-bottom: var(--bw) solid var(--line);
 }
-.cx-modal-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cx-modal-titles { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
 .cx-modal-title { font-family: var(--font-display); font-size: var(--fs-2); font-weight: var(--fw-semibold); }
 /* A column, so a body that wants to fill the card can. Without it the body
    sized to its content and the card scrolled as a whole -- which put the group
@@ -67,7 +67,7 @@
 
 .cx-choice-list { display: flex; flex-direction: column; gap: var(--sp-1); }
 .cx-choice-row {
-  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  display: flex; flex-direction: column; gap: var(--sp-1); text-align: left;
   padding: var(--sp-4) var(--sp-5);
   border: var(--bw) solid var(--line); border-radius: var(--r-3);
   background: var(--elev-2); color: var(--text); cursor: pointer;
@@ -135,6 +135,8 @@
   background: var(--elev-3); color: var(--text);
   border: var(--bw) solid var(--line); border-radius: var(--r-4);
   box-shadow: var(--shadow-3); overflow: hidden;
+  /* Whatever size was remembered or asked for, never larger than the screen. */
+  max-inline-size: 100vw; max-block-size: 100dvh;
 }
 .cx-window-bar {
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4);

@@ -65,6 +65,34 @@ Never carry meaning by colour alone. A chip says its state in words, an error ha
 - Test every new element in both themes in the catalogue.
 - A custom property used but never defined resolves to nothing without any error, so check that every `var(--x)` you write exists.
 
+## Responsive by construction
+
+The kit is built the way a grid system is: you pick a step from a scale, and the layout primitives size and wrap themselves. A new button, field or panel should need no CSS of its own to look right at any window size.
+
+**The scales** (all in `composer/tokens/tokens.css`)
+
+| Scale | Tokens | Rule |
+|---|---|---|
+| Spacing | `--sp-0` .. `--sp-11` | Every gap and padding. Panels pad with `--sp-7` (16px), rows inside a toolbar sit `--sp-2` apart. |
+| Control height | `--ctl-h-sm` .. `--ctl-h-xl` | One per row. Never set a height on a button. |
+| Edge room | `--gutter`, `--win-margin` | The space between regions, and the room a window keeps from the screen edge. |
+| Timeline | `--lane-h-video`, `--lane-h-audio`, `--lane-h-overlay`, `--lane-gutter-w` | Lane sizes live in one place. |
+
+**Breakpoints.** A custom property cannot be used in `@media`, so the numbers are written in the rules and listed once in `tokens.css`: narrow is 1250px and under (the timeline gets taller because its header and toolbar wrap onto more rows), compact is 900px and under. The frame's proportions are in `app/ui/frame.css` (`--media-w`, `--properties-w`, `--timeline-h`).
+
+**Primitives that adapt on their own**
+
+- `toolbar` wraps by default. Add items freely; they flow to a second row instead of widening the zone.
+- `segmented` wraps its choices to a second line in a narrow column, so none is clipped.
+- `stack` is a column with a gap from the scale; `region.stack` with `fill` takes the room it is given and scrolls inside.
+- `panel` bodies pad with the scale and carry no bottom spacer; the padding is the clearance, also at the end of a scroll.
+- Windows (`floating.window`, modals, popovers) are bounded by the viewport in both axes and come fully back on screen when it shrinks.
+- Settings rows in a stack, a modal or a popover form one card with seams; do not add your own spacing around them.
+
+**Checking it.** `npm test` has a ratchet (`rule_kit_uses_the_scale.test.js`) that fails when element CSS gains a literal pixel size. `cd app && npm run test:viewport` opens the real app in Chromium and Firefox (whichever are installed) at 1280x720, 1024x1024, 1366x768, 1920x1080, 2560x1440 and the vertical 768x1024, 720x1280, 1080x1920, against a stub server (`app/e2e/stub.mjs`), and fails on page overflow, a window outside the viewport, or a timeline lane cut off. It needs Playwright browsers, so it is not part of `npm test`.
+
+**Adding an element so it adapts.** Use `cx-` classes and tokens only. Let it be a flex or grid child that can shrink (`min-inline-size: 0`). Put a row of controls in a `toolbar`, not in your own flex box. If it needs a size, add a token to `tokens.css` and use that. Then run the viewport test and look at the element in the catalogue at a narrow width.
+
 ## Layout and density
 
 - Build layout with `region.stack`, `splitPane`, `panel`, `toolbar`, `group` and `workspace`, not with ad hoc CSS.

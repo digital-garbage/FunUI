@@ -7,7 +7,7 @@
   padding: var(--sp-6) 0; border-bottom: var(--bw) solid var(--line-2);
 }
 .cx-settings-row:last-child { border-bottom: 0; }
-.cx-settings-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cx-settings-text { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
 .cx-settings-label { font-size: var(--fs-4); line-height: var(--lh-4); color: var(--text); }
 .cx-settings-control {
   flex: 0 0 var(--control-col); min-inline-size: 0;
@@ -136,7 +136,8 @@
 .cx-panel-body > .cx-viewer, .cx-panel-body > .cx-stack-fill { flex: 1 1 auto; }
 .cx-panel-flush > .cx-panel-body { padding: 0; }
 
-.cx-toolbar { display: flex; align-items: center; gap: var(--sp-2); min-inline-size: 0; }
+/* Wraps by default, so a new button never pushes a row wider than its zone. */
+.cx-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); min-inline-size: 0; }
 .cx-toolbar-trailing {
   margin-inline-start: auto; display: flex; align-items: center; gap: var(--sp-3);
   font-size: var(--fs-6); color: var(--muted);

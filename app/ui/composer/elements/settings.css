@@ -13,7 +13,7 @@
   padding: var(--sp-6) var(--sp-5); gap: var(--sp-5);
 }
 .cx-settings-rail .cx-search { inline-size: 100%; }
-.cx-settings-rail .cx-filter-list { gap: 2px; }
+.cx-settings-rail .cx-filter-list { gap: var(--sp-1); }
 .cx-settings-rail .cx-filter-row { gap: var(--sp-5); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-4); font-size: var(--fs-4); }
 .cx-settings-rail .cx-filter-icon { inline-size: 24px; block-size: 24px; border-radius: 6px; font-size: var(--fs-5); margin: 0; }
 .cx-settings-rail .cx-filter-row.cx-on { background: var(--accent); color: var(--on-accent); }

@@ -56,7 +56,7 @@ body { -webkit-font-smoothing: antialiased; letter-spacing: -.003em; }
 .cx-nle-clip-title { font-weight: var(--fw-medium); }
 
 /* toolbars inside a zone wrap instead of overlapping; readouts never break mid-phrase */
-.cx-zone .cx-toolbar { flex-wrap: wrap; row-gap: var(--sp-2); }
+.cx-zone .cx-toolbar { row-gap: var(--sp-2); }
 .cx-zone .cx-toolbar-trailing { flex-wrap: wrap; }
 .cx-zone .cx-toolbar .cx-hint, .cx-zone .cx-toolbar .cx-t { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cx-zone .cx-toolbar .cx-hint { padding-inline: var(--sp-3); }
