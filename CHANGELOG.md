@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **"Video detail" (Engine > Post) is gone.** The other Post settings (edge smoothing, auto contrast, auto brightness, colour strength) stay. A project or setting that still holds Video detail loads normally: its values are skipped and the Log says so once.
 - **LoRA Loader shows one slot at a time.** With no LoRA picked it shows only the first picker. Once a LoRA is chosen its strengths (and stage) appear, together with the picker for the next slot, and so on up to eight. A slot that already holds a LoRA never hides.
 - **Simpler Project and Scene settings.** The rarely used groups (Video input, Source trim, Final render size, Split preview) are folded under "More" and stay open once opened.
 - **"Start shots" is gone.** A scene with no picture and no references is made from the prompt alone; with references it starts from them in the way the model supports (image, video or reference to video).
@@ -158,7 +159,7 @@ A rewrite from scratch, not an update of 4.x. Same idea (a studio for video insi
 ### Features
 
 - **Proven**: prompt markup, empty latent, second pass (the H3 preset for it is held back), loaders (diffusion model, CLIP, VAE, LoRA, checkpoint, media), cut opening, decode, save video, anchor de-staticking (ALG), randomizer, DynaShift, first-step seed search, modifiers, sampler, detail, shot camera, prompt enhancer, Render, taste modules (slider, guidance, prompt nudge, attention, REINS, early guidance), shot memory, decisiveness, late-branch guidance, momentum, velocity bias.
-- **Experimental**: continuity, identity transfer, negative erase, camera move, context windows, block influence, block repeat, phrase probe, shadow negative, video detail, temporal style, massive-activation steering, video-to-audio coupling, **LoRA training**.
+- **Experimental**: continuity, identity transfer, negative erase, camera move, context windows, block influence, block repeat, phrase probe, shadow negative, temporal style, massive-activation steering, video-to-audio coupling, **LoRA training**.
 - **Prompt enhancer**: a language model rewrites each finished prompt. Has its own encoder pick (Composer ▸ Enhance ▸ Encoder), because H3's own encoder cannot write prose. Verified with Gemma 4.
 - **Auto Montage**: builds a new cut at the end of the timeline from your rendered clips; originals stay untouched, and the pieces are never regenerated or rated.
 - **Upscale** (a background job of FunUI like Interpolate, so it no longer makes ComfyUI drop the workflow's loaded models) a finished render with an upscale model (`.safetensors`) or NVIDIA RTX Super Resolution.

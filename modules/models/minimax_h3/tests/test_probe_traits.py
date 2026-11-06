@@ -56,7 +56,7 @@ def test_traits_match_the_real_latent_format_class():
 
 
 def test_claims_adaln_modalities_so_h3_settings_are_not_hidden():
-    """Shadow negative and Video detail need it. The header cannot prove it, so the
+    """Shadow negative needs it. The header cannot prove it, so the
     probe is optimistic and the real load (traits()) has the last word at run time."""
     m = _module()
     assert "adaln_modalities" in m.probe_traits(_h3_keys())

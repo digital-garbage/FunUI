@@ -1,4 +1,4 @@
-"""A picked H3 file must keep Shadow negative and Video detail on screen.
+"""A picked H3 file must keep Shadow negative on screen.
 
 Fake .safetensors header (names only, no weights) -> the probe -> the manifest the
 browser gets, over the real module tree.
@@ -19,9 +19,9 @@ def _fake_h3_file(tmp_path):
     return path
 
 
-def test_a_picked_h3_file_shows_shadow_negative_and_video_detail(tmp_path):
+def test_a_picked_h3_file_shows_shadow_negative(tmp_path):
     found = probe.detect(_fake_h3_file(tmp_path))
     assert found["detected"] and found["module"] == "model_minimax_h3"
 
     shown = {m["id"] for m in routes.manifest(found["traits"])["modules"]}
-    assert {"shadow_negative", "video_detail"} <= shown
+    assert "shadow_negative" in shown

@@ -49,7 +49,6 @@ FEATURES = {
     "shadow_negative": {},
     "trajectory_guidance": {},
     "velocity_bias": {},
-    "video_detail": {},
 }
 #: Modifiers that need the LTX audio+video or spatial-latent model: run in test_combinations_ltx.py.
 LTX_ONLY = {"audio_coupling", "context_windows", "identity_bank", "sharpen", "temporal_style"}
@@ -216,7 +215,7 @@ def _load_recording(model, feature):
 
 
 #: Features that act on this tiny model without ratings: they must change the picture, not just install.
-ACTS = ("momentum", "video_detail", "noise_merge", "sharpness", "late_branch", "decisiveness", "turbo_sampler", "camera_move")
+ACTS = ("momentum", "noise_merge", "sharpness", "late_branch", "decisiveness", "turbo_sampler", "camera_move")
 
 
 @pytest.mark.parametrize("feature", ACTS)

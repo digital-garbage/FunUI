@@ -119,7 +119,7 @@ def probe_traits(keys) -> list:
 
     `adaln_modalities` is claimed here although the header cannot prove it
     (full-form vs. curve-form checkpoints differ in which blocks exist). Left
-    out, the UI hid Shadow negative and Video detail for every picked H3 file.
+    out, the UI hid Shadow negative for every picked H3 file.
     A claim that turns out wrong is caught at run time: the loaded model's own
     `traits()` is checked, and the feature is skipped with a note in the Log.
     """

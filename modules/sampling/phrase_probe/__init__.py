@@ -28,7 +28,7 @@ REQUIRES = ["dit_block_hooks"]
 # Innermost on the model, so every call it sees is a real forward: the extra forwards of
 # late-branch guidance and the taste slider (flagged as probes) pass through it untouched
 # instead of being measured as the picture.
-AFTER = ["video_detail", "late_branch", "score_slider", "sharpen"]
+AFTER = ["late_branch", "score_slider", "sharpen"]
 
 
 def _say(message):

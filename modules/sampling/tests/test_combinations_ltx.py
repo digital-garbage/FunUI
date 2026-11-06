@@ -22,7 +22,7 @@ FEATURES = {
 NEEDS_OTHER_MODEL = {
     "block_influence": "dit_block_hooks", "block_map": "dit_block_hooks", "late_branch": "dit_block_hooks",
     "q_steer": "dit_block_hooks", "stas": "dit_block_hooks", "shadow_negative": "adaln_modalities",
-    "video_detail": "adaln_modalities", "sharpen": "spatial_latent",
+    "sharpen": "spatial_latent",
 }
 UNREACHABLE = {"context_windows": "this local ComfyUI cannot window an audio+video latent; it installs on the rental's ComfyUI (not proven here)"}
 

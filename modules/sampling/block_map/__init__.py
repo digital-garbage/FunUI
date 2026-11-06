@@ -21,7 +21,7 @@ CATEGORY = "sampling"
 STATUS = "experimental"
 REQUIRES = ["dit_block_hooks"]
 # Innermost, like the other measurement modules: only real forwards are nudged.
-AFTER = ["video_detail", "late_branch", "score_slider", "sharpen"]
+AFTER = ["late_branch", "score_slider", "sharpen"]
 
 PUBLISHED = "funui_block_map"
 
