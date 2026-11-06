@@ -3,7 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { accept, suggestionsAt } from "./match.js";
 
-const BOXES = new Set(["Story", "Prompt"]);          // aria-labels of the prompt fields
+const BOXES = new Set(["Story", "Prompt", "Anchor", "Postfix"]);          // aria-labels of the prompt fields
 
 export default {
   id: "autocomplete",

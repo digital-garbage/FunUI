@@ -661,3 +661,22 @@ test("a toast with no words is not shown at all", () => {
   composer.toast.warn({ text: null });
   assert.equal(document.querySelectorAll(".cx-toast").length, before);
 });
+
+test("Tab takes the first suggestion (or the highlighted one); with no menu it stays a plain Tab", () => {
+  const picked = [];
+  const input = composer.input.md({});
+  document.body.appendChild(input.node);
+  const ac = composer.autocomplete.default({ input, source: () => [{ label: "a" }, { label: "b" }], onPick: (i) => picked.push(i.label), minChars: 1 });
+  const tab = () => { const e = new window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }); input.node.dispatchEvent(e); return e.defaultPrevented; };
+  assert.equal(tab(), false, "no menu: Tab is left alone");
+  input.node.value = "x"; fire(input.node, "input");
+  assert.equal(tab(), true);
+  assert.deepEqual(picked, ["a"]);
+  assert.equal(document.querySelector(".cx-autocomplete"), null, "the menu closed");
+  input.node.value = "xy"; fire(input.node, "input");
+  input.node.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  input.node.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  tab();
+  assert.deepEqual(picked, ["a", "b"]);
+  ac.destroy(); input.node.remove();
+});

@@ -115,7 +115,9 @@ export function createMaintenance({ api, flush }) {
       return run("Switching torch to CUDA 13…", action, (r) => r.message || "");
     },
     async restart() {
-      if (!(await ask("Restart ComfyUI", "Restart now? The server is down for 10–40 s and any running generation is lost. This page reloads when it is back."))) return;
+      let waiting = []; try { waiting = (await api.addons()).filter((a) => a.state === "pending").map((a) => a.title); } catch { /* not knowing is not a reason to refuse */ }
+      const installs = waiting.length ? `\n\nOn the way up it will also download and install: ${waiting.join(", ")}. That can take a few minutes more.` : "";
+      if (!(await ask("Restart ComfyUI", `Restart now? The server is down for 10–40 s and any running generation is lost. This page reloads when it is back.${installs}`))) return;
       const action = () => api.git("restart"); action.dropsConnection = true;
       return run("Restarting ComfyUI…", action);
     },

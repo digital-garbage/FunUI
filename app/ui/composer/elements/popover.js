@@ -198,7 +198,10 @@ define("autocomplete", "default", ({ input, source, onPick, minChars = 1 } = {})
     if (!live) return;
     if (e.key === "ArrowDown") { e.preventDefault(); index = Math.min(index + 1, current.length - 1); draw(current); }
     else if (e.key === "ArrowUp") { e.preventDefault(); index = Math.max(index - 1, 0); draw(current); }
-    else if (e.key === "Enter" && index >= 0) { e.preventDefault(); if (onPick) onPick(current[index]); close(); }
+    else if ((e.key === "Enter" && index >= 0) || (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+      // Tab takes the highlighted suggestion, or the first one; it is a plain Tab only when nothing is offered.
+      e.preventDefault(); if (onPick) onPick(current[Math.max(index, 0)]); close();
+    }
   };
 
   if (field) {

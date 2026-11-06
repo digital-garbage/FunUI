@@ -13,7 +13,10 @@ export const modules = (app) => function mount() {
   // The project remembers which add-ons it uses, so a new rental can offer them again on load.
   const remember = (id, on) => { const now = app.project.pref("addons", []) || [], next = on ? [...new Set([...now, id])] : now.filter((i) => i !== id); app.project.setPref("addons", next); };
   const flip = async (a, on) => {
-    try { addons = await app.api.setAddon(a.id, on); remember(a.id, on); } catch (err) { c.toast.warn({ text: `Could not change ${a.title}: ${err.message}` }); }
+    try {
+      addons = await app.api.setAddon(a.id, on); remember(a.id, on);
+      if (on && addons.some((x) => x.id === a.id && x.state === "pending")) c.toast.info({ text: `${a.title} is not installed yet: restart ComfyUI to download and install it.`, duration: 10000 });
+    } catch (err) { c.toast.warn({ text: `Could not change ${a.title}: ${err.message}` }); }
     draw();
   };
   const addonRow = (a) => {
@@ -48,7 +51,9 @@ export const modules = (app) => function mount() {
       checked: ps.allOff(), onChange: (on) => ps.setAllOff(on).then(draw) });
     const section = (label, rows) => rows.length ? [c.label.section({ text: label }), ...rows] : [];
     const installed = mine.filter((m) => !isOff(m));
+    const waiting = addons.filter((a) => a.state === "pending");
     page.set([notes.length ? c.banner.warn({ text: notes.join(" ") }) : null,
+      waiting.length ? c.banner.info({ text: `Restart ComfyUI to finish: ${waiting.map((a) => a.title).join(", ")} will be installed (their dependencies downloaded) while ComfyUI starts, and work after that.`, action: { label: "Restart ComfyUI", onClick: () => app.maintenance.restart() } }) : null,
       ...section("Available modules", offered.map(addonRow)),
       ...section("Installed modules", [...onAddons.map(addonRow), ...CATEGORIES.flatMap(([key]) => installed.filter((m) => (m.category || "") === key).map(row))]),
       ...section("Disabled modules", [...offAddons.map(addonRow), ...mine.filter(isOff).map(row)]),
