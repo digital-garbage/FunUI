@@ -108,3 +108,6 @@ body { -webkit-font-smoothing: antialiased; letter-spacing: -.003em; }
 .cx-settings-content .cx-media-list { background: var(--elev-2); border-radius: var(--r-5); padding: var(--sp-3); gap: 0; }
 .cx-settings-content .cx-media-row { border-radius: var(--r-3); border-color: transparent; background: transparent; }
 .cx-settings-content .cx-media-row:hover { background: var(--hover); }
+
+/* Settings rows in a popover already carry their own padding and a seam; the stack's 20px gap on top of that left 44px between two controls. */
+.cx-popover .cx-stack:has(> .cx-settings-row) { gap: 0; --cx-gap: 0px; }
