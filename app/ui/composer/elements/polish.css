@@ -22,11 +22,6 @@ body { -webkit-font-smoothing: antialiased; letter-spacing: -.003em; }
 .cx-panel-title::before { display: none; }
 .cx-panel-status { color: var(--muted); }
 .cx-panel-body { padding: var(--sp-7); gap: var(--sp-6); }
-/* Scrolled to the end, the last line sits well clear of the panel's edge, whatever the browser does with a scroller's bottom padding. */
-.cx-panel:not(.cx-panel-flush) > .cx-panel-body::after { content: ""; flex: 0 0 var(--sp-6); }
-/* A body that is one filler (the preview's stack, a viewer) already ends at the padding; the spacer plus the body gap was a 24px dead band under its last row. */
-.cx-panel-body:has(> .cx-stack-fill:only-child, > .cx-viewer:only-child)::after { display: none; }
-
 /* buttons: soft fill, no outline; the one primary is solid */
 .cx-btn { background: var(--elev-2); border-color: transparent; font-weight: var(--fw-medium); }
 .cx-btn:hover:not(:disabled) { background: var(--hover); border-color: transparent; }
