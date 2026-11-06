@@ -74,9 +74,11 @@
 .cx-segmented {
   display: inline-flex; border: var(--bw) solid var(--line);
   border-radius: var(--ctl-r); overflow: hidden; background: var(--elev-2);
+  /* In a narrow column the last choices wrapped out of sight (clipped by the overflow): wrap them to a second line instead. */
+  flex-wrap: wrap; max-inline-size: 100%;
 }
 .cx-segment {
-  border: 0; background: transparent; color: var(--muted);
+  border: 0; background: transparent; color: var(--muted); white-space: nowrap;
   cursor: pointer; font-family: var(--font-ui);
   border-left: var(--bw) solid var(--line);
   transition: background var(--dur-1) var(--ease-standard), color var(--dur-1) var(--ease-standard);

@@ -1,5 +1,5 @@
 /* The frame's proportions, as v4 had them: fixed side columns and a fixed-height timeline across the bottom. */
-:root { --media-w: clamp(180px, 20vw, 280px); --properties-w: clamp(270px, 28vw, 360px); --timeline-h: clamp(270px, 42vh, 340px); --pad: 10px; --pgap: 10px; }
+:root { --media-w: clamp(180px, 20vw, 280px); --properties-w: clamp(270px, 28vw, 360px); --timeline-h: clamp(340px, 42vh, 380px); --pad: 10px; --pgap: 10px; }
 .fp-main { flex-direction: column; padding: 0 var(--pad) var(--pad); gap: var(--pgap); }
 /* Narrower windows wrap the timeline's header and toolbar onto more rows, so its fixed height gets more room for the lanes. */
 @media (max-width: 1250px) { :root { --timeline-h: clamp(360px, 44vh, 400px); } }
@@ -15,7 +15,7 @@
 .cx-zone .cx-panel-body > :not(.cx-stack-fill):not(.cx-viewer) { flex-shrink: 0; }
 .cx-zone .cx-stack-fill > :not(.cx-viewer):not(.cx-stack-fill) { flex-shrink: 0; }
 .cx-zone .cx-stack-fill > .cx-segmented { display: flex; }
-.cx-zone .cx-stack-fill > .cx-segmented .cx-segment { flex: 1 1 0; }
+.cx-zone .cx-stack-fill > .cx-segmented .cx-segment { flex: 1 1 auto; }
 [hidden] { display: none !important; }
 /* An empty zone says so in the middle of it, with the controls kept at its foot. */
 .cx-zone .cx-stack-fill > .cx-empty { flex: 1 1 auto; justify-content: center; }
