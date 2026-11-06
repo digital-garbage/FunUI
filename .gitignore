@@ -9,10 +9,6 @@ __pycache__/
 # OS / editor
 .DS_Store
 
-# Local tooling / agent config
-.claude/
-.cursor/
-
 # Runtime artifacts (generated refinement stores, attn maps, etc.)
 refinements/
 
