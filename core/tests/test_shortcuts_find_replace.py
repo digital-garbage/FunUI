@@ -103,6 +103,25 @@ def test_unicode_case_insensitive(store):
     assert shortcuts.find_replace("éclair")["matches"][0]["count"] == 2
 
 
+def test_whole_words_refuses_a_hit_inside_a_longer_word_and_still_matches_punctuation_edges(store):
+    put("a", "a bored fox, the scatter cat", "red fox, big hat")
+    assert [m["count"] for m in shortcuts.find_replace("red fox", whole_words=False)["matches"]] == [1, 1]
+    assert [m["index"] for m in shortcuts.find_replace("red fox", whole_words=True)["matches"]] == [1]
+    shortcuts.find_replace("cat", "dog", apply=True, whole_words=True)
+    assert texts()["a"][0] == "a bored fox, the scatter dog"
+    shortcuts.find_replace(", big", " small", apply=True, whole_words=True)      # ends that are not word characters are free
+    assert texts()["a"][1] == "red fox small hat"
+    shortcuts.find_replace("cat", "dog", apply=True)                              # off: inside a word too
+    assert texts()["a"][0] == "a bored fox, the sdogter dog"
+
+
+def test_removing_a_phrase_tidies_the_commas_and_a_line_left_with_only_punctuation_is_skipped(store):
+    put("a", "red fox, big hat", "a red fox, big hat", "big hat, red fox", "red fox.")
+    done = shortcuts.find_replace("red fox", "", apply=True)
+    assert texts()["a"] == ["big hat", "a, big hat", "red fox."]      # the two that became "big hat" are one
+    assert done["skipped"] == [{"name": "a", "index": 3, "reason": "empty"}]
+
+
 # ── common phrases ────────────────────────────────────────────────────────
 
 def phrases(**kw):
@@ -150,3 +169,9 @@ def test_every_listed_phrase_can_be_found_and_the_counts_agree(store):
 
 def test_nothing_in_an_empty_library(store):
     assert shortcuts.common_phrases() == []
+
+
+def test_the_phrase_limit_can_be_lifted_so_a_caller_can_say_how_many_there_are(store):
+    for i in range(3):
+        put(f"s{i}", " ".join(f"w{j}" for j in range(8)))
+    assert len(shortcuts.common_phrases(limit=2)) == 2 and len(shortcuts.common_phrases()) > 2

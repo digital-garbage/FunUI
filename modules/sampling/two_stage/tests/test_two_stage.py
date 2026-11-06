@@ -299,3 +299,28 @@ def test_a_stage_lora_is_not_applied_when_two_stages_is_off_and_it_is_said(model
     monkeypatch.setattr(two.log, "once", lambda key, level, source, message: said.append(message))
     seen = _stage_lora_run(model, monkeypatch, "Second", values={"enabled": False})
     assert all(not applied for _g, applied in seen) and any("not applied" in m for m in said)
+
+
+def test_an_error_between_the_stages_leaves_the_guider_as_it_was_found(model, monkeypatch):
+    """The guider can be cached by ComfyUI across runs: a failed enlarge must not leave it on the stage-1 model."""
+    import comfy.samplers
+    from comfy.nested_tensor import NestedTensor
+    from modules.sampling.two_stage import install, stages
+    patched = model.clone()
+    install(patched, {"enabled": True, "size": 0.5, "steps": 2}, "funui.two_stage")
+    guider = comfy.samplers.CFGGuider(patched)
+    cond = [[torch.randn(1, 5, 48), {}]]
+    guider.set_conds(cond, cond)
+    guider.set_cfg(1.0)
+    before = guider.model_patcher
+
+    def boom(*_a, **_k):
+        raise RuntimeError("enlarge failed")
+    monkeypatch.setattr(stages, "enlarge", boom)
+    noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
+    latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
+    with pytest.raises(RuntimeError, match="enlarge failed"):
+        guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor((1.0, 0.9, 0.7, 0.3, 0.0)),
+                      seed=1, disable_pbar=True)
+    assert guider.model_patcher is before
+    assert getattr(guider, stages.FULL, None) is None and getattr(guider, "funui_stage", None) is None

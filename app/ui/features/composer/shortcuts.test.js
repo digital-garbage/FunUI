@@ -44,12 +44,12 @@ const closeAll = () => { for (const m of document.querySelectorAll(".cx-modal"))
 test("Find lists the matches with their counts and sends the text and the case choice as typed", async () => {
   const asked = [];
   const lib = { shortcuts: [one("a")] };
-  const page = await mount({ shortcuts: async () => lib, findShortcuts: async (f, mc) => { asked.push([f, mc]); return { matches: [hit("a", "red fox red", null, 2), hit("b", "a red hat", null)], skipped: [] }; } });
+  const page = await mount({ shortcuts: async () => lib, findShortcuts: async (f, mc, ww) => { asked.push([f, mc, ww]); return { matches: [hit("a", "red fox red", null, 2), hit("b", "a red hat", null)], skipped: [] }; } });
   page.node.querySelector("button[title^='Export']").click();
   press("Find and replace…");
   typeInto("Find", "a.b (red)");
   await later(260);
-  assert.deepEqual(asked.at(-1), ["a.b (red)", false]);
+  assert.deepEqual(asked.at(-1), ["a.b (red)", false, true]);
   assert.match(document.querySelector(".cx-modal").textContent, /3 matches in 2 shortcuts/);
   assert.deepEqual(rows(), ["a" + "red fox red", "b" + "a red hat"]);
   assert.ok([...document.querySelectorAll("button")].find((b) => /everywhere/.test(b.textContent)).disabled, "Find alone can change nothing");
@@ -60,21 +60,21 @@ test("Replace shows before and after, asks first, then saves and redraws with th
   const calls = [];
   let lib = { shortcuts: [one("a")] };
   const api = { shortcuts: async () => lib,
-    replaceShortcuts: async (f, r, mc, apply) => { calls.push([f, r, mc, apply]); return { ...(apply ? { shortcuts: [one("renamed")] } : {}), matches: [hit("a", "red fox", "blue fox")], changed: 1, skipped: [] }; } };
+    replaceShortcuts: async (f, r, mc, apply, ww) => { calls.push([f, r, mc, apply, ww]); return { ...(apply ? { shortcuts: [one("renamed")] } : {}), matches: [hit("a", "red fox", "blue fox")], changed: 1, skipped: [] }; } };
   const page = await mount(api);
   page.node.querySelector("button[title^='Export']").click();
   press("Find and replace…");
   press("Replace");
   typeInto("Find", "red"); typeInto("Replace with", "blue");
   await later(260);
-  assert.deepEqual(calls.at(-1), ["red", "blue", false, false], "a preview writes nothing");
+  assert.deepEqual(calls.at(-1), ["red", "blue", false, false, true], "a preview writes nothing");
   assert.deepEqual(rows(), ["ared fox → blue fox"]);
   press("Replace everywhere");
   await wait();
   assert.equal(calls.filter((c) => c[3]).length, 0, "nothing is written before the person agrees");
   press("Replace", true);                                                                           // the confirmation
   await later(30);
-  assert.deepEqual(calls.at(-1), ["red", "blue", false, true]);
+  assert.deepEqual(calls.at(-1), ["red", "blue", false, true, true]);
   assert.deepEqual([...page.node.querySelectorAll(".cx-filter-label")].map((n) => n.textContent), ["renamed"]);
   closeAll(); page.node.remove();
 });
@@ -105,5 +105,34 @@ test("Common phrases lists them with counts, and picking one opens Replace with 
   await later(30);
   assert.equal([...document.querySelectorAll("input")].find((n) => n.getAttribute("aria-label") === "Find").value, "golden light");
   assert.deepEqual(asked, ["golden light"]);
+  closeAll(); page.node.remove();
+});
+
+test("the count in the confirmation is asked again for what is typed at that moment", async () => {
+  let latest = "";
+  const api = { shortcuts: async () => ({ shortcuts: [one("a")] }),
+    replaceShortcuts: async (f, _r, _m, apply) => { latest = f; return { matches: f === "red" ? [hit("a", "red", "blue"), hit("b", "red", "blue")] : [hit("a", "r", "b")], skipped: [], changed: 1, shortcuts: apply ? [one("a")] : undefined }; } };
+  const page = await mount(api);
+  page.node.querySelector("button[title^='Export']").click();
+  press("Find and replace…");
+  press("Replace");
+  typeInto("Find", "r"); await later(260);
+  typeInto("Find", "red");                      // typed, and Replace pressed before the pause ends
+  press("Remove everywhere");
+  await later(40);
+  assert.equal(latest, "red");
+  assert.match(document.body.textContent, /Change 2 lines/);
+  closeAll(); page.node.remove();
+});
+
+test("Whole words only is on to begin with and is sent as chosen", async () => {
+  const sent = [];
+  const page = await mount({ shortcuts: async () => ({ shortcuts: [one("a")] }), findShortcuts: async (f, mc, ww) => { sent.push(ww); return { matches: [], skipped: [] }; } });
+  page.node.querySelector("button[title^='Export']").click();
+  press("Find and replace…");
+  typeInto("Find", "cat"); await later(260);
+  const box = document.querySelectorAll(".cx-modal input[type=checkbox]")[1];
+  box.click(); await later(260);
+  assert.deepEqual(sent, [true, false]);
   closeAll(); page.node.remove();
 });

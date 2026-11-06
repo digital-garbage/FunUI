@@ -169,7 +169,7 @@ def test_find_replace_and_phrases_over_http(server):
     assert [m["name"] for m in found["matches"]] == ["A", "B"]
     assert _request(server, "POST", "/fun/api/shortcuts/find", {"find": ""})[0] == 400
     _, phrases = _request(server, "GET", "/fun/api/shortcuts/phrases")
-    assert phrases["phrases"][0]["phrase"] == "golden light"
+    assert phrases["phrases"][0]["phrase"] == "golden light" and phrases["total"] == 1
     status, preview = _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "golden", "replace": "warm", "apply": False})
     assert status == 200 and preview["changed"] == 2
     assert [s["replacements"] for s in _request(server, "GET", "/fun/api/shortcuts")[1]["shortcuts"]][0] == ["soft golden light"]

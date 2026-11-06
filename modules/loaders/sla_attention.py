@@ -517,7 +517,9 @@ def make_run_start(state):
     counter above resets itself from the schedule, but a run cancelled during its first step leaves the next run
     looking like the same step, so its stabilize_motion memory (the cancelled run's block choices) and a kernel
     failure would be read as its own. Only these two are cleared: a Two stages run enters this once per stage and
-    the stage's own bookkeeping has to carry over."""
+    the stage's own bookkeeping has to carry over. So the call and fall-through counts of a run cancelled in its first
+    step still reach the next run's summary line (log only, the picture is unaffected): a retry cannot be told apart
+    from a second stage."""
     def outer(executor, *args, **kwargs):
         state["history"].clear()
         state["failed"] = None

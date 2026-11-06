@@ -31,9 +31,9 @@ export function shortcuts(app, own) {
 
   /** Phrases that repeat across shortcuts; picking one hands it to `onPick`. */
   async function phrasesWindow(onPick) {
-    let phrases;
-    try { phrases = (await app.api.shortcutPhrases()).phrases || []; } catch (err) { return tell(err.message); }
-    const win = c.modal.stacked({ title: "Common phrases", subtitle: "Phrases used in more than one shortcut. Pick one to look at it or change it everywhere.", size: "md", body: c.filterList.md({
+    let phrases, total = 0;
+    try { const got = await app.api.shortcutPhrases(); phrases = got.phrases || []; total = got.total || phrases.length; } catch (err) { return tell(err.message); }
+    const win = c.modal.stacked({ title: "Common phrases", subtitle: `Phrases of two or more words used in more than one shortcut.${total > phrases.length ? ` Showing the ${phrases.length} most shared of ${total}.` : ""} Pick one to look at it or change it everywhere.`, size: "md", body: c.filterList.md({
       items: phrases.map((p) => ({ id: p.phrase, label: p.phrase, hint: `${p.shortcuts} shortcuts, ${p.uses} ${p.uses === 1 ? "line" : "lines"}` })),
       placeholder: "Search phrases", empty: "No phrase is used in more than one shortcut.",
       onChange: (phrase) => { win.close("picked"); onPick(phrase); } }) });
@@ -41,7 +41,7 @@ export function shortcuts(app, own) {
 
   /** Find a phrase in the text of every shortcut, or replace it in all of them at once. */
   function findWindow(start = "", mode = "find") {
-    const state = { find: start, replace: "", matchCase: false, mode };
+    const state = { find: start, replace: "", matchCase: false, wholeWords: true, mode };
     const results = c.region.stack({ gap: "sm" });
     let ticket = 0, timer = null, apply = null;
     const findBox = c.input.md({ label: "Find", value: start, placeholder: "Find", onInput: (v) => { state.find = v; soon(); } });
@@ -57,7 +57,7 @@ export function shortcuts(app, own) {
       const mine = ++ticket;
       if (!state.find.trim()) return note("Type the phrase to look for. It is matched exactly as typed.");
       try {
-        const asked = state.mode === "replace" ? await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, false) : await app.api.findShortcuts(state.find, state.matchCase);
+        const asked = state.mode === "replace" ? await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, false, state.wholeWords) : await app.api.findShortcuts(state.find, state.matchCase, state.wholeWords);
         if (mine !== ticket || !alive) return;
         const rows = asked.matches || [], names = new Set(rows.map((m) => m.name));
         if (!rows.length) return note("No shortcut contains that phrase.");
@@ -74,11 +74,14 @@ export function shortcuts(app, own) {
     own(() => clearTimeout(timer));
 
     async function commit() {
+      clearTimeout(timer);
+      await look();                                 // the count asked about is the one for what is typed now
+      if (!found) return;
       const ok = await c.modal.dialogue({ title: state.replace === "" ? "Remove everywhere" : "Replace everywhere", tone: "danger",
         message: `Change ${found} ${found === 1 ? "line" : "lines"} in your saved shortcuts? This cannot be undone.`, confirmLabel: state.replace === "" ? "Remove" : "Replace" }).result;
       if (!ok) return;
       try {
-        const done = await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, true);
+        const done = await app.api.replaceShortcuts(state.find, state.replace, state.matchCase, true, state.wholeWords);
         draw(done);
         c.toast.good({ text: `Changed ${done.changed} ${done.changed === 1 ? "shortcut" : "shortcuts"}.` });
         win.close("done");
@@ -89,6 +92,7 @@ export function shortcuts(app, own) {
       c.segmented.md({ label: "Mode", value: state.mode, options: [{ value: "find", label: "Find" }, { value: "replace", label: "Replace" }], onChange: (v) => { state.mode = v; fields.set(v === "replace" ? [findField, replaceField] : [findField]); look(); } }),
       fields,
       c.toggle.default({ label: "Match upper and lower case", checked: false, onChange: (v) => { state.matchCase = v; look(); } }),
+      c.toggle.default({ label: "Whole words only", hint: "Off also finds the phrase inside longer words, such as “cat” in “scatter”.", checked: true, onChange: (v) => { state.wholeWords = v; look(); } }),
       c.button.sm({ label: "Common phrases…", onClick: () => phrasesWindow((phrase) => { findBox.setValue(phrase); state.find = phrase; look(); }) }),
       results,
     ] }) });

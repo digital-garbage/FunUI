@@ -1139,7 +1139,8 @@ def register(routes, prefix=None):
         if body is None:
             return web.json_response({"problems": ["send {find, match_case}"]}, status=400)
         try:
-            return web.json_response(shortcuts_mod.find_replace(body.get("find"), None, body.get("match_case") is True))
+            return web.json_response(shortcuts_mod.find_replace(body.get("find"), None, body.get("match_case") is True,
+                                                                              whole_words=body.get("whole_words") is True))
         except ValueError as exc:
             return web.json_response({"problems": [str(exc)]}, status=400)
 
@@ -1151,14 +1152,17 @@ def register(routes, prefix=None):
             return web.json_response({"problems": ["send {find, replace, match_case, apply}"]}, status=400)
         try:
             done = shortcuts_mod.find_replace(body.get("find"), body["replace"], body.get("match_case") is True,
-                                              body.get("apply") is True)
+                                              body.get("apply") is True, whole_words=body.get("whole_words") is True)
         except ValueError as exc:
             return web.json_response({"problems": [str(exc)]}, status=400)
         return web.json_response(dict(json.loads(_library().text), **done))
 
+    PHRASES_SHOWN = 200
+
     @routes.get(P + "/api/shortcuts/phrases")
     async def _shortcuts_phrases(_req):
-        return web.json_response({"phrases": shortcuts_mod.common_phrases()})
+        rows = await asyncio.to_thread(shortcuts_mod.common_phrases)       # a big library takes seconds: not on the server's loop
+        return web.json_response({"phrases": rows[:PHRASES_SHOWN], "total": len(rows)})
 
     @routes.get(P + "/api/shortcuts/revolver")
     async def _revolver_get(_req):

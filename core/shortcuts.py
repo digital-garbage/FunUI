@@ -175,20 +175,29 @@ def clear() -> list[Shortcut]:
 # These work on the replacement text only: that is the prose. A trigger is a key, and rewriting
 # triggers in bulk could merge two of them or break the picker's order.
 
-def _finder(query, match_case: bool = False):
-    """The query as a literal (never a pattern) regex; runs of whitespace match the single space the library keeps."""
+_WORD_EDGE = r"[\w'’-]"      # what a trigger treats as part of a word (see _trigger_pattern)
+
+
+def _finder(query, match_case: bool = False, whole_words: bool = False):
+    """The query as a literal (never a pattern) regex; runs of whitespace match the single space the library keeps.
+    `whole_words` refuses a hit inside a longer word ("cat" in "scatter"), but only at an end of the query that is
+    itself a word character, so a query like ", big" still matches after a word."""
     text = re.sub(r"\s+", " ", str(query if query is not None else ""))
     if not text.strip():
         raise ValueError("type the phrase to look for")
-    return re.compile(re.escape(text), 0 if match_case else re.IGNORECASE)
+    body = re.escape(text)
+    if whole_words:
+        body = (rf"(?<!{_WORD_EDGE})" if re.match(_WORD_EDGE, text[0]) else "") + body + \
+               (rf"(?!{_WORD_EDGE})" if re.match(_WORD_EDGE, text[-1]) else "")
+    return re.compile(body, 0 if match_case else re.IGNORECASE)
 
 
-def find_replace(find, replace=None, match_case: bool = False, apply: bool = False, items=None) -> dict:
+def find_replace(find, replace=None, match_case: bool = False, apply: bool = False, items=None, whole_words: bool = False) -> dict:
     """-> {matches, changed, skipped}. Finds `find` in every replacement of every shortcut (enabled or not);
     `replace=None` only looks. Matches are taken left to right and never overlap ("aa" in "aaa" is one).
-    `apply` writes the library. A replacement that would end up empty or longer than the limit is left
+    `apply` writes the library. A replacement that would end up with no word in it or longer than the limit is left
     as it was and named in `skipped`: an empty replacement means "remove this phrase", not "was blanked by accident"."""
-    rx = _finder(find, match_case)
+    rx = _finder(find, match_case, whole_words)
     new = None if replace is None else re.sub(r"\s+", " ", str(replace))
     with _LOCK:
         base = listing() if items is None else items
@@ -203,9 +212,11 @@ def find_replace(find, replace=None, match_case: bool = False, apply: bool = Fal
                 after = None if new is None else rx.sub(lambda _m: new, text)
                 entry = {"name": sc.name, "index": i, "count": count, "before": text, "after": after}
                 if after is not None:
+                    if new == "":                    # a removal: tidy the commas it leaves, as removing a trigger's phrase does
+                        after = _cleanup_removed_phrases(after)
                     after = after.strip()
-                    if not after or len(after) > MAX_ITEM:
-                        skipped.append({"name": sc.name, "index": i, "reason": "empty" if not after else "too long"})
+                    if not re.search(r"\w", after) or len(after) > MAX_ITEM:        # nothing but punctuation is as empty as nothing
+                        skipped.append({"name": sc.name, "index": i, "reason": "too long" if len(after) > MAX_ITEM else "empty"})
                         continue
                     lines[i], touched, entry["after"] = after, True, after
                 matches.append(entry)
@@ -219,7 +230,7 @@ def find_replace(find, replace=None, match_case: bool = False, apply: bool = Fal
 _SEGMENT = re.compile(r"[^\w\s'’-]+|\n")     # punctuation ends a phrase: "red fox, big hat" never makes "fox big"
 
 
-def common_phrases(items=None, min_words: int = 2, min_shortcuts: int = 2, max_words: int = 8, limit: int = 200) -> list[dict]:
+def common_phrases(items=None, min_words: int = 2, min_shortcuts: int = 2, max_words: int = 6, limit: int | None = None) -> list[dict]:
     """Runs of words that appear in the replacements of at least `min_shortcuts` different shortcuts:
     [{phrase, shortcuts, uses, words}], most shared first. `uses` counts replacement lines (a phrase twice in one
     line is one use). A phrase is dropped when a longer one around it is in exactly the same places, so
@@ -244,7 +255,7 @@ def common_phrases(items=None, min_words: int = 2, min_shortcuts: int = 2, max_w
                 del kept[child]
     rows = [{"phrase": e[0], "shortcuts": len(e[1]), "uses": len(e[2]), "words": len(k.split())} for k, e in kept.items()]
     rows.sort(key=lambda r: (-r["shortcuts"], -r["words"], -r["uses"], r["phrase"].casefold()))
-    return rows[:limit]
+    return rows if limit is None else rows[:limit]
 
 
 # --- categories --------------------------------------------------------------

@@ -26,12 +26,12 @@ SETTINGS = {
     "auto_contrast": {
         "type": "bool", "default": False,
         "label": "Auto contrast",
-        "hint": "Stretches the clip's darkest and brightest levels (by at most 15% each) toward black and white. Measured once on the whole clip and applied as one fixed curve, so it never flickers.",
+        "hint": "Stretches the clip's darkest and brightest levels (by at most 15% each) toward black and white. Measured once from 16 frames spread over the clip and applied as one fixed curve, so it never flickers.",
     },
     "auto_brightness": {
         "type": "bool", "default": False,
         "label": "Auto brightness",
-        "hint": "Lifts or lowers the clip's midtones toward a middle level (within a mild range). Measured once on the whole clip, never per frame.",
+        "hint": "Lifts or lowers the clip's midtones toward a middle level (within a mild range). Measured once from 16 frames spread over the clip, never per frame.",
     },
     "saturation": {
         "type": "float", "default": 1.0, "min": 0.5, "max": 1.5, "step": 0.05, "ui": "slider",

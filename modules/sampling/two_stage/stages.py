@@ -250,32 +250,26 @@ def _staged(original, guider, size, steps, resize, method, back_up, *args, **kwa
     setattr(guider, FULL, whole)
     setattr(guider, dit_hooks.STAGE, 1)
     guider.model_patcher = first_model
-    try:
+    try:                                            # everything from here to the end: an error between the stages (enlarging) must not leave the stage-1 model on a guider ComfyUI may cache
         run(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
              latent_shapes=shapes1)
-    except BaseException:
-        guider.model_patcher = base_model
-        setattr(guider, FULL, None)
-        setattr(guider, dit_hooks.STAGE, None)
-        raise
-    if "x0" not in seen:
-        raise RuntimeError("the first stage gave no clean guess to hand over")
+        if "x0" not in seen:
+            raise RuntimeError("the first stage gave no clean guess to hand over")
 
-    video, audio = comfy.utils.unpack_latents(seen["x0"], shapes1)
-    done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
-    video, audio = done.unbind()
-    enlarged = enlarge(video, h, w, upscaler, method)
-    handed, _ = comfy.utils.pack_latents(
-        (enlarged.to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
+        video, audio = comfy.utils.unpack_latents(seen["x0"], shapes1)
+        done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
+        video, audio = done.unbind()
+        enlarged = enlarge(video, h, w, upscaler, method)
+        handed, _ = comfy.utils.pack_latents(
+            (enlarged.to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
-    guider.conds = raw_conds                        # the first stage encoded the originals for its own size
-    shifted = None
-    if callback is not None:
-        def shifted(step, x0, x, total):
-            return callback(step + steps, x0, x, total + steps)
-    setattr(guider, dit_hooks.STAGE, 2)
-    guider.model_patcher = second_model
-    try:
+        guider.conds = raw_conds                        # the first stage encoded the originals for its own size
+        shifted = None
+        if callback is not None:
+            def shifted(step, x0, x, total):
+                return callback(step + steps, x0, x, total + steps)
+        setattr(guider, dit_hooks.STAGE, 2)
+        guider.model_patcher = second_model
         return run(noise, handed, sampler, second, None, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
     finally:
         guider.model_patcher = base_model
