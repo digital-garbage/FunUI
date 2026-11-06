@@ -79,11 +79,77 @@ def test_known_types_are_explicit():
     assert content_type_for(Path("a.svg")) == "image/svg+xml"
 
 
-def test_responses_are_never_cached(tree):
-    assert app_get(tree, "boot.js").headers["Cache-Control"] == "no-store, max-age=0"
+def test_code_is_never_cached_blindly(tree):
+    assert app_get(tree, "boot.js").headers["Cache-Control"] == "no-cache"
 
 
 # --- missing files ---------------------------------------------------------
 
 def test_missing_file_is_404(tree):
     assert app_get(tree, "nope.js").status == 404
+
+
+# --- keeping modules between reloads -----------------------------------------
+
+def test_an_unchanged_file_answers_304_with_no_body_and_a_changed_one_answers_whole(tree):
+    first = app_get(tree, "boot.js")
+    again = serve(tree / "app", "boot.js", config.APP_EXTS, if_none_match=first.headers["ETag"])
+    assert again.status == 304 and again.body == b""
+    (tree / "app" / "boot.js").write_text("export const ok = 2; // changed")
+    changed = serve(tree / "app", "boot.js", config.APP_EXTS, if_none_match=first.headers["ETag"])
+    assert changed.status == 200 and b"changed" in changed.body and changed.headers["ETag"] != first.headers["ETag"]
+
+
+def test_a_file_is_kept_for_a_year_only_under_its_present_hash(tree):
+    now = app_get(tree, "boot.js").headers["ETag"].strip('"')
+    assert "immutable" in serve(tree / "app", "boot.js", config.APP_EXTS, version=now).headers["Cache-Control"]
+    old = serve(tree / "app", "boot.js", config.APP_EXTS, version="0123456789abcdef")           # a name from before an edit
+    assert old.status == 200 and "immutable" not in old.headers["Cache-Control"], "an old name must never pin a file"
+    assert "immutable" not in serve(tree / "app", "boot.js", config.APP_EXTS, version="").headers["Cache-Control"]
+
+
+def test_the_import_map_names_every_script_by_its_content_and_skips_tests(tree):
+    from core.serve import import_map
+    app = tree / "app"
+    (app / "tests").mkdir()
+    (app / "tests" / "a.js").write_text("x")
+    (app / "b.test.js").write_text("x")
+    one = import_map(app, "/fun/app/ui")
+    assert set(one) == {"/fun/app/ui/boot.js"} and one["/fun/app/ui/boot.js"].startswith("/fun/app/ui/boot.js?v=")
+    (app / "boot.js").write_text("export const ok = 3;")
+    assert import_map(app, "/fun/app/ui") != one
+
+
+def test_the_page_starts_the_app_through_the_import_map(tree):
+    from core.serve import index_page
+    app = tree / "app"
+    (app / "index.html").write_text('<html><head><title>x</title></head><body><script type="module" src="/fun/app/ui/boot.js"></script></body></html>')
+    page = index_page(app, "/fun/app/ui", config.APP_EXTS)
+    text = page.body.decode()
+    assert page.status == 200 and '<script type="importmap">' in text and text.index("importmap") < text.index('import "/fun/app/ui/boot.js"')
+    assert 'src="/fun/app/ui/boot.js"' not in text and page.headers["Cache-Control"] == "no-cache" and page.headers["ETag"]
+    (app / "index.html").write_text("<p>no entry script</p>")
+    assert b"importmap" not in index_page(app, "/fun/app/ui", config.APP_EXTS).body        # a page it does not know is left as it is
+
+
+def test_stylesheets_and_plain_scripts_in_the_page_are_named_by_content_and_follow_an_edit(tree):
+    from core.serve import index_page
+    app = tree / "app"
+    (app / "a.css").write_text("a{color:red}")
+    (app / "index.html").write_text('<html><head><link rel="stylesheet" href="/fun/app/ui/a.css"><link href="/fun/app/ui/missing.css"></head><body></body></html>')
+    one = index_page(app, "/fun/app/ui", config.APP_EXTS)
+    assert b'href="/fun/app/ui/a.css?v=' in one.body and b'href="/fun/app/ui/missing.css"' in one.body
+    (app / "a.css").write_text("a{color:blue}")                       # an edit: the very next page names the new file
+    two = index_page(app, "/fun/app/ui", config.APP_EXTS)
+    assert two.body != one.body and two.headers["ETag"] != one.headers["ETag"]
+
+
+def test_a_stylesheet_names_what_it_imports_by_content_and_an_edit_inside_it_changes_the_outer_name(tree):
+    app = tree / "app"
+    (app / "inner.css").write_text("b{color:red}")
+    (app / "outer.css").write_text('@import "./inner.css";\na{color:blue}')
+    one = serve(app, "outer.css", config.APP_EXTS)
+    assert b'@import "./inner.css?v=' in one.body
+    (app / "inner.css").write_text("b{color:green}")
+    two = serve(app, "outer.css", config.APP_EXTS, if_none_match=one.headers["ETag"])
+    assert two.status == 200 and two.headers["ETag"] != one.headers["ETag"], "an edit inside an import must not be answered 304"

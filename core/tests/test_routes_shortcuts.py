@@ -176,3 +176,39 @@ def test_find_replace_and_phrases_over_http(server):
     _, done = _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "golden", "replace": "warm", "apply": True})
     assert done["shortcuts"][1]["replacements"] == ["warm light, red fox"]
     assert _request(server, "POST", "/fun/api/shortcuts/replace", {"find": "x"})[0] == 400
+
+
+def test_the_app_is_kept_by_the_browser_and_asked_about_each_time(server):
+    import socket
+    def get(path, extra=""):
+        with socket.create_connection(("127.0.0.1", server), timeout=30) as sock:
+            sock.sendall(f"GET {path} HTTP/1.1\r\nHost: localhost\r\n{extra}Connection: close\r\n\r\n".encode())
+            data = b""
+            while chunk := sock.recv(65536):
+                data += chunk
+        head, _, body = data.partition(b"\r\n\r\n")
+        lines = head.decode().split("\r\n")
+        return int(lines[0].split()[1]), {k.lower(): v for k, v in (l.split(": ", 1) for l in lines[1:] if ": " in l)}, body
+    status, headers, body = get("/fun/app/ui/boot.js")
+    assert status == 200 and headers["cache-control"] == "no-cache" and headers["etag"]
+    assert get("/fun/app/ui/boot.js", f"If-None-Match: {headers['etag']}\r\n")[0:1] == (304,)
+    status, _h, page = get("/fun/")
+    assert status == 200 and b'<script type="importmap">' in page and b"/fun/app/ui/boot.js?v=" in page
+    version = headers["etag"].strip('"')
+    assert "immutable" in get(f"/fun/app/ui/boot.js?v={version}")[1]["cache-control"]
+
+
+def test_the_module_list_is_sent_once_and_then_answered_304(server):
+    import socket
+    def get(extra=""):
+        with socket.create_connection(("127.0.0.1", server), timeout=30) as sock:
+            sock.sendall(f"GET /fun/api/modules HTTP/1.1\r\nHost: localhost\r\n{extra}Connection: close\r\n\r\n".encode())
+            data = b""
+            while chunk := sock.recv(65536):
+                data += chunk
+        head = data.partition(b"\r\n\r\n")[0].decode().split("\r\n")
+        return int(head[0].split()[1]), {k.lower(): v for k, v in (l.split(": ", 1) for l in head[1:] if ": " in l)}
+    status, headers = get()
+    assert status == 200 and headers["cache-control"] == "no-cache" and headers["etag"]
+    assert get(f"If-None-Match: {headers['etag']}\r\n")[0] == 304
+    assert get('If-None-Match: "stale"\r\n')[0] == 200

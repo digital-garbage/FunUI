@@ -6,6 +6,7 @@ thin adapters over pure functions in `serve`.
 """
 
 import asyncio
+import hashlib
 import json
 
 from . import (addons as addons_mod, backend_log, config, control as control_mod, graph as graph_mod, log, media, nodes_manager, probe as probe_mod,
@@ -94,11 +95,14 @@ def _schedule_restart():
 def _respond(served):
     if served.status != 200:
         return web.Response(status=served.status, headers=served.headers)
-    return web.Response(
+    reply = web.Response(
         body=served.body,
         content_type=served.content_type,
         headers=served.headers,
     )
+    if served.content_type.startswith("text/") or served.content_type.endswith(("javascript", "json", "svg+xml")):
+        reply.enable_compression()                      # about a megabyte of script becomes a fraction of that over a rental's link
+    return reply
 
 
 def _serve_under(req, root, allowed):
@@ -107,7 +111,8 @@ def _serve_under(req, root, allowed):
     # reaches resolve() and is refused there. Note that aiohttp's own TestClient
     # normalises the URL before sending -- a test written with it cannot see
     # this path at all, which is why test_routes.py uses a raw socket.
-    return _respond(static.serve(root, req.match_info["tail"], allowed))
+    return _respond(static.serve(root, req.match_info["tail"], allowed,
+                                 req.headers.get("If-None-Match"), req.query.get("v")))
 
 
 def modules(rescan=False):
@@ -227,7 +232,16 @@ def register(routes, prefix=None):
     async def _modules(req):
         raw = req.query.get("traits")
         traits = [t for t in raw.split(",") if t] if raw is not None else None
-        return web.json_response(manifest(traits))
+        # Recomputed each time (it follows the control state and folder listings), but only sent when it differs from what
+        # the browser holds: ~60 kB, asked for twice per load.
+        body = json.dumps(manifest(traits)).encode()
+        tag = '"' + hashlib.sha1(body).hexdigest()[:16] + '"'
+        head = {"Cache-Control": "no-cache", "ETag": tag}
+        if req.headers.get("If-None-Match") == tag:
+            return web.Response(status=304, headers=head)
+        reply = web.Response(body=body, content_type="application/json", headers=head)
+        reply.enable_compression()
+        return reply
 
     @routes.post(P + "/api/control/release")
     async def _control_release(req):
@@ -1284,9 +1298,12 @@ def register(routes, prefix=None):
         return _serve_under(req, config.APP_DIR, config.APP_EXTS)
 
     @routes.get(P + "/")
-    async def _index(_req):
+    async def _index(req):
         # The frontend: app/ui.
-        return _respond(static.serve(config.APP_DIR, "ui/index.html", config.APP_EXTS))
+        page = static.index_page(config.APP_DIR / "ui", P + "/app/ui", config.APP_EXTS)
+        if page.status == 200 and req.headers.get("If-None-Match") == page.headers["ETag"]:
+            return web.Response(status=304, headers=page.headers)
+        return _respond(page)
 
     @routes.get(P)
     async def _index_bare(_req):

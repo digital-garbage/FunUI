@@ -52,7 +52,7 @@ def test_fonts_are_cacheable_but_code_is_not():
     assert "immutable" in font.headers["Cache-Control"]
 
     code = serve(config.APP_DIR, "ui/boot.js", config.APP_EXTS)
-    assert code.headers["Cache-Control"] == "no-store, max-age=0"
+    assert code.headers["Cache-Control"] == "no-cache" and code.headers["ETag"]      # kept, but asked about every time
 
 
 def test_cache_headers_are_not_shared_between_responses():
