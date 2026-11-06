@@ -104,17 +104,17 @@ const zoom = {
   },
 };
 
-// "4 clips · 4 active · 1 selected · 00:09:19" at the far end of the zone's head.
+// "4 clips · 3 active" in the row with the hint and zoom. The selection and the total time are already in the tools row.
 const count = {
   id: "timeline-count",
-  mount: "timeline.status",
-  needs: ["project", "selection"],
+  mount: "timeline.toolbar.end",
+  needs: ["project"],
   setup({ host, app }) {
-    const p = app.project, sel = app.selection;
+    const p = app.project;
     const put = inPlace(host);
     const draw = () => {
       const open = p.project, scenes = open ? open.scenes : [];
-      put(c.text.sm({ text: `${scenes.length} clips · ${scenes.filter((s) => !s.excluded).length} active · ${open ? sel.ids.length : 0} selected · ${clock(open ? totalSeconds(open) : 0)}` }).node);
+      put(c.hint.default({ text: `${scenes.length} ${scenes.length === 1 ? "clip" : "clips"} · ${scenes.filter((s) => !s.excluded).length} active` }).node);
     };
     draw();
     return app.on(draw);
