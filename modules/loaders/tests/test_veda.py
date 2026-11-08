@@ -702,3 +702,47 @@ def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folde
     finally:
         gc.enable()
         mm.unload_all_models()
+
+
+def test_a_reference_run_with_the_r2v_predictor_leaves_a_collectable_model(veda_on, folder, comfyui):
+    """The r2v predictor tiles the reference clips (its own budget for them) and the cached tile layouts carry the reference spans:
+    a run with a reference image must still leave nothing holding the model."""
+    import gc
+    import weakref
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    import comfy.samplers
+    import comfy.supported_models as sm
+    from comfy.nested_tensor import NestedTensor
+    _write_predictor(folder, ratio=0.3, meta={"ref_budget_kind": "ratio", "ref_budget_value": "0.5"})
+    config = sm.MiniMaxH3(dict(image_model="minimax_h3", hidden_size=64, num_layers=BLOCKS, token_refiner_num_layers=1, num_attention_heads=2,
+                               attention_head_dim=32, ffn_hidden_size=64, text_dim=48, timestep_input_dim=32, time_embed_hidden_size=64,
+                               time_embed_dim=32, rope_inv_freq_len=4))
+    config.set_inference_dtype(torch.bfloat16, None)
+    base = config.get_model({}, device=torch.device("cpu"))
+    for p in base.diffusion_model.parameters():
+        torch.nn.init.normal_(p, std=0.05)
+        p.requires_grad_(False)
+    loaded = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+    patched, note, installed = sla.install_sla(loaded, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9)
+    assert installed and "reference" in note
+    refs = [{"kind": "image", "latent_h": 8, "latent_w": 8, "latent": torch.randn(1, 24, 1, 8, 8)}]
+    cond = [[torch.randn(1, 5, 48).to(torch.bfloat16), {"minimax_refs": refs}]]
+    mm.load_models_gpu([patched])
+    guider = comfy.samplers.CFGGuider(patched)
+    guider.set_conds(cond, cond)
+    guider.set_cfg(1.0)
+    latent = NestedTensor((torch.zeros(1, 24, 10, 16, 16), torch.zeros(1, 32, 2, 3)))
+    noise = NestedTensor((torch.randn(1, 24, 10, 16, 16), torch.randn(1, 32, 2, 3)))
+    guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor([1.0, 0.5, 0.0]), seed=1, disable_pbar=True)
+    assert veda_on.calls, "Veda never took a call"
+    ref = weakref.ref(base)
+    gc.collect()
+    gc.disable()
+    try:
+        del guider, patched, loaded, base, noise, latent, cond, refs, config
+        dead = [m for m in mm.current_loaded_models if m.is_dead()]
+        assert not dead and ref() is None, [type(r).__name__ for r in gc.get_referrers(ref())] if ref() is not None else "dead model tracked"
+    finally:
+        gc.enable()
+        mm.unload_all_models()
