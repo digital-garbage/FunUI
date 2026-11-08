@@ -43,7 +43,7 @@ def routes(table, base, web):
         except ValueError as exc:
             return bad(str(exc))
         job = jobs.new(stoppable=True)
-        asyncio.create_task(jobs.run(job, nodes.interpolate, media, body.get("options") or {}, error=nodes.InterpolateError, stoppable=True))
+        asyncio.create_task(jobs.run(job, nodes.interpolate, media, body.get("options") or {}, error=nodes.InterpolateError, stoppable=True, exclusive=True))
         return web.json_response({"job_id": job})
 
     @table.post(base + "/jobs/{job}/stop")

@@ -13,7 +13,7 @@ const STEPS = [
   { at: "button:⏱ Sampler", side: "top", title: "Sampler", text: "Steps, sampler, scheduler, seed and the common switches, one click from the timeline. While a run goes, the step count shows to its left." },
   { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole story in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
   { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a video clip or audio track from the bin, an effect or transition, a text or picture overlay. Next to it: Split, Remove, Export, Save to media bin and Separate audio." },
-  { at: "button:⧉ Render", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads just the picked clip." },
+  { at: "button:⧉ Render", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads the picked clips." },
   { at: "main", side: "bottom", title: "FAQ", text: "Nothing happens? Check the ComfyUI chip at the top right and the Log window. Wrong look? Settings ▸ Appearance. Lost a layout? View ▸ Reset Layout. Lost a project? File ▸ Open recent. That is the tour: Help ▸ Start tour runs it again." },
 ];
 
@@ -23,26 +23,28 @@ export default {
   needs: ["project", "dom"],
   setup({ app }) {
     let at = -1, pop = null;
-    const stop = () => { if (pop) { const p = pop; pop = null; p.close(); } at = -1; };
+    const stop = () => { if (pop) { const p = pop; pop = null; p.close(); } at = -1; app.has.delete("tour.running"); };      // a flag the Help menu reads: features see copies of app, the Set is shared
+    const shown = (i) => { const el = app.dom.landmark(STEPS[i].at); return el && el.getBoundingClientRect().width ? el : null; };
     function show(i) {
       if (pop) { const p = pop; pop = null; p.close(); }
       let target;
-      while (i >= 0 && i < STEPS.length && !((target = app.dom.landmark(STEPS[i].at)) && target.getBoundingClientRect().width)) i += i >= at ? 1 : -1;      // a part that is hidden right now is skipped
+      while (i >= 0 && i < STEPS.length && !(target = shown(i))) i += i >= at ? 1 : -1;      // a part that is hidden right now is skipped
       if (i < 0 || i >= STEPS.length) return stop();
       at = i;
+      app.has.add("tour.running");
+      const seen = STEPS.map((_, k) => k).filter((k) => k === i || shown(k)), place = seen.indexOf(i) + 1;       // numbered among the parts on screen, so the count has no gaps
       const s = STEPS[i], last = i === STEPS.length - 1;
-      const body = c.region.stack({ gap: "sm", children: [c.label.section({ text: `${i + 1} / ${STEPS.length} · ${s.title}` }), c.text.sm({ text: s.text }),
+      const body = c.region.stack({ gap: "sm", children: [c.label.section({ text: `${place} / ${seen.length} · ${s.title}` }), c.text.sm({ text: s.text }),
         c.toolbar.default({ items: [c.button.sm({ label: "Back", tone: "ghost", disabled: i === 0, onClick: () => show(i - 1) }), c.button.sm({ label: last ? "Done" : "Next", tone: "primary", onClick: () => (last ? stop() : show(i + 1)) })],
           trailing: [c.button.sm({ label: "Exit tour", tone: "ghost", onClick: stop })] })] });
-      pop = c.popover.anchored({ anchor: target, body, side: s.side, align: "center", gap: 10, closeOnOutside: false, onClose: () => { if (pop) { pop = null; at = -1; } } });
+      pop = c.popover.anchored({ anchor: target, body, side: s.side, align: "center", gap: 10, closeOnOutside: false, onClose: () => { if (pop) { pop = null; at = -1; app.has.delete("tour.running"); } } });
     }
     app.has.add("tour");
-    app.tourOn = () => pop !== null;          // Help shows "Exit tour" only while one is running
     const off = app.on((what) => {
       if (what === "tour.start") show(0);
       else if (what === "tour.faq") show(STEPS.length - 1);
       else if (what === "tour.stop") stop();
     });
-    return () => { off(); app.has.delete("tour"); delete app.tourOn; };
+    return () => { off(); app.has.delete("tour"); app.has.delete("tour.running"); };
   },
 };

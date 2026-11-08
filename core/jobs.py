@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 MAX_JOBS = 50                         # finished jobs are kept this long for the poll that reads them
 
+_waiting: set = set()                # ids queued behind another job
 _jobs: "OrderedDict[str, dict]" = OrderedDict()
 _stop: set = set()                    # ids asked to stop; the job notices between chunks
 _can_stop: set = set()                # ids whose work checks for it
@@ -23,6 +24,8 @@ def stop(job: str) -> bool:
     if job not in _can_stop or not entry or entry.get("state") not in ("queued", "running"):
         return False
     _stop.add(job)
+    if entry.get("state") == "queued" and job in _waiting:
+        _jobs[job] = {"state": "stopped"}                # still waiting for its turn: it ends now, not when the one ahead does
     return True
 
 
@@ -49,15 +52,23 @@ def get(job: str) -> dict | None:
     return _jobs.get(job)
 
 
-_turns: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()   # one lock per event loop: one job at a time (they share the GPU, the loaded effects and ffmpeg)
+_turns: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()   # one lock per event loop
 
 
-async def run(job: str, fn, *args, error, stoppable: bool = False) -> None:
+async def run(job: str, fn, *args, error, stoppable: bool = False, exclusive: bool = False) -> None:
     """Run the blocking `fn(*args)` off the event loop and record how it ended. `error` is the
     exception class whose message is meant for the person; anything else is reported plainly.
-    Jobs run one after the other (a second one waits as "queued"): two effects of one kind share a buffer."""
-    turn = _turns.setdefault(asyncio.get_running_loop(), asyncio.Lock())
-    async with turn:
+    `exclusive`: the work uses a GPU effect that keeps one buffer per kind (Upscale, Interpolate), so such jobs
+    run one after the other and a second waits as "queued". Other jobs (the render) never wait for them."""
+    turn = _turns.setdefault(asyncio.get_running_loop(), asyncio.Lock()) if exclusive else None
+    if turn is not None and turn.locked():
+        _waiting.add(job)
+    try:
+        if turn is not None:
+            await turn.acquire()
+    finally:
+        _waiting.discard(job)
+    try:
         if job in _stop:                                    # stopped while it was still queued
             _stop.discard(job)
             _can_stop.discard(job)
@@ -76,3 +87,6 @@ async def run(job: str, fn, *args, error, stoppable: bool = False) -> None:
         finally:
             _stop.discard(job)
             _can_stop.discard(job)
+    finally:
+        if turn is not None:
+            turn.release()

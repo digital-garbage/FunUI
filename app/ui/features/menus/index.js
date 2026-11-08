@@ -70,7 +70,7 @@ export default {
         { id: "exclude", label: "Toggle Exclude", disabled: !sel.focus }],
       View: () => [{ id: "refresh", label: "Refresh Preview" }, { id: "reset", label: "Reset Layout" }],
       Help: () => {
-        const running = Boolean(app.tourOn?.());
+        const running = app.has.has("tour.running");
         return [...(app.has.has("tour") ? [{ id: "tour", label: running ? "Restart tour" : "Start tour" }, { id: "faq", label: "Skip to FAQ" },
           ...(running ? [{ id: "exit", label: "Exit tour" }] : []), { separator: true }] : []), { id: "welcome", label: "Welcome window…" }];
       },

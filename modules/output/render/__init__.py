@@ -102,7 +102,7 @@ def routes(table, base, web):
         if not isinstance(media, dict) or not isinstance(media.get("filename"), str) or not media["filename"] or not isinstance(model, str) or not model:
             return bad("Send {media: {filename, subfolder, type}, model, rtx_options}.")
         job = jobs.new(stoppable=True)
-        asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True))
+        asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True, exclusive=True))
         return web.json_response({"job_id": job})
 
     @table.post(base + "/jobs/{job}/stop")

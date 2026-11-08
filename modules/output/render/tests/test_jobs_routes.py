@@ -235,7 +235,7 @@ def test_a_stop_that_lands_after_the_last_chunk_still_removes_the_file(comfy):
     assert not dst.exists()
 
 
-def test_jobs_run_one_after_the_other_and_the_second_waits_as_queued():
+def test_exclusive_jobs_run_one_after_the_other_and_the_second_waits_as_queued():
     import asyncio
     import threading
     gate, order = threading.Event(), []
@@ -252,10 +252,10 @@ def test_jobs_run_one_after_the_other_and_the_second_waits_as_queued():
 
     async def go():
         a, b = jobs.new(), jobs.new()
-        ta = asyncio.create_task(jobs.run(a, first, error=RuntimeError))
+        ta = asyncio.create_task(jobs.run(a, first, error=RuntimeError, exclusive=True))
         while "first start" not in order:
             await asyncio.sleep(0.01)
-        tb = asyncio.create_task(jobs.run(b, second, error=RuntimeError))
+        tb = asyncio.create_task(jobs.run(b, second, error=RuntimeError, exclusive=True))
         await asyncio.sleep(0.1)
         waiting = (jobs.get(a)["state"], jobs.get(b)["state"], list(order))
         gate.set()
@@ -265,3 +265,39 @@ def test_jobs_run_one_after_the_other_and_the_second_waits_as_queued():
     waiting, order, last = asyncio.run(go())
     assert waiting == ("running", "queued", ["first start"])
     assert order == ["first start", "first end", "second start"] and last == "done"
+
+
+def test_a_render_never_waits_for_an_exclusive_job_and_a_queued_one_can_be_stopped():
+    import asyncio
+    import threading
+    gate, ran = threading.Event(), []
+
+    def long_effect(interrupted):
+        gate.wait(5)
+        return {}
+
+    def render():
+        ran.append("render")
+        return {}
+
+    def effect(interrupted):
+        ran.append("effect")
+        return {}
+
+    async def go():
+        a, b, r = jobs.new(stoppable=True), jobs.new(stoppable=True), jobs.new()
+        ta = asyncio.create_task(jobs.run(a, long_effect, error=RuntimeError, stoppable=True, exclusive=True))
+        await asyncio.sleep(0.05)
+        tb = asyncio.create_task(jobs.run(b, effect, error=RuntimeError, stoppable=True, exclusive=True))
+        await asyncio.sleep(0.05)
+        await jobs.run(r, render, error=RuntimeError)                       # not held up by the effect running
+        seen = (jobs.get(r)["state"], jobs.get(b)["state"])
+        assert jobs.stop(b) is True
+        stopped_now = jobs.get(b)["state"]                                  # ends at once, not when the one ahead ends
+        gate.set()
+        await asyncio.gather(ta, tb)
+        return seen, stopped_now, jobs.get(b)["state"]
+
+    seen, stopped_now, last = asyncio.run(go())
+    assert seen == ("done", "queued") and stopped_now == "stopped" and last == "stopped"
+    assert ran == ["render"]                                                # the stopped one never started
