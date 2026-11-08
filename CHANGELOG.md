@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
+## [5.2.0] "Classy Chopper" - 2026-11-08
+
 ### Changed
 
+- **Save Video quality is a setting now, and "high" is the default** (constant quality 16 where it was 23, a slower encoder preset): files are larger and encode a little slower, and clip trims and the final render re-encode at 16 instead of 23. Saved pipelines without the input get "high". The finished picture is also rounded to 8 bits instead of cut down, so every value is up to one level brighter than before.
 - **Auto Montage is gone** (the button, its window and its code). A saved project that already holds pieces it made loads normally: they stay on the timeline as ordinary copies and are still never regenerated.
 - **"Video detail" (Engine > Post) is gone.** The other Post settings (edge smoothing, auto contrast, auto brightness, colour strength) stay. A project or setting that still holds Video detail loads normally: its values are skipped and the Log says so once.
 - **LoRA Loader shows one slot at a time.** With no LoRA picked it shows only the first picker. Once a LoRA is chosen its strengths (and stage) appear, together with the picker for the next slot, and so on up to eight. A slot that already holds a LoRA never hides.
@@ -17,10 +20,16 @@
 
 ### Fixed
 
+- **Settings of a module that no longer exists are cleared from a project when it opens** (such as the removed Video detail), and saved at once, so the Log stops warning about them. Nothing is cleared while a module failed to load, and a module a model merely hides keeps its settings.
+- **Save Video carries the sampler's own last picture to the next shot** (it was carrying the Post-processed one). **Interpolate keeps the full length at 3 and 4 times** (it ended up to 75 ms short of the sound). **LoRA training refuses a model it cannot copy with the reason** (MXFP8 or int8 conversion in the loader), and a ticked MXFP8 that was skipped no longer blocks training. LoRA files that spell their matrices lora_down and lora_up load like lora_A and lora_B.
+- **Model Loader: no more reload on every run, and no half-way eviction.** Two loaders of one file in one graph no longer reload the model each run. When the same file comes back with other settings (SLA method, attention...), ComfyUI frees the earlier copy when the run ends instead of evicting it half way. A ComfyUI that cannot free the earlier copy is said in the Log.
+- **Timeline is never shorter than its lanes**, even from a saved height. **LoRA files with Diffusers modules that have no place in H3** are counted and alerted. **A Stop pressed before Upscale or Interpolate gets its turn ends the job at once**, and only those two jobs wait for each other. **A removed watermark or upscaler file no longer refuses a render.** **A second-stage LoRA is said when Two stages is not running.** **Upscale with a model file waits for ComfyUI's queue.**
+- **Build keeps a far-below-best draft's share of the odds**, and the word "constructor" is no weight.
 - **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now limits a query to its own span before torchsde sees it, so torchsde's rounding never lands outside it. The noise itself is unchanged and the picture was never affected.
 
 ### Added
 
+- **Watermark** (Settings > Engine > Post, off by default): a text or a picture from the media bin in a chosen corner of the finished video. Opacity, width (as a share of the video's width), distance from the edge, and an outline with its own size, colour and opacity; text also has its colour. A transparent PNG keeps its transparency and its outline follows its shape. It is laid on after the picture's other Post settings, so they never change it, and it is in the saved file only: the next shot's start picture does not carry it. A picture that is missing, or an empty text, is said in the Log and the video goes out without it.
 - **Prompt enhancer: Dynamic style.** A Style choice in the Enhance panel (default: unchanged). Dynamic keeps every rule of the default but asks for a concrete action beat, a change over time and secondary motion in each shot. Instructions you type still override it.
 - **Shortcuts: find, replace and common phrases.** The ⋯ menu in Shortcuts has Find and replace (search the text of every shortcut, preview each change, match case or not, whole words only or inside words too, then change them all in one go, or remove the phrase) and Common phrases (words and phrases of any length used in more than one shortcut, most shared first, with counts; pick one to correct it everywhere). Triggers are never touched.
 
