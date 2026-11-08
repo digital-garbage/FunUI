@@ -1,8 +1,8 @@
 """Veda learned sparse attention for MiniMax H3, as the loader's SLA method "veda".
 
 Veda (Han, Yang, Hu, Mei, Jiang, Qi; MIT; arXiv 2605.30325) ported from Veda-on-ComfyUI: see veda_core.py for
-the method and VEDA-NOTICE.txt for the licences. EXPERIMENTAL and UNTESTED on a GPU: the pure-torch half is
-tested on CPU, the Triton kernel (veda_kernel.py) only ever ran on the author's machine of origin.
+the method and VEDA-NOTICE.txt for the licences. EXPERIMENTAL, tested on a rental GPU: the pure-torch half is
+tested on CPU too; the Triton kernel (veda_kernel.py) needs CUDA and cannot run in the CPU suite.
 
 It rides the same hook as SLA (`transformer_options["optimized_attention_override"]`, plus SLA's per-step wrapper
 for the step counter, the dense steps and the rising share), so it needs no weight change and meets q/k/v only after
@@ -200,7 +200,7 @@ def install_veda(model, cfg, dense_fn=None, dense_label=None, attend=None):
     sla.add_wrappers(patched, state, cfg)
     cfg["asked"] = f"trained ({core.describe_budget(bundle.generated)})"
     return patched, "\n".join([
-        f"SLA on | veda (EXPERIMENTAL, Triton kernel untested on a GPU) | predictor {core.describe_bundle(bundle)} | sparsity {cfg['asked']} | "
+        f"SLA on | veda (EXPERIMENTAL, tested on a GPU) | predictor {core.describe_bundle(bundle)} | sparsity {cfg['asked']} | "
         f"references {core.describe_budget(bundle.reference)} | min_seq_len={cfg['min_seq_len']} | full attention on steps "
         f"{sla._runs(i + 1 for i in cfg['dense_steps']) or 'none'} and the last {cfg['dense_last_steps']} | dense calls -> {dense_label or 'as launched'}",
         *(f"SLA: {n}" for n in notes)]), True

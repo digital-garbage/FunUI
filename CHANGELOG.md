@@ -17,7 +17,7 @@
 
 ### Fixed
 
-- **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now starts a hair earlier and ends a hair later than the schedule, so torchsde's rounding never lands inside it. The noise itself is unchanged and the picture was never affected.
+- **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now limits a query to its own span before torchsde sees it, so torchsde's rounding never lands outside it. The noise itself is unchanged and the picture was never affected.
 
 ### Added
 

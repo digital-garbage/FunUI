@@ -366,3 +366,14 @@ def test_two_stages_saved_trilinear_loads_as_the_default_method():
     fake = type("S", (), {"id": "two_stage", "settings": two_stage.SETTINGS, "defaults": lambda self: {k: v["default"] for k, v in two_stage.SETTINGS.items()}})()
     clean, problems = schema.check_values(fake, {"enabled": True, "resize": "trilinear"})
     assert problems == [] and clean["resize"] == "bicubic"
+
+
+def test_a_file_choice_that_is_gone_from_its_list_is_kept_and_said_not_refused():
+    from types import SimpleNamespace
+    from core import schema
+    s = {"f": {"type": "enum", "default": "", "keep_missing": True, "options": [{"value": "", "label": "None"}], "label": "File"},
+         "g": {"type": "enum", "default": "", "options": [{"value": "", "label": "None"}], "label": "Other"}}
+    spec = SimpleNamespace(id="x", settings=s, defaults=lambda: {"f": "", "g": ""})
+    clean, problems = schema.check_values(spec, {"f": "removed.png"})
+    assert problems == [] and clean["f"] == "removed.png"
+    assert schema.check_values(spec, {"g": "removed.png"})[1]          # only a setting that declares it is spared

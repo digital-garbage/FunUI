@@ -56,7 +56,7 @@ SETTINGS = {
         "hint": "The colour of the text.",
     },
     "watermark_picture": {
-        "type": "enum", "default": "", "options": [{"value": "", "label": "None picked"}], "label": "Watermark picture", "when": {"watermark": "picture"},
+        "type": "enum", "keep_missing": True, "default": "", "options": [{"value": "", "label": "None picked"}], "label": "Watermark picture", "when": {"watermark": "picture"},
         "hint": "A picture from the media bin. A transparent PNG keeps its transparency.",
     },
     "watermark_corner": {

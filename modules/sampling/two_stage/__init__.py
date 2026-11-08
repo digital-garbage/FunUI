@@ -81,7 +81,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "upscaler": {
-        "type": "enum", "default": (_files() or [""])[0],
+        "type": "enum", "keep_missing": True, "default": (_files() or [""])[0],
         "options": _options(),
         "label": "Latent upscaler file",
         "hint": "The H3 latent upscaler file. The list is read again each time Settings opens.",

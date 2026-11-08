@@ -254,9 +254,11 @@ test("video to video, direct: the scene's own picture is named as unused, not dr
   let r = await run(LTX.direct, { source_image: "pic" });
   assert.ok(!r.inputs.source_image.media_id);
   assert.deepEqual(r.left, [{ id: "pic", at: "assets.source_image", why: "this pipeline starts from a video, not a picture" }]);
+  assert.equal(r.unusedPicture, "pic");
   r = await run(LTX.direct, { source_image: "pic", references: ["vid"] });
   assert.equal(r.inputs.source_image.media_id, "vid");
   assert.deepEqual(r.left.map((x) => x.id), ["pic"]);
+  assert.equal(r.unusedPicture, "pic");              // handed to Generate, which says so instead of dropping the picture quietly
   r = await run(LTX.direct, { references: ["vid"] });
   assert.deepEqual(r.left, []);
 });

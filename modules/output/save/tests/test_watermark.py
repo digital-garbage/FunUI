@@ -119,3 +119,16 @@ def test_the_biggest_outline_on_a_4k_frame_stays_cheap():
     layer = watermark.build({**TEXT, "watermark_text": "FunUI studio", "watermark_size": 60.0, "watermark_outline": 20.0}, 3840, 2160)
     grown = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before) / (1024 * 1024 if __import__("sys").platform == "darwin" else 1024)
     assert layer.alpha.shape[0] > 100 and grown < 400            # MB over what the process already held
+
+
+def test_a_picture_removed_from_the_bin_does_not_refuse_the_render(monkeypatch):
+    import json
+    from core.routes import refresh_options
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
+    payload = json.dumps({"output_save": {"watermark": "picture", "watermark_picture": "abc"}})
+    monkeypatch.setattr(watermark.media, "listing", lambda: [{"id": "abc", "name": "logo", "kind": "image"}])
+    refresh_options()
+    assert FunUIModifierSettings.validate_inputs(payload) is True
+    monkeypatch.setattr(watermark.media, "listing", lambda: [])
+    refresh_options()
+    assert FunUIModifierSettings.validate_inputs(payload) is True      # gone: the video goes out without the mark, said in the Log

@@ -33,7 +33,7 @@ import json
 
 from comfy_api.latest import io
 
-from ..._core import (control as control_mod, log, patching, registry as registry_mod,
+from ..._core import (control as control_mod, dit_hooks, log, patching, registry as registry_mod,
                       relations as relations_mod, run as run_mod,
                       schema as schema_mod)
 
@@ -309,6 +309,11 @@ class FunUILoadModifiers(io.ComfyNode):
                 # neutral result, so a failure inside it can still end the run.
                 notes.append(f"{spec.id}: {name} could not be guarded")
 
+        if patched.get_attachment(dit_hooks.STAGE_PATCHES) and "two_stage" not in applied:
+            # LoRAs set for one stage have no one to apply them when Two stages is off for the project, failed or is absent. (Its
+            # own "enabled" switch off says the same, under the same key, so it is said once.)
+            log.once("two_stage:stage_loras_off", log.WARNING, "FunUI Load Modifiers",
+                     "LoRAs are set for one stage, but Two stages is not running, so they are not applied")
         for spec in incompatible:
             notes.append(f"{spec.id}: needs {', '.join(traits_mod.missing_for(spec, available))}")
         for spec, why in rejected:

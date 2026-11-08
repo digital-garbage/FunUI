@@ -166,7 +166,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                        "comfy_kitchen engine. vsa: video cubes, only for models trained "
                                        "for it (the status says when the model lacks VSA's layers); run "
                                        "by ComfyUI's own Model Sparse Attention, keeping 1 - sla_sparsity "
-                                       "of the cubes. veda (experimental, Triton kernel untested on a GPU): "
+                                       "of the cubes. veda (experimental, tested on a GPU): "
                                        "a small learned predictor (Veda, arXiv 2605.30325, a file "
                                        "in models/veda) picks the 128-token tiles at its own trained "
                                        "budget, 90% for text-to-video; sla_sparsity and the rising "

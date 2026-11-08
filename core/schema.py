@@ -279,6 +279,14 @@ def check_values(spec, values: Any, keep_bad: bool = False) -> Tuple[Dict[str, A
         if isinstance(value, str):
             value = (declared.get("renamed_options") or {}).get(value, value)
         problem = _value_problem(declared, key, value, spec.id)
+        if problem and declared.get("keep_missing") and declared["type"] == "enum" and isinstance(value, str) and value:
+            # The list is read from a folder or the media bin and the saved choice is gone from it: the module has its own
+            # answer for a missing file (it says so in the Log and carries on), so the run is not refused.
+            from . import log
+            log.once(f"missing_choice:{spec.id}.{key}:{value}", log.WARNING, "FunUI settings",
+                     f"{spec.id}: {declared.get('label', key)} {value!r} is no longer in the list (removed?)")
+            clean[key] = value
+            continue
         if problem and not _applies(declared, {**spec.defaults(), **values}):
             continue                    # a setting that is hidden by another one's choice cannot act, so it cannot stop the run: its default stands
         if problem:

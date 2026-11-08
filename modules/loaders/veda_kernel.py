@@ -1,6 +1,6 @@
 """Block-sparse INT8 attention in Triton for Veda: walks only the kept 128-token tiles.
 
-UNTESTED on a GPU: written on a machine with no Triton or CUDA. `check` runs the kernel on a small problem
+Written on a machine with no Triton or CUDA, then tested on a rental GPU. `check` runs the kernel on a small problem
 against the fp32 reference before any real use, and the caller falls back to dense attention with the reason
 when it fails.
 

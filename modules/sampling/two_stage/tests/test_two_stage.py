@@ -328,3 +328,38 @@ def test_an_error_between_the_stages_leaves_the_guider_as_it_was_found(model, mo
                       seed=1, disable_pbar=True)
     assert guider.model_patcher is before
     assert getattr(guider, stages.FULL, None) is None and getattr(guider, "funui_stage", None) is None
+
+
+def test_a_removed_latent_upscaler_file_does_not_refuse_the_render(comfyui, monkeypatch):
+    import json
+    import folder_paths
+    from core.routes import refresh_options
+    from modules.sampling.modifiers.nodes import FunUIModifierSettings
+    files = {"latent_upscale_models": ["h3_up.safetensors"]}
+    monkeypatch.setattr(folder_paths, "get_filename_list", lambda name: list(files.get(name, [])))
+    refresh_options()
+    payload = json.dumps({"two_stage": {"enabled": True, "resize": "upscaler", "upscaler": "h3_up.safetensors"}})
+    assert FunUIModifierSettings.validate_inputs(payload) is True
+    files["latent_upscale_models"] = []
+    refresh_options()
+    assert FunUIModifierSettings.validate_inputs(payload) is True      # gone: Bicubic with a warning (stages.py), never a refusal
+
+
+def test_a_stage_lora_is_said_not_applied_when_two_stages_is_not_running_at_all(model, monkeypatch):
+    import comfy.utils
+    import folder_paths
+    from core import log
+    from core import registry as registry_mod
+    from modules.loaders.lora import nodes
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    gen = torch.Generator().manual_seed(3)
+    lora = {"transformer.transformer_blocks.0.ff.net.2.lora_A.weight": torch.randn(4, 64, generator=gen),
+            "transformer.transformer_blocks.0.ff.net.2.lora_B.weight": torch.randn(64, 4, generator=gen)}
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
+    monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: dict(lora))
+    loaded = nodes.FunUILoraLoader.execute(model=model, lora_name="x.safetensors", strength_model=1.0, apply_to_stage="First").result[0]
+    monkeypatch.setitem(registry_mod.current().specs["two_stage"].provides, "modifier", lambda patcher, values, key: None)   # the module did not install
+    said = []
+    monkeypatch.setattr(log, "once", lambda key, level, title, text: said.append((key, text)))
+    FunUILoadModifiers.execute(loaded, {"two_stage": {"enabled": True}})
+    assert any(k == "two_stage:stage_loras_off" and "not applied" in t for k, t in said)

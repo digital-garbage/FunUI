@@ -233,3 +233,35 @@ def test_a_stop_that_lands_after_the_last_chunk_still_removes_the_file(comfy):
     with pytest.raises(jobs.Stopped):
         video_pipe.stream_file(str(src), str(dst), lambda x: x, stop_at_the_last_check)
     assert not dst.exists()
+
+
+def test_jobs_run_one_after_the_other_and_the_second_waits_as_queued():
+    import asyncio
+    import threading
+    gate, order = threading.Event(), []
+
+    def first():
+        order.append("first start")
+        gate.wait(5)
+        order.append("first end")
+        return {}
+
+    def second():
+        order.append("second start")
+        return {}
+
+    async def go():
+        a, b = jobs.new(), jobs.new()
+        ta = asyncio.create_task(jobs.run(a, first, error=RuntimeError))
+        while "first start" not in order:
+            await asyncio.sleep(0.01)
+        tb = asyncio.create_task(jobs.run(b, second, error=RuntimeError))
+        await asyncio.sleep(0.1)
+        waiting = (jobs.get(a)["state"], jobs.get(b)["state"], list(order))
+        gate.set()
+        await asyncio.gather(ta, tb)
+        return waiting, order, jobs.get(b)["state"]
+
+    waiting, order, last = asyncio.run(go())
+    assert waiting == ("running", "queued", ["first start"])
+    assert order == ["first start", "first end", "second start"] and last == "done"
