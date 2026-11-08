@@ -74,9 +74,11 @@ export default {
       const sc = p.selected;
       if (!sc) return null;
       const plan = sceneReferences(sc, (p.project || {}).fixed_references), i = plan.ids.indexOf(id);
-      return i < 0 ? null : { n: referenceNumbers(plan.ids, plan.pins)[i], pinned: id in plan.pins };
+      if (i < 0) return null;
+      const nums = referenceNumbers(plan.ids, plan.pins), kindOf = (x) => (items.find((m) => m.id === x) || {}).kind;
+      return { n: nums[i], ord: plan.ids.filter((r, j) => nums[j] <= nums[i] && kindOf(r) === kindOf(id)).length, pinned: id in plan.pins };       // ord: the number the tile shows (per kind)
     };
-    const pinItem = (it) => { const s = slotOf(it.id); return s && s.n <= 16 ? [{ id: "pinref", label: s.pinned ? `Unpin reference from slot R${s.n}` : `Pin reference to slot R${s.n}` }] : []; };
+    const pinItem = (it) => { const s = slotOf(it.id); return s && s.n <= 16 ? [{ id: "pinref", label: s.pinned ? `Unpin reference from slot R${s.ord}` : `Pin reference to slot R${s.ord}` }] : []; };
     const extras = (it) => (app.mediaMenu || []).flatMap((f) => { try { return f(it, items.find((m) => m.id === it.id)) || []; } catch { return []; } });       // entries other features add to a tile's menu: { id, label, run }
     const context = (it, e) => c.menu.context({ x: e.clientX, y: e.clientY, onPick: (id) => (act[id] ? act[id](it) : extras(it).find((x) => x.id === id)?.run()),
       items: [{ id: "look", label: "Look at it on the monitor" }, ...(p.selected && p.selected.source_image === it.id ? [{ id: "unres", label: "Stop using as the selected scene's aspect ratio source" }]

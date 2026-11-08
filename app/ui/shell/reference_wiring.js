@@ -26,7 +26,8 @@ export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, r
   // before it is switched off; the rest take the free numbers in the order they were added.
   const kind = (id) => (kindOf && kindOf(id)) || "image";
   const numbers = referenceNumbers(mediaIds, pins);
-  const seen = {};         // how many of each kind went in: a video or audio input is numbered per kind
+  // A video or sound input is numbered per kind, in the order of the reference numbers (a pinned one keeps its place), not of the list.
+  const rank = (i) => 1 + mediaIds.filter((id, j) => j !== i && kind(id) === kind(mediaIds[i]) && numbers[j] < numbers[i]).length;
   mediaIds.forEach((mediaId, i) => {
     const at = `assets.reference_${numbers[i]}`;
     const slot = pool.find((s) => (s.roles || []).some((r) => r.at === at));
@@ -37,8 +38,8 @@ export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, r
     const role = slot.roles.find((r) => r.at === at);
     const k = kind(mediaId);
     const route = routeOf && routeOf(k, slot, role);
-    if (k !== "image" && !route) { unwired += 1; left.push({ id: mediaId, at, why: `this pipeline has no input for a ${k}` }); return; }
-    const n = seen[k] = (seen[k] || 0) + 1;
+    if (k !== "image" && !route) { unwired += 1; left.push({ id: mediaId, at, why: `this pipeline has no input for ${/^[aeiou]/.test(k) ? "an" : "a"} ${k}` }); return; }
+    const n = rank(i);
     if (route && n > route.names.length) { unwired += 1; left.push({ id: mediaId, at, why: `the model takes only ${route.names.length} ${k}${route.names.length > 1 ? "s" : ""}` }); return; }
     const wire = route ? { slot: route.slot, input: route.names[n - 1], output: route.output } : role.wireTo && { ...role.wireTo, output: 0 };
     // A destination can hold one value. Two references claiming the SAME slot or the SAME wire target are
@@ -52,6 +53,7 @@ export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, r
     // A video with a soundtrack also feeds the input paired with its own number (video 1's sound is audio 1).
     const track = k === "video" && hasSound && hasSound(mediaId) && routeOf && routeOf("videosound", slot, role);
     if (track && track.names[n - 1]) overrides[track.slot] = { ...overrides[track.slot], [track.names[n - 1]]: [slot.id, track.output] };
+    else if (track) { unwired += 1; left.push({ id: mediaId, at, why: "the model has no free input for this video's own sound" }); }
   });
   return { overrides, unwired, left };
 }

@@ -40,6 +40,10 @@ test("a dialog on screen is reported, and a landmark is found by name", () => {
   assert.equal(dom.landmark("menubar").className, "cx-frame-head");
   assert.equal(dom.landmark("zone:1"), document.querySelectorAll("section.cx-zone")[1]);
   assert.equal(dom.landmark("button:▶ Generate").tagName, "BUTTON");
+  assert.equal(dom.landmark("button:Generating…|▶ Generate").tagName, "BUTTON");       // "a|b": either label
+  document.querySelector("button").textContent = "Generating…";
+  assert.equal(dom.landmark("button:▶ Generate|Generating…").tagName, "BUTTON");
+  assert.equal(dom.landmark("button:▶ Generate"), null);
   assert.equal(dom.landmark("zone:9"), null);
   assert.equal(dom.landmark("nonsense"), null);
 });

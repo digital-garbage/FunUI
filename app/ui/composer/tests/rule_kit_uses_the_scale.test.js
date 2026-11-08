@@ -24,11 +24,11 @@ test("element CSS has no literal pixel sizes", () => {
   assert.equal(found, 0, `${found} literal px values in element CSS: use a --sp-* step or a component size from tokens.css`);
 });
 
-test("element CSS has no literal colours outside token definitions", () => {
+test("element CSS has no hex, rgb() or hsl() colours outside token definitions", () => {
   const bad = [];
   for (const f of sheets()) {
     const css = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    for (const decl of css.split(/[;{}]/)) if (!/^\s*--/.test(decl) && /#[0-9a-fA-F]{3,8}\b/.test(decl)) bad.push(`${f}: ${decl.trim().slice(0, 60)}`);
+    for (const decl of css.split(/[;{}]/)) if (!/^\s*--/.test(decl) && /#[0-9a-fA-F]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\(/.test(decl)) bad.push(`${f}: ${decl.trim().slice(0, 60)}`);
   }
   assert.deepEqual(bad, [], "literal colours in element CSS: use a token from tokens.css");
 });

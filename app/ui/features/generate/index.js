@@ -173,9 +173,9 @@ export default {
     /** One run for the Training window: the pipeline as it is, its LoRA loader pointed at `lora`, the picked scene (else the first one) and the project's own settings.
      *  Nothing is put on the timeline; resolves to {image} or {error}. */
     app.runner.preview = async ({ lora, strength = 1 }) => {
-      if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { error: "A run is already going: the preview waits for it." };
-      if (!p.project) return { error: "Open a project first: the preview uses its settings." };
       if (await upscaling()) return { error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
+      if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { error: "A run is already going: the preview waits for it." };       // after the wait: a Generate may have started meanwhile
+      if (!p.project) return { error: "Open a project first: the preview uses its settings." };
       const frozen = structuredClone(app.pipeline.slots() || []);
       const slot = frozen.find((s) => s.node === "FunUILoraLoader" && !s.bypassed) || frozen.find((s) => s.node === "FunUILoraLoader");
       if (!slot) return { error: "This pipeline has no LoRA loader to try the LoRA in. Add one in Models & Pipeline." };

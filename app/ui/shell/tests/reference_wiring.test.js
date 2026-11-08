@@ -188,3 +188,24 @@ test("fifteen references of mixed kinds all find an input: 9 pictures, 3 videos 
   assert.deepEqual(overrides.r2v["ref_video_audios.ref_video_audio_2"], ["s12", 2]);
   assert.deepEqual(overrides.r2v["ref_audios.ref_audio_2"], ["s15", 2]);
 });
+
+test("a pinned reference feeds the model input of its number, per kind, not of its place in the list", () => {
+  const slot = (n) => ({ id: `ref_source_${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "r2v", input: `ref_images.ref_image_${n - 1}` } }] });
+  const kinds = { pic1: "image", pic2: "image", snd1: "audio", snd2: "audio" };
+  const routeOf = (k, s, role) => routeFor(k, R2V, LOADER, role.wireTo.slot);
+  // pic1 is pinned to number 2, so it is listed first but is the SECOND picture; the same for the sound pinned to 2
+  const { overrides, unwired } = wireReferences(["pic1", "snd1", "pic2", "snd2"], [slot(1), slot(2), slot(3), slot(4)], [], { pic1: 2, snd1: 4 }, (id) => kinds[id], routeOf);
+  assert.equal(unwired, 0);
+  assert.equal(overrides.r2v["ref_images.ref_image_1"][0], "ref_source_2");       // pic1 (number 2) is picture 2
+  assert.equal(overrides.r2v["ref_images.ref_image_0"][0], "ref_source_1");       // pic2 takes the free number 1
+  assert.equal(overrides.r2v["ref_audios.ref_audio_1"][0], "ref_source_4");       // snd1 (number 4) is sound 2
+  assert.equal(overrides.r2v["ref_audios.ref_audio_0"][0], "ref_source_3");
+});
+
+test("a video's own sound with no free input to go to is said, not dropped", () => {
+  const slot = { id: "ref_source_1", node: "Loader", roles: [{ at: "assets.reference_1", input: "media_id", wireTo: { slot: "r2v", input: "x" } }] };
+  const routeOf = (k, s, role) => (k === "video" ? { slot: "r2v", names: ["v0"], output: 1 } : k === "videosound" ? { slot: "r2v", names: [], output: 2 } : null);
+  const r = wireReferences(["vid"], [slot], [], {}, () => "video", routeOf, () => true);
+  assert.equal(r.unwired, 1);
+  assert.match(r.left[0].why, /video's own sound/);
+});
