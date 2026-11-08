@@ -110,3 +110,12 @@ def test_the_carried_last_frame_never_has_the_mark(tmp_path, monkeypatch):
     monkeypatch.setattr(nodes.FunUISaveVideo, "hidden", type("H", (), {"extra_pnginfo": None, "prompt": None})(), raising=False)
     nodes.FunUISaveVideo.execute(GREY, settings={"output_save": TEXT})
     assert (seen[0] == nodes.to_frames(GREY[-1:])[-1]).all()
+
+
+def test_the_biggest_outline_on_a_4k_frame_stays_cheap():
+    """The outline grows by small steps on one map: a kernel as large as the mark once used all the memory of a small machine."""
+    import resource
+    before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    layer = watermark.build({**TEXT, "watermark_text": "FunUI studio", "watermark_size": 60.0, "watermark_outline": 20.0}, 3840, 2160)
+    grown = (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - before) / (1024 * 1024 if __import__("sys").platform == "darwin" else 1024)
+    assert layer.alpha.shape[0] > 100 and grown < 400            # MB over what the process already held

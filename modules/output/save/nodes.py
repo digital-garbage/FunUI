@@ -110,7 +110,15 @@ def to_frames(images, values=None):
     values = values or {}
     look = clip_look(images, values)
     mark = watermark.build(values, images.shape[2], images.shape[1])          # last: nothing before it can touch the mark
-    return np.concatenate([(watermark.apply(finish(x, values, look), mark) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
+    out = []
+    for x in images.split(_CHUNK):
+        f = finish(x, values, look)
+        y = (f * 255).round().clamp(0, 255).byte().cpu().numpy()
+        if mark is not None:                      # only the mark's corner is blended and pasted: no second copy of the chunk
+            part = watermark.corner(f, mark)
+            y[:, mark.y:mark.y + part.shape[1], mark.x:mark.x + part.shape[2], :] = (watermark.blend(part, mark) * 255).round().clamp(0, 255).byte().cpu().numpy()
+        out.append(y)
+    return np.concatenate(out)
 
 
 def _with_quality(codec, quality):

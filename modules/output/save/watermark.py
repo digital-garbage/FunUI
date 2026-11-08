@@ -55,10 +55,15 @@ def _text_alpha(text, target_w):
     return np.asarray(img, dtype=np.float32) / 255.0
 
 
-def _disc(radius):
-    r = int(radius)
-    yy, xx = torch.meshgrid(torch.arange(-r, r + 1), torch.arange(-r, r + 1), indexing="ij")
-    return ((yy * yy + xx * xx) <= (radius + 0.5) ** 2).float()
+def _grow(alpha, steps):
+    """alpha [1, 1, h, w] -> the shape grown by `steps` pixels (a near-round edge: a square step, then a cross step, and so on). Memory: one map, whatever `steps`."""
+    a = alpha
+    for i in range(steps):
+        if i % 2 == 0:
+            a = F.max_pool2d(a, 3, 1, 1)
+        else:
+            a = torch.maximum(F.max_pool2d(a, (1, 3), 1, (0, 1)), F.max_pool2d(a, (3, 1), 1, (1, 0)))
+    return a
 
 
 def _hex(colour):
@@ -110,7 +115,7 @@ def build(values, width, height):
         pad = ring + 1
         a = F.pad(alpha[None, None], (pad, pad, pad, pad))
         rgb = F.pad(rgb.permute(2, 0, 1)[None], (pad, pad, pad, pad))[0].permute(1, 2, 0)
-        grown = (F.conv2d(a, _disc(ring)[None, None], padding=ring) > 1e-3).float()
+        grown = (_grow(a, ring) > 1e-3).float()
         grown = F.avg_pool2d(F.pad(grown, (1, 1, 1, 1), mode="replicate"), 3, 1)      # a soft edge instead of a staircase
         outline = (grown - a).clamp(0, 1)[0, 0] * float(values.get("watermark_outline_opacity", 1.0))     # only outside the mark: a see-through mark shows no outline behind it
         mark_a = F.pad(mark_a[None, None], (pad, pad, pad, pad))[0, 0]
@@ -127,16 +132,25 @@ def build(values, width, height):
     return Layer(out_rgb.clamp(0, 1), out_a.clamp(0, 1)[..., None], y, x)
 
 
+def blend(region, layer):
+    """region [T, h, w, 3] floats (the corner of a chunk, exactly the layer's size) -> the same, with the layer laid over it, in the region's dtype and device."""
+    a, c = layer.alpha.to(device=region.device, dtype=torch.float32), layer.rgb.to(device=region.device, dtype=torch.float32)
+    return (region.float() * (1 - a) + c * a).to(region.dtype)
+
+
+def corner(x, layer):
+    """The part of x [T, H, W, 3] the layer covers (a view: nothing is copied)."""
+    h, w = layer.alpha.shape[0], layer.alpha.shape[1]
+    if layer.y + h > x.shape[1] or layer.x + w > x.shape[2]:            # the frame changed size after the layer was drawn: no guess about where it goes
+        raise ValueError("the Watermark was drawn for another frame size")
+    return x[:, layer.y:layer.y + h, layer.x:layer.x + w, :]
+
+
 def apply(x, layer):
-    """x [T, H, W, 3] floats -> the same shape, dtype and device with the layer laid over its corner."""
+    """x [T, H, W, 3] floats -> a copy with the layer laid over its corner (same shape, dtype and device). The save path uses corner() and blend() instead: it never copies a whole chunk."""
     if layer is None:
         return x
-    h, w = layer.alpha.shape[0], layer.alpha.shape[1]
-    y0, x0 = layer.y, layer.x
-    if y0 + h > x.shape[1] or x0 + w > x.shape[2]:            # the frame changed size after the layer was drawn: no guess about where it goes
-        raise ValueError("the Watermark was drawn for another frame size")
-    a, c = layer.alpha.to(device=x.device, dtype=torch.float32), layer.rgb.to(device=x.device, dtype=torch.float32)
-    region = x[:, y0:y0 + h, x0:x0 + w, :].float()
     out = x.clone()
-    out[:, y0:y0 + h, x0:x0 + w, :] = (region * (1 - a) + c * a).to(x.dtype)
+    view = corner(out, layer)
+    view.copy_(blend(view, layer))
     return out

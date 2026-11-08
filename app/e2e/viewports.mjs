@@ -40,6 +40,7 @@ let ran = 0;
 for (const name of wanted) {
   let browser;
   try { browser = await playwright[name].launch(); } catch { console.log(`skipping ${name}: not installed`); continue; }
+  try {
   for (const [w, h, running] of SIZES.flatMap(([w, h]) => [[w, h, false], [w, h, true]])) {
     const page = await browser.newPage({ viewport: { width: w, height: h } });
     const note = (what) => problems.push(`${name} ${w}x${h}${running ? " running" : ""}: ${what}`);
@@ -66,7 +67,7 @@ for (const name of wanted) {
     await page.close();
     ran += 1;
   }
-  await browser.close();
+  } finally { await browser.close(); }     // a failed run must not leave a browser holding memory on a small machine
 }
 server.close();
 console.log(problems.length ? problems.join("\n") : `ok: ${ran} browser/size runs, no findings`);
