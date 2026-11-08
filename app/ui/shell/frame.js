@@ -66,7 +66,9 @@ export function build(root) {
       return out;
     } catch { return {}; }       // nothing, or nothing usable, remembered
   })();
-  const apply = () => { for (const k in size) saved[k] ? css.setProperty(k, saved[k] + "px") : css.removeProperty(k); };
+  // The timeline is never shorter than its lanes need: the stylesheet's own floor for this window width (taller when narrow).
+  const floor = (k) => k === "--timeline-h" ? (window.matchMedia?.("(max-width: 1250px)").matches ? 380 : 340) : size[k][0];
+  const apply = () => { for (const k in size) saved[k] ? css.setProperty(k, Math.max(floor(k), saved[k]) + "px") : css.removeProperty(k); };
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch { /* not remembered */ } };
   const splitter = (host, cls, prop, sign, axis) => {
     const bar = document.createElement("div");
@@ -75,7 +77,7 @@ export function build(root) {
     drag(bar, {
       // the default is a clamp(), which has no number in it: measure the zone itself
       onStart: () => { const zone = prop === "--media-w" ? row.node.children[0] : prop === "--properties-w" ? row.node.children[2] : main.node.children[1]; const r = zone.getBoundingClientRect(); from = axis === "dx" ? r.width : r.height; },
-      onMove: (m) => { saved[prop] = Math.round(Math.min(size[prop][1], Math.max(size[prop][0], from + sign * m[axis]))); apply(); },
+      onMove: (m) => { saved[prop] = Math.round(Math.min(size[prop][1], Math.max(floor(prop), from + sign * m[axis]))); apply(); },
       onEnd: keep,
     });
     host.append(bar);
@@ -84,6 +86,7 @@ export function build(root) {
   splitter(row.node, "fp-split-right", "--properties-w", -1, "dx");
   splitter(main.node, "fp-split-bottom", "--timeline-h", -1, "dy");
   apply();
+  window.addEventListener("resize", apply);        // a saved height is re-checked against the width it now meets
   frame.resetLayout = () => { for (const k in size) delete saved[k]; apply(); keep(); };
   frame.setZoneTitle = (mount, text) => titles[mount] && titles[mount](text);
   return frame;

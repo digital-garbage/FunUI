@@ -99,18 +99,21 @@ def _apply_to_stage(model, lora_name, strength_model, stage):
         return model, f"{lora_name}: strength is 0, not applied"
     path = folder_paths.get_full_path_or_raise("loras", lora_name)
     lora = comfy.utils.load_torch_file(path, safe_load=True)
-    patches, how, dropped = match(model, None, lora)
+    patches, how, dropped, unplaced = match(model, None, lora)
     if not patches:
         log.alert("FunUI LoRA Loader", f"{lora_name} matched NOTHING in this model, so it does nothing: "
                   "it is for another model, or names its layers in a way not known here")
         return model, f"{lora_name}: matched nothing, not applied"
+    if unplaced:
+        log.alert("FunUI LoRA Loader", f"{lora_name}: {unplaced} of its {len(patches) + dropped + unplaced} modules have no place in this model "
+                  "and were left out, so the LoRA is only partly applied")
     if dropped:
         log.alert("FunUI LoRA Loader", f"{lora_name}: {dropped} of {len(patches) + dropped} weights do not fit this "
                   "model's shapes and were left out (trained on another variant of it)")
     patched = model.clone()
     held = patched.get_attachment(dit_hooks.STAGE_PATCHES) or ()
     patched.set_attachments(dit_hooks.STAGE_PATCHES, tuple(held) + ((stage, patches, strength_model),))
-    found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "")
+    found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "") + (f", {unplaced} without a place" if unplaced else "")
     log.info("FunUI LoRA Loader", f"{lora_name} kept for the {stage.lower()} stage of Two stages (model={strength_model}; {found})")
     return patched, f"FunUI LoRA Loader | {lora_name} ({stage.lower()} stage only; model={strength_model}; {found})"
 
@@ -128,7 +131,7 @@ def _apply(model, clip, lora_name, strength_model, strength_clip):
 
     path = folder_paths.get_full_path_or_raise("loras", lora_name)
     lora = comfy.utils.load_torch_file(path, safe_load=True)
-    patches, how, dropped = match(model, clip, lora)
+    patches, how, dropped, unplaced = match(model, clip, lora)
     if not patches:
         log.alert("FunUI LoRA Loader", f"{lora_name} matched NOTHING in this model, so it does nothing: "
                   "it is for another model, or names its layers in a way not known here")
@@ -139,12 +142,15 @@ def _apply(model, clip, lora_name, strength_model, strength_clip):
     if clip is not None:
         patched_clip = clip.clone()
         patched_clip.add_patches(patches, strength_clip)
+    if unplaced:
+        log.alert("FunUI LoRA Loader", f"{lora_name}: {unplaced} of its {len(patches) + dropped + unplaced} modules have no place in this model "
+                  "and were left out, so the LoRA is only partly applied")
     if dropped:
         log.alert("FunUI LoRA Loader", f"{lora_name}: {dropped} of {len(patches) + dropped} weights do not fit this "
                   "model's shapes and were left out (trained on another variant of it)")
 
     applied = [f"model={strength_model}"]
     applied.append(f"clip={strength_clip}" if clip is not None else "clip=not wired")
-    found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "")
+    found = f"{len(patches)} weights" + (f", keys {how}" if how != "as-is" else "") + (f", {dropped} dropped" if dropped else "") + (f", {unplaced} without a place" if unplaced else "")
     log.info("FunUI LoRA Loader", f"{lora_name} applied ({', '.join(applied)}; {found}). {sysinfo.memory_line()}")
     return patched_model, patched_clip, f"FunUI LoRA Loader | {lora_name} ({', '.join(applied)}; {found})"

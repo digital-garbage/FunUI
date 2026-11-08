@@ -47,7 +47,7 @@ def _delta(patcher, key, shape):
 def test_every_weight_gets_exactly_its_change(patcher, prefix, native):
     from modules.loaders.lora.keys import match
     lora, want = _file(prefix, torch.Generator().manual_seed(0))
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert dropped == 0 and len(patches) == 6, (len(patches), how)
 
     clone = patcher.clone()
@@ -106,7 +106,7 @@ def test_an_ltx_lora_with_transformer_blocks_names_is_left_as_it_is(tiny_ltx, mo
                         lambda model, key_map: {**key_map, **{k[:-len(".weight")]: k for k in sd if k.endswith(".weight")}})
     lora = {name.replace(".weight", ".lora_A.weight"): torch.randn(RANK, in_dim),
             name.replace(".weight", ".lora_B.weight"): torch.randn(out_dim, RANK)}
-    patches, _how, dropped = keys.match(tiny_ltx.patcher, None, lora)
+    patches, _how, dropped, _unplaced = keys.match(tiny_ltx.patcher, None, lora)
     assert len(patches) == 1 and dropped == 0
 
 
@@ -116,7 +116,7 @@ def test_a_wrapped_diffusers_file_gets_every_change_on_a_weight_the_model_has(pa
     from modules.loaders.lora.keys import match
     lora, want = _file("transformer_blocks.1", torch.Generator().manual_seed(0))
     lora = {wrapper + k[len("transformer."):]: v for k, v in lora.items()}
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert dropped == 0 and len(patches) == 6, (wrapper, how, len(patches))
     state = patcher.model.state_dict()
     assert all((k[0] if isinstance(k, tuple) else k) in state for k in patches)       # every patch aims at a weight that exists
@@ -132,7 +132,7 @@ def test_a_qkv_pair_of_the_wrong_width_is_dropped_not_merged_scrambled(patcher):
     lora, _ = _file("transformer_blocks.1", torch.Generator().manual_seed(0))
     k = "transformer.transformer_blocks.1.attn.to_q.lora_B.weight"
     lora[k] = torch.randn(96, RANK)                                   # 96 rows where this model has 64 per part
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert dropped >= 1 and len(patches) == 5
 
 
@@ -140,7 +140,7 @@ def test_a_refiner_layout_file_without_a_wrapper_reaches_the_refiner_blocks(patc
     from modules.loaders.lora.keys import match
     lora, want = _file("token_refiner.refiner_blocks.0", torch.Generator().manual_seed(0))
     lora = {k[len("transformer."):]: v for k, v in lora.items()}
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert dropped == 0 and len(patches) == 6, (how, len(patches))
     state = patcher.model.state_dict()
     assert all((k[0] if isinstance(k, tuple) else k) in state for k in patches)
@@ -149,7 +149,7 @@ def test_a_refiner_layout_file_without_a_wrapper_reaches_the_refiner_blocks(patc
 def test_a_block_the_model_does_not_have_is_dropped_and_counted_not_reported_as_applied(patcher):
     from modules.loaders.lora.keys import match
     lora, _ = _file("transformer_blocks.9", torch.Generator().manual_seed(0))            # the tiny model has 2 blocks
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert not patches and dropped >= 1
 
 
@@ -158,7 +158,7 @@ def test_a_dense_lokr_on_a_native_weight_is_not_mistaken_for_a_misfit_pair(patch
     gen = torch.Generator().manual_seed(0)
     lora = {"diffusion_model.blocks.1.attn.out_proj.lokr_w1": torch.randn(8, 8, generator=gen),
             "diffusion_model.blocks.1.attn.out_proj.lokr_w2": torch.randn(8, 8, generator=gen)}
-    patches, how, dropped = match(patcher, None, lora)
+    patches, how, dropped, _unplaced = match(patcher, None, lora)
     assert len(patches) == 1 and dropped == 0
 
 
@@ -167,7 +167,7 @@ def test_a_file_that_trains_only_some_of_q_k_v_puts_each_in_its_own_rows(patcher
     from modules.loaders.lora.keys import match
     lora, want = _file("transformer_blocks.1", torch.Generator().manual_seed(3))
     lora = {k: v for k, v in lora.items() if not any(f"attn.{q}." in k for q in ("to_q", "to_k", "to_v") if q not in keep)}
-    patches, _how, dropped = match(patcher, None, lora)
+    patches, _how, dropped, _unplaced = match(patcher, None, lora)
     assert dropped == 0 and len(patches) == 3 + len(keep)
     clone = patcher.clone()
     clone.add_patches(patches, 1.0)
@@ -183,3 +183,25 @@ def test_the_older_lora_down_up_spelling_is_translated_like_lora_a_b():
     old, _ = from_diffusers({"transformer.transformer_blocks.0.ff.net.2.lora_down.weight": a, "transformer.transformer_blocks.0.ff.net.2.lora_up.weight": b})
     assert sorted(old) == sorted(new) == ["blocks.0.mlp.fc2.lora_A.weight", "blocks.0.mlp.fc2.lora_B.weight"]
     assert all(torch.equal(old[k], new[k]) for k in new)
+
+
+def test_modules_with_no_place_in_the_model_are_counted_and_alerted(patcher, monkeypatch):
+    from modules.loaders.lora import nodes
+    from modules.loaders.lora.keys import match
+    lora, _want = _file("transformer_blocks.1", torch.Generator().manual_seed(0))
+    assert match(patcher, None, lora)[3] == 0                                  # a complete file: nothing is missing
+    gen = torch.Generator().manual_seed(5)
+    for name, (o, i) in {"norm1.linear": (384, 64), "attn.to_add_out": (64, 64)}.items():      # modules H3 has no name for
+        a, b = _pair(o, i, gen)
+        lora[f"transformer.transformer_blocks.1.{name}.lora_A.weight"] = a
+        lora[f"transformer.transformer_blocks.1.{name}.lora_B.weight"] = b
+    patches, _how, dropped, unplaced = match(patcher, None, lora)
+    assert (len(patches), dropped, unplaced) == (6, 0, 2)
+    said = []
+    monkeypatch.setattr(nodes.log, "alert", lambda title, text: said.append(text))
+    import comfy.utils
+    import folder_paths
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: "/fake/x")
+    monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: dict(lora))
+    nodes.FunUILoraLoader.execute(model=patcher, lora_name="x.safetensors", strength_model=1.0)
+    assert any("2 of its 8 modules have no place" in t for t in said), said

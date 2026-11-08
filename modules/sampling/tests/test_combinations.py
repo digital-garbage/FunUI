@@ -86,7 +86,7 @@ def _stage_lora(model, stage):
     gen = torch.Generator().manual_seed(4)
     lora = {"transformer.transformer_blocks.0.ff.net.2.lora_A.weight": torch.randn(4, 64, generator=gen),
             "transformer.transformer_blocks.0.ff.net.2.lora_B.weight": torch.randn(64, 4, generator=gen)}
-    patches, _how, _dropped = match(model, None, lora)
+    patches, _how, _dropped, _unplaced = match(model, None, lora)
     kept = model.clone()
     kept.set_attachments(dit_hooks.STAGE_PATCHES, ((stage, patches, 1.0),))
     return kept

@@ -120,13 +120,16 @@ def _misfit(sd, key, adapter):
 
 
 def match(model, clip, lora):
-    """-> (patches, how, dropped): the best keying's patches, which keying won, and how many were dropped for shape."""
+    """-> (patches, how, dropped, unplaced): the best keying's patches, which keying won, how many were dropped for shape,
+    and (Diffusers layout only) how many of the file's transformer modules found no place in this model at all."""
     key_map = comfy.lora.model_lora_keys_unet(model.model, {})
     if clip is not None:
         key_map = comfy.lora.model_lora_keys_clip(clip.cond_stage_model, key_map)
     extra = {}
+    modules = 0
     sd = model.model.state_dict()
     if any(".attn.qkv_proj." in str(v) for v in key_map.values()):         # only the H3 transformer is renamed: other models use `transformer_blocks` as they are
+        modules = len({k.split(".lora_")[0].split(".alpha")[0] for k in lora if k.startswith("transformer.") and (".lora_" in k or k.endswith(".alpha"))})
         lora, extra = from_diffusers(lora, lambda base: (lambda w: int(w.shape[0]) if w is not None and w.dim() else None)(sd.get(f"diffusion_model.{base}.weight")))
     key_map.update(extra)
     converted = comfy.lora_convert.convert_lora(lora)
@@ -140,4 +143,5 @@ def match(model, clip, lora):
     bad = [k for k, a in best.items() if _absent(sd, k) or _misfit(sd, k, a)]
     for k in bad:
         best.pop(k)
-    return best, how, len(bad)
+    unplaced = max(0, modules - len(best) - len(bad)) if modules else 0      # modules ComfyUI never mapped: skipped without a word
+    return best, how, len(bad), unplaced

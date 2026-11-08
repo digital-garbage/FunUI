@@ -115,7 +115,7 @@ def test_a_model_only_lora_still_applies_at_zero_clip_strength(monkeypatch):
 
     monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {"fake": 1})
-    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"w": object()}, "as-is", 0))
+    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"w": object()}, "as-is", 0, 0))
     out = nodes.FunUILoraLoader.execute(model=M(), lora_name="x.safetensors", strength_model=0.8, clip=None)
     assert added == {"n": 1, "s": 0.8}
     assert "1 weights" in out.result[2]
@@ -142,7 +142,7 @@ def test_a_lora_under_a_training_wrapper_is_unwrapped_and_lands(monkeypatch):
     model = _lora_world(monkeypatch)
     lora = {"base_model.model.dit.blocks.0.attn.lora_up.weight": torch.zeros(4, 2),
             "base_model.model.dit.blocks.0.attn.lora_down.weight": torch.zeros(2, 3)}
-    patches, how, dropped = match(model, None, lora)
+    patches, how, dropped, _unplaced = match(model, None, lora)
     assert list(patches) == ["diffusion_model.blocks.0.attn.weight"] and dropped == 0 and "dit." in how
 
 
@@ -152,7 +152,7 @@ def test_a_lora_pair_of_the_wrong_shape_is_dropped_not_merged_scrambled(monkeypa
     model = _lora_world(monkeypatch, weight_shape=(6, 2))          # same element count (12), other shape
     lora = {"diffusion_model.blocks.0.attn.lora_up.weight": torch.zeros(4, 2),
             "diffusion_model.blocks.0.attn.lora_down.weight": torch.zeros(2, 3)}
-    patches, _how, dropped = match(model, None, lora)
+    patches, _how, dropped, _unplaced = match(model, None, lora)
     assert patches == {} and dropped == 1
 
 
@@ -162,7 +162,7 @@ def test_a_lora_that_matches_nothing_is_not_applied_and_says_so(monkeypatch):
     from modules.loaders.lora import nodes
     monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {})
-    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({}, "as-is", 0))
+    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({}, "as-is", 0, 0))
     model = object()
     out = nodes.FunUILoraLoader.execute(model=model, lora_name="x.safetensors", strength_model=1.0, clip=None)
     assert out.result[0] is model and "matched nothing" in out.result[2]
@@ -447,7 +447,7 @@ def test_several_loras_in_one_node_apply_in_order(monkeypatch):
 
     monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: name)
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: {"name": p})
-    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"tag": l["name"]}, "as-is", 0))
+    monkeypatch.setattr(nodes, "match", lambda m, c, l: ({"tag": l["name"]}, "as-is", 0, 0))
     out = nodes.FunUILoraLoader.execute(
         model=M(), lora_name="a", strength_model=0.5,
         lora_name_2="None", lora_name_3="c", strength_model_3=1.5,
