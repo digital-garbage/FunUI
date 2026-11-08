@@ -34,6 +34,24 @@ async function fakeRunning(page) {
   });
 }
 
+// Help > Start tour, then Next to the end: every callout must find its target (a step whose target is missing is skipped, so the numbers would jump).
+async function walkTour(page, note) {
+  await page.getByRole("button", { name: "Help", exact: true }).click();
+  await page.getByText("Start tour").click();
+  const seen = [];
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(150);
+    const head = await page.evaluate(() => (document.querySelector(".cx-popover .cx-label, .cx-popover") || {}).textContent || "");
+    const m = head.match(/(\d+) \/ (\d+)/);
+    if (!m) break;
+    seen.push(Number(m[1]));
+    const done = Number(m[1]) === Number(m[2]);
+    await page.getByRole("button", { name: done ? "Done" : "Next", exact: true }).click();
+    if (done) break;
+  }
+  if (!seen.length || seen.some((n, i) => n !== i + 1) || seen.length < 5) note(`the tour skipped a step or did not run (saw ${seen.join(",") || "nothing"})`);
+}
+
 const { server, url } = await start(0);
 const problems = [];
 let ran = 0;
@@ -53,6 +71,7 @@ for (const name of wanted) {
       if (!(await page.getByText(/Step 4\/5/).count())) note("the running render's progress is not shown");
       if (process.env.FUNUI_SHOTS) await page.screenshot({ path: `${process.env.FUNUI_SHOTS}/running-${name}-${w}x${h}.png` });
     }
+    if (!running) await walkTour(page, note);
     const main = await page.evaluate(inspect);
     if (main.over[0] > 0 || main.over[1] > 0) note(`page overflows by ${main.over}`);
     main.lanes.forEach((m) => note(m));
