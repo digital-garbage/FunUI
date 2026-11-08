@@ -559,3 +559,141 @@ def test_the_loader_passes_the_predictor_through_and_names_it(veda_on, folder, c
 def test_the_triton_kernel_passes_its_own_self_check_on_this_gpu():
     from modules.loaders import veda_kernel
     assert veda_kernel.check(torch.device("cuda")) is None
+
+
+@pytest.mark.parametrize("how", ["plain", "kernel_fails", "timing", "two_sizes", "cancelled"])
+def test_the_model_is_collectable_after_a_veda_run(veda_on, folder, comfyui, tiny_h3, how):
+    """ComfyUI warns 'memory leak with model' when anything outside the patcher still holds the diffusion model after the
+    patcher is gone. Nothing Veda keeps (state, caches, closures, wrappers) may be that holder, so no gc.collect() here."""
+    import gc
+    import weakref
+    _write_predictor(folder, ratio=0.3)
+    if how == "kernel_fails":
+        veda_on.attend = lambda *a: (_ for _ in ()).throw(RuntimeError("no such kernel"))
+        logging.disable(logging.CRITICAL)
+    tiny = _big(tiny_h3)
+    patched, _, installed = _install(tiny, veda_timing=(how == "timing"))
+    assert installed
+    if how == "cancelled":
+        tiny.run(patched, sigma=1.0, sigmas=torch.tensor([1.0, 0.5, 0.0]))          # step 1 of 2 only: no summary, caches still full
+    else:
+        _last_step(tiny, patched)
+    if how == "two_sizes":
+        tiny.video = torch.randn(1, 24, 10, 20, 16).to(torch.bfloat16)
+        _last_step(tiny, patched)
+    assert how == "kernel_fails" or veda_on.calls
+    ref = weakref.ref(tiny.patcher.model)          # what ComfyUI names in the warning: the model, not the patcher
+    gc.collect()
+    gc.disable()
+    try:
+        del patched, tiny
+        tiny_h3.patcher = None
+        del tiny_h3
+        assert ref() is None, [type(r).__name__ for r in gc.get_referrers(ref())]
+    finally:
+        gc.enable()
+        logging.disable(logging.NOTSET)
+
+
+def test_the_real_model_class_is_collectable_after_a_sampled_veda_run(veda_on, folder, comfyui):
+    """The path ComfyUI warns about by class name ('memory leak with model MiniMaxH3'): the real MiniMaxH3 model object, sampled by
+    the real guider, loaded through model management, then dropped. It must die without a gc.collect()."""
+    import gc
+    import weakref
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    import comfy.samplers
+    import comfy.supported_models as sm
+    from comfy.nested_tensor import NestedTensor
+    _write_predictor(folder, ratio=0.3)
+    config = sm.MiniMaxH3(dict(image_model="minimax_h3", hidden_size=64, num_layers=BLOCKS, token_refiner_num_layers=1, num_attention_heads=2,
+                               attention_head_dim=32, ffn_hidden_size=64, text_dim=48, timestep_input_dim=32, time_embed_hidden_size=64,
+                               time_embed_dim=32, rope_inv_freq_len=4))
+    config.set_inference_dtype(torch.bfloat16, None)
+    base = config.get_model({}, device=torch.device("cpu"))
+    for p in base.diffusion_model.parameters():
+        torch.nn.init.normal_(p, std=0.05)
+        p.requires_grad_(False)
+    patcher = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+    patched, _, installed = sla.install_sla(patcher, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9)
+    assert installed
+    guider = comfy.samplers.CFGGuider(patched)
+    cond = [[torch.randn(1, 5, 48).to(torch.bfloat16), {}]]
+    guider.set_conds(cond, cond)
+    guider.set_cfg(1.0)
+    latent = NestedTensor((torch.zeros(1, 24, 10, 16, 16), torch.zeros(1, 32, 2, 3)))
+    noise = NestedTensor((torch.randn(1, 24, 10, 16, 16), torch.randn(1, 32, 2, 3)))
+    mm.load_models_gpu([patched])
+    guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor([1.0, 0.5, 0.0]), seed=1, disable_pbar=True)
+    assert veda_on.calls
+    ref = weakref.ref(patcher.model)
+    gc.collect()
+    gc.disable()
+    try:
+        del guider, patched, noise, latent, cond, config          # the loader's own patcher stays (a cached node output), as in the app
+        dead = [m for m in mm.current_loaded_models if m.is_dead()]          # ComfyUI's own test for 'memory leak with model'
+        assert not dead and ref() is not None or ref() is None, [type(r).__name__ for r in gc.get_referrers(ref())]
+        assert not dead, [type(r).__name__ for r in gc.get_referrers(ref())]
+    finally:
+        gc.enable()
+        mm.unload_all_models()
+
+
+@pytest.mark.parametrize("interrupted", [False, True], ids=["finished", "interrupted"])
+@pytest.mark.parametrize("staged", [False, True], ids=["one-stage", "two-stages"])
+def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folder, comfyui, staged, interrupted):
+    """The class of leak ComfyUI names 'memory leak with model MiniMaxH3': a hook or wrapper that holds its own patcher is a cycle only a
+    full gc frees, and that gc clears ComfyUI's weak link to the parent copy first. Veda in the loader, every modifier on top, a real
+    sampling run, then everything dropped: the model must die by reference counting alone."""
+    import gc
+    import weakref
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    import comfy.samplers
+    import comfy.supported_models as sm
+    from comfy.nested_tensor import NestedTensor
+    from modules.sampling.tests.test_combinations import FEATURES, STAGES, _load
+    _write_predictor(folder, ratio=0.3)
+    config = sm.MiniMaxH3(dict(image_model="minimax_h3", hidden_size=64, num_layers=BLOCKS, token_refiner_num_layers=1, num_attention_heads=2,
+                               attention_head_dim=32, ffn_hidden_size=64, text_dim=48, timestep_input_dim=32, time_embed_hidden_size=64,
+                               time_embed_dim=32, rope_inv_freq_len=4))
+    config.set_inference_dtype(torch.float32, None)
+    base = config.get_model({}, device=torch.device("cpu"))
+    for p in base.diffusion_model.parameters():
+        torch.nn.init.normal_(p, std=0.05)
+        p.requires_grad_(False)
+    loaded = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+    veda, _, installed = sla.install_sla(loaded, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9)
+    assert installed
+    patched, _ = _load(veda, tuple(f for f in FEATURES if f != "phrase_probe"), STAGES["two-stages"] if staged else None)
+    mm.load_models_gpu([patched])
+    guider = comfy.samplers.CFGGuider(patched)
+    cond = [[torch.randn(1, 5, 48), {}]]
+    guider.set_conds(cond, cond)
+    guider.set_cfg(1.0)
+    latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
+    noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
+    calls = []
+
+    def cut(module, args):
+        calls.append(1)
+        if interrupted and len(calls) > 2:
+            raise mm.InterruptProcessingException()
+    hook = base.diffusion_model.register_forward_pre_hook(cut)
+    try:
+        guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor([1.0, 0.7, 0.3, 0.0]), seed=1, disable_pbar=True)
+    except mm.InterruptProcessingException:
+        assert interrupted
+    finally:
+        hook.remove()
+    del hook
+    ref = weakref.ref(base)
+    gc.collect()
+    gc.disable()
+    try:
+        del guider, patched, veda, loaded, base, noise, latent, cond, config
+        dead = [m for m in mm.current_loaded_models if m.is_dead()]
+        assert not dead and ref() is None, [type(r).__name__ for r in gc.get_referrers(ref())] if ref() is not None else "dead model tracked"
+    finally:
+        gc.enable()
+        mm.unload_all_models()
