@@ -15,22 +15,23 @@ def test_scaled_fps_keeps_the_fraction():
 
 @needs_ffmpeg
 def test_interpolation_stream_adds_frames_and_keeps_length_and_sound(comfy):
-    src, dst = str(comfy.output / "a.mp4"), str(comfy.output / "fi.mp4")
-    make_clip(src, seconds=1.0, size="64x48", rate=10, audio=True)
-    last = [None]
+    for mult in (2, 3, 4):                            # the length is source x factor at every factor, not short by (m-1)/m of a frame
+        src, dst = str(comfy.output / f"a{mult}.mp4"), str(comfy.output / f"fi{mult}.mp4")
+        make_clip(src, seconds=1.0, size="64x48", rate=10, audio=True)
+        last = [None]
 
-    def between(x):                                   # stands in for the effect: an average frame, carried across chunks
-        out = []
-        for f in x:
-            if last[0] is not None:
-                out.append((last[0] + f) / 2)
-            out.append(f)
-            last[0] = f
-        return torch.stack(out)
+        def between(x, mult=mult, last=last):          # stands in for the effect: (mult-1) in-betweens per pair, carried across chunks
+            out = []
+            for f in x:
+                if last[0] is not None:
+                    out += [(last[0] * (mult - i) + f * i) / mult for i in range(1, mult)]
+                out.append(f)
+                last[0] = f
+            return torch.stack(out)
 
-    assert upscale.upscale_file(src, dst, between, fps_factor=2) == 19      # 10 frames -> 10 + 9 between, none lost at the chunk seam
-    w, h, fps, sound = upscale.probe(dst)
-    assert (w, h, fps, sound) == (64, 48, "20/1", True)
+        assert upscale.upscale_file(src, dst, between, fps_factor=mult) == 10 * mult
+        w, h, fps, sound = upscale.probe(dst)
+        assert (w, h, fps, sound) == (64, 48, f"{10 * mult}/1", True)
 
 
 def test_frame_generation_options_are_checked_by_name():

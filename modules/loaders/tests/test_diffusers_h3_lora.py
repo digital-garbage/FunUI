@@ -174,3 +174,12 @@ def test_a_file_that_trains_only_some_of_q_k_v_puts_each_in_its_own_rows(patcher
     got = _delta(clone, "diffusion_model.blocks.1.attn.qkv_proj.weight", (192, 64))
     zero = torch.zeros(64, 64)
     assert torch.allclose(got, torch.cat([want[f"attn.{q}"] if q in keep else zero for q in ("to_q", "to_k", "to_v")], 0), atol=1e-5)
+
+
+def test_the_older_lora_down_up_spelling_is_translated_like_lora_a_b():
+    from modules.loaders.lora.keys import from_diffusers
+    a, b = torch.randn(2, 8), torch.randn(6, 2)
+    new, _ = from_diffusers({"transformer.transformer_blocks.0.ff.net.2.lora_A.weight": a, "transformer.transformer_blocks.0.ff.net.2.lora_B.weight": b})
+    old, _ = from_diffusers({"transformer.transformer_blocks.0.ff.net.2.lora_down.weight": a, "transformer.transformer_blocks.0.ff.net.2.lora_up.weight": b})
+    assert sorted(old) == sorted(new) == ["blocks.0.mlp.fc2.lora_A.weight", "blocks.0.mlp.fc2.lora_B.weight"]
+    assert all(torch.equal(old[k], new[k]) for k in new)

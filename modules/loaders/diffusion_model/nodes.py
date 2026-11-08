@@ -255,11 +255,13 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
             notes.append(gguf_note)
         else:
             state_dict, metadata = comfy.utils.load_torch_file(path, return_metadata=True)
+        converted = False                 # True once a quantizer rewrote the weights: only then is "read the file again" not the same model
         if int8_convrot:
             if weight_dtype != "default":
                 notes.append(f"int8_convrot: skipped, weight dtype is forced to {weight_dtype}")
             else:
                 _, note = int8_convrot_module.quantize_state_dict(state_dict, comfy.model_management.get_torch_device())
+                converted = True
                 notes.append(note)
                 if compute_dtype != "default":
                     notes.append("int8_convrot: compute dtype is forced, so the matmuls run in that dtype -- memory is saved, speed is not")
@@ -273,6 +275,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 notes.append("mxfp8: skipped, this machine cannot run MXFP8 matmuls (needs a Blackwell GPU, torch 2.10+ and a current comfy-kitchen)")
             else:
                 _, note = mxfp8_module.quantize_state_dict(state_dict, comfy.model_management.get_torch_device())
+                converted = True
                 notes.append(note)
             for line in notes[mark:]:                   # the status output is rarely read; the log is
                 log.info("FunUI Diffusion Model Loader", line)
@@ -295,7 +298,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
             raise RuntimeError(
                 f"Could not detect a diffusion model in {model_name}. Loading a text "
                 f"encoder or a VAE file here is the usual cause.")
-        if not gguf and not int8_convrot and not mxfp8 and hasattr(model, "cached_patcher_init") and model.cached_patcher_init is None and hasattr(comfy.sd, "load_diffusion_model"):
+        if not gguf and not converted and hasattr(model, "cached_patcher_init") and model.cached_patcher_init is None and hasattr(comfy.sd, "load_diffusion_model"):
             # What LoRA training clones the model from: core's own loaders set it, and a plain file is the one case this loader can say how to read again.
             model.cached_patcher_init = (comfy.sd.load_diffusion_model, (path, model_options))
 

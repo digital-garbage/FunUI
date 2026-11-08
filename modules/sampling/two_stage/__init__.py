@@ -58,7 +58,7 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "back_up": {
-        "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
+        "type": "float", "default": 0.5, "min": 0.0, "max": 0.95, "step": 0.05, "ui": "slider",     # 1.0 would repeat the previous step's noise level, and the step could no longer be told apart
         "label": "Noise added at the hand-over",
         "hint": "How far back the full-size stage starts. 0 starts at the noise level where the first stage stopped; higher values start "
                 "earlier, adding more fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines.",
@@ -100,9 +100,12 @@ def install(patcher, values, key):
     size, steps = float(values.get("size", 0.7)), int(values.get("steps", 2))
     resize = values.get("upscaler") if values.get("resize") == "upscaler" and values.get("upscaler") else None
     method = values.get("resize") if values.get("resize") in METHODS else "bicubic"
+    nofile = values.get("resize") == "upscaler" and not resize
+    if nofile:
+        log.once("two_stage:no_upscaler_file", log.WARNING, TITLE, "Latent upscaler is chosen but no file is picked (models/latent_upscale_models is empty), so the hand-over is enlarged by Bicubic")
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5))))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else f", enlarged by {method}" if method != "bicubic" else "")
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else "")
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}

@@ -223,7 +223,11 @@ def test_backing_up_starts_the_full_size_stage_noisier_and_keeps_the_rest():
     half = backed_up(sigmas, 2, 0.5)
     assert abs(float(half[0]) - 0.8) < 0.01 and half[1:].tolist() == sigmas[3:].tolist()
     assert half.dtype == sigmas.dtype and sigmas[2] == 0.7                 # the original schedule is not touched
-    assert float(backed_up(sigmas, 2, 5.0)[0]) == float(sigmas[1])         # never further back than one step
+    far = float(backed_up(sigmas, 2, 5.0)[0])
+    assert far < float(sigmas[1]) and far > float(sigmas[2])                # never as far back as the previous step's own sigma: two steps with one noise level cannot be told apart
+    from core import dit_hooks
+    schedule = torch.cat([sigmas[:2], backed_up(sigmas, 2, 1.0)])           # the slider's far end
+    assert [dit_hooks.current_step({"sample_sigmas": schedule, "sigmas": schedule[i:i + 1]})[0] for i in range(len(schedule) - 1)] == list(range(len(schedule) - 1))
 
 
 def test_a_staged_run_with_backing_up_still_finishes(model):

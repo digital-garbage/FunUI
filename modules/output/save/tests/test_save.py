@@ -102,6 +102,19 @@ def test_the_last_decoded_picture_is_kept_exactly_for_the_next_shot(tmp_path, mo
     nodes.keep_last_frame("x.mp4", frame)           # a failure here never fails the save
 
 
+def test_the_carried_picture_is_the_samplers_not_the_post_look(tmp_path, monkeypatch):
+    import torch
+    images = torch.rand(3, 16, 16, 3)
+    seen = []
+    monkeypatch.setattr(nodes, "keep_last_frame", lambda file, frame: seen.append(frame))
+    monkeypatch.setattr(nodes, "encode", lambda *a, **k: "libx264")
+    monkeypatch.setattr(nodes.folder_paths, "get_output_directory", lambda: str(tmp_path))
+    monkeypatch.setattr(nodes.folder_paths, "get_save_image_path", lambda *a: (str(tmp_path), "FunUI", 1, "", "FunUI"))
+    monkeypatch.setattr(nodes.FunUISaveVideo, "hidden", type("H", (), {"extra_pnginfo": None, "prompt": None})(), raising=False)
+    nodes.FunUISaveVideo.execute(images, settings={"output_save": {"saturation": 0.2, "smoothing": "strong"}})
+    assert np.array_equal(seen[0], nodes.to_frames(images[-1:])[-1])           # not the desaturated, smoothed one the file got
+
+
 def test_a_failed_keep_never_leaves_an_older_videos_picture_under_the_name(tmp_path, monkeypatch):
     monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: str(tmp_path))
     old = tmp_path / nodes.last_frame_name("FunUI_00001_.mp4")

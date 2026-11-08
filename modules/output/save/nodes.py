@@ -245,5 +245,5 @@ class FunUISaveVideo(io.ComfyNode):
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
         log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + "".join(f", {k} {v}" for k, v in look.items() if v != DEFAULTS[k]))
-        keep_last_frame(file, frames[-1])
+        keep_last_frame(file, to_frames(images[-1:])[-1])             # the sampler's own picture: the Post look belongs to the file, not to the next shot's start
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

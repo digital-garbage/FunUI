@@ -253,3 +253,10 @@ def test_a_map_that_answers_with_nan_or_fails_gives_the_setting_as_typed():
     for answer in (float("nan"), float("inf"), RuntimeError("boom")):
         to = {"funui_block_map": View(answer)}
         assert dit_hooks.block_map_value(to, "attention", 3, 0.7, 10) == 0.7
+
+
+def test_the_multipliers_average_one_even_when_the_clamp_bites():
+    lev = [[0.1] * 3, [10.0] * 3]                  # three blocks cheap to move, one very expensive: the lower limit bites
+    m = measure.MapView(_data(lev=lev)).multipliers("attention", 0.5, [0, 1, 2, 9])
+    assert sum(m.values()) / 4 == pytest.approx(1.0, abs=0.01)
+    assert all(measure.LOW <= v <= measure.HIGH for v in m.values())

@@ -85,3 +85,19 @@ def test_the_head_count_reads_shapes_only_so_any_device_or_dtype_works():
     sd = {k: v.to(device="meta", dtype=torch.float16) for k, v in _file().items()}
     fixed, _ = head_bank_metadata(sd, _meta(latents_dim=24))
     assert json.loads(fixed["config"])["transformer"]["pdd_steps"] == STEPS
+
+
+def test_a_ticked_but_skipped_mxfp8_still_leaves_the_model_clonable_for_lora_training(monkeypatch):
+    """MXFP8 is skipped on a machine that cannot run it; the weights are then the file's own, so training can re-read the file."""
+    import comfy.utils
+    import folder_paths
+    from modules.loaders.diffusion_model import nodes
+    from _tiny import native_model
+    sd = {k: v.clone() for k, v in native_model(num_layers=8).model.diffusion_model.state_dict().items()}
+    monkeypatch.setattr(folder_paths, "get_full_path_or_raise", lambda kind, name: f"/fake/{name}")
+    monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: ({k: v.clone() for k, v in sd.items()}, None))
+    monkeypatch.setattr(nodes.mxfp8_module, "available", lambda device: False)
+    model = nodes.FunUIDiffusionModelLoader.execute(model_name="m.safetensors", weight_dtype="default", compute_dtype="default",
+                                                    attention="default", mxfp8=True)[0]
+    assert model.cached_patcher_init is not None
+    model.clone(force_deepcopy=True)

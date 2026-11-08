@@ -248,7 +248,14 @@ class MapView:
         if not known:
             return {b: 1.0 for b in blocks}
         mean = sum(known) / len(known)
-        return {b: (1.0 if v is None else min(HIGH, max(LOW, v / mean))) for b, v in raw.items()}
+        out = {b: (1.0 if v is None else min(HIGH, max(LOW, v / mean))) for b, v in raw.items()}
+        for _ in range(8):                      # the clamp pulls the mean off 1: scale what is not at a limit back until it sits there (it settles in a few rounds)
+            seen = [out[b] for b, v in raw.items() if v is not None]
+            off = sum(seen) / len(seen)
+            if abs(off - 1.0) < 1e-3:
+                break
+            out = {b: (1.0 if v is None else min(HIGH, max(LOW, out[b] / off))) for b, v in raw.items()}
+        return out
 
     def adjust(self, kind, block, frac, blocks, value):
         """The feature's own `value` (its change from neutral: a temperature minus 1, a strength) for this block:

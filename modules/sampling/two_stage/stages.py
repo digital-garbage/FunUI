@@ -174,7 +174,7 @@ def backed_up(sigmas, steps, amount):
     """The schedule for the full-size stage. The hand-over starts `amount` of the way from the cut back to the sigma
     before it: the enlarged guess gets more fresh noise, and the model is told the true noise level it now sees."""
     second = sigmas[steps:].clone()
-    amount = max(0.0, min(1.0, float(amount)))
+    amount = max(0.0, min(0.95, float(amount)))        # 1.0 would start at the previous step's own sigma: two steps with one noise level
     if amount > 0.0 and steps >= 1:
         before = sigmas[steps - 1].to(device=second.device, dtype=second.dtype)
         second[0] = second[0] + amount * (before - second[0])

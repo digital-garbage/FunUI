@@ -31,7 +31,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Seed search",
-        "hint": "After 10+ rated clips (some liked, some disliked), tries a few seeds for one step each and keeps the one your taste likes.",
+        "hint": "After 10+ rated clips (some liked, some disliked), tries a few seeds for one step each and keeps the one your taste likes. With Two stages the choice is made for the small first stage; the full-size stage starts from your own seed's noise.",
     },
     "candidates": {
         "type": "int", "default": 3, "min": 2, "max": 8,

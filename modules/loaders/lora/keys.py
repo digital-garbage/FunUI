@@ -28,7 +28,7 @@ REKEY = (
 
 _DIFFUSERS = re.compile(r"(^|\.)(transformer_blocks|refiner_blocks)\.\d+\.")
 _WRAPPER = re.compile(r"^.*?(?=(?:token_refiner\.)?(?:transformer_blocks|refiner_blocks)\.\d+\.)")
-_PART = re.compile(r"^(?P<mod>.+?)(?P<tail>\.(?:lora_[AB]\.weight|lora_[AB]|alpha))$")
+_PART = re.compile(r"^(?P<mod>.+?)(?P<tail>\.(?:lora_(?:[AB]|down|up)\.weight|lora_(?:[AB]|down|up)|alpha))$")
 _SUFFIX = (("attn.to_out.0", "attn.out_proj"), ("ff.net.0.proj", "mlp.fc1"), ("ff.net.2", "mlp.fc2"))
 _QKV = ("to_q", "to_k", "to_v")
 
@@ -55,6 +55,7 @@ def from_diffusers(lora, fused_rows=None):
             out[k] = v
             continue
         mod, tail = m.group("mod"), m.group("tail")
+        tail = tail.replace("lora_down", "lora_A").replace("lora_up", "lora_B")        # the older spelling of the same two matrices
         mod = mod.replace("transformer_blocks.", "blocks.").replace("token_refiner.refiner_blocks.", "token_refiner.blocks.")
         for old, new in _SUFFIX:
             if mod.endswith(old):

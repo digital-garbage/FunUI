@@ -12,12 +12,13 @@ import { pickShortcut, templatesBar, variablesPanel } from "./storytools.js";
 const TABS = [{ value: "story", label: "Story" }, { value: "shortcuts", label: "Shortcuts" }, { value: "build", label: "Build" }, { value: "cuts", label: "Cuts" }, { value: "enhance", label: "Enhance" }, { value: "chat", label: "Chat" }, { value: "files", label: "Files" }];
 
 // The box follows the scenes; typing in it rewrites them (after a short pause, or when focus leaves).
-const story = (app, own) => {
+export const story = (app, own) => {
   const p = app.project;
-  let shown = null, marker = "qcut", words = ["qcut"], timer = 0, asked = 0, inFlight = Promise.resolve();
-  const box = c.textarea.md({ label: "Story", rows: 14, value: p.project ? joinStory(p.project, marker) : "", onInput: (v) => { clearTimeout(timer); timer = setTimeout(() => { timer = 0; apply(v); }, 700); }, onCommit: (v) => { clearTimeout(timer); timer = 0; apply(v); } });
+  let shown = null, marker = "qcut", words = ["qcut"], timer = 0, typedFor = null, asked = 0, inFlight = Promise.resolve();
+  const box = c.textarea.md({ label: "Story", rows: 14, value: p.project ? joinStory(p.project, marker) : "", onInput: (v) => { clearTimeout(timer); typedFor = p.project && p.project.id; timer = setTimeout(() => { timer = 0; apply(v); }, 700); }, onCommit: (v) => { clearTimeout(timer); timer = 0; apply(v); } });
   const area = box.node, warn = c.hint.default({ text: "" });
-  function apply(text) { return (inFlight = split(text)); }
+  // Text typed in one project is never split into another one that was opened (by keyboard, with no blur) before the pause ran out.
+  function apply(text) { if (typedFor && p.project && p.project.id !== typedFor) { typedFor = null; sync(); return inFlight; } typedFor = null; return (inFlight = split(text)); }
   async function split(text) {
     if (!p.project) return;
     const mine = ++asked, pid = p.project.id;

@@ -127,6 +127,15 @@ def stream_file(src, dst, upscale, interrupted=lambda: None, fps_factor=1):
                 enc.wait()
                 raise ClipError(f"ffmpeg could not encode the video: {enc.stderr.read().decode(errors='replace')[-500:]}") from None
             frames += y.shape[0]
+            tail = y[-1:]
+        if enc is not None and fps_factor > 1:         # the last picture has no partner to blend with: hold it, so frames = source x factor and the length stays
+            hold = np.repeat(tail, fps_factor - 1, axis=0)
+            try:
+                enc.stdin.write(hold.tobytes())
+            except BrokenPipeError:
+                enc.wait()
+                raise ClipError(f"ffmpeg could not encode the video: {enc.stderr.read().decode(errors='replace')[-500:]}") from None
+            frames += hold.shape[0]
         dec.wait()
         problems.seek(0)
         said = problems.read().decode(errors="replace").strip()
