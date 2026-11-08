@@ -49,6 +49,40 @@ def chains(target, depth=DEPTH, nodes=NODES, paths=PATHS) -> list:
     return out
 
 
+def _owners(model):
+    """The live patchers whose model this is, deepest clone first."""
+    held = [r for r in gc.get_referrers(model) if type(r).__name__ == "dict" and "patches" in r]
+    found = {id(o): o for h in held for o in gc.get_referrers(h) if type(o).__name__.startswith("ModelPatcher") and getattr(o, "model", None) is model}
+
+    def depth(p):
+        n = 0
+        while getattr(p, "parent", None) is not None and n < 50:
+            p, n = p.parent, n + 1
+        return n
+    return sorted(found.values(), key=depth, reverse=True)
+
+
+def relink(mm) -> int:
+    """ComfyUI follows a loaded model through its patcher, and when that patcher dies it hands over to the patcher's direct parent
+    only. A parent that is gone leaves the entry dead although other patchers of the same model are alive (the loader's, the
+    LoRA's, the modifiers' outputs, all cached by ComfyUI): it then warns "memory leak" on every load. Such an entry is pointed
+    at the deepest live patcher of its model, so the model is tracked again. An entry with no live patcher stays dead and is
+    reported. -> how many were re-linked."""
+    n = 0
+    for m in list(mm.current_loaded_models):
+        if not m.is_dead():
+            continue
+        model = m.real_model()
+        owners = _owners(model) if model is not None else []
+        if not owners:
+            continue
+        m._set_model(owners[0])
+        m.device = owners[0].load_device
+        n += 1
+        log.info("FunUI Leak", f"{type(model).__name__} had lost its patcher; ComfyUI tracks it again through one of the {len(owners)} patchers still holding it")
+    return n
+
+
 def report(mm, when) -> int:
     dead = [m for m in mm.current_loaded_models if m.is_dead()]
     if dead:
@@ -122,6 +156,7 @@ def install(mm=None) -> bool:
 
     def cleanup_models_gc():
         try:
+            relink(mm)
             report(mm, "before ComfyUI's gc")
         except Exception as exc:            # noqa: BLE001 -- a diagnostic must never stop a run
             log.failed("leak report", exc)

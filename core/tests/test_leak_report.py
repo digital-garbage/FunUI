@@ -74,3 +74,51 @@ def test_a_hand_over_that_finds_no_parent_is_said(comfyui, capsys):
         mm.LoadedModel._switch_parent = original
         if leak_report._gc_flag in gc.callbacks:
             gc.callbacks.remove(leak_report._gc_flag)
+
+
+def test_an_entry_whose_patcher_died_without_a_hand_over_is_tracked_again_through_a_live_one(comfyui, capsys):
+    """The state the rental showed: the cache keeps the loader, LoRA and modifier patchers (one chain), the sampling clone died and
+    ComfyUI could not hand over to its parent. The entry must be tracked again, and ComfyUI's own check must stay quiet."""
+    import weakref
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    base = torch.nn.Linear(2, 2)
+    base.model_config = type("C", (), {})()
+    root = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+    chain = [root]
+    for _ in range(3):
+        chain.append(chain[-1].clone())
+    sampling = chain[-1].clone()
+    loaded = mm.LoadedModel(sampling)
+    loaded.real_model = weakref.ref(base)
+    mm.current_loaded_models.append(loaded)
+    try:
+        loaded._parent_model = lambda: None          # the hand-over finds no parent
+        del sampling
+        gc.collect()
+        assert loaded.is_dead()
+        assert leak_report.relink(mm) == 1 and not loaded.is_dead() and loaded.model is chain[-1]
+        assert "tracks it again" in capsys.readouterr().err
+        assert leak_report.relink(mm) == 0
+    finally:
+        mm.current_loaded_models.remove(loaded)
+
+
+def test_an_entry_with_no_live_patcher_is_left_for_the_report(comfyui):
+    import weakref
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    base = torch.nn.Linear(2, 2)
+    base.model_config = type("C", (), {})()
+    patcher = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+    loaded = mm.LoadedModel(patcher)
+    loaded.real_model = weakref.ref(base)
+    keep = Holder(base)
+    mm.current_loaded_models.append(loaded)
+    try:
+        del patcher
+        gc.collect()
+        assert loaded.is_dead() and leak_report.relink(mm) == 0 and loaded.is_dead()
+        del keep
+    finally:
+        mm.current_loaded_models.remove(loaded)
