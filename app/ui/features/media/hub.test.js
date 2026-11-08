@@ -240,3 +240,14 @@ test("Delete after picking files ends Select mode, and the bin's controls are pi
   assert.equal(btn("Delete (0)").hidden, true);
   host.remove();
 });
+
+test("references are numbered per kind: the first sound is R1 even when a picture holds the first slot", async () => {
+  const doc = { scenes: [{ id: "s1", references: ["m1", "m2", "m3"] }] };
+  const project = { selected: doc.scenes[0], project: doc, setScene() {}, edit: (fn) => fn(doc) };
+  const api = { media: async () => ({ media: [{ id: "m1", name: "cat.png", kind: "image" }, { id: "m2", name: "song.wav", kind: "audio" }, { id: "m3", name: "dog.png", kind: "image" }] }) };
+  const host = document.createElement("div");
+  hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
+  await new Promise((r) => setTimeout(r, 10));
+  const flag = (n) => [...[...host.querySelectorAll(".cx-cell")].find((x) => x.textContent.includes(n)).querySelectorAll(".cx-cell-flag")].map((x) => x.textContent).join();
+  assert.deepEqual([flag("cat.png"), flag("song.wav"), flag("dog.png")], ["R1", "R1", "R2"]);
+});

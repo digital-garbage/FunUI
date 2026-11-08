@@ -178,9 +178,12 @@ export default {
       shelf.set([g]);
       if (g.setCols) g.setCols(Number(show.cols));
       tileSize.node.hidden = !g.setCols;
+      // Numbered per kind, as the model's inputs are: the first sound is R1 even when a picture holds the first slot.
+      const kindOf = (id) => (items.find((m) => m.id === id) || {}).kind;
+      const ordinal = (id) => { const i = refs.indexOf(id); return refs.filter((r, j) => nums[j] <= nums[i] && kindOf(r) === kindOf(id)).length; };
       // what the selected scene uses is marked on its tile, so a reference can be told from the rest
       const flags = (m) => [sc && sc.source_image === m.id ? { text: "◐", title: "The selected scene's aspect ratio source" } : null,
-        refs.includes(m.id) ? { text: `${plan.pins[m.id] ? "📌" : ""}R${nums[refs.indexOf(m.id)]}`, title: `Reference slot ${nums[refs.indexOf(m.id)]} for the selected scene${plan.pins[m.id] ? ", pinned to every scene" : ""}` } : null].filter(Boolean);
+        refs.includes(m.id) ? { text: `${plan.pins[m.id] ? "📌" : ""}R${ordinal(m.id)}`, title: `${m.kind === "image" ? "Reference" : m.kind[0].toUpperCase() + m.kind.slice(1) + " reference"} ${ordinal(m.id)} for the selected scene${plan.pins[m.id] ? ", pinned to every scene" : ""}` } : null].filter(Boolean);
       g.setItems(shown.map((m) => ({ id: m.id, label: m.name, thumb: m.kind === "audio" ? undefined : `${base(m.id)}/thumb`, badge: m.kind, flags: flags(m) })));
       g.setValue(selecting ? [...chosen] : sc ? [sc.source_image, ...refs].filter(Boolean) : []);
       selectBtn.setLabel(selecting ? "Done" : "Select");
