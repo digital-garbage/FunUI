@@ -6,7 +6,7 @@ export const elapsed = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); r
 
 export default {
   id: "generate-progress",
-  mount: "timeline.toolbar.end",
+  mount: "timeline.status",
   needs: ["generate"],
   setup({ host, app }) {
     const g = app.generate;
