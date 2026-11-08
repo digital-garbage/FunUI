@@ -46,18 +46,18 @@ export default {
     app.timelineLanes.push(entry);
     app.say("timeline.lanes");          // the stage draws what it has; tell it there is more
 
-    const add = c.button.menu({ label: "＋ Overlay", tone: "ghost", disabled: !p.project, onClick: () => c.menu.dropdown({ anchor: add,
-      items: [{ id: "text", label: "Text…" }, { id: "image", label: "Picture…" }, { separator: true }, { id: "lane", label: "New lane on top" },
-        { id: "unlane", label: "Remove top lane", danger: true, disabled: !ov.lanesOf(p.project).length }],
-      onPick: (id) => {
-        if (id === "text" || id === "image") return open(id);
-        if (id === "lane") return edit((pr) => ov.addLane(pr));
-        const top = ov.lanesOf(p.project).slice(-1)[0];
-        if (!top) return;
-        if (top && !ov.overlaysOf(p.project).some((o) => o.lane_id === top.id)) return edit((pr) => ov.removeLane(pr, top.id));
-        c.modal.dialogue({ title: "Remove lane", message: `Remove “${top.label}” and everything on it?`, tone: "danger", confirmLabel: "Remove" }).result.then((yes) => yes && edit((pr) => ov.removeLane(pr, top.id)));
-      } }) });
-    host.append(add.node);
+    const removeTop = () => {
+      const top = ov.lanesOf(p.project).slice(-1)[0];
+      if (!top) return;
+      if (!ov.overlaysOf(p.project).some((o) => o.lane_id === top.id)) return edit((pr) => ov.removeLane(pr, top.id));
+      c.modal.dialogue({ title: "Remove lane", message: `Remove “${top.label}” and everything on it?`, tone: "danger", confirmLabel: "Remove" }).result.then((yes) => yes && edit((pr) => ov.removeLane(pr, top.id)));
+    };
+    const addEntry = { order: 30, items: () => [
+      { id: "ov-text", label: "Text overlay…", disabled: !p.project, run: () => open("text") },
+      { id: "ov-image", label: "Picture overlay…", disabled: !p.project, run: () => open("image") },
+      { id: "ov-lane", label: "New overlay lane on top", disabled: !p.project, run: () => edit((pr) => ov.addLane(pr)) },
+      { id: "ov-unlane", label: "Remove top overlay lane", danger: true, disabled: !p.project || !ov.lanesOf(p.project).length, run: removeTop }] };
+    app.addMenu.push(addEntry);        // listed under the timeline's "＋ Add"
     const offDrop = onMediaDrop("lane:overlay", async (item, lane, e, where) => {       // a picture dropped on an overlay lane becomes an overlay there
       if (item.kind !== "image" || !p.project) return c.toast.warn({ text: "Only a picture can be laid over the cut." });
       let name = "Image"; try { name = ((await app.api.media()).media || []).find((m) => m.id === item.id).name; } catch { /* keep the generic label */ }
@@ -65,7 +65,6 @@ export default {
       const sec = app.timelineView && app.timelineView.timeAt ? app.timelineView.timeAt(e.clientX) : app.playhead.at;
       edit((pr) => ov.addImage(pr, item.id, name, sec, laneId));
     });
-    const off = app.on(() => { add.setDisabled && add.setDisabled(!p.project); });
-    return () => { off(); offDrop(); const at = app.timelineLanes.indexOf(entry); if (at >= 0) app.timelineLanes.splice(at, 1); add.node.remove(); app.say("timeline.lanes"); };
+    return () => { const k = app.addMenu.indexOf(addEntry); if (k >= 0) app.addMenu.splice(k, 1); offDrop(); const at = app.timelineLanes.indexOf(entry); if (at >= 0) app.timelineLanes.splice(at, 1); app.say("timeline.lanes"); };
   },
 };

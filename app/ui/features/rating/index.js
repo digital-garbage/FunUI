@@ -16,7 +16,7 @@ export function notTaught(r, ps) {
 
 export default {
   id: "rating",
-  mount: "timeline.toolbar.end",
+  mount: "timeline.actions",
   needs: ["project", "api", "selection", "pipeline"],
   setup({ host, app }) {
     const p = app.project, sel = app.selection;

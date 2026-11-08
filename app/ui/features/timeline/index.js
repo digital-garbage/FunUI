@@ -77,10 +77,18 @@ const tools = {
       const inside = head.at > seg.start && head.at < seg.start + seg.dur;
       if (!p.edit((pr) => edits.split(pr, seg.id, inside ? framesAt(seg.scene, pr, head.at - seg.start) : undefined, gridFor(app)))) c.toast.warn({ text: "Too close to the clip's edge to cut there." });
     };
+    // One "＋ Add" for everything that can go on the timeline: a scene, a clip or sound from the bin, an effect, an overlay.
+    const addButton = c.button.menu({ label: "＋ Add", tone: "ghost", onClick: () => {
+      const groups = [...(app.addMenu || [])].sort((a, b) => a.order - b.order).map((g) => { try { return g.items(); } catch { return []; } }).filter((g) => g.length);
+      const items = [{ id: "scene", label: "Scene", disabled: !p.project, run: () => { const sc = p.edit((pr) => edits.addScene(pr)); if (sc) p.select(sc.id); } },
+        ...groups.flatMap((g) => [{ separator: true }, ...g])];
+      c.menu.dropdown({ anchor: addButton, items, onPick: (id) => { const hit = items.find((i) => i.id === id); if (hit && hit.run) hit.run(); } });
+    } });
     const draw = () => {
       const open = p.project, ids = open ? sel.ids : [];
+      if (addButton.setDisabled) addButton.setDisabled(!open);
       put(c.hint.default({ text: `${clock(head.at)} / ${clock(open ? totalSeconds(open) : 0)}` }).node,
-        btn("＋ Add", () => { const sc = p.edit((pr) => edits.addScene(pr)); if (sc) p.select(sc.id); }, !open),
+        addButton.node,
         btn("Split", split, !ids.length, "Cut the selected clip at the playhead (in the middle when the playhead is elsewhere)"),
         btn("Remove", () => ids.forEach((id) => p.edit((pr) => edits.removeScene(pr, id))), !ids.length),
         c.chip.neutral({ label: ids.length ? `${ids.length} clip${ids.length > 1 ? "s" : ""} selected` : "no clip selected" }).node);

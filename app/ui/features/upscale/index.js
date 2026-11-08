@@ -7,7 +7,7 @@ import { RTX, RTX_DEFAULTS, keepsSize, keyOf, qualityLabel, swap, upscale } from
 
 export default {
   id: "upscale",
-  mount: "timeline.toolbar.end",
+  mount: "timeline.actions",
   needs: ["project", "api", "selection"],
   modules: ["render"],
   setup({ host, app }) {

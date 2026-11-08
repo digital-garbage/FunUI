@@ -33,9 +33,8 @@ export default {
       if (seconds == null) c.toast.warn({ text: asset.kind === "video" ? "The file's length could not be read; the clip uses the project's length." : "The file's length could not be read: the lane cannot be trimmed, and plays to the end of the file." });
     }
 
-    const menu = c.button.menu({ label: "＋ From bin", tone: "ghost", onClick: () => c.menu.dropdown({ anchor: menu, items: [{ id: "video", label: "Video clip…", disabled: !p.project }, { id: "audio", label: "Audio track…", disabled: !p.project }],
-      onPick: (id) => choose(id) }) });
-    host.append(menu.node);
+    const entry = { order: 10, items: () => [{ id: "bin-video", label: "Video clip from bin…", disabled: !p.project, run: () => choose("video") }, { id: "bin-audio", label: "Audio track from bin…", disabled: !p.project, run: () => choose("audio") }] };
+    app.addMenu.push(entry);           // listed under the timeline's "＋ Add"
 
     // Dropping a bin tile on the timeline: a video makes a clip, a sound a lane, a picture a scene's anchor (on a clip) or a new scene (beside them).
     const at = (e) => (app.timelineView && app.timelineView.timeAt ? app.timelineView.timeAt(e.clientX) : app.playhead.at);
@@ -63,6 +62,6 @@ export default {
         p.edit((pr) => addAudioTrack(pr, a, at(e), seconds));
       }),
     ];
-    return () => { offs.forEach((f) => f()); menu.node.remove(); };
+    return () => { offs.forEach((f) => f()); const i = app.addMenu.indexOf(entry); if (i >= 0) app.addMenu.splice(i, 1); };
   },
 };

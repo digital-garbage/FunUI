@@ -37,14 +37,11 @@ export default {
         } })] });
     }
 
-    const menu = c.button.menu({ label: "＋ Effect", tone: "ghost", onClick: () => c.menu.dropdown({ anchor: menu, items: [
-      { id: "fx", label: "Effect…", disabled: !p.selected }, { id: "tr", label: "Transition…", disabled: !p.selected },
-      { separator: true }, { id: "off", label: "Remove effects and transition", danger: true, disabled: !p.selected || !tags(p.selected).length }],
-      onPick: (id) => {
-        if (id === "fx") ask("effects"); else if (id === "tr") ask("video_transitions");
-        else p.edit((pr) => { const s = pr.scenes.find((x) => x.id === p.selectedId); if (!s) return false; applyEffect(s, "reset"); return clearTransition(s); });
-      } }) });
-    host.append(menu.node);
+    const entry = { order: 20, items: () => [
+      { id: "fx", label: "Effect…", disabled: !p.selected, run: () => ask("effects") }, { id: "tr", label: "Transition…", disabled: !p.selected, run: () => ask("video_transitions") },
+      { id: "fx-off", label: "Remove effects and transition", danger: true, disabled: !p.selected || !tags(p.selected).length,
+        run: () => p.edit((pr) => { const s = pr.scenes.find((x) => x.id === p.selectedId); if (!s) return false; applyEffect(s, "reset"); return clearTransition(s); }) }] };
+    app.addMenu.push(entry);           // listed under the timeline's "＋ Add"
 
     app.clipTags.push(tags);
     const section = { key: (sc) => `${sc.audio_volume}|${sc.audio_separated}`, rows: (sc) => [
@@ -54,7 +51,7 @@ export default {
     app.sceneSections.push(section);
     return () => {
       for (const [list, x] of [[app.clipTags, tags], [app.sceneSections, section]]) { const i = list.indexOf(x); if (i >= 0) list.splice(i, 1); }
-      menu.node.remove();
+      const k = app.addMenu.indexOf(entry); if (k >= 0) app.addMenu.splice(k, 1);
     };
   },
 };
