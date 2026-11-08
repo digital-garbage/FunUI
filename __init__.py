@@ -36,6 +36,11 @@ else:
         brownian.install()          # no torchsde start-rounding warnings on SDE samplers
     except Exception as exc:        # cosmetic; never take ComfyUI down
         log.failed("core.brownian", exc)
+    try:
+        from .core import leak_report
+        leak_report.install()        # names what holds a model when ComfyUI warns "memory leak with model X"
+    except Exception as exc:        # a diagnostic; never take ComfyUI down
+        log.failed("core.leak_report", exc)
     addons.install_wanted()         # add-ons switched on in Settings: installed now, before a module imports them
 
 
