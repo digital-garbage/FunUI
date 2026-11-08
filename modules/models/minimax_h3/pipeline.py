@@ -165,6 +165,15 @@ FAST_SIMPLE_PREFS = {
 }
 
 
+def _sol_vae() -> str:
+    """The Sol-H3 VAE when it is installed; else "None" (the model's own VAE), so the preset is not refused for a missing file."""
+    try:
+        import folder_paths
+        return "sol_h3_vae.safetensors" if "sol_h3_vae.safetensors" in folder_paths.get_filename_list("vae") else "None"
+    except Exception:                       # noqa: BLE001 -- no ComfyUI folders to ask: the preset's own choice
+        return "sol_h3_vae.safetensors"
+
+
 def h3_fast_simple_r2v():
     """Reference to Video set up for speed with few settings to think about: MXFP8 weights, block-sparse attention
     that ramps from 0.7 to 0.9, a DMAD LoRA slot, five steps on the Turbo sampler with the first three on a smaller
@@ -182,7 +191,7 @@ def h3_fast_simple_r2v():
         "model": {"weight_dtype": "default", "compute_dtype": "default", "attention": "default", "mxfp8": True,
                   "sla": True, "sla_method": "sla", "sla_engine": "comfy_kitchen", "sla_sparsity": 0.9,
                   "sla_sparsity_start": 0.7, "sla_dense_steps": "0", "sla_dense_last_steps": 0},
-        "vae": {"decode_vae_name": "sol_h3_vae.safetensors"},
+        "vae": {"decode_vae_name": _sol_vae()},
         "lora": {"strength_model": 0.5, "strength_clip": 0.0},
         "sampler": {"steps": 5, "sampler_name": "funui_turbo", "scheduler": "ddim_uniform"},
         "settings": {"settings": json.dumps(settings)},

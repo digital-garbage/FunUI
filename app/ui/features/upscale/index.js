@@ -12,7 +12,7 @@ export default {
   modules: ["render"],
   setup({ host, app }) {
     const p = app.project, sel = app.selection;
-    const put = inPlace(host), busy = new Set(), waited = new Map();       // waited: how often "Always" put a render off for a running generation
+    const put = inPlace(host), busy = new Set(), heavy = new Set(), waited = new Map();       // waited: how often "Always" put a render off for a running generation
     const render = (id) => ((p.project || {}).scene_renders || {})[id];
     const target = () => {                               // the picked clip's generation unit root, when it has a render
       const open = p.project, sc = open && open.scenes.find((s) => s.id === sel.focus);
@@ -52,6 +52,7 @@ export default {
         const model = rtxOn() ? RTX : p.pref("upscaleModel", "");
         if (!model) return void (pressed ? suggest() : (gaveUp(media, "upscale"), c.toast.warn({ text: "Upscale: pick a model or NVIDIA RTX Super Resolution in Settings ▸ Editor." })));
         c.toast.info({ text: `Upscaling with ${model}…` });
+        if (model !== RTX) { heavy.add(key); app.has.add("upscale.model"); }          // Generate waits: an upscale model shares ComfyUI's model memory
         const out = await upscale(app.api, media, model, undefined, rtxOn() ? rtxOpts() : undefined);
         derived(media, out, "upscale");
         waited.delete(key); if (!waited.size) told = false;
@@ -70,7 +71,7 @@ export default {
         }
         else { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       }
-      finally { busy.delete(key); draw(); }
+      finally { busy.delete(key); heavy.delete(key); if (!heavy.size) app.has.delete("upscale.model"); draw(); }
     }
 
     function draw() {

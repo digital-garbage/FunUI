@@ -66,7 +66,7 @@ _TOKEN = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
 #: What a free-form field (effects, tracks, pipeline settings) may weigh once it is JSON.
 MAX_BLOB = 4 * 1024 * 1024
 FRAME_MODES = ("project", "timeline", "custom")
-SOURCE_TYPES = ("carry", "empty", "image", "generated_frame", "mixed", "video", "v2v", "anchor_guide")
+SOURCE_TYPES = ("carry", "video", "v2v")        # the scene Source choice is gone: only the clips that play a file keep a type; every older value opens as "carry"
 
 
 def is_token(value) -> bool:

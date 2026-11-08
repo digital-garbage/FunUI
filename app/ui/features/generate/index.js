@@ -56,6 +56,7 @@ export default {
     // `once`: for a single run only - {seed} uses that seed on every seed input; onQueued runs once ComfyUI has taken (or refused) the run.
     async function runUnits(units, times = 1, once = {}) {
       if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }
+      if (app.has && app.has.has("upscale.model")) { tell("An upscale model is running. It shares ComfyUI's model memory, so Generate when it has finished."); return; }
       busy = true; stopped = false; draw();
       const pid = p.project.id;
       let made = 0;

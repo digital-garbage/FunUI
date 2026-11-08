@@ -179,8 +179,10 @@ def test_the_preset_takes_its_size_from_the_aspect_size_alone():
     assert {"at": "project.resolution_basis", "input": "basis"} in slots["aspect"]["roles"]
 
 
-def test_fast_simple_preset_carries_its_settings_and_builds_clean(registered):
+def test_fast_simple_preset_carries_its_settings_and_builds_clean(registered, monkeypatch):
     import json
+    import folder_paths
+    monkeypatch.setattr(folder_paths, "get_filename_list", lambda kind: ["sol_h3_vae.safetensors"] if kind == "vae" else [])
     from core import graph
     from modules.models.minimax_h3.pipeline import h3_fast_simple_r2v
 
@@ -201,3 +203,12 @@ def test_fast_simple_preset_names_its_render_steps():
     prefs = next(p for p in presets() if p["id"] == "minimax_h3_fast_simple_r2v")["prefs"]
     assert prefs["interpolateMode"] == "always" and prefs["interpolateOpts"] == {"mode": "MEDIUM", "multiplier": 2}
     assert prefs["upscaleMode"] == "button" and prefs["upscaleRtx"] == {"quality": "DENOISE_MEDIUM"}
+
+
+def test_fast_simple_preset_decodes_with_none_when_the_sol_vae_is_not_installed(monkeypatch):
+    import folder_paths
+    from modules.models.minimax_h3 import pipeline
+    monkeypatch.setattr(folder_paths, "get_filename_list", lambda kind: [])
+    assert pipeline._sol_vae() == "None"
+    monkeypatch.setattr(folder_paths, "get_filename_list", lambda kind: ["sol_h3_vae.safetensors"])
+    assert pipeline._sol_vae() == "sol_h3_vae.safetensors"

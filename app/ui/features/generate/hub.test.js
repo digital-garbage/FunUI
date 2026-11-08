@@ -255,3 +255,15 @@ test("Quick A/B ends with the clip from before and the new clip, labelled, side 
   assert.match(text, /Before/);
   assert.match(text, /After: enhancements off, seed 5/);
 });
+
+test("Generate does not start while an upscale model is running, and starts again after", async () => {
+  let queued = 0;
+  const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
+  app.has = new Set(["upscale.model"]);
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 0);
+  assert.match(document.body.textContent, /upscale model is running/);
+  app.has.delete("upscale.model");
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 1);
+});

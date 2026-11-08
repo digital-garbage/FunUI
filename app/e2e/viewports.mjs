@@ -45,6 +45,17 @@ async function walkTour(page, note) {
     const m = head.match(/(\d+) \/ (\d+)/);
     if (!m) break;
     seen.push(Number(m[1]));
+    if (/· Generate/.test(head)) {         // the pointed-at button is redrawn (as when a run starts): the callout must follow the new one
+      await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").trim().startsWith("▶ Generate")); if (b) b.replaceWith(b.cloneNode(true)); window.dispatchEvent(new Event("resize")); });
+      await page.waitForTimeout(400);
+      const gap = await page.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").trim().startsWith("▶ Generate")), pop = document.querySelector(".cx-popover");
+        if (!b || !pop) return null;
+        const r = b.getBoundingClientRect(), q = pop.getBoundingClientRect();
+        return Math.abs(q.bottom - r.top);       // above the button (the sideways place is clamped to the screen edge)
+      });
+      if (gap === null || gap > 40) note(`the tour callout did not follow the redrawn Generate button (off by ${gap})`);
+    }
     const done = Number(m[1]) === Number(m[2]);
     await page.getByRole("button", { name: done ? "Done" : "Next", exact: true }).click();
     if (done) break;

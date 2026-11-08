@@ -628,3 +628,11 @@ def test_a_pinned_source_image_survives_a_round_trip_and_a_bad_one_is_dropped():
     p = projects.Project.from_dict({"fixed_source_image": "111111111111"})
     assert projects.Project.from_dict(p.to_dict()).fixed_source_image == "111111111111"
     assert projects.Project.from_dict({"fixed_source_image": "bad"}).fixed_source_image is None
+
+
+def test_a_scene_source_type_that_no_longer_exists_opens_as_carry():
+    from core import projects
+    for old in ("image", "empty", "generated_frame", "mixed", "anchor_guide", "nonsense"):
+        assert projects._clean_source({"type": old})["type"] == "carry"
+    for kept in ("carry", "video", "v2v"):
+        assert projects._clean_source({"type": kept})["type"] == kept

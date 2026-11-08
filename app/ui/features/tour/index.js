@@ -22,16 +22,23 @@ export default {
   mount: "menubar.menus",
   needs: ["project", "dom"],
   setup({ app }) {
-    let at = -1, pop = null;
-    const stop = () => { if (pop) { const p = pop; pop = null; p.close(); } at = -1; app.has.delete("tour.running"); };      // a flag the Help menu reads: features see copies of app, the Set is shared
+    let at = -1, pop = null, target = null, watcher = null, queued = false;
+    // The part pointed at can be redrawn (Generate becomes "Generating..."): the callout then follows the new node instead of a detached one.
+    const follow = () => {
+      if (queued || !pop || !target || target.isConnected) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; if (pop && at >= 0 && target && !target.isConnected) show(at); });
+    };
+    const stop = () => { if (watcher) { watcher.disconnect(); watcher = null; } target = null; if (pop) { const p = pop; pop = null; p.close(); } at = -1; app.has.delete("tour.running"); };      // a flag the Help menu reads: features see copies of app, the Set is shared
     const shown = (i) => { const el = app.dom.landmark(STEPS[i].at); return el && el.getBoundingClientRect().width ? el : null; };
     function show(i) {
       if (pop) { const p = pop; pop = null; p.close(); }
-      let target;
+      target = null;
       while (i >= 0 && i < STEPS.length && !(target = shown(i))) i += i >= at ? 1 : -1;      // a part that is hidden right now is skipped
       if (i < 0 || i >= STEPS.length) return stop();
       at = i;
       app.has.add("tour.running");
+      if (!watcher && typeof MutationObserver === "function") { watcher = new MutationObserver(follow); watcher.observe(app.dom.body, { childList: true, subtree: true }); }
       const seen = STEPS.map((_, k) => k).filter((k) => k === i || shown(k)), place = seen.indexOf(i) + 1;       // numbered among the parts on screen, so the count has no gaps
       const s = STEPS[i], last = i === STEPS.length - 1;
       const body = c.region.stack({ gap: "sm", children: [c.label.section({ text: `${place} / ${seen.length} · ${s.title}` }), c.text.sm({ text: s.text }),
