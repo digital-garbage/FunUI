@@ -55,8 +55,50 @@ def report(mm, when) -> int:
         model = m.real_model()
         if model is None:
             continue
-        log.warning("FunUI Leak", f"{when}: {type(model).__name__} outlived its patcher. What holds it:\n" + "\n".join(chains(model)))
+        held = [r for r in gc.get_referrers(model) if type(r).__name__ == "dict" and "patches" in r]
+        owners = [o for h in held for o in gc.get_referrers(h) if type(o).__name__.startswith("ModelPatcher")]
+
+        def depth(p):
+            n = 0
+            while getattr(p, "parent", None) is not None and n < 50:
+                p, n = p.parent, n + 1
+            return n
+        lineage = ", ".join(f"{type(o).__name__}(parents {depth(o)}, tracked {any(l.model is o for l in mm.current_loaded_models)})" for o in owners)
+        log.warning("FunUI Leak", f"{when}: {type(model).__name__} outlived its patcher. Patchers holding it: {lineage or 'none'}. What holds it:\n" + "\n".join(chains(model)))
     return len(dead)
+
+
+_in_gc = [False]
+
+
+def _gc_flag(phase, info):
+    _in_gc[0] = phase == "start"
+
+
+def watch_switch(mm) -> bool:
+    """ComfyUI follows a model through its patcher's parent when the patcher dies. Say when that hand-over finds no parent, and whether
+    Python's own gc was running at that moment (it clears weak links to every patcher in a cycle before the hand-over can use them)."""
+    original = getattr(mm.LoadedModel, "_switch_parent", None)
+    if original is None or getattr(original, TAG, False):
+        return False
+    if _gc_flag not in gc.callbacks:
+        gc.callbacks.append(_gc_flag)
+
+    def _switch_parent(self):
+        try:
+            parent = self._parent_model()
+            real = self.real_model() if callable(self.real_model) else None
+            if parent is None and real is not None:
+                live = [type(o).__name__ for o in gc.get_referrers(real) if type(o).__name__.startswith("ModelPatcher")]
+                log.warning("FunUI Leak", f"a {type(real).__name__} patcher died and its parent was already gone, so ComfyUI loses track of the model. "
+                            f"Python's gc was running: {_in_gc[0]}. Patchers still holding the model: {len(live)}")
+        except Exception as exc:            # noqa: BLE001 -- a diagnostic must never stop a run
+            log.failed("leak report", exc)
+        return original(self)
+
+    setattr(_switch_parent, TAG, True)
+    mm.LoadedModel._switch_parent = _switch_parent
+    return True
 
 
 def install(mm=None) -> bool:
@@ -65,6 +107,7 @@ def install(mm=None) -> bool:
     original = getattr(mm, "cleanup_models_gc", None)
     if original is None or getattr(original, TAG, False):
         return False
+    watch_switch(mm)
 
     def cleanup_models_gc():
         try:
