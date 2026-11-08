@@ -205,3 +205,37 @@ def test_modules_with_no_place_in_the_model_are_counted_and_alerted(patcher, mon
     monkeypatch.setattr(comfy.utils, "load_torch_file", lambda p, **kw: dict(lora))
     nodes.FunUILoraLoader.execute(model=patcher, lora_name="x.safetensors", strength_model=1.0)
     assert any("2 of its 8 modules have no place" in t for t in said), said
+
+
+# Modules with no place in H3 are counted whatever training wrapper sits in front of the Diffusers key names.
+import pytest as _pytest
+_RANK = 4
+
+@_pytest.fixture(scope="module")
+def wrapper_patcher():
+    import comfy.model_patcher as mp
+    import comfy.supported_models as sm
+    config = sm.MiniMaxH3(dict(
+        image_model="minimax_h3", hidden_size=64, num_layers=2, token_refiner_num_layers=1, num_attention_heads=2,
+        attention_head_dim=32, ffn_hidden_size=64, text_dim=48, timestep_input_dim=32, time_embed_hidden_size=64,
+        time_embed_dim=32, rope_inv_freq_len=4))
+    config.set_inference_dtype(torch.float32, None)
+    base = config.get_model({}, device=torch.device("cpu"))
+    return mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+
+def _pair(o, i, g):
+    return torch.randn(_RANK, i, generator=g), torch.randn(o, _RANK, generator=g)
+
+@_pytest.mark.parametrize("wrapper", ["transformer.", "", "diffusion_model.", "base_model.model.", "dit."])
+def test_unplaced_counted_for_wrapper(wrapper_patcher, wrapper):
+    from modules.loaders.lora.keys import match
+    g = torch.Generator().manual_seed(0)
+    lora = {}
+    for name, (o, i) in {"attn.to_q": (64, 64), "attn.to_k": (64, 64), "attn.to_v": (64, 64), "attn.to_out.0": (64, 64),
+                         "ff.net.0.proj": (128, 64), "ff.net.2": (64, 64), "norm1.linear": (384, 64), "attn.to_add_out": (64, 64)}.items():
+        a, b = _pair(o, i, g)
+        lora[f"{wrapper}transformer_blocks.1.{name}.lora_A.weight"] = a
+        lora[f"{wrapper}transformer_blocks.1.{name}.lora_B.weight"] = b
+    patches, how, dropped, unplaced = match(wrapper_patcher, None, lora)
+    assert unplaced == 2, (wrapper, unplaced)
+

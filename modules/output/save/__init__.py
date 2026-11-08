@@ -45,7 +45,7 @@ SETTINGS = {
         "options": [{"value": "off", "label": "Off"}, {"value": "text", "label": "Text"}, {"value": "picture", "label": "Picture"}],
         "label": "Watermark",
         "hint": "A text or a picture from the media bin in one corner of the finished video. It is laid on last, so the settings above never change it. "
-                "It is in the saved file only: the next shot's start picture and the Preview's own frames do not carry it.",
+                "It is in the saved file only: the next shot's start picture and the Preview's own frames do not carry it (a clip trimmed short at its end starts the next shot from the saved file, so then it does).",
     },
     "watermark_text": {
         "type": "text", "default": "", "label": "Watermark text", "when": {"watermark": "text"},

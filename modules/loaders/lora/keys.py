@@ -33,6 +33,9 @@ _SUFFIX = (("attn.to_out.0", "attn.out_proj"), ("ff.net.0.proj", "mlp.fc1"), ("f
 _QKV = ("to_q", "to_k", "to_v")
 
 
+_BLOCKS = re.compile(r"(?:^|\.)(?:token_refiner\.)?(?:transformer_blocks|refiner_blocks)\.\d+\.")      # a Diffusers module under any training wrapper
+
+
 def from_diffusers(lora, fused_rows=None):
     """-> (lora, extra key map). A LoRA written against the Diffusers layout of the H3 transformer, renamed to the one
     ComfyUI loads, or the LoRA unchanged with {} when it is not in that layout.
@@ -129,7 +132,7 @@ def match(model, clip, lora):
     modules = 0
     sd = model.model.state_dict()
     if any(".attn.qkv_proj." in str(v) for v in key_map.values()):         # only the H3 transformer is renamed: other models use `transformer_blocks` as they are
-        modules = len({k.split(".lora_")[0].split(".alpha")[0] for k in lora if k.startswith("transformer.") and (".lora_" in k or k.endswith(".alpha"))})
+        modules = len({k.split(".lora_")[0].split(".alpha")[0] for k in lora if (k.startswith("transformer.") or _BLOCKS.search(k)) and (".lora_" in k or k.endswith(".alpha"))})
         lora, extra = from_diffusers(lora, lambda base: (lambda w: int(w.shape[0]) if w is not None and w.dim() else None)(sd.get(f"diffusion_model.{base}.weight")))
     key_map.update(extra)
     converted = comfy.lora_convert.convert_lora(lora)
