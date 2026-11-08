@@ -747,3 +747,19 @@ def test_a_reference_run_with_the_r2v_predictor_leaves_a_collectable_model(veda_
     finally:
         gc.enable()
         mm.unload_all_models()
+
+
+def test_switching_the_sla_method_frees_the_earlier_copy_when_the_run_ends(monkeypatch):
+    """The same file coming back with other settings leaves two copies in ComfyUI's node cache; the earlier one is freed (ComfyUI's own
+    free_memory flag, read when the run ends) instead of being evicted half way, which is what raised 'memory leak with model'."""
+    import server
+    from modules.loaders import common
+    flags = {}
+    queue = types.SimpleNamespace(set_flag=lambda name, value: flags.__setitem__(name, value))
+    monkeypatch.setattr(server, "PromptServer", types.SimpleNamespace(instance=types.SimpleNamespace(prompt_queue=queue)), raising=False)
+    monkeypatch.setattr(common, "_loaded_as", {})
+    base = {"sla": True, "sla_method": "sla", "attention": "default"}
+    assert not common.free_stale_copy_after_run("h3.safetensors", base) and not flags          # first load of the file
+    assert not common.free_stale_copy_after_run("h3.safetensors", dict(base)) and not flags    # the same settings again
+    assert not common.free_stale_copy_after_run("other.safetensors", {**base, "sla_method": "veda"}) and not flags   # another file
+    assert common.free_stale_copy_after_run("h3.safetensors", {**base, "sla_method": "veda"}) and flags == {"free_memory": True}

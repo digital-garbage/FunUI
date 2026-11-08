@@ -223,3 +223,25 @@ def head_bank_metadata(state_dict, metadata):
     fixed["config"] = json.dumps(config, separators=(",", ":"))
     return fixed, (f"output heads: the file stacks {steps} per stream but its metadata "
                    f"{'says ' + str(declared) if declared else 'does not say so'}; using {steps}")
+
+
+_loaded_as = {}        # model file -> the settings it was last loaded with
+
+
+def free_stale_copy_after_run(name, settings) -> bool:
+    """Loading a file again with other settings (attention, SLA method, dtype...) leaves the earlier copy in ComfyUI's node cache,
+    until RAM runs short and ComfyUI evicts it half way, which is when "memory leak with model X" shows up. So when the same file
+    comes back with different settings, ask ComfyUI to unload its models and reset its cache once this run ends (its own /free
+    flag): the next run loads the file once more, and only one copy was ever around."""
+    before, _loaded_as[name] = _loaded_as.get(name), settings
+    if before is None or before == settings:
+        return False
+    try:
+        from server import PromptServer
+        PromptServer.instance.prompt_queue.set_flag("free_memory", True)
+    except Exception:           # noqa: BLE001 -- no server (tests, a plain script): nothing to ask
+        return False
+    changed = sorted(k for k in settings if before.get(k) != settings[k])
+    log.info("FunUI Diffusion Model Loader",
+             f"{name} was loaded before with other {', '.join(changed)}: the earlier copy is freed when this run ends, so the next run loads it once more")
+    return True

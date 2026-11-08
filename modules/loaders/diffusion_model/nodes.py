@@ -15,7 +15,7 @@ from ..._core import log
 from .. import gguf_support, sla_attention, veda_attention
 from .. import int8_convrot as int8_convrot_module
 from .. import mxfp8 as mxfp8_module
-from ..common import (COMPUTE_DTYPES, head_bank_metadata, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
+from ..common import (COMPUTE_DTYPES, free_stale_copy_after_run, head_bank_metadata, WEIGHT_DTYPES, attention_choices, fp32_over_bf16, unsupported_dtypes,
                       attention_override, dtype_of, set_fp16_accumulation,
                       slow_int8_build, stored_weights, weight_model_options)
 
@@ -219,6 +219,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 sla_method: str = None, sla_tau: float = None,
                 sla_sparsity_start: float = None, mxfp8: bool = False,
                 veda_predictor: str = None, veda_timing: bool = False) -> io.NodeOutput:
+        asked = {k: v for k, v in locals().items() if k not in ("cls", "model_name")}          # before any local of the body
         notes = [f"FunUI Diffusion Model Loader | {model_name}"]
 
         accumulation = set_fp16_accumulation(fp16_accumulation)
@@ -364,4 +365,5 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                  f"{model_name} loaded as {kind}, weights "
                  f"{weights}, compute {compute_dtype}, attention "
                  f"{applied_attention}")
+        free_stale_copy_after_run(model_name, asked)
         return io.NodeOutput(model, "\n".join(notes))
