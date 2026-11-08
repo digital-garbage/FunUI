@@ -12,7 +12,7 @@ export default {
   modules: ["render"],
   setup({ host, app }) {
     const p = app.project, sel = app.selection;
-    const put = inPlace(host), busy = new Set();
+    const put = inPlace(host), busy = new Set(), waited = new Map();       // waited: how often "Always" put a render off for a running generation
     const render = (id) => ((p.project || {}).scene_renders || {})[id];
     const target = () => {                               // the picked clip's generation unit root, when it has a render
       const open = p.project, sc = open && open.scenes.find((s) => s.id === sel.focus);
@@ -55,6 +55,11 @@ export default {
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
       } catch (err) {
         if (err.stopped) c.toast.info({ text: "Upscale stopped. The render stays as it was." });
+        else if (!pressed && /^ComfyUI is generating/.test(err.message || "") && (waited.get(key) || 0) < 60) {       // Always: not lost, tried again when the generation is over
+          if (!waited.has(key)) c.toast.info({ text: "Upscale waits for the generation to finish." });
+          waited.set(key, (waited.get(key) || 0) + 1);
+          setTimeout(() => run(media), 15000);
+        }
         else { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       }
       finally { busy.delete(key); draw(); }

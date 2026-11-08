@@ -344,3 +344,13 @@ def test_upscale_job_with_a_model_file_stops_if_comfyui_got_busy_after_the_route
     import pytest
     with pytest.raises(RuntimeError, match="ComfyUI is generating"):
         upscale.run({"filename": "x.mp4"}, "4x.safetensors")
+
+
+def test_rtx_upscale_job_runs_while_comfyui_is_busy(monkeypatch, tmp_path):
+    from modules.output.render import upscale, rtx
+    monkeypatch.setattr(upscale, "comfy_busy", lambda: True)
+    import pytest
+    # the busy check is passed (RTX); the run then stops on the missing file, not on the busy message
+    with pytest.raises(RuntimeError) as e:
+        upscale.run({"filename": "missing.mp4"}, rtx.NAME)
+    assert "ComfyUI is generating" not in str(e.value)

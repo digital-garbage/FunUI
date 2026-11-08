@@ -138,3 +138,31 @@ def test_a_hand_over_with_no_parent_is_logged_after_the_first_forty(monkeypatch)
     leak_report.watch_switch(mm)
     LM()._switch_parent()
     assert lines and "hand-over" in lines[0][1] and "gone" in lines[0][1]
+
+
+def test_install_runs_relink_before_comfyuis_own_cleanup(monkeypatch):
+    order = []
+    mm = type("MM", (), {})()
+    mm.cleanup_models_gc = lambda: order.append("comfy")
+    monkeypatch.setattr(leak_report, "watch_switch", lambda m: True)
+    monkeypatch.setattr(leak_report, "relink", lambda m: order.append("relink") or 0)
+    monkeypatch.setattr(leak_report, "report", lambda m, when: order.append(when) or 0)
+    assert leak_report.install(mm)
+    mm.cleanup_models_gc()
+    assert order == ["relink", "before ComfyUI's gc", "comfy", "after ComfyUI's gc"]
+
+
+def test_the_first_forty_hand_overs_with_a_parent_are_logged_and_the_forty_first_is_not(monkeypatch):
+    monkeypatch.setattr(leak_report, "_seen", [0])
+    lines = []
+    monkeypatch.setattr(leak_report.log, "info", lambda *a, **k: lines.append(a))
+    mm = type("MM", (), {})()
+
+    class LM:
+        def __init__(self): self._parent_model = lambda: object(); self.real_model = lambda: None
+        def _switch_parent(self): pass
+    mm.LoadedModel = LM
+    leak_report.watch_switch(mm)
+    for _ in range(45):
+        LM()._switch_parent()
+    assert len(lines) == 40
