@@ -46,11 +46,11 @@ async function walkTour(page, note) {
     if (!m) break;
     seen.push(Number(m[1]));
     if (/· Generate/.test(head)) {         // the pointed-at button is redrawn (as when a run starts): the callout must follow the new one
-      await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").trim().startsWith("▶ Generate")); if (b) b.replaceWith(b.cloneNode(true)); window.dispatchEvent(new Event("resize")); });
+      await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").trim().startsWith("▶ Generate")); if (b) { const n = b.cloneNode(true); n.textContent = "Generating…"; b.replaceWith(n); } window.dispatchEvent(new Event("resize")); });
       await page.waitForTimeout(400);
       const gap = await page.evaluate(() => {
-        const b = [...document.querySelectorAll("button")].find((x) => (x.textContent || "").trim().startsWith("▶ Generate")), pop = document.querySelector(".cx-popover");
-        if (!b || !pop) return null;
+        const b = [...document.querySelectorAll("button")].find((x) => /^(▶ Generate|Generating…)/.test((x.textContent || "").trim())), pop = document.querySelector(".cx-popover");
+        if (!b || !pop || !/· Generate/.test(pop.textContent)) return null;       // still the Generate callout, not skipped on to the next part
         const r = b.getBoundingClientRect(), q = pop.getBoundingClientRect();
         return Math.abs(q.bottom - r.top);       // above the button (the sideways place is clamped to the screen edge)
       });

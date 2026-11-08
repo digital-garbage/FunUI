@@ -267,3 +267,17 @@ test("Generate does not start while an upscale model is running, and starts agai
   await app.runner.units(["a"], 1);
   assert.equal(queued, 1);
 });
+
+test("the Training preview waits for an upscale model too, and the server's word counts after a reload", async () => {
+  let queued = 0;
+  const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
+  app.has = new Set();
+  app.api.upscaleBusy = async () => ({ busy: true });
+  const r = await app.runner.preview({ lora: "x.safetensors" });
+  assert.match(r.error, /upscale model is running/);
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 0);
+  app.api.upscaleBusy = async () => ({ busy: false });
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 1);
+});

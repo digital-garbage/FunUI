@@ -30,6 +30,9 @@ BUSY = ("ComfyUI is generating right now. An upscale model shares ComfyUI's mode
         "(RTX Super Resolution can run beside it).")
 
 
+MODEL_JOBS = [0]                  # upscale-model jobs queued or running (the page asks, so a reloaded page or a second tab knows too)
+
+
 def comfy_busy() -> bool:
     """Whether ComfyUI has a prompt running or waiting. An upscale model is loaded through ComfyUI's model manager, which is not safe to
     use from two threads at once, so it is not started beside a generation. False when there is no server to ask (tests, a script)."""

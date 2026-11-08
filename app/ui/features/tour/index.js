@@ -9,7 +9,7 @@ const STEPS = [
   { at: "zone:1", side: "left", title: "Preview", text: "The monitor plays the cut wherever the playhead is. Save frame puts the current picture in the media bin." },
   { at: "zone:2", side: "left", title: "Properties", text: "Project settings (size, length, postfix) and the picked scene's prompt, source, references and length." },
   { at: "zone:3", side: "top", title: "Timeline", text: "One clip per scene. Drag the edges to trim, press S to split, Space to play. Lanes below carry separated sound." },
-  { at: "button:▶ Generate", side: "top", title: "Generate", text: "Makes every scene on the timeline, except left-out scenes and video clips; an earlier render of a scene stays as a take. Beside it: Selected makes only the picked scenes, Takes ×N makes the picked scene N times with only the seed changing, and Rate scene… lets FunUI learn your taste (Upscale and Interpolate appear there too once you switch them on). “Generate this scene” in Properties makes just the picked one." },
+  { at: "button:▶ Generate|Generating…", side: "top", title: "Generate", text: "Makes every scene on the timeline, except left-out scenes and video clips; an earlier render of a scene stays as a take. Beside it: Selected makes only the picked scenes, Takes ×N makes the picked scene N times with only the seed changing, and Rate scene… lets FunUI learn your taste (Upscale and Interpolate appear there too once you switch them on). “Generate this scene” in Properties makes just the picked one." },
   { at: "button:⏱ Sampler", side: "top", title: "Sampler", text: "Steps, sampler, scheduler, seed and the common switches, one click from the timeline. While a run goes, the step count shows to its left." },
   { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole story in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
   { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a video clip or audio track from the bin, an effect or transition, a text or picture overlay. Next to it: Split, Remove, Export, Save to media bin and Separate audio." },
@@ -44,7 +44,7 @@ export default {
       const body = c.region.stack({ gap: "sm", children: [c.label.section({ text: `${place} / ${seen.length} · ${s.title}` }), c.text.sm({ text: s.text }),
         c.toolbar.default({ items: [c.button.sm({ label: "Back", tone: "ghost", disabled: i === 0, onClick: () => show(i - 1) }), c.button.sm({ label: last ? "Done" : "Next", tone: "primary", onClick: () => (last ? stop() : show(i + 1)) })],
           trailing: [c.button.sm({ label: "Exit tour", tone: "ghost", onClick: stop })] })] });
-      pop = c.popover.anchored({ anchor: target, body, side: s.side, align: "center", gap: 10, closeOnOutside: false, onClose: () => { if (pop) { pop = null; at = -1; app.has.delete("tour.running"); } } });
+      pop = c.popover.anchored({ anchor: target, body, side: s.side, align: "center", gap: 10, closeOnOutside: false, onClose: () => { if (pop) { pop = null; at = -1; if (watcher) { watcher.disconnect(); watcher = null; } app.has.delete("tour.running"); } } });
     }
     app.has.add("tour");
     const off = app.on((what) => {

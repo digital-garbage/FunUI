@@ -29,7 +29,7 @@
 .cx-modal-stacked {
   box-shadow: 0 var(--sp-8) var(--shadow-blur-lg) color-mix(in srgb, var(--shadow-ink) 90%, transparent);
 }
-@keyframes cx-pop { from { opacity: 0; transform: translateY(-6px) scale(.99); } }
+@keyframes cx-pop { from { opacity: 0; transform: translateY(calc(var(--sp-3) * -1)) scale(.99); } }
 
 /* A modal that hosts SWITCHABLE content -- Settings, so far -- rather than
    one fixed question: sizing to whichever section is showing means the frame

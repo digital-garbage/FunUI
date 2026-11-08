@@ -54,9 +54,12 @@ export default {
 
     // `times` > 1: the same shots again, only the seed differing (the prompt's random picks are drawn once), so the takes can be compared.
     // `once`: for a single run only - {seed} uses that seed on every seed input; onQueued runs once ComfyUI has taken (or refused) the run.
+    // This page's own upscale, or one the server still runs for a reloaded page or another tab.
+    const upscaling = async () => Boolean(app.has && app.has.has("upscale.model")) || Boolean(await Promise.resolve(app.api.upscaleBusy ? app.api.upscaleBusy() : null).then((r) => r && r.busy).catch(() => false));
     async function runUnits(units, times = 1, once = {}) {
       if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }
-      if (app.has && app.has.has("upscale.model")) { tell("An upscale model is running. It shares ComfyUI's model memory, so Generate when it has finished."); return; }
+      if (await upscaling()) { tell("An upscale model is running. It shares ComfyUI's model memory, so Generate when it has finished."); return; }
+      if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }       // a second click that came in while the server was asked
       busy = true; stopped = false; draw();
       const pid = p.project.id;
       let made = 0;
@@ -172,6 +175,7 @@ export default {
     app.runner.preview = async ({ lora, strength = 1 }) => {
       if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { error: "A run is already going: the preview waits for it." };
       if (!p.project) return { error: "Open a project first: the preview uses its settings." };
+      if (await upscaling()) return { error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
       const frozen = structuredClone(app.pipeline.slots() || []);
       const slot = frozen.find((s) => s.node === "FunUILoraLoader" && !s.bypassed) || frozen.find((s) => s.node === "FunUILoraLoader");
       if (!slot) return { error: "This pipeline has no LoRA loader to try the LoRA in. Add one in Models & Pipeline." };

@@ -17,7 +17,7 @@
 }
 .cx-range::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: var(--thumb-size); height: var(--thumb-size); margin-top: -5px;
+  width: var(--thumb-size); height: var(--thumb-size); margin-top: calc((var(--sp-2) - var(--thumb-size)) / 2);
   border-radius: var(--r-pill); background: var(--elev-1);
   border: var(--bw-2) solid var(--accent);
   transition: transform var(--dur-1) var(--ease-standard);

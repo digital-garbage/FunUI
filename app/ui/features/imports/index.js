@@ -52,7 +52,7 @@ export default {
           p.setScene(id, "source_image", a.id);
           return c.toast.good({ text: "Set as that clip's starting picture." });
         }
-        const made = p.edit((pr) => { const sc = addScene(pr, "image"); sc.source_image = a.id; return sc; });
+        const made = p.edit((pr) => { const sc = addScene(pr); sc.source_image = a.id; return sc; });
         if (made) p.select(made.id);
       }),
       onMediaDrop("lane:audio", async (item, lane, e) => {

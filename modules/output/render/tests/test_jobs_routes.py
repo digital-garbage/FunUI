@@ -354,3 +354,24 @@ def test_rtx_upscale_job_runs_while_comfyui_is_busy(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError) as e:
         upscale.run({"filename": "missing.mp4"}, rtx.NAME)
     assert "ComfyUI is generating" not in str(e.value)
+
+
+def test_upscale_busy_is_true_only_while_a_model_job_is_queued_or_running(server, monkeypatch):
+    from modules.output.render import upscale, rtx
+    monkeypatch.setattr(upscale, "comfy_busy", lambda: False)
+    assert call(server, "GET", f"{BASE}/upscale_busy")[1] == {"busy": False}
+    import threading
+    gate = threading.Event()
+    monkeypatch.setattr(upscale, "run", lambda *a, **k: (gate.wait(5), {"media": {}})[1])
+    media_ref = {"filename": "x.mp4", "subfolder": "", "type": "output"}
+    call(server, "POST", f"{BASE}/upscale", {"media": media_ref, "model": "4x.safetensors"})
+    assert call(server, "GET", f"{BASE}/upscale_busy")[1] == {"busy": True}
+    gate.set()
+    import time
+    for _ in range(50):
+        if call(server, "GET", f"{BASE}/upscale_busy")[1] == {"busy": False}:
+            break
+        time.sleep(0.1)
+    assert call(server, "GET", f"{BASE}/upscale_busy")[1] == {"busy": False}
+    call(server, "POST", f"{BASE}/upscale", {"media": media_ref, "model": rtx.NAME})
+    assert call(server, "GET", f"{BASE}/upscale_busy")[1] == {"busy": False}      # RTX uses no ComfyUI model memory

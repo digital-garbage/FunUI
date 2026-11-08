@@ -104,8 +104,16 @@ def routes(table, base, web):
         if model != rtx.NAME and upscale.comfy_busy():
             return bad(upscale.BUSY)
         job = jobs.new(stoppable=True)
-        asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True, exclusive=True))
+        task = asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True, exclusive=True))
+        if model != rtx.NAME:
+            upscale.MODEL_JOBS[0] += 1
+            task.add_done_callback(lambda _t: upscale.MODEL_JOBS.__setitem__(0, max(0, upscale.MODEL_JOBS[0] - 1)))
         return web.json_response({"job_id": job})
+
+    @table.get(base + "/upscale_busy")
+    async def _upscale_busy(_req):
+        """Whether an upscale-model job is queued or running: Generate waits for it (they share ComfyUI's model memory)."""
+        return web.json_response({"busy": upscale.MODEL_JOBS[0] > 0})
 
     @table.post(base + "/jobs/{job}/stop")
     async def _stop_job(req):

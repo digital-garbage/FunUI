@@ -142,6 +142,7 @@ export const api = {
   upscaleModels: () => call("GET", "/api/m/render/upscale_models"),
   /** The upscale is a background job of FunUI, not a ComfyUI prompt (that would make ComfyUI drop the workflow's loaded models). -> {job_id}. */
   upscale: (media, model, rtx) => call("POST", "/api/m/render/upscale", { media: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output" }, model, ...(rtx ? { rtx_options: rtx } : {}) }),
+  upscaleBusy: () => call("GET", "/api/m/render/upscale_busy"),
   upscaleJob: (id) => call("GET", `/api/m/render/upscale/${encodeURIComponent(id)}`),
   /** The Stop button for Upscale and Interpolate jobs (Upscale's route; Interpolate has its own below). -> {stopped} */
   stopJob: (id) => call("POST", `/api/m/render/jobs/${encodeURIComponent(id)}/stop`),

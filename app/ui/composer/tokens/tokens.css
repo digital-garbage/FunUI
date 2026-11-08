@@ -148,6 +148,7 @@
   --pink:   rgb(255, 120, 180);
 
   --void: #060606;     /* media letterbox */
+  --on-media: #ffffff; /* text over a picture */
   --shadow-ink: rgba(0, 0, 0, .85);
   --backdrop: rgba(6, 5, 4, .66);
 
@@ -202,6 +203,7 @@
   --pink:   rgb(197, 45, 116);
 
   --void: #0a0c0f;
+  --on-media: #ffffff;
   --shadow-ink: rgba(24, 34, 48, .30);
   --backdrop: rgba(24, 34, 48, .34);
 

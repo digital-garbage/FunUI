@@ -170,8 +170,8 @@ def _sol_vae() -> str:
     try:
         import folder_paths
         return "sol_h3_vae.safetensors" if "sol_h3_vae.safetensors" in folder_paths.get_filename_list("vae") else "None"
-    except Exception:                       # noqa: BLE001 -- no ComfyUI folders to ask: the preset's own choice
-        return "sol_h3_vae.safetensors"
+    except Exception:                       # noqa: BLE001 -- no ComfyUI folders to ask: the model's own VAE, never a file that may be missing
+        return "None"
 
 
 def h3_fast_simple_r2v():

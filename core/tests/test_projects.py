@@ -636,3 +636,9 @@ def test_a_scene_source_type_that_no_longer_exists_opens_as_carry():
         assert projects._clean_source({"type": old})["type"] == "carry"
     for kept in ("carry", "video", "v2v"):
         assert projects._clean_source({"type": kept})["type"] == kept
+
+
+def test_a_saved_scene_with_an_old_source_type_loads_as_carry_through_the_project():
+    from core import projects
+    p = projects.Project.from_dict({"scenes": [{"text": "a", "source": {"type": "image"}}, {"text": "b", "source": {"type": "v2v", "media_ref": "m"}}]})
+    assert [s.source["type"] for s in p.scenes] == ["carry", "v2v"]

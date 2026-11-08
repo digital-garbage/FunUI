@@ -1,5 +1,5 @@
 .cx-stage { position: absolute; pointer-events: none; overflow: hidden; z-index: 2; }
 .cx-stage-item { position: absolute; pointer-events: auto; cursor: move; touch-action: none; }
 .cx-stage-item img { display: block; }
-.cx-stage-grip { position: absolute; inset-inline-end: -5px; inset-block-end: -5px; inline-size: var(--sp-5); block-size: var(--sp-5); background: var(--accent); border: var(--bw) solid #000; cursor: nwse-resize; border-radius: var(--r-1); }
+.cx-stage-grip { position: absolute; inset-inline-end: calc(var(--sp-5) / -2); inset-block-end: calc(var(--sp-5) / -2); inline-size: var(--sp-5); block-size: var(--sp-5); background: var(--accent); border: var(--bw) solid var(--void); cursor: nwse-resize; border-radius: var(--r-1); }
 :has(> .cx-stage) { position: relative; }

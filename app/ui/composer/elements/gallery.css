@@ -27,7 +27,7 @@
 .cx-cell-badge, .cx-cell-duration {
   position: absolute; bottom: var(--sp-1); font-size: var(--fs-8);
   padding: 1px var(--sp-2); border-radius: var(--r-1);
-  background: color-mix(in srgb, var(--void) 70%, transparent); color: var(--hi, #fff);
+  background: color-mix(in srgb, var(--void) 70%, transparent); color: var(--on-media);
 }
 .cx-cell-badge { left: var(--sp-1); }
 .cx-cell-duration { right: var(--sp-1); font-variant-numeric: tabular-nums; }
