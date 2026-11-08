@@ -101,6 +101,8 @@ def routes(table, base, web):
         media, model = body.get("media"), body.get("model")
         if not isinstance(media, dict) or not isinstance(media.get("filename"), str) or not media["filename"] or not isinstance(model, str) or not model:
             return bad("Send {media: {filename, subfolder, type}, model, rtx_options}.")
+        if model != rtx.NAME and upscale.comfy_busy():
+            return bad("ComfyUI is generating right now. An upscale model shares ComfyUI's model memory, so run Upscale when the generation has finished (RTX Super Resolution can run beside it).")
         job = jobs.new(stoppable=True)
         asyncio.create_task(jobs.run(job, upscale.run, media, model, body.get("rtx_options") or "{}", error=(RuntimeError, ValueError, files.ClipError), stoppable=True, exclusive=True))
         return web.json_response({"job_id": job})

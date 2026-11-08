@@ -325,3 +325,14 @@ def test_a_stop_before_the_lock_is_even_tried_ends_the_exclusive_job_at_once():
 
     now, last = asyncio.run(go())
     assert now == "stopped" or last == "stopped"
+
+
+def test_upscale_with_a_model_file_is_refused_while_comfyui_is_busy_and_rtx_is_not(server, monkeypatch):
+    from modules.output.render import upscale, rtx
+    monkeypatch.setattr(upscale, "comfy_busy", lambda: True)
+    media_ref = {"filename": "x.mp4", "subfolder": "", "type": "output"}
+    status, body = call(server, "POST", f"{BASE}/upscale", {"media": media_ref, "model": "4x.safetensors"})
+    assert status == 400 and "ComfyUI is generating" in json.dumps(body)
+    monkeypatch.setattr(upscale, "run", lambda *a, **k: {"media": media_ref})
+    status, body = call(server, "POST", f"{BASE}/upscale", {"media": media_ref, "model": rtx.NAME})
+    assert status == 200 and body.get("job_id")                       # RTX uses no ComfyUI model memory: it may run beside a generation

@@ -72,13 +72,15 @@ export function compose(library, stats = {}, idea = "", { add = 3, random = Math
   return { text: [String(idea || "").trim(), ...added.map((s) => trigger(s).trim())].filter(Boolean).join(", "), added };
 }
 
+const FLOOR = 2;      // the biggest score gap that still counts: beyond it a draft keeps e^-2 of the best one's odds
+
 /** The like-guess (stats.guess, core/suggestions.py guess): of several drafts, one picked with odds = how much likelier
  *  a like its words make it (e^score), so a likelier draft comes up more, never always. Off until the guess is ready. */
 export function likelier(drafts, guess, random = Math.random) {
   if (!guess || !guess.ready || drafts.length < 2) return drafts[0];
   const words = (t) => new Set(String(t || "").toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}_'’-]*/gu) || []);      // core twin: suggestions.words
-  const score = (d) => [...words(d.text)].reduce((s, w) => s + (guess.weights[w] || 0), 0);
-  const top = Math.max(...drafts.map(score)), odds = drafts.map((d) => Math.exp(score(d) - top));
+  const score = (d) => [...words(d.text)].reduce((s, w) => s + (Object.hasOwn(guess.weights, w) ? Number(guess.weights[w]) || 0 : 0), 0);      // a word like "constructor" is not a weight
+  const top = Math.max(...drafts.map(score)), odds = drafts.map((d) => Math.max(Math.exp(score(d) - top), Math.exp(-FLOOR)));      // odds, not a ban: the worst draft keeps about 1 in 8 of the best one's chance
   let r = random() * odds.reduce((a, b) => a + b, 0);
   return drafts.find((_, i) => (r -= odds[i]) < 0) || drafts[drafts.length - 1];
 }

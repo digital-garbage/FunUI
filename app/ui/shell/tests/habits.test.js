@@ -84,3 +84,15 @@ test("the like-guess picks likelier drafts more often, never always, and only on
   assert.equal(likelier(drafts, { ...guess, ready: false }), drafts[0]);
   assert.equal(likelier(drafts, undefined), drafts[0]);
 });
+
+test("the like-guess is odds, not a ban: a far worse draft still comes up, and the word constructor is no weight", async () => {
+  const { likelier } = await import("../habits.js");
+  const drafts = [{ text: "a fox, fog" }, { text: "a fox, neon" }, { text: "a fox, constructor" }];
+  const guess = { ready: true, weights: { neon: 6, fog: -6 } };
+  let seed = 11; const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const picks = Array.from({ length: 6000 }, () => likelier(drafts, guess, random).text);
+  const share = (word) => picks.filter((t) => t.includes(word)).length / picks.length;
+  assert.ok(share("fog") > 0.05, `the worst draft keeps a chance: ${share("fog")}`);
+  assert.ok(share("neon") < 0.8, `the best never takes everything: ${share("neon")}`);
+  assert.ok(share("constructor") > 0.05, `an odd word is not NaN: ${share("constructor")}`);
+});

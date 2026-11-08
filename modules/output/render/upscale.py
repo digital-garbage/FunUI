@@ -26,6 +26,16 @@ def models() -> list:
         return []
 
 
+def comfy_busy() -> bool:
+    """Whether ComfyUI has a prompt running or waiting. An upscale model is loaded through ComfyUI's model manager, which is not safe to
+    use from two threads at once, so it is not started beside a generation. False when there is no server to ask (tests, a script)."""
+    try:
+        from server import PromptServer
+        return PromptServer.instance.prompt_queue.get_tasks_remaining() > 0
+    except Exception:                                  # noqa: BLE001 -- no server: nothing is running
+        return False
+
+
 def run(media, model, rtx_options="{}", interrupted=lambda: None) -> dict:
     """Blocking. Upscale the output/temp file `media` ({filename, subfolder, type}) with an upscale model or NVIDIA RTX Super Resolution.
     -> {"media": the new file}. The page runs this as a background job of its own: as a ComfyUI prompt it would make ComfyUI's cache
