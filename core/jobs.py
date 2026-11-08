@@ -61,8 +61,8 @@ async def run(job: str, fn, *args, error, stoppable: bool = False, exclusive: bo
     `exclusive`: the work uses a GPU effect that keeps one buffer per kind (Upscale, Interpolate), so such jobs
     run one after the other and a second waits as "queued". Other jobs (the render) never wait for them."""
     turn = _turns.setdefault(asyncio.get_running_loop(), asyncio.Lock()) if exclusive else None
-    if turn is not None and turn.locked():
-        _waiting.add(job)
+    if turn is not None:
+        _waiting.add(job)                                  # from here until its turn comes, a stop ends it at once
     try:
         if turn is not None:
             await turn.acquire()

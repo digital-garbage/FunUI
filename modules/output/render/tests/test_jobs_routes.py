@@ -301,3 +301,27 @@ def test_a_render_never_waits_for_an_exclusive_job_and_a_queued_one_can_be_stopp
     seen, stopped_now, last = asyncio.run(go())
     assert seen == ("done", "queued") and stopped_now == "stopped" and last == "stopped"
     assert ran == ["render"]                                                # the stopped one never started
+
+
+def test_a_stop_before_the_lock_is_even_tried_ends_the_exclusive_job_at_once():
+    import asyncio
+    import threading
+    gate = threading.Event()
+
+    def hold(interrupted):
+        gate.wait(5)
+        return {}
+
+    async def go():
+        a, b = jobs.new(stoppable=True), jobs.new(stoppable=True)
+        ta = asyncio.create_task(jobs.run(a, hold, error=RuntimeError, stoppable=True, exclusive=True))
+        await asyncio.sleep(0.05)
+        tb = asyncio.create_task(jobs.run(b, hold, error=RuntimeError, stoppable=True, exclusive=True))
+        assert jobs.stop(b) is True                                          # the task has not run yet
+        now = jobs.get(b)["state"]
+        gate.set()
+        await asyncio.gather(ta, tb)
+        return now, jobs.get(b)["state"]
+
+    now, last = asyncio.run(go())
+    assert now == "stopped" or last == "stopped"
