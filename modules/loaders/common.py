@@ -225,23 +225,36 @@ def head_bank_metadata(state_dict, metadata):
                    f"{'says ' + str(declared) if declared else 'does not say so'}; using {steps}")
 
 
-_loaded_as = {}        # model file -> the settings it was last loaded with
+_loaded_as = {}        # model file -> [run id, the settings seen in that run, the settings seen in the run before]
 
 
 def free_stale_copy_after_run(name, settings) -> bool:
     """Loading a file again with other settings (attention, SLA method, dtype...) leaves the earlier copy in ComfyUI's node cache,
     until RAM runs short and ComfyUI evicts it half way, which is when "memory leak with model X" shows up. So when the same file
-    comes back with different settings, ask ComfyUI to unload its models and reset its cache once this run ends (its own /free
-    flag): the next run loads the file once more, and only one copy was ever around."""
-    before, _loaded_as[name] = _loaded_as.get(name), settings
-    if before is None or before == settings:
-        return False
+    comes back with settings the run before did not have, ask ComfyUI to unload its models and reset its cache once this run ends
+    (its own /free flag): the next run loads the file once more, and only one copy was ever around. Two loaders of one file in one
+    graph are no change: each run sees the same set of settings, so nothing is flagged and nothing reloads every run."""
     try:
         from server import PromptServer
-        PromptServer.instance.prompt_queue.set_flag("free_memory", True)
+        server = PromptServer.instance
+        running = list((getattr(server.prompt_queue, "currently_running", None) or {}).values())      # ComfyUI's running item: (number, prompt id, ...)
+        run = running[0][1] if running else object()                        # no run id (a plain script, a test): every call is its own run
     except Exception:           # noqa: BLE001 -- no server (tests, a plain script): nothing to ask
         return False
-    changed = sorted(k for k in settings if before.get(k) != settings[k])
+    key = json.dumps(settings, sort_keys=True, default=str)
+    seen = _loaded_as.get(name)
+    if seen is None or seen[0] != run:
+        seen = _loaded_as[name] = [run, set(), seen[1] if seen else None]
+    seen[1].add(key)
+    previous = seen[2]
+    if previous is None or key in previous:
+        return False
+    try:
+        server.prompt_queue.set_flag("free_memory", True)
+    except Exception as exc:    # noqa: BLE001 -- a ComfyUI without the flag: said, so the leak warning is not a mystery
+        log.warning("FunUI Diffusion Model Loader", f"{name} came back with other settings, but this ComfyUI cannot be asked to free the earlier copy ({type(exc).__name__}); "
+                    "a 'memory leak with model' warning may follow")
+        return False
     log.info("FunUI Diffusion Model Loader",
-             f"{name} was loaded before with other {', '.join(changed)}: the earlier copy is freed when this run ends, so the next run loads it once more")
+             f"{name} was loaded before with other settings: the earlier copy is freed when this run ends, so the next run loads it once more")
     return True

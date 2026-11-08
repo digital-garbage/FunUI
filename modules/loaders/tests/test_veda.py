@@ -763,3 +763,37 @@ def test_switching_the_sla_method_frees_the_earlier_copy_when_the_run_ends(monke
     assert not common.free_stale_copy_after_run("h3.safetensors", dict(base)) and not flags    # the same settings again
     assert not common.free_stale_copy_after_run("other.safetensors", {**base, "sla_method": "veda"}) and not flags   # another file
     assert common.free_stale_copy_after_run("h3.safetensors", {**base, "sla_method": "veda"}) and flags == {"free_memory": True}
+
+
+def test_two_loaders_of_one_file_in_one_graph_do_not_flag_every_run(monkeypatch):
+    import server
+    from modules.loaders import common
+    flags = []
+    queue = types.SimpleNamespace(set_flag=lambda name, value: flags.append(name), currently_running={})
+    inst = types.SimpleNamespace(prompt_queue=queue)
+    running = lambda run: queue.currently_running.update({0: (0, run, {}, {}, [])})
+    monkeypatch.setattr(server, "PromptServer", types.SimpleNamespace(instance=inst), raising=False)
+    monkeypatch.setattr(common, "_loaded_as", {})
+    a, b = {"sla_method": "sla"}, {"sla_method": "veda"}
+    for run in ("run1", "run2", "run3", "run4"):                  # the same graph over and over: two loaders, one file
+        running(run)
+        assert not common.free_stale_copy_after_run("h3.safetensors", a)
+        assert not common.free_stale_copy_after_run("h3.safetensors", b)
+    assert flags == []
+    running("run5")                                               # now one of them changes: that IS a change, once
+    assert not common.free_stale_copy_after_run("h3.safetensors", a)
+    assert common.free_stale_copy_after_run("h3.safetensors", {"sla_method": "sla", "attention": "other"})
+    assert flags == ["free_memory"]
+
+
+def test_a_comfyui_that_cannot_be_asked_to_free_is_said(monkeypatch):
+    import server
+    from modules.loaders import common
+    said = []
+    monkeypatch.setattr(common.log, "warning", lambda title, text: said.append(text))
+    monkeypatch.setattr(server, "PromptServer", types.SimpleNamespace(instance=types.SimpleNamespace(prompt_queue=types.SimpleNamespace(currently_running={0: (0, "r1")}))), raising=False)
+    monkeypatch.setattr(common, "_loaded_as", {})
+    common.free_stale_copy_after_run("h3.safetensors", {"sla_method": "sla"})
+    server.PromptServer.instance.prompt_queue.currently_running = {0: (0, "r2")}
+    assert not common.free_stale_copy_after_run("h3.safetensors", {"sla_method": "veda"})
+    assert said and "cannot be asked to free" in said[0]
