@@ -657,22 +657,22 @@ def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folde
     config = sm.MiniMaxH3(dict(image_model="minimax_h3", hidden_size=64, num_layers=BLOCKS, token_refiner_num_layers=1, num_attention_heads=2,
                                attention_head_dim=32, ffn_hidden_size=64, text_dim=48, timestep_input_dim=32, time_embed_hidden_size=64,
                                time_embed_dim=32, rope_inv_freq_len=4))
-    config.set_inference_dtype(torch.float32, None)
+    config.set_inference_dtype(torch.bfloat16, None)
     base = config.get_model({}, device=torch.device("cpu"))
     for p in base.diffusion_model.parameters():
         torch.nn.init.normal_(p, std=0.05)
         p.requires_grad_(False)
     loaded = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
-    veda, _, installed = sla.install_sla(loaded, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9)
+    veda, _, installed = sla.install_sla(loaded, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9, veda_timing=True)
     assert installed
     patched, _ = _load(veda, tuple(f for f in FEATURES if f != "phrase_probe"), STAGES["two-stages"] if staged else None)
     mm.load_models_gpu([patched])
     guider = comfy.samplers.CFGGuider(patched)
-    cond = [[torch.randn(1, 5, 48), {}]]
+    cond = [[torch.randn(1, 5, 48).to(torch.bfloat16), {}]]
     guider.set_conds(cond, cond)
     guider.set_cfg(1.0)
-    latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
-    noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
+    latent = NestedTensor((torch.zeros(1, 24, 10, 16, 16), torch.zeros(1, 32, 2, 3)))
+    noise = NestedTensor((torch.randn(1, 24, 10, 16, 16), torch.randn(1, 32, 2, 3)))
     calls = []
 
     def cut(module, args):
@@ -681,12 +681,17 @@ def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folde
             raise mm.InterruptProcessingException()
     hook = base.diffusion_model.register_forward_pre_hook(cut)
     try:
-        guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor([1.0, 0.7, 0.3, 0.0]), seed=1, disable_pbar=True)
+        from modules.sampling.sampler.nodes import FunUISampler
+        settings = {"taste": {"key": "fox"}, **{f: {"enabled": True, **FEATURES[f]} for f in FEATURES if f != "phrase_probe"}}
+        for seed in (1, 2):          # a second run on the same cached model: what each run leaves behind is what the next one meets
+            guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor([1.0, 0.7, 0.3, 0.0]), seed=seed, disable_pbar=True)
+            FunUISampler.execute(patched, cond, cond, {"samples": latent}, seed, 3, 1.0, "euler", "simple", settings=settings)
     except mm.InterruptProcessingException:
         assert interrupted
     finally:
         hook.remove()
     del hook
+    assert veda_on.calls, "Veda never took a call: the test would prove nothing about it"
     ref = weakref.ref(base)
     gc.collect()
     gc.disable()
