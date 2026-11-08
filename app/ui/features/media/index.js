@@ -146,12 +146,13 @@ export default {
       const ids = [...chosen];
       if (!ids.length || !(await c.modal.dialogue({ title: "Delete media", message: `Delete ${ids.length} file${ids.length > 1 ? "s" : ""} from the bin for good? Scenes in other projects that use them will lose them too.`, tone: "danger", confirmLabel: "Delete" }).result)) return;
       await gone(ids);
+      selecting = false; chosen.clear(); draw(true);       // Delete ends Select mode
     } });
     const controls = { sort, view: view, cols: tileSize };
     bulk.node.hidden = true;
     const clearRefs = c.button.sm({ label: "Clear references", tone: "ghost", title: "Stop using every reference picture in every scene (pinned ones stay)", onClick: () => p.edit(clearReferences) });
-    host.append(c.toolbar.default({ items: [c.text.sm({ text: "Media" })], trailing: [clearRefs, selectBtn, bulk] }).node, drop.node, note.node, seg("Show", FILTERS, "filter").node, sort.node,
-      view.node, tileSize.node, shelf.node);
+    const bar = c.region.stack({ gap: "sm", sticky: true, children: [c.toolbar.default({ items: [c.text.sm({ text: "Media" })], trailing: [clearRefs, selectBtn, bulk] }), drop, note, seg("Show", FILTERS, "filter"), sort, view, tileSize] });
+    host.append(bar.node, shelf.node);
 
     let drawn = "";
     function adopt() {

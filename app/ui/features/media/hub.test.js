@@ -218,3 +218,25 @@ menuTest("an already pinned picture is unpinned, scenes keep it, new scenes no l
 menuTest("reference for all scenes skips scenes that have it or are full, pinned counts as having it", cat,
   { fixed_references: { z: 1 }, scenes: [{ id: "s1" }, { id: "s2", references: ["m1"] }, { id: "s3", references: Array.from({ length: 15 }, (_, i) => `r${i}`) }, { id: "s4", references: ["a"] }] },
   "reference for all scenes", (d) => assert.deepEqual(d.scenes.map((s) => s.references), [["m1"], ["m1"], Array.from({ length: 15 }, (_, i) => `r${i}`), ["a", "m1"]]));
+
+test("Delete after picking files ends Select mode, and the bin's controls are pinned at the top", async () => {
+  const project = { selected: null, project: { fixed_references: {} }, setScene: () => {}, edit: () => {} };
+  let list = [{ id: "m1", name: "cat.png", kind: "image" }, { id: "m2", name: "dog.png", kind: "image" }];
+  const api = { media: async () => ({ media: list }), deleteMedia: async (id) => { list = list.filter((m) => m.id !== id); } };
+  const host = document.createElement("div");
+  hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
+  await new Promise((r) => setTimeout(r, 10));
+  const btn = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith(t));
+  assert.ok(host.querySelector(".cx-stack-sticky button"), "the controls sit in the pinned stack");
+  document.body.append(host);
+  btn("Select").click();
+  host.querySelector(".cx-cell").click();
+  btn("Delete (1)").click();
+  await new Promise((r) => setTimeout(r, 10));
+  [...document.querySelectorAll("button")].filter((b) => b.textContent.trim() === "Delete").pop().click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(host.querySelectorAll(".cx-cell").length, 1);
+  assert.ok(btn("Select"), "back to Select, not Done");
+  assert.equal(btn("Delete (0)").hidden, true);
+  host.remove();
+});
