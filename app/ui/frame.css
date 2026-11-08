@@ -50,10 +50,10 @@
 :root.fp-peek.fp-peek-open .fp-peek-strip { display: none; }
 :root.fp-peek .fp-split-bottom { display: none; }
 
-/* The timeline's header is ONE line wherever its controls can physically fit (about 1000px and up). It never spreads
+/* The timeline's header is ONE line wherever its controls can physically fit (about 1024px and up). It never spreads
    its controls apart: the room goes to the text that can give way (hints, the step counter), which truncates, and
    below the widest layouts a button that has an icon shows only the icon (its label stays for screen readers). */
-@media (min-width: 1000px) {
+@media (min-width: 1024px) {
   .fp-main > :nth-child(2) > .cx-panel-head { flex-wrap: nowrap; column-gap: var(--sp-3); }
   .fp-main > :nth-child(2) > .cx-panel-head .cx-panel-actions { flex: 1 1 0; flex-wrap: nowrap; min-inline-size: 0; overflow: hidden; }
   .fp-main > :nth-child(2) > .cx-panel-head .cx-panel-status { flex: none; flex-wrap: nowrap; gap: var(--sp-2); }
@@ -62,7 +62,7 @@
   .fp-main > :nth-child(2) > .cx-panel-head .cx-btn, .fp-main > :nth-child(2) > .cx-panel-head .cx-chip { flex: none; }
   .fp-main > :nth-child(2) > .cx-panel-head :is(.cx-hint, .cx-t) { flex: 0 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
-@media (min-width: 1000px) and (max-width: 1500px) {
+@media (min-width: 1024px) and (max-width: 1500px) {
   .fp-main > :nth-child(2) > .cx-panel-head .cx-btn:has(.cx-btn-icon) .cx-btn-label {
     position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }

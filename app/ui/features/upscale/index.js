@@ -36,9 +36,13 @@ export default {
       if (pick) app.openSettings(pick);
     }
 
-    async function run(media, pressed = false) {
+    let told = false;                                   // "waits" is said once, however many renders wait
+    const stillThere = (pid, key) => p.project && p.project.id === pid
+      && Object.values(p.project.scene_renders || {}).some((r) => r && r.media && keyOf(r.media) === key);
+    async function run(media, pressed = false, project = null) {
+      if (!p.project) return;
       if (!media || wentThrough(media, "upscale")) return;                    // never upscale twice, even after an interpolation in between
-      const key = keyOf(media), pid = p.project.id;
+      const key = keyOf(media), pid = project || p.project.id;
       if (busy.has(key)) return;
       busy.add(key); draw();
       try {
@@ -50,15 +54,19 @@ export default {
         c.toast.info({ text: `Upscaling with ${model}…` });
         const out = await upscale(app.api, media, model, undefined, rtxOn() ? rtxOpts() : undefined);
         derived(media, out, "upscale");
+        waited.delete(key); if (!waited.size) told = false;
         const swapped = await p.editFor(pid, (pr) => swap(pr, media, out) > 0);
         if (!swapped) c.toast.warn({ text: "Upscaled, but that render was replaced meanwhile, so nothing was swapped." });
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
       } catch (err) {
         if (err.stopped) c.toast.info({ text: "Upscale stopped. The render stays as it was." });
         else if (!pressed && /^ComfyUI is generating/.test(err.message || "") && (waited.get(key) || 0) < 60) {       // Always: not lost, tried again when the generation is over
-          if (!waited.has(key)) c.toast.info({ text: "Upscale waits for the generation to finish." });
+          if (!told) { told = true; c.toast.info({ text: "Upscale waits for the generation to finish." }); }
           waited.set(key, (waited.get(key) || 0) + 1);
-          setTimeout(() => run(media), 15000);
+          setTimeout(() => {                         // only for the same project, the same render and while Always is still on
+            if (stillThere(pid, key) && p.pref("upscaleMode", "never") === "always") run(media, false, pid);
+            else { waited.delete(key); if (!waited.size) told = false; }
+          }, 15000);
         }
         else { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       }

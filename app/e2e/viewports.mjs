@@ -1,10 +1,10 @@
 // The app at the screens people really have, in a real browser: no page overflow, every window inside the viewport,
-// both timeline lanes visible, the timeline header on one row from 1000px wide, idle and while a render is running (a fake ComfyUI queue and socket). Not part of `npm test` (it needs browsers): run it with `npm run test:viewport`.
+// both timeline lanes visible, the timeline header on one row from 1024px wide, idle and while a render is running (a fake ComfyUI queue and socket). Not part of `npm test` (it needs browsers): run it with `npm run test:viewport`.
 // FUNUI_BROWSERS=chromium,firefox picks the engines (default: every one that is installed).
 import playwright from "playwright";
 import { start } from "./stub.mjs";
 
-const SIZES = [[1280, 720], [1024, 1024], [1366, 768], [1920, 1080], [2560, 1440], [768, 1024], [720, 1280], [1080, 1920]];
+const SIZES = [[1280, 720], [1024, 1024], [1000, 700], [1366, 768], [1920, 1080], [2560, 1440], [768, 1024], [720, 1280], [1080, 1920]];
 const WINDOWS = [["Settings", /^Settings$/], ["Log", /^Log$/], ["Composer", /Composer/], ["Sampler", /Sampler/], ["Training", /Training/]];
 const CLIENT = "viewport-test";
 const wanted = (process.env.FUNUI_BROWSERS || "chromium,firefox").split(",");
@@ -15,7 +15,7 @@ const inspect = () => {
   const out = seen.map((e) => ({ name: e.className.toString().split(" ")[0], r: box(e) }));
   const nle = document.querySelector(".cx-nle"), lanes = [...document.querySelectorAll(".cx-nle-gutter-lane")];
   const head = [...document.querySelectorAll(".cx-panel-head")].find((h) => h.textContent.startsWith("Timeline")), act = head && head.querySelector(".cx-panel-actions");
-  const header = innerWidth < 1000 || !head ? [] : [box(head).height > 50 && `Timeline header is ${Math.round(box(head).height)}px tall (more than one row)`, act.scrollWidth > act.clientWidth + 1 && `Timeline header clips ${act.scrollWidth - act.clientWidth}px of its controls`].filter(Boolean);
+  const header = innerWidth < 1024 || !head ? [] : [box(head).height > 50 && `Timeline header is ${Math.round(box(head).height)}px tall (more than one row)`, act.scrollWidth > act.clientWidth + 1 && `Timeline header clips ${act.scrollWidth - act.clientWidth}px of its controls`].filter(Boolean);
   return {
     header,
     over: [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight],
