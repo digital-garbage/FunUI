@@ -3,6 +3,7 @@
 Core's SaveVideo encodes on one CPU thread; on a rental that was most of the time after decoding.
 """
 
+from . import watermark
 from .nodes import FunUISaveVideo
 
 ID = "output_save"
@@ -21,7 +22,8 @@ SETTINGS = {
         "options": [{"value": "off", "label": "Off"}, {"value": "light", "label": "Light"}, {"value": "strong", "label": "Strong"}],
         "label": "Smooth jagged edges",
         "hint": "Anti-aliasing like FXAA in games: only edges with strong contrast are softened, flat areas and texture stay. "
-                "Cheap on a GPU, noticeably slower on a CPU for 4K clips.",
+                "Cheap on a GPU, noticeably slower on a CPU for 4K clips. "
+                "These look settings are in the saved file; a clip trimmed in the timeline starts the next shot from that file's picture, so it carries them too.",
     },
     "auto_contrast": {
         "type": "bool", "default": False,
@@ -38,7 +40,61 @@ SETTINGS = {
         "label": "Colour strength",
         "hint": "1 leaves the colours as they are; below 1 mutes them, above 1 makes them stronger.",
     },
+    "watermark": {
+        "type": "enum", "default": "off",
+        "options": [{"value": "off", "label": "Off"}, {"value": "text", "label": "Text"}, {"value": "picture", "label": "Picture"}],
+        "label": "Watermark",
+        "hint": "A text or a picture from the media bin in one corner of the finished video. It is laid on last, so the settings above never change it. "
+                "It is in the saved file only: the next shot's start picture and the Preview's own frames do not carry it.",
+    },
+    "watermark_text": {
+        "type": "text", "default": "", "label": "Watermark text", "when": {"watermark": "text"},
+        "hint": "The words to show. They are scaled to the width below, whatever their length.",
+    },
+    "watermark_colour": {
+        "type": "color", "default": "#ffffff", "label": "Text colour", "when": {"watermark": "text"},
+        "hint": "The colour of the text.",
+    },
+    "watermark_picture": {
+        "type": "enum", "default": "", "options": [{"value": "", "label": "None picked"}], "label": "Watermark picture", "when": {"watermark": "picture"},
+        "hint": "A picture from the media bin. A transparent PNG keeps its transparency.",
+    },
+    "watermark_corner": {
+        "type": "enum", "default": "bottom-right", "label": "Corner", "when": {"watermark": ["text", "picture"]},
+        "options": [{"value": "top-left", "label": "Top left"}, {"value": "top-right", "label": "Top right"},
+                    {"value": "bottom-left", "label": "Bottom left"}, {"value": "bottom-right", "label": "Bottom right"}],
+        "hint": "Which corner of the video the mark sits in.",
+    },
+    "watermark_opacity": {
+        "type": "float", "default": 0.6, "min": 0.05, "max": 1.0, "step": 0.05, "ui": "slider", "label": "Opacity", "when": {"watermark": ["text", "picture"]},
+        "hint": "1 is solid, lower lets the video show through.",
+    },
+    "watermark_size": {
+        "type": "float", "default": 18.0, "min": 5.0, "max": 60.0, "step": 1.0, "ui": "slider", "label": "Width", "unit": "% of the video's width",
+        "when": {"watermark": ["text", "picture"]},
+        "hint": "How wide the mark is. It never takes more than half the video's height.",
+    },
+    "watermark_margin": {
+        "type": "float", "default": 2.0, "min": 0.0, "max": 20.0, "step": 0.5, "ui": "slider", "label": "Distance from the edge", "unit": "% of the video's width",
+        "when": {"watermark": ["text", "picture"]},
+        "hint": "How far the mark stays from the edges. The outline is kept inside it.",
+    },
+    "watermark_outline": {
+        "type": "float", "default": 0.0, "min": 0.0, "max": 20.0, "step": 0.5, "ui": "slider", "label": "Outline size", "unit": "% of the mark's height",
+        "when": {"watermark": ["text", "picture"]},
+        "hint": "0 draws no outline. For a picture the outline follows its shape, so it suits a transparent PNG.",
+    },
+    "watermark_outline_colour": {
+        "type": "color", "default": "#000000", "label": "Outline colour", "when": {"watermark": ["text", "picture"]},
+        "hint": "The colour of the outline.",
+    },
+    "watermark_outline_opacity": {
+        "type": "float", "default": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "ui": "slider", "label": "Outline opacity", "when": {"watermark": ["text", "picture"]},
+        "hint": "1 is solid, lower lets the video show through the outline. Only used when the outline size is above 0.",
+    },
 }
+
+PROVIDES_OPTIONS = lambda: {"watermark_picture": watermark.picture_options()}
 
 
 def _link(v):
@@ -86,4 +142,4 @@ def upgrade(slots, outputs):
     return [s for s in slots if s["id"] not in drop]
 
 
-PROVIDES = {"upgrade_slots": upgrade}
+PROVIDES = {"upgrade_slots": upgrade, "setting_options": PROVIDES_OPTIONS}

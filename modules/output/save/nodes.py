@@ -23,6 +23,7 @@ from comfy.cli_args import args
 from comfy_api.latest import io, ui
 
 from ..._core import log, registry as registry_mod, schema as schema_mod, video_pipe
+from . import watermark
 
 ENCODERS = ("auto", "gpu", "cpu")
 CODECS = ("h264", "h265")
@@ -40,7 +41,10 @@ X264 = ("libx264", {"crf": "16", "preset": "medium"})
 # Contrast and brightness are measured ONCE on a sample of the whole clip and applied as one fixed curve: a per-frame
 # auto-level would pump and flicker as the picture changes.
 SMOOTHINGS = ("off", "light", "strong")
-DEFAULTS = {"smoothing": "off", "auto_contrast": False, "auto_brightness": False, "saturation": 1.0}
+DEFAULTS = {"smoothing": "off", "auto_contrast": False, "auto_brightness": False, "saturation": 1.0,
+            "watermark": "off", "watermark_text": "", "watermark_colour": "#ffffff", "watermark_picture": "", "watermark_corner": "bottom-right",
+            "watermark_opacity": 0.6, "watermark_size": 18.0, "watermark_margin": 2.0,
+            "watermark_outline": 0.0, "watermark_outline_colour": "#000000", "watermark_outline_opacity": 1.0}
 _AMOUNT = {"light": 0.5, "strong": 1.0}
 _CHUNK = 8                                                    # frames per step: the float working copy stays small on a long 4K clip
 _SAMPLE_FRAMES, _SAMPLE_PIXELS = 16, 1_000_000
@@ -105,7 +109,8 @@ def to_frames(images, values=None):
     """-> uint8 [T, H, W, 3] on the CPU, `values` being the Engine > Post settings. Rounded: a bare cast cuts every value down, a steady half-level darkening."""
     values = values or {}
     look = clip_look(images, values)
-    return np.concatenate([(finish(x, values, look) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
+    mark = watermark.build(values, images.shape[2], images.shape[1])          # last: nothing before it can touch the mark
+    return np.concatenate([(watermark.apply(finish(x, values, look), mark) * 255).round().clamp(0, 255).byte().cpu().numpy() for x in images.split(_CHUNK)])
 
 
 def _with_quality(codec, quality):
@@ -199,6 +204,9 @@ def _values(settings):
     spec = registry_mod.current().specs.get("output_save")
     if spec is None:
         return dict(DEFAULTS)
+    pick = spec.settings.get("watermark_picture")
+    if pick is not None:
+        pick["options"] = watermark.picture_options()               # read now: a picture added since Settings was opened still counts
     clean, problems = schema_mod.check_values(spec, (settings or {}).get("output_save"))
     for problem in problems or ():
         log.once(f"save_video:{problem}", log.ALERT, "FunUI Save Video", f"setting ignored, default used: {problem}")

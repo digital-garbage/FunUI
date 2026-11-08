@@ -58,10 +58,11 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "back_up": {
-        "type": "float", "default": 0.5, "min": 0.0, "max": 0.95, "step": 0.05, "ui": "slider",     # 1.0 would repeat the previous step's noise level, and the step could no longer be told apart
+        "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Noise added at the hand-over",
         "hint": "How far back the full-size stage starts. 0 starts at the noise level where the first stage stopped; higher values start "
-                "earlier, adding more fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines.",
+                "earlier, adding more fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines. "
+                "The top of the slider is held at 0.95: a full step back would repeat the previous step's noise level.",
         "when": {"enabled": True},
     },
     "resize": {

@@ -824,3 +824,21 @@ test("a Video to Video pipeline does not gain the Image to Video preset's identi
   await PS.adopt(direct, ["model"], {}, true);
   assert.deepStrictEqual(PS.slots().map((s) => s.id), ["ckpt", "encode", "source_image"]);
 });
+
+test("settings saved for a module that no longer exists are cleared from the project when it opens", async () => {
+  const posts = [];
+  const PS = load(posts);
+  lastApi.modules = async () => ({ modules: [{ id: "sharpen", settings: { amount: { default: 1 } } }], installed: ["sharpen", "hidden_by_model"], failed: [], sinks: [{ node: "Gen", input: "settings" }], control: {} });
+  await PS.adopt([{ id: "gen", node: "Gen", inputs: { steps: 8, settings: JSON.stringify({ sharpen: { amount: 2 }, video_detail: { on: true }, hidden_by_model: { x: 1 } }) } }]);
+  const blob = () => JSON.parse(PS.slots().find((s) => s.id === "gen").inputs.settings);
+  assert.deepStrictEqual(Object.keys(blob()).sort(), ["hidden_by_model", "sharpen"]);        // the removed module is gone, one the model merely hides stays
+  assert.strictEqual(blob().sharpen.amount, 2);
+  assert.ok(posts.some((p) => p.values && !("video_detail" in p.values)), "and it was saved, not left for a later edit");
+});
+
+test("nothing is cleared while a module failed to load: it may be back next time", async () => {
+  const PS = load([]);
+  lastApi.modules = async () => ({ modules: [], installed: ["sharpen"], failed: [{ where: "x", why: "broke" }], sinks: [{ node: "Gen", input: "settings" }], control: {} });
+  await PS.adopt([{ id: "gen", node: "Gen", inputs: { steps: 8, settings: JSON.stringify({ lost_for_now: { a: 1 } }) } }]);
+  assert.ok("lost_for_now" in JSON.parse(PS.slots().find((s) => s.id === "gen").inputs.settings));
+});

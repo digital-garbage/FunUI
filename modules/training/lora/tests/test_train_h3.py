@@ -125,6 +125,15 @@ def test_h3_without_its_audio_vae_says_what_to_add(run_env):
         train.run(tiny_h3_patcher(), FakeClip(), FakeVae(), None, "tiny", settings())
 
 
+def test_a_model_the_trainer_cannot_copy_is_refused_before_training_with_the_reason(run_env):
+    """A loader that converted the weights (MXFP8, int8) leaves no way to re-read the file: ComfyUI's own error must not be what is shown."""
+    from modules.training.lora import train
+    patcher = tiny_h3_patcher()
+    patcher.cached_patcher_init = None
+    with pytest.raises(ValueError, match="MXFP8"):
+        train.run(patcher, FakeClip(), FakeVae(), FakeAudioVae(), "tiny", settings(steps=2))
+
+
 def test_stop_ends_the_run_and_records_it(run_env):
     from modules.training.lora import train
     _, jobs = run_env

@@ -68,3 +68,10 @@ def test_the_import_path_is_not_published(manifest):
     # Where a module lives on disk is core's business.
     for entry in manifest()["modules"]:
         assert "source" not in entry
+
+
+def test_installed_names_every_loaded_module_even_one_the_model_hides(manifest):
+    """The app clears saved settings for ids that are not in this list, so it must hold a module a model merely hides."""
+    result = manifest(traits=["no_such_trait_anything_requires"])
+    assert "audio_clock" in result["installed"] and "explodes" not in result["installed"]
+    assert result["installed"] == sorted(result["installed"])

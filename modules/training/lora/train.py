@@ -207,8 +207,9 @@ def _run(model, clip, vae, audio_vae, set_name: str, cfg: dict, prompt_id: str =
             raise ValueError("; ".join(problems))
         if problems:
             log.warning("FunUI LoRA training", f"left out of the run: {'; '.join(problems[:5])}{' ...' if len(problems) > 5 else ''}")
-        if adapt is None and getattr(model, "cached_patcher_init", None) is None:
-            raise ValueError("this model was loaded in a way the trainer cannot copy; load it with the FunUI Diffusion Model Loader from a plain file")
+        if getattr(model, "cached_patcher_init", None) is None:
+            raise ValueError("this model was loaded in a way the trainer cannot copy (MXFP8 or int8 conversion in the loader, or a file the loader cannot read again); "
+                             "untick those in the loader and wire it again, or leave the model unwired and pick the file in the trainer")
         batch = cfg["batch_size"]
         if adapt and batch > adapt.get("batch_limit", batch):
             log.warning("FunUI LoRA training", f"{adapt['name']} trains one sample at a time; batch size {batch} is lowered to {adapt['batch_limit']}")

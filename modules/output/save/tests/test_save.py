@@ -164,14 +164,32 @@ def test_chunked_conversion_equals_one_go_and_off_equals_the_plain_cast():
     assert (nodes.to_frames(x, {"smoothing": "strong"}) == whole).all()
 
 
+def _ends(spec):
+    """The values a declared setting is tried at: every choice, both switch positions, a slider's two ends and its default, a text or colour its default and one more."""
+    if spec["type"] == "enum":
+        return [o["value"] for o in spec["options"]]
+    if spec["type"] == "bool":
+        return [False, True]
+    if spec["type"] == "text":
+        return [spec["default"], "FunUI"]
+    if spec["type"] == "color":
+        return [spec["default"], "#ff8800"]
+    return [spec["min"], spec["default"], spec["max"]]
+
+
 def _combos():
-    """Every on/off combination of the declared Post settings (a slider: its two ends and its neutral value)."""
+    """Registry-driven: every on/off combination of the picture's look settings, each with the watermark off and with it on at every
+    setting's other values (one at a time against an all-on mark, so the count stays small: the marks do not touch each other)."""
     import itertools
     from modules.output import save
-    choices = []
-    for key, spec in save.SETTINGS.items():
-        choices.append([(key, v) for v in ([o["value"] for o in spec["options"]] if spec["type"] == "enum" else [False, True] if spec["type"] == "bool" else [spec["min"], spec["default"], spec["max"]])])
-    return [dict(c) for c in itertools.product(*choices)]
+    look = {k: v for k, v in save.SETTINGS.items() if not k.startswith("watermark")}
+    mark = {k: v for k, v in save.SETTINGS.items() if k.startswith("watermark")}
+    looks = [dict(c) for c in itertools.product(*[[(k, v) for v in _ends(spec)] for k, spec in look.items()])]
+    on = {"watermark": "text", "watermark_text": "FunUI", "watermark_outline": 6.0}
+    marks = [{}, on]
+    for key, spec in mark.items():
+        marks += [{**on, key: v} for v in _ends(spec) if v != on.get(key)]
+    return [{**a, **b} for a in looks for b in ([{}, on])] + [{**looks[-1], **b} for b in marks]
 
 
 def test_every_post_combination_saves_and_every_encoder_codec_quality_takes_the_all_on_look(tmp_path):
@@ -181,7 +199,7 @@ def test_every_post_combination_saves_and_every_encoder_codec_quality_takes_the_
     for n, values in enumerate(_combos()):
         path = str(tmp_path / f"c{n}.mp4")
         assert nodes.encode(path, nodes.to_frames(x, values), 24.0, encoder="auto") and os.path.getsize(path) > 0
-    everything = {"smoothing": "strong", "auto_contrast": True, "auto_brightness": True, "saturation": 1.5}
+    everything = {"smoothing": "strong", "auto_contrast": True, "auto_brightness": True, "saturation": 1.5, "watermark": "text", "watermark_text": "FunUI", "watermark_outline": 6.0}
     frames = nodes.to_frames(x, everything)
     for encoder, codec, quality in itertools.product(nodes.ENCODERS, nodes.CODECS, nodes.QUALITIES):
         path = str(tmp_path / f"{encoder}_{codec}_{quality}.mp4")

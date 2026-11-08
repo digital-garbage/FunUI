@@ -16,7 +16,7 @@ A feature asks `multiplier(kind, block, fraction_of_run, blocks)` and gets a num
 more or less than its set strength to use in that block at that point of the run. The effect share a
 block gets is its quality, (1 - fragility)^2, and the nudge that produces that share is the share over
 the leverage, so the picture change goes where it is clean and the nudge is small where leverage is big.
-Averaged over the blocks the feature uses it is 1, so a strength slider keeps its meaning.
+Averaged over the blocks the feature uses it is 1 (within about 1% when the limits below bite), so a strength slider keeps its meaning.
 """
 
 import json

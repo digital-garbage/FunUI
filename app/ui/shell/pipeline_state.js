@@ -70,6 +70,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
   let lastProbedFile;         // undefined = never probed (a pipeline with no model file is null, and still needs its first probe)
 
   let lastTraits;             // the traits the module list was last asked for
+  let installed = null;       // ids of every module that loaded (null until the server says): saved settings for any other id belong to nothing
   // Ask again for the modules, for the choices a setting reads from disk (a folder of files) that may have changed.
   async function reloadModules() {
     try {
@@ -77,6 +78,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
       if (!Array.isArray(manifest.modules)) return false;
       modulesById = {};
       manifest.modules.forEach((m) => { modulesById[m.id] = m; });
+      installed = Array.isArray(manifest.installed) && !(manifest.failed || []).length ? new Set(manifest.installed) : null;       // a module that failed to load may be back next time: its settings are only cleared when none failed
       return true;
     } catch (_) { return false; }       // keeps the list it has
   }
@@ -90,6 +92,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
     modulesById = {};
     (manifest.modules || []).forEach((m) => { modulesById[m.id] = m; });
     controlState = manifest.control || controlState;
+    installed = Array.isArray(manifest.installed) && !(manifest.failed || []).length ? new Set(manifest.installed) : null;       // a module that failed to load may be back next time: its settings are only cleared when none failed
     if (Array.isArray(manifest.sinks)) sinks = manifest.sinks;
     if (traits !== undefined) lastProbedFile = file;    // only once it worked: a failed probe is tried again
     loadError = null;                                   // the pipeline is in and its modules are known: nothing is failing now
@@ -144,11 +147,25 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
         Object.entries(parsed).forEach(([moduleId, own]) => {
           if (!sinks && !known.has(moduleId)) return;
+          if (installed && moduleId !== "_off" && !installed.has(moduleId)) return;       // a removed or renamed module's settings leave the project at the next save
           if (own && typeof own === "object") merged[moduleId] = { ...(merged[moduleId] || {}), ...own };
         });
       });
     });
     return merged;
+  }
+
+  // Module ids a saved settings blob names that no loaded module has (a module removed or renamed since the project was saved).
+  function staleModuleIds(from = slots) {
+    if (!installed || !sinks) return [];
+    const out = new Set();
+    (from || []).forEach((slot) => Object.entries(slot.inputs || {}).forEach(([key, v]) => {
+      if (typeof v !== "string" || !isSink(slot, key)) return;
+      let parsed;
+      try { parsed = JSON.parse(v); } catch (_) { return; }
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) Object.keys(parsed).forEach((id) => { if (id !== "_off" && !installed.has(id)) out.add(id); });
+    }));
+    return [...out];
   }
 
   // Two panels can mount close enough together that both call this before
@@ -724,6 +741,7 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
           // The modules offered depend on the model this pipeline names, which may differ from the
           // previous project's: refresh, or the next settings edit drops this project's modules.
           try { await refreshManifest(); } catch (_) { /* the next save retries it */ }
+          if (staleModuleIds().length) { const values = currentValues(); mirrorValues(values); save({ values }); }     // settings of modules that no longer exist are cleared from the project now, not at some later edit
           return (adoptedOk = true);
         }
         reasons = (res && res.refused) || reasons;

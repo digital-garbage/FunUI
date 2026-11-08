@@ -190,6 +190,7 @@ def manifest(traits=None):
 
     return {
         "contract": CONTRACT_VERSION,
+        "installed": sorted(reg.specs),         # every module that loaded, whatever the model: a saved setting for any other id belongs to nothing
         "modules": [dict(spec.to_manifest(), serves=sorted(used & set(spec.provides))) for spec in ordered],
         "failed": (
             [{"where": where, "why": why} for where, why in reg.failed]
