@@ -640,8 +640,9 @@ def test_the_real_model_class_is_collectable_after_a_sampled_veda_run(veda_on, f
 
 
 @pytest.mark.parametrize("interrupted", [False, True], ids=["finished", "interrupted"])
+@pytest.mark.parametrize("stage_lora", [None, "First", "Second"], ids=["no-lora", "lora-first", "lora-second"])
 @pytest.mark.parametrize("staged", [False, True], ids=["one-stage", "two-stages"])
-def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folder, comfyui, staged, interrupted):
+def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folder, comfyui, staged, interrupted, stage_lora):
     """The class of leak ComfyUI names 'memory leak with model MiniMaxH3': a hook or wrapper that holds its own patcher is a cycle only a
     full gc frees, and that gc clears ComfyUI's weak link to the parent copy first. Veda in the loader, every modifier on top, a real
     sampling run, then everything dropped: the model must die by reference counting alone."""
@@ -665,7 +666,7 @@ def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folde
     loaded = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
     veda, _, installed = sla.install_sla(loaded, method="veda", min_seq_len=0, dense_steps="", sparsity_ratio=0.9, veda_timing=True)
     assert installed
-    patched, _ = _load(veda, tuple(f for f in FEATURES if f != "phrase_probe"), STAGES["two-stages"] if staged else None)
+    patched, _ = _load(veda, tuple(f for f in FEATURES if f != "phrase_probe"), STAGES["two-stages"] if staged else None, stage_lora if staged else None)
     mm.load_models_gpu([patched])
     guider = comfy.samplers.CFGGuider(patched)
     cond = [[torch.randn(1, 5, 48).to(torch.bfloat16), {}]]
