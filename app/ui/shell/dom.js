@@ -50,7 +50,7 @@ export function createDom(doc = document) {
       if (name === "main") return doc.querySelector(".cx-frame-main");
       const [kind, rest] = name.split(/:(.*)/s);
       if (kind === "zone") return doc.querySelectorAll("section.cx-zone")[Number(rest)] || null;
-      if (kind === "button") return [...doc.querySelectorAll("button")].find((b) => rest.split("|").some((r) => b.textContent.trim().startsWith(r))) || null;       // "a|b": either label (a button that is renamed while it works)
+      if (kind === "button") return [...doc.querySelectorAll("button")].find((b) => rest.split("|").filter(Boolean).some((r) => b.textContent.trim().startsWith(r))) || null;       // "a|b": either label (a button that is renamed while it works)
       return null;
     },
     /** The page's body, as an anchor for things that float. */

@@ -281,3 +281,13 @@ test("the Training preview waits for an upscale model too, and the server's word
   await app.runner.units(["a"], 1);
   assert.equal(queued, 1);
 });
+
+test("the next shot waits while an upscale model runs, and the Training preview says a reference that did not fit", async () => {
+  let queued = 0, busyNow = false, asked = 0;
+  const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
+  app.has = new Set();
+  app.api.upscaleBusy = async () => { asked += 1; if (asked === 2) busyNow = true; return { busy: asked === 2 }; };       // free at the click, busy once before the first shot
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 1);
+  assert.ok(busyNow && asked >= 3, "the shot asked again and went on when the server said free");
+});

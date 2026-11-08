@@ -52,6 +52,7 @@ export default {
       return true;
     }).catch(() => tell("The result could not be saved to its project.")); };
 
+    const unwiredText = (unwired, left) => `${unwired} reference(s) did not fit this pipeline and are not used: ${(left || []).map((l) => `${names.get(l.id) || l.id} (looked for ${l.what ? `${l.what}, ${l.at.replace("assets.", "")}` : l.at.replace("assets.", "")}: ${l.why})`).join("; ")}.`;
     // `times` > 1: the same shots again, only the seed differing (the prompt's random picks are drawn once), so the takes can be compared.
     // `once`: for a single run only - {seed} uses that seed on every seed input; onQueued runs once ComfyUI has taken (or refused) the run.
     // This page's own upscale, or one the server still runs for a reloaded page or another tab.
@@ -98,6 +99,11 @@ export default {
         const same = times > 1 ? (body) => { const key = JSON.stringify(body); if (!drawn.has(key)) drawn.set(key, expand(body)); return drawn.get(key); } : expand;
         for (const unit of Array.from({ length: times }, () => units).flat()) {
           if (stopped) break;
+          for (let waited = false; await upscaling() && !stopped; waited = true) {       // an Always upscale of the shot before may be running: the next shot waits for it
+            if (!waited) tell("Waiting for the upscale model to finish before the next shot.");
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          if (stopped) break;
           if (!p.project || p.project.id !== pid) { tell("Stopped: another project was opened."); break; }
           const root = unitRoot(snap, unit);
           const group = snap.scenes.filter((s) => genUnitId(s) === unit);
@@ -114,7 +120,7 @@ export default {
           notes.forEach(tell);
           for (const x of placed || []) app.api.carryLog(pid, { scene_id: root.id, ...x }).catch(() => {});        // the Log records where a carried picture went; no toast
           if (unusedPicture) tell(`The scene's picture (${names.get(unusedPicture) || unusedPicture}) is not used: this pipeline starts from a video, not a picture.`);
-          if (unwired) tell(`${unwired} reference(s) did not fit this pipeline and are not used: ${(left || []).map((l) => `${names.get(l.id) || l.id} (looked for ${l.at.replace("assets.", "")}: ${l.why})`).join("; ")}.`);
+          if (unwired) tell(unwiredText(unwired, left));
           // The page's own guard does not see another tab: ComfyUI's queue does. Asked per shot: between this run's shots it is empty.
           if (app.api.projectQueued && (await app.api.projectQueued(pid))) { tell("This project already has a run in ComfyUI's queue (another tab or window?). Wait for it, or Stop it there."); break; }
           if (stopped) break;
@@ -190,7 +196,8 @@ export default {
       busy = true; draw();
       try {
         await Promise.all((app.beforeRun || []).map((f) => f().catch(() => {})));
-        const { inputs } = await buildInputs({ project: snap, scene: root, slots: frozen, expand, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
+        const { inputs, unwired, left } = await buildInputs({ project: snap, scene: root, slots: frozen, expand, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
+        if (unwired) tell(unwiredText(unwired, left));
         const done = g.waitForTerminal();
         const queued = await g.generate({ sceneId: root.id, projectId: snap.id, inputs, slots: frozen });
         if (!queued) { done.cancel(); return { error: (g.run.state.error && g.run.state.error.message) || "The preview could not be queued. Is ComfyUI running?" }; }

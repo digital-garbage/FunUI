@@ -1,6 +1,6 @@
 // What one run sends: the scene's prompt (expanded with anchor/postfix/$variables), the project's video
 // settings, the scene's picked media -- each placed by the ROLE a pipeline slot declares, never by slot id.
-import { sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
+import { referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
 import { DRIVEN } from "../../shell/scenes.js";
 import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
@@ -37,9 +37,11 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // a VIDEO first (it is then not also sent as a reference: nothing takes it there), else the first picture (which stays a
   // reference too, so an identity input still gets it). A video-only pipeline (video-to-video) looks at videos alone.
   const takesVideo = Boolean(source && source.role.video_frames), videoOnly = Boolean(source && (source.role.video_only || (slots || []).some((s) => s.node === "VAEEncode" && ((s.inputs || {}).pixels || [])[0] === source.slot.id)));       // a pipeline that encodes the start itself is video-to-video, whether or not it was saved saying so
+  const numberOf = referenceNumbers(plan.ids, plan.pins);       // the start is the lowest-numbered reference of its kind, whatever the list order (a pinned one is listed first)
+  const firstByNumber = (test) => plan.ids.map((id, i) => [id, numberOf[i]]).filter(([id]) => test(id)).sort((a, b) => a[1] - b[1]).map(([id]) => id)[0];
   const wanted = (id) => kinds.get(id) === "video" || (!videoOnly && kinds.get(id) === "image");
   const fromRefs = takesVideo
-    ? plan.ids.find((id) => kinds.get(id) === "video") || (videoOnly ? null : plan.ids.find((id) => wanted(id))) : null;
+    ? firstByNumber((id) => kinds.get(id) === "video") || (videoOnly ? null : firstByNumber(wanted)) : null;
   if (fromRefs && kinds.get(fromRefs) === "video") plan.ids = plan.ids.filter((id) => id !== fromRefs);
   const startId = takesVideo ? fromRefs || "" : scene.source_image;      // nothing picked: text to video follows by itself
   if (source) put(source.slot, "media_id", startId || "");    // "from a prompt" starts every shot without a picture
