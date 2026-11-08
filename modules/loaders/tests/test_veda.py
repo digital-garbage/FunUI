@@ -639,10 +639,11 @@ def test_the_real_model_class_is_collectable_after_a_sampled_veda_run(veda_on, f
         mm.unload_all_models()
 
 
+@pytest.mark.parametrize("cached", [False, True], ids=["all-dropped", "node-cache-keeps-the-chain"])
 @pytest.mark.parametrize("interrupted", [False, True], ids=["finished", "interrupted"])
 @pytest.mark.parametrize("stage_lora", [None, "First", "Second"], ids=["no-lora", "lora-first", "lora-second"])
 @pytest.mark.parametrize("staged", [False, True], ids=["one-stage", "two-stages"])
-def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folder, comfyui, staged, interrupted, stage_lora):
+def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folder, comfyui, staged, interrupted, stage_lora, cached):
     """The class of leak ComfyUI names 'memory leak with model MiniMaxH3': a hook or wrapper that holds its own patcher is a cycle only a
     full gc frees, and that gc clears ComfyUI's weak link to the parent copy first. Veda in the loader, every modifier on top, a real
     sampling run, then everything dropped: the model must die by reference counting alone."""
@@ -697,6 +698,11 @@ def test_every_modifier_on_top_of_veda_leaves_a_collectable_model(veda_on, folde
     gc.collect()
     gc.disable()
     try:
+        if cached:          # ComfyUI's node cache still holds the loader and modifier outputs; only the run's own clones are gone
+            del guider, noise, latent, cond, config
+            dead = [m for m in mm.current_loaded_models if m.is_dead()]
+            assert not dead, "ComfyUI lost track of a model the node cache still holds"
+            return
         del guider, patched, veda, loaded, base, noise, latent, cond, config
         dead = [m for m in mm.current_loaded_models if m.is_dead()]
         assert not dead and ref() is None, [type(r).__name__ for r in gc.get_referrers(ref())] if ref() is not None else "dead model tracked"

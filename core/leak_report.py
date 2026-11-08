@@ -51,6 +51,11 @@ def chains(target, depth=DEPTH, nodes=NODES, paths=PATHS) -> list:
 
 def report(mm, when) -> int:
     dead = [m for m in mm.current_loaded_models if m.is_dead()]
+    if dead:
+        log.warning("FunUI Leak", f"{when}: ComfyUI tracks " + ", ".join(
+            f"{type(l.real_model()).__name__ if callable(l.real_model) and l.real_model() is not None else '?'}"
+            f"({'DEAD' if l.is_dead() else 'patcher alive' if l.model is not None else 'gone'}"
+            f"{', has parent link' if getattr(l, '_parent_model', None) is not None else ''})" for l in mm.current_loaded_models))
     for m in dead:
         model = m.real_model()
         if model is None:
@@ -64,11 +69,14 @@ def report(mm, when) -> int:
                 p, n = p.parent, n + 1
             return n
         lineage = ", ".join(f"{type(o).__name__}(parents {depth(o)}, tracked {any(l.model is o for l in mm.current_loaded_models)})" for o in owners)
-        log.warning("FunUI Leak", f"{when}: {type(model).__name__} outlived its patcher. Patchers holding it: {lineage or 'none'}. What holds it:\n" + "\n".join(chains(model)))
+        fin = getattr(m, "_patcher_finalizer", None)
+        state = f"its hand-over {'registered' if fin is not None else 'was never registered'}{' and still pending' if fin is not None and fin.alive else ''}"
+        log.warning("FunUI Leak", f"{when}: {type(model).__name__} outlived its patcher ({state}). Patchers holding it: {lineage or 'none'}. What holds it:\n" + "\n".join(chains(model)))
     return len(dead)
 
 
 _in_gc = [False]
+_seen = [0]
 
 
 def _gc_flag(phase, info):
@@ -88,10 +96,13 @@ def watch_switch(mm) -> bool:
         try:
             parent = self._parent_model()
             real = self.real_model() if callable(self.real_model) else None
-            if parent is None and real is not None:
-                live = [type(o).__name__ for o in gc.get_referrers(real) if type(o).__name__.startswith("ModelPatcher")]
-                log.warning("FunUI Leak", f"a {type(real).__name__} patcher died and its parent was already gone, so ComfyUI loses track of the model. "
-                            f"Python's gc was running: {_in_gc[0]}. Patchers still holding the model: {len(live)}")
+            _seen[0] += 1
+            if _seen[0] <= 40:          # every hand-over, so a missing one shows too
+                depth, p = 0, parent
+                while p is not None and getattr(p, "parent", None) is not None and depth < 50:
+                    p, depth = p.parent, depth + 1
+                log.info("FunUI Leak", f"hand-over {_seen[0]}: a {type(real).__name__ if real is not None else 'dead'} patcher died; its parent is "
+                         f"{'gone' if parent is None else type(parent).__name__ + f' with {depth} more above it'}; Python's gc running: {_in_gc[0]}")
         except Exception as exc:            # noqa: BLE001 -- a diagnostic must never stop a run
             log.failed("leak report", exc)
         return original(self)

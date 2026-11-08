@@ -68,7 +68,7 @@ def test_a_hand_over_that_finds_no_parent_is_said(comfyui, capsys):
         loaded._parent_model = lambda: None          # what a gc that cleared the weak link leaves behind
         loaded._switch_parent()
         shown = capsys.readouterr().err
-        assert "parent was already gone" in shown and "Python's gc was running: False" in shown
+        assert "its parent is gone" in shown and "Python's gc running: False" in shown
         del keep
     finally:
         mm.LoadedModel._switch_parent = original
