@@ -89,7 +89,7 @@ def report(mm, when) -> int:
         log.warning("FunUI Leak", f"{when}: ComfyUI tracks " + ", ".join(
             f"{type(l.real_model()).__name__ if callable(l.real_model) and l.real_model() is not None else '?'}"
             f"({'DEAD' if l.is_dead() else 'patcher alive' if l.model is not None else 'gone'}"
-            f"{', has parent link' if getattr(l, '_parent_model', None) is not None else ''})" for l in mm.current_loaded_models))
+            f"{', has parent link' if callable(getattr(l, '_parent_model', None)) and l._parent_model() is not None else ''})" for l in mm.current_loaded_models))
     for m in dead:
         model = m.real_model()
         if model is None:
@@ -131,7 +131,7 @@ def watch_switch(mm) -> bool:
             parent = self._parent_model()
             real = self.real_model() if callable(self.real_model) else None
             _seen[0] += 1
-            if _seen[0] <= 40:          # every hand-over, so a missing one shows too
+            if parent is None or _seen[0] <= 40:          # a hand-over with no parent always shows; the others for the first 40 of the session
                 depth, p = 0, parent
                 while p is not None and getattr(p, "parent", None) is not None and depth < 50:
                     p, depth = p.parent, depth + 1

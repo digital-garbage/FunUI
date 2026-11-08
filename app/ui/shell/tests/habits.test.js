@@ -94,5 +94,5 @@ test("the like-guess is odds, not a ban: a far worse draft still comes up, and t
   const share = (word) => picks.filter((t) => t.includes(word)).length / picks.length;
   assert.ok(share("fog") > 0.05, `the worst draft keeps a chance: ${share("fog")}`);
   assert.ok(share("neon") < 0.8, `the best never takes everything: ${share("neon")}`);
-  assert.ok(share("constructor") > 0.05, `an odd word is not NaN: ${share("constructor")}`);
+  assert.ok(share("constructor") > 0.05 && share("constructor") < 0.3, `an odd word weighs 0, not NaN (which made it always win): ${share("constructor")}`);
 });

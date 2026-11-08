@@ -336,3 +336,11 @@ def test_upscale_with_a_model_file_is_refused_while_comfyui_is_busy_and_rtx_is_n
     monkeypatch.setattr(upscale, "run", lambda *a, **k: {"media": media_ref})
     status, body = call(server, "POST", f"{BASE}/upscale", {"media": media_ref, "model": rtx.NAME})
     assert status == 200 and body.get("job_id")                       # RTX uses no ComfyUI model memory: it may run beside a generation
+
+
+def test_upscale_job_with_a_model_file_stops_if_comfyui_got_busy_after_the_route(monkeypatch):
+    from modules.output.render import upscale, rtx
+    monkeypatch.setattr(upscale, "comfy_busy", lambda: True)
+    import pytest
+    with pytest.raises(RuntimeError, match="ComfyUI is generating"):
+        upscale.run({"filename": "x.mp4"}, "4x.safetensors")

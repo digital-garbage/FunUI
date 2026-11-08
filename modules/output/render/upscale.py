@@ -26,6 +26,10 @@ def models() -> list:
         return []
 
 
+BUSY = ("ComfyUI is generating right now. An upscale model shares ComfyUI's model memory, so run Upscale when the generation has finished "
+        "(RTX Super Resolution can run beside it).")
+
+
 def comfy_busy() -> bool:
     """Whether ComfyUI has a prompt running or waiting. An upscale model is loaded through ComfyUI's model manager, which is not safe to
     use from two threads at once, so it is not started beside a generation. False when there is no server to ask (tests, a script)."""
@@ -42,6 +46,8 @@ def run(media, model, rtx_options="{}", interrupted=lambda: None) -> dict:
     let go of the workflow's loaders and models (a prompt without them), and the next generation would load them again."""
     import folder_paths
 
+    if model != rtx.NAME and comfy_busy():          # a generation may have been queued since the route looked
+        raise RuntimeError(BUSY)
     src = files.comfy_path(media.get("filename"), media.get("subfolder") or "", media.get("type") or "output")
     if not src or not os.path.isfile(src):
         raise RuntimeError(f"{media.get('filename')} is not in the {media.get('type') or 'output'} folder (anymore).")

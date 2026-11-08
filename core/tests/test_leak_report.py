@@ -122,3 +122,19 @@ def test_an_entry_with_no_live_patcher_is_left_for_the_report(comfyui):
         del keep
     finally:
         mm.current_loaded_models.remove(loaded)
+
+
+def test_a_hand_over_with_no_parent_is_logged_after_the_first_forty(monkeypatch):
+    from core import leak_report
+    monkeypatch.setattr(leak_report, "_seen", [500])
+    lines = []
+    monkeypatch.setattr(leak_report.log, "info", lambda *a, **k: lines.append(a))
+    mm = type("MM", (), {})()
+
+    class LM:
+        def __init__(self): self._parent_model = lambda: None; self.real_model = lambda: None
+        def _switch_parent(self): pass
+    mm.LoadedModel = LM
+    leak_report.watch_switch(mm)
+    LM()._switch_parent()
+    assert lines and "hand-over" in lines[0][1] and "gone" in lines[0][1]
