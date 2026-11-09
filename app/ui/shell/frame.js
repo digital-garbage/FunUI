@@ -63,6 +63,7 @@ export function build(root) {
     try {
       const raw = JSON.parse(localStorage.getItem(KEY)), out = {};
       for (const k in size) if (Number.isFinite(raw[k])) out[k] = Math.min(size[k][1], Math.max(size[k][0], raw[k]));
+      if ([340, 380].includes(out["--timeline-h"])) delete out["--timeline-h"];      // those were the old fixed minimum a drag could not go below, not a chosen height
       return out;
     } catch { return {}; }       // nothing, or nothing usable, remembered
   })();
@@ -71,7 +72,8 @@ export function build(root) {
   // A taller height the person dragged to is kept; a shorter one is not allowed.
   let need = 0;
   const floor = (k) => k === "--timeline-h" ? need : size[k][0];
-  const apply = () => { for (const k in size) { const v = Math.max(floor(k), saved[k] || 0); v ? css.setProperty(k, v + "px") : css.removeProperty(k); } };
+  // Only what the person set, or what the lanes need, is written; the side columns keep their stylesheet widths until dragged.
+  const apply = () => { for (const k in size) { const v = saved[k] ? Math.max(floor(k), saved[k]) : k === "--timeline-h" ? need : 0; v ? css.setProperty(k, v + "px") : css.removeProperty(k); } };
   const measure = () => {
     const zone = main.node.children[1], nle = zone && zone.querySelector(".cx-nle"), stage = nle && nle.querySelector(".cx-nle-stage");
     if (!stage || document.documentElement.classList.contains("fp-peek")) return;          // nothing drawn yet, or the timeline is folded to its strip
