@@ -15,11 +15,12 @@
 > [!NOTE]
 > "ComfyUI-FunPack" on Comfy Registry and FunUI on GitHub is the same app.
 
+
 <p align="center"><img src="docs/images/studio.jpg" alt="FunUI studio: preview, scene settings and a six-clip timeline" width="900"></p>
 
 ## What's FunUI?
 
-The main idea behind FunUI is gathering as many useful features as possible inside one app, while offering an thought-out interface designed for maximum speed of daily operations.
+The main idea behind FunUI is gathering as many useful features as possible inside one app, while offering a thought-out interface designed for maximum speed of daily operation.
 
 How does it do it?
 
@@ -131,15 +132,15 @@ Thanks for understanding.
 
 ## Thank you
 
-I express my deepest gratitude to everyone who inspired FunUI, helped with its development and whose ideas have been ported into it:
+I express my deepest gratitude to everyone who inspired FunUI, helped with its development at any stage, and whose ideas and researches have been ported into it:
 
 - ComfyUI and its whole community;
+- Anthropic and Claude Code;
 - OpenAI and ChatGPT Codex;
 - xAI and Grok Build;
-- Anthropic and Claude Code;
 - Team Cursor and Composer model;
 - DeepSeek team and model;
-- Google and Gemini;
+- Google and Gemini model;
 - Lightricks and the LTX-Video model; FunUI's identity-transfer phase tag is a port of `ltx_core` (Apache-2.0);
 - [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) — the LTX nodes used by the LTX pipeline presets;
 - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) — utility nodes used by the H3 pipeline presets;
