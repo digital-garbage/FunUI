@@ -33,7 +33,7 @@ How does it do it?
 - **Features:** lots of operations such as upscaling, interpolation, inference speedup techniques, mixed precision - already built-in or can be activated and installed within 3 clicks.
 - **Designed to tend to your taste:** rate resulting videos and compatible features will react according to your ratings, gradually changing outputs according to your preferences.
 
-FunUI opens at `ComfyUI's host:port/fun/` in your browser after you start ComfyUI, e.g. `127.0.0.1:8888/fun`.
+FunUI opens at `ComfyUI's host:port/fun/` in your browser after you start ComfyUI, e.g. `127.0.0.1:8888/fun` (the port depends on how you start ComfyUI).
 
 ## A look around
 
