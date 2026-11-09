@@ -51,7 +51,7 @@ SETTINGS = {
             {"value": "noise", "label": "Starting noise"},
         ],
         "label": "Merge", "ui": "segmented",
-        "hint": "Step answers: the model answers twice at chosen steps and the pictures are blended. Second run: a whole second video from the second seed is blended in at chosen steps. Starting noise: mixes the second seed's noise into the start, at no extra cost.",
+        "hint": "Blends in a second seed. Step answers: asks the model twice at chosen steps. Second run: blends a whole second video (slower). Starting noise: mixes the second seed's noise in at no extra cost.",
         "when": {"enabled": True},
     },
     "steps": {

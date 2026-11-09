@@ -45,10 +45,7 @@ class FunUIDecode(io.ComfyNode):
                 io.Vae.Input("audio_vae", optional=True,
                              tooltip="Only for models that generate sound alongside the video."),
                 io.Int.Input("tile_size", default=0, min=0, max=4096, step=64, optional=True,
-                             tooltip="Decode in tiles of this many pixels, to fit less VRAM. 0 = the "
-                                     "model's own way. MiniMax H3: 0 is ComfyUI's 256px tiles, the size "
-                                     "its decoder was trained on; bigger tiles show a grid. An X2 Detail "
-                                     "VAE is always tiled (256 at least)."),
+                             tooltip="Decodes in tiles of this many pixels to fit less VRAM. 0 uses the model's own way. For MiniMax H3 keep 0, since bigger tiles show a grid."),
             ],
             outputs=[
                 io.Image.Output(display_name="images"),

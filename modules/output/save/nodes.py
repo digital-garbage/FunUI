@@ -239,7 +239,7 @@ class FunUISaveVideo(io.ComfyNode):
                 io.Combo.Input("codec", options=list(CODECS), default="h264", optional=True,
                                tooltip="For the GPU encoder. H.264: plays in every browser. H.265: smaller files, but Firefox may not play it."),
                 io.Combo.Input("quality", options=list(QUALITIES), default="high", optional=True,
-                               tooltip="How closely the file keeps the picture. standard: small files, but fine texture smears and blocks show on a sharp high-resolution picture. high: visually clean for a bigger file. maximum: near lossless, large."),
+                               tooltip="How closely the file keeps the picture. standard: small files, but fine texture can smear. high: clean, bigger file. maximum: near lossless, large."),
                 io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
             ],
             hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],

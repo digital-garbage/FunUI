@@ -56,151 +56,71 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
             inputs=[
                 io.Combo.Input("model_name", options=_model_file_choices()),
                 io.Combo.Input("weight_dtype", options=WEIGHT_DTYPES, default="default",
-                               tooltip="How the weights are stored. 'default' keeps whatever "
-                                       "the file already is."),
+                               tooltip="How the model is stored in memory. 'default' keeps the file as it is. A smaller type uses less memory, with a small quality cost."),
                 io.Combo.Input("compute_dtype", options=COMPUTE_DTYPES, default="default",
-                               tooltip="What the maths runs in, independently of storage."),
+                               tooltip="The precision used for the maths while generating. 'default' is safe; a lower one is faster, with a small quality cost."),
                 io.Combo.Input("attention", options=attention_choices(), default="default",
-                               tooltip="Attention backend. Only what this machine can run is "
-                                       "listed; 'default' keeps ComfyUI's launch choice."),
+                               tooltip="The attention method. Faster ones need extra packages and only the ones this machine can run are listed. 'default' keeps ComfyUI's own choice."),
                 io.Boolean.Input("fp16_accumulation", default=False, optional=True,
-                                 tooltip="Faster fp16 matmuls where the torch build supports it."),
+                                 tooltip="Speeds up fp16 maths slightly, with a small quality trade-off. Needs a recent PyTorch and a GPU that supports it."),
                 io.Boolean.Input("sla", default=False, optional=True, extra_dict={"funui_requires": ["sparse_attention"]},
-                                 tooltip="Block-sparse attention for MiniMax H3 -- the "
-                                         "inference path lightx2v's SLA turbo LoRA was "
-                                         "distilled against, which is why that LoRA gives no "
-                                         "speedup on its own. Roughly 3.7x the attention "
-                                         "throughput at 768p/15s. Runs ALONGSIDE the attention "
-                                         "backend above rather than replacing it: SLA takes "
-                                         "H3's long packed self-attention, the chosen backend "
-                                         "takes the text refiner, masked calls and any trailing "
-                                         "dense steps. Skipped, with the reason, on anything "
-                                         "that is not MiniMax H3 or on a machine without Triton."),
+                                 tooltip="Faster attention for MiniMax H3, with a quality trade-off. Needed for the SLA turbo LoRA to give any speedup. Requires Triton and an H3 model; otherwise it is skipped and the status says why."),
                 # SLA settings. Every one is validated at its default (see sla_attention);
                 # they are here because a knob whose value was measured is still a knob.
                 io.Float.Input("sla_sparsity", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "vsa"])), default=sla_attention.SLA_DEFAULTS["sparsity_ratio"],
                               min=0.0, max=0.95, step=0.05, optional=True,
-                              tooltip="Fraction of key blocks skipped while SLA is on (of video "
-                                      "cubes for method vsa). 0.90 is validated; 0.85 is lightx2v's own value "
-                                      "and ~15% slower. Break-even is around 0.60 -- below that "
-                                      "the kernel is SLOWER than dense, so a low value is a "
-                                      "loss, not a safe fallback."),
+                              tooltip="How much of the attention is skipped. Higher is faster but softer. 0.90 is a good start; below 0.60 it is slower than normal attention."),
                 io.Combo.Input("sla_block_size", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"]), ("sla_engine", ["triton"])),
                                options=["32", "64", "128"],
                                default=str(sla_attention.SLA_DEFAULTS["block_size"]),
                                optional=True,
-                               tooltip="How many sequence tokens share one key selection. H3 "
-                                       "packs audio at 80 rows per second, so a 128-row block "
-                                       "forces 1.6s of speech down one attention pattern while "
-                                       "the same rows are 3% of a video frame. Use 128 only "
-                                       "when the audio does not matter; 32 routes finer still for "
-                                       "about the same time. Triton engine only."),
+                               tooltip="Smaller blocks follow the audio more closely at about the same speed. Use 128 only if sound does not matter. Triton engine only."),
                 io.Boolean.Input("sla_protect_audio", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn"])),
                                  default=sla_attention.SLA_DEFAULTS["protect_audio"], optional=True,
-                                 tooltip="Always attend the prompt's words and every audio "
-                                         "stream, whatever top-k picks. Audio is ~1% of the packed "
-                                         "sequence, so plain top-k regularly drops all of it "
-                                         "and the soundtrack degrades while the video still "
-                                         "looks fine. Reference images stay sparse: see sla_references."),
+                                 tooltip="Keeps the prompt and the sound at full attention, so the soundtrack does not degrade while the picture still looks fine. Recommended on."),
                 io.Int.Input("sla_min_seq_len", extra_dict=shows(("sla", [True])),
                             default=sla_attention.SLA_DEFAULTS["min_seq_len"],
                             min=0, max=1000000, step=1024, optional=True,
-                            tooltip="Sequences shorter than this stay dense. Guards the short "
-                                    "text refiner, which must never be sparsified, and "
-                                    "low-resolution runs where block selection costs more "
-                                    "than it saves."),
+                            tooltip="Short inputs below this length skip the speed-up, because it would not pay off there. Leave at the default."),
                 io.Int.Input("sla_dense_last_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn", "veda"])),
                             default=sla_attention.SLA_DEFAULTS["dense_last_steps"],
                             min=0, max=8, optional=True,
-                            tooltip="Run the last N sampling steps at full attention. 0 "
-                                    "matches lightx2v; 1 was tested and did not help, for "
-                                    "+20% time."),
+                            tooltip="Runs the last N steps with normal attention for a cleaner finish. Costs extra time; 0 is fine for most runs."),
                 io.Boolean.Input("int8_convrot", default=False, optional=True,
-                                 tooltip="MiniMax H3 from an ordinary (bf16/fp16) file: store the "
-                                         "attention and MLP weights as int8 (rotated first, so no lone "
-                                         "outlier spoils the rounding), the way Comfy-Org's own int8_convrot "
-                                         "files are. About half the memory and int8 matmuls on GPUs that "
-                                         "have them; slightly different pictures. Does nothing to a file "
-                                         "that is already quantized or is not H3 (the status says so), and "
-                                         "is skipped when a weight dtype is forced above. The memory saving "
-                                         "always holds; the speed-up is lost on layers a LoRA is applied "
-                                         "to and when compute dtype is forced."),
+                                 tooltip="MiniMax H3 only: stores the big layers as int8 for about half the memory, with slightly different pictures. Skipped for files that are already quantized; the status says so."),
                 # Added later, so after everything: saved workflows can store widget values by position.
                 io.Combo.Input("sla_engine", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"])), options=list(sla_attention.ENGINES),
                                default=sla_attention.SLA_DEFAULTS["engine"], optional=True,
-                               tooltip="What runs the sparse calls. comfy_kitchen: ComfyUI's compiled "
-                                       "int8 sol_attn (needs comfy-kitchen 0.2.32+; the Triton kernel "
-                                       "runs instead where it is missing, and the status says so). "
-                                       "triton: FunUI's own kernel, the only one with block size and "
-                                       "stabilize motion."),
+                               tooltip="What runs the faster attention. comfy_kitchen is ComfyUI's own and needs comfy-kitchen 0.2.32+; triton is FunUI's and has more options. Falls back to triton if missing."),
                 io.String.Input("sla_dense_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn", "veda"])), default=sla_attention.SLA_DEFAULTS["dense_steps"],
                                 optional=True,
-                                tooltip="Steps at full attention, counted from 1: '1' is the first "
-                                        "step, '1-2' the first two, '1,6' the first and sixth; blank or '0', "
-                                        "none. The first steps set the layout and how closely the "
-                                        "prompt is followed, so the first is exact by default. Adds to "
-                                        "dense last steps. The log names the steps that ran this way."),
+                                tooltip="Steps that use normal attention, counted from 1 ('1', '1-2', '1,6'). The first step sets the layout, so it is exact by default. Blank or 0 means none."),
                 io.Combo.Input("sla_references", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn"])), options=list(sla_attention.REFERENCES),
                                default=sla_attention.SLA_DEFAULTS["references"], optional=True,
-                               tooltip="Reference images, conditioning frames and the prompt's vision "
-                                       "tokens. off: sparse like the video. light: each keeps its best "
-                                       "15% for every query block. heavy: all of them exact, slow with "
-                                       "big references. On comfy_kitchen, light picks one 15% for all "
-                                       "query blocks."),
+                               tooltip="How reference pictures are treated. off: skipped like the video. light: keeps the most relevant parts. heavy: kept exact, but slow with big references."),
                 io.Boolean.Input("sla_tail", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"]), ("sla_engine", ["comfy_kitchen"])), default=sla_attention.SLA_DEFAULTS["tail"], optional=True,
-                                 tooltip="comfy_kitchen engine: the skipped blocks still count, as one "
-                                         "averaged term per query block, instead of not at all. Off "
-                                         "matches what the SLA turbo LoRA was trained against; untested "
-                                         "on H3."),
+                                 tooltip="comfy_kitchen engine: also keeps a rough summary of the skipped parts. Off matches the SLA turbo LoRA; untested on H3."),
                 io.Boolean.Input("sla_stabilize_motion", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"]), ("sla_engine", ["triton"])),
                                  default=sla_attention.SLA_DEFAULTS["stabilize_motion"], optional=True,
-                                 tooltip="Triton engine: each layer leans toward the blocks it picked last "
-                                         "step, so near ties stop flipping and showing as a faint double "
-                                         "exposure on fast motion. A fix for that one symptom; a little "
-                                         "more memory."),
+                                 tooltip="Triton engine: removes a faint double image on fast motion. Uses a little more memory."),
                 io.Combo.Input("sla_method", extra_dict=shows(("sla", [True])), options=list(sla_attention.METHODS),
                                default=sla_attention.SLA_DEFAULTS["method"], optional=True,
-                               tooltip="How the blocks worth attending are chosen. sla: a fixed share "
-                                       "(sla_sparsity), what SLA turbo LoRAs were trained against. "
-                                       "sol-attn: a per-block threshold (sla_tau), no training needed; "
-                                       "comfy_kitchen engine. vsa: video cubes, only for models trained "
-                                       "for it (the status says when the model lacks VSA's layers); run "
-                                       "by ComfyUI's own Model Sparse Attention, keeping 1 - sla_sparsity "
-                                       "of the cubes. veda (experimental, tested on a GPU): "
-                                       "a small learned predictor (Veda, arXiv 2605.30325, a file "
-                                       "in models/veda) picks the 128-token tiles at its own trained "
-                                       "budget, 90% for text-to-video; sla_sparsity and the rising "
-                                       "share are not used. Needs CUDA "
-                                       "and Triton."),
+                               tooltip="How the parts to skip are chosen. sla: a fixed share, what turbo LoRAs expect. sol-attn: adapts per block. vsa: only for models trained for it. veda: experimental, needs CUDA."),
                 io.Float.Input("sla_tau", extra_dict=shows(("sla", [True]), ("sla_method", ["sol-attn"])), default=sla_attention.SLA_DEFAULTS["tau"], min=0.0, max=4.0,
                                step=0.05, optional=True,
-                               tooltip="sol-attn only: higher skips more. About 1.0 keeps ~16% of key "
-                                       "blocks exact, 1.5 ~7%, 2.0 ~3%."),
+                               tooltip="sol-attn only: higher skips more attention. About 1.0 is gentle, 2.0 is aggressive."),
                 # Added after everything: saved workflows store widget values by position.
                 io.Float.Input("sla_sparsity_start", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"])), default=sla_attention.SLA_DEFAULTS["sparsity_start"],
                               min=0.0, max=0.95, step=0.05, optional=True,
-                              tooltip="Skip fewer blocks early and more late: the share rises in a straight "
-                                      "line from this value on the first step to sla_sparsity on the last "
-                                      "(attention concentrates as denoising goes, GSRS, arXiv 2610.21129). "
-                                      "0 is off: one fixed share all run. One H3 render: quality held, perhaps a little better. Try 0.70 "
-                                      "with sla_sparsity 0.90. Early steps cost more time than late ones."),
+                              tooltip="Skips less at the first steps and more at the last, up to the sparsity above. 0 turns it off. Try 0.70 with sparsity 0.90."),
                 io.Boolean.Input("mxfp8", default=False, optional=True,
-                                 tooltip="MiniMax H3 from an ordinary (bf16/fp16) file: store the attention and MLP "
-                                         "weights of the middle blocks as MXFP8 (one scale per 32 weights), which "
-                                         "Blackwell GPUs (RTX 50, RTX PRO 6000) multiply at about twice the bf16 "
-                                         "rate. The first 2 and last 3 blocks stay bf16, as in NVIDIA's Sol-H3. "
-                                         "Needs torch 2.10+ with CUDA 13 and a current comfy-kitchen, else it is "
-                                         "skipped and the status says so. Slightly different pictures: listen to "
-                                         "the sound first, it spoils before the picture does. A LoRA applied to "
-                                         "these layers slows them back down."),
+                                 tooltip="MiniMax H3 only: about twice the speed on RTX 50 and newer GPUs, with slightly different pictures. Requires torch 2.10+ with CUDA 13; otherwise skipped."),
                 # Added last: saved workflows store widget values by position.
                 io.Combo.Input("veda_predictor", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), options=veda_attention.predictor_choices(),
                                default="auto", optional=True,
-                               tooltip="veda: the predictor file in ComfyUI/models/veda. auto takes the text-to-video one "
-                                       "when it is there, else the first. Use the R2VA file for reference-to-video runs."),
+                               tooltip="veda: which predictor file in models/veda to use. auto picks the text-to-video one. Use the R2VA file for reference-to-video."),
                 io.Boolean.Input("veda_timing", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), default=False, optional=True,
-                                 tooltip="veda: also log how long each phase of its attention took this run (gather, score, select, "
-                                         "kernel, scatter). Changes nothing in the picture; the clock waits for the GPU once per run."),
+                                 tooltip="veda: logs how long each stage took. The picture is unchanged."),
             ],
             outputs=[
                 io.Model.Output(display_name="model"),

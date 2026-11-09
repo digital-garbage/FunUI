@@ -202,3 +202,13 @@ Most used:
 | `/fun/api/modules` | the manifest (`?traits=a,b` narrows to a model) |
 | `/fun/api/m/<id>/...` | a module's own routes |
 | `/fun/app/...` | the app. Allowed types: `.js .css .html .woff2 .svg`. |
+
+## Diffusion Model Loader: speed settings in detail
+
+The in-app hints are short; the details are here.
+
+- **mxfp8**: MiniMax H3 only. Stores attention and MLP weights of the middle blocks as MXFP8 (one scale per 32 weights); the first 2 and last 3 blocks stay bf16. Blackwell GPUs multiply it at about twice the bf16 rate. Needs torch 2.10+ with CUDA 13 and a current comfy-kitchen. A LoRA applied to these layers slows them back down.
+- **int8_convrot**: MiniMax H3 from a bf16/fp16 file. Weights are rotated, then stored as int8 (about half the memory). Speed-up is lost on layers a LoRA touches or when compute dtype is forced.
+- **fp16_accumulation**: sets torch's fp16 matmul accumulation flag; needs a torch build that has it.
+- **sla / sla_method**: block-sparse attention for H3, run alongside the chosen attention backend. `sla` keeps a fixed share (`sla_sparsity`, 0.90 validated, break-even near 0.60), `sol-attn` uses a per-block threshold (`sla_tau`), `vsa` works on video cubes and needs a model trained for it, `veda` uses a learned predictor file from `models/veda` (Veda, arXiv 2605.30325). `sla_sparsity_start` ramps the share up over the steps (arXiv 2610.21129).
+- **sla_block_size / sla_protect_audio**: H3 packs audio at 80 rows per second, so large blocks force seconds of speech through one pattern; protecting audio keeps words and sound at full attention.

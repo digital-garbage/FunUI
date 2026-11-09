@@ -45,10 +45,7 @@ class FunUIVAELoader(io.ComfyNode):
                                tooltip="The precision the VAE works in. bfloat16 is the default; MiniMax H3 needs it."),
                 io.Combo.Input("decode_vae_name", options=["None", *vae_files()], default="None", optional=True,
                                display_name="Decode-only VAE (Optional)",
-                               tooltip="A second VAE used only for the final picture decode; this one still encodes "
-                                       "(references, start pictures). For a decoder that has no encoder: MiniMax H3's "
-                                       "Sol-H3-VAE (sol_h3_vae.safetensors, whole clip at once, about 2.5 times faster; "
-                                       "needs a ComfyUI that supports it) or an X2 Detail VAE. None decodes with this VAE."),
+                               tooltip="A separate VAE used only to turn the result into pictures; this one still encodes. Pick MiniMax H3's Sol-H3-VAE for about 2.5 times faster decoding, or an X2 Detail VAE. None uses this VAE for both."),
             ],
             outputs=[
                 io.Vae.Output(display_name="vae"),
