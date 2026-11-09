@@ -33,9 +33,10 @@ test("it is hidden when the server has no refsheet module, and the button opens 
   const host = document.createElement("div");
   offer("assets.actions", host);
   let sent;
+  const said = [];
   const api = { media: async () => ({ media: [{ id: "a", name: "front.png", kind: "image" }, { id: "v", name: "clip.mp4", kind: "video" }] }), uploadMedia: async () => ({ media: [], problems: [] }),
     refsheetMake: async (b) => { sent = b; return { media: { id: "n", name: "Sheet.png" }, missing: [] }; } };
-  const app = { api, dom: { pickFile: async () => null }, say() {}, hasModule: () => false };
+  const app = { api, dom: { pickFile: async () => null }, say: (w) => said.push(w), hasModule: () => false };
   const none = await loadFeatures(["x"], { load: async () => ({ default: hub }), app, has: (n) => n in app });
   assert.equal(none.mounted.length, 0);
 
@@ -63,6 +64,7 @@ test("it is hidden when the server has no refsheet module, and the button opens 
   make.click();
   await new Promise((r) => setTimeout(r, 20));
   assert.deepEqual(sent, { title: "", rows: 2, cols: 3, format: "1:1", width: 512, slots: [{ picture: "a", label: undefined }] });
+  assert.ok(said.includes("media"));                  // the media bin redraws on "media"
   mounted[0].teardown();
   assert.equal(host.textContent, "");
 });

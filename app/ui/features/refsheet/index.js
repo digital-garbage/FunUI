@@ -28,7 +28,7 @@ export default {
         if (!file) return;
         const got = await app.api.uploadMedia([file]);
         if (got.problems.length) c.toast.warn({ text: got.problems[0] });
-        if (got.media[0]) { await reload(); state.slots[i].picture = got.media[0].id; app.say("bin"); }
+        if (got.media[0]) { await reload(); state.slots[i].picture = got.media[0].id; app.say("media"); }
       };
       // The bin itself, as pictures with their names: one click chooses, Escape or the close button keeps what was there.
       let picking = null;
@@ -58,7 +58,7 @@ export default {
         make.setBusy(true);
         try {
           const out = await app.api.refsheetMake(request(state));
-          await reload(); app.say("bin");
+          await reload(); app.say("media");
           c.toast.good({ text: `Saved “${out.media.name}” to the media bin.` });
           if (out.missing.length) c.toast.warn({ text: `Left empty (picture gone or not readable): ${out.missing.join(", ")}.` });
           win.close("done");
