@@ -21,6 +21,7 @@ const inspect = () => {
     over: [document.documentElement.scrollWidth - innerWidth, document.documentElement.scrollHeight - innerHeight],
     windows: out.filter(({ r }) => r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1).map(({ name, r }) => `${name} ${Math.round(r.left)},${Math.round(r.top)}..${Math.round(r.right)},${Math.round(r.bottom)}`),
     lanes: lanes.length < 2 ? ["fewer than two lanes"] : lanes.filter((l) => box(l).bottom > box(nle).bottom + 1).map((l) => `lane ends ${Math.round(box(l).bottom)}, timeline ${Math.round(box(nle).bottom)}`),
+    slack: nle && nle.querySelector(".cx-nle-stage") && nle.clientHeight - nle.querySelector(".cx-nle-stage").offsetHeight > 6 ? [`${Math.round(nle.clientHeight - nle.querySelector(".cx-nle-stage").offsetHeight)}px of empty space under the last lane`] : [],
   };
 };
 
@@ -86,6 +87,7 @@ for (const name of wanted) {
     const main = await page.evaluate(inspect);
     if (main.over[0] > 0 || main.over[1] > 0) note(`page overflows by ${main.over}`);
     main.lanes.forEach((m) => note(m));
+    main.slack.forEach((m) => note(m));
     main.header.forEach((m) => note(m));
     for (const [label, text] of WINDOWS) {
       await page.getByText(text).first().click({ timeout: 1500 }).catch(() => note(`${label} cannot be opened`));

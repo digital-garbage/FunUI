@@ -66,9 +66,22 @@ export function build(root) {
       return out;
     } catch { return {}; }       // nothing, or nothing usable, remembered
   })();
-  // The timeline is never shorter than its lanes need: the stylesheet's own floor for this window width (taller when narrow).
-  const floor = (k) => k === "--timeline-h" ? (window.matchMedia?.("(max-width: 1250px)").matches ? 380 : 340) : size[k][0];
-  const apply = () => { for (const k in size) saved[k] ? css.setProperty(k, Math.max(floor(k), saved[k]) + "px") : css.removeProperty(k); };
+  // The timeline is as tall as its lanes need and no taller: what the zone spends on everything but the lanes (title, toolbar rows,
+  // which wrap in narrow windows), plus the lanes that exist now. An empty overlay lane takes no room; adding one grows it.
+  // A taller height the person dragged to is kept; a shorter one is not allowed.
+  let need = 0;
+  const floor = (k) => k === "--timeline-h" ? need : size[k][0];
+  const apply = () => { for (const k in size) { const v = Math.max(floor(k), saved[k] || 0); v ? css.setProperty(k, v + "px") : css.removeProperty(k); } };
+  const measure = () => {
+    const zone = main.node.children[1], nle = zone && zone.querySelector(".cx-nle"), stage = nle && nle.querySelector(".cx-nle-stage");
+    if (!stage || document.documentElement.classList.contains("fp-peek")) return;          // nothing drawn yet, or the timeline is folded to its strip
+    const next = Math.min(size["--timeline-h"][1], Math.round(window.innerHeight * 0.6), Math.ceil(zone.offsetHeight - nle.clientHeight + stage.offsetHeight + (nle.offsetHeight - nle.clientHeight)));
+    if (next > 0 && next !== need) { need = next; apply(); }
+  };
+  let queued = false;
+  const remeasure = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; measure(); }); };
+  if (typeof MutationObserver === "function") new MutationObserver(remeasure).observe(main.node, { childList: true, subtree: true });
+  if (typeof ResizeObserver === "function") new ResizeObserver(remeasure).observe(main.node);
   const keep = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch { /* not remembered */ } };
   const splitter = (host, cls, prop, sign, axis) => {
     const bar = document.createElement("div");
