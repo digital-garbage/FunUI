@@ -212,3 +212,18 @@ def test_fast_simple_preset_decodes_with_none_when_the_sol_vae_is_not_installed(
     assert pipeline._sol_vae() == "None"
     monkeypatch.setattr(folder_paths, "get_filename_list", lambda kind: ["sol_h3_vae.safetensors"])
     assert pipeline._sol_vae() == "sol_h3_vae.safetensors"
+
+
+def test_a_pipeline_saved_with_the_enhancer_reading_the_aspect_picture_is_freed_for_the_scenes_reference():
+    from modules.models.minimax_h3.pipeline import h3_reference_to_video, upgrade
+    from core import graph
+    slots = h3_reference_to_video()
+    old = [dict(s, inputs=dict(s["inputs"], image=["source_image", 0])) if s["id"] == "enhance" else s for s in slots]
+    fixed = upgrade(old)
+    enhance = next(s for s in fixed if s["id"] == "enhance")
+    assert "image" not in enhance["inputs"]
+    assert graph.override(fixed, {"enhance": {"image": ["ref_source_1", 0]}})[1] == []        # what the app sends per run
+    assert next(s for s in slots if s["id"] == "enhance")["inputs"].get("image") is None      # the preset itself starts free
+    # a link to anything that is not the aspect picture is somebody's own wiring and stays
+    mine = [dict(s, inputs=dict(s["inputs"], image=["vae", 0])) if s["id"] == "enhance" else s for s in slots]
+    assert next(s for s in upgrade(mine) if s["id"] == "enhance")["inputs"]["image"] == ["vae", 0]

@@ -247,10 +247,21 @@ OPTIONAL_NODES = {
 }
 
 
+def _free_enhancer_picture(slots):
+    """A pipeline saved while the prompt enhancer read the aspect source's picture: that link is cut, so the app can hand the
+    enhancer the scene's first picture reference instead (a value cannot be put in an input another node feeds)."""
+    aspect = {x.get("id") for x in slots if any(r.get("at") == "assets.source_image" for r in x.get("roles") or [])}
+    cut = lambda x: x.get("node") == "FunUIEnhancePrompt" and isinstance((x.get("inputs") or {}).get("image"), (list, tuple)) and x["inputs"]["image"][0] in aspect
+    if not any(cut(x) for x in slots):
+        return slots
+    return [dict(x, inputs={k: v for k, v in x["inputs"].items() if k != "image"}) if cut(x) else x for x in slots]
+
+
 def upgrade(slots, _outputs=None):
     """A pipeline saved while the size came from ImageTransformKJ (total_pixels, the pixel count of the project's width x height)
     gets FunUIAspectSize in its place: the same size (`basis` is "area" in it), and the project's Short side / Long side choice
     can reach it. The project's saved width and height keep working (the new roles say what they were called)."""
+    slots = _free_enhancer_picture(slots)
     old = next((x for x in slots if x.get("id") == "image_transform" and x.get("node") == "ImageTransformKJ"), None)
     if not old or (old.get("inputs") or {}).get("keep_proportion") != "total_pixels":
         return slots
