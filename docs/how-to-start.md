@@ -8,13 +8,13 @@ With git, inside `ComfyUI/custom_nodes`:
 
 `git clone https://github.com/digital-garbage/FunUI`
 
-For the classic 4.x add `-b v4-classic`. `comfy node install FunUI` and ComfyUI-Manager install what is published on Comfy Registry, which is 5.0 only once it is published there; check Settings ▸ About FunUI after installing.
+For the classic 4.x add `-b v4-classic`. `comfy node install FunUI` and ComfyUI-Manager install what is published on Comfy Registry, which is the current version (5.2) only once it is published there; check Settings ▸ About FunUI after installing.
 
 Then `pip install -r requirements.txt` in the same Python environment ComfyUI uses, and restart ComfyUI. FunUI uses your existing ComfyUI and PyTorch. If pip wants to upgrade a package ComfyUI compiles against (torch, numpy, transformers, comfy-kitchen), read what it will change first: FunUI's own updater only installs what is missing and reports the rest.
 
 ## 2. Open FunUI
 
-Start ComfyUI as usual and open `/fun/` on the same address, for example `http://127.0.0.1:8188/fun/`. The chip at the top right says whether ComfyUI is live.
+Start ComfyUI as usual and open `/fun/` on the same address, for example `http://127.0.0.1:8188/fun/` (the number after the colon is whatever port your ComfyUI uses). The chip at the top right says whether ComfyUI is live.
 
 ## 3. Make a project
 
@@ -24,7 +24,7 @@ Start ComfyUI as usual and open `/fun/` on the same address, for example `http:/
 |---|---|
 | MiniMax H3 · Reference to Video, MiniMax H3 · Fast & Simple R2V | The model FunUI is built and tested around. |
 | Stable Diffusion 1.5 · Text to Image (held as a clip) | Experimental. |
-| LTX 2.3 · Image to Video, from References, LTX 2.3 · Video to Video, direct | Tested on a real model, with LoRAs and Noise merging. Other enhancements are not tested on LTX yet; please report problems in [Issues](https://github.com/digital-garbage/FunUI/issues). |
+| LTX 2.3 · Image to Video, from References, LTX 2.3 · Video to Video, direct | Tested on a real model, with LoRAs, Noise merging and Attention explorer. Other enhancements are not tested on LTX yet; please report problems in [Issues](https://github.com/digital-garbage/FunUI/issues). |
 
 ## 4. Pick your files
 
@@ -56,7 +56,11 @@ Trim and split clips on the timeline. The **＋ Add** menu in the timeline toolb
 
 ## 8. Teach it your taste (optional)
 
-Rate a result with **Rate scene…** in the timeline header, next to **Takes ×N…** (liked, disliked, bad image, bad composition). **Upscale** and **Interpolate** appear beside it once you set them to "When I press" in their settings. Set a **Taste key** (the ⚠ chip on the timeline points to it: **Settings ▸ Engine ▸ System**) so ratings are remembered. **Settings ▸ Refinement & Taste** lists, exports and deletes keys. Modules that learn from ratings start acting once they have enough ratings (a few liked clips for some, ten or more rated clips for others; some also need disliked ones) and say so when they need more.
+Rate a result with **Rate scene...** in the timeline header, next to **Takes ×N...** (liked, disliked, bad image, bad composition). **Upscale** and **Interpolate** appear beside it once you set them to "When I press" in their settings. Set a **Taste key** (the ⚠ chip on the timeline points to it: **Settings ▸ Engine ▸ System**), a name for what the ratings teach, such as a style or a character. Without a key nothing is remembered. **Settings ▸ Refinement & Taste** lists, exports and deletes keys.
+
+**What learns from ratings.** Only features that say so in their hint: for example Taste steering (REINS), Attention explorer, Decisiveness, Taste prompt nudge, Velocity bias, DynaShift and First-step seed search. Each run keeps a compact numeric summary of how the model behaved (no pictures or text). When you rate that run, the summary is filed under your key as liked or disliked. A learning feature then pushes new runs toward the liked summaries and away from the disliked ones. Newer ratings count more than old ones, so your taste can move. Everything stays on your computer.
+
+**How much you need.** It differs per feature and the hint says so. Most need at least 2 liked and 2 disliked runs under the same key. Taste prompt nudge and similar prompt-based ones need 3 liked clips. First-step seed search needs 10 rated clips with both kinds. Until there is enough, the feature does nothing and the Log tells you it needs more ratings. "Learn what I like" in LoRA training works differently: it trains a LoRA on your liked clips.
 
 ## 9. Features marked experimental
 
@@ -68,8 +72,8 @@ Rate a result with **Rate scene…** in the timeline header, next to **Takes ×N
 - Wrong look: Settings ▸ Appearance. Lost a layout: View ▸ Reset Layout. Lost a project: File ▸ Open recent.
 - A bug or a missing feature: please open an [issue](https://github.com/digital-garbage/FunUI/issues).
 
-## Known limits in 5.0
+## Known limits in 5.2
 
-- LTX 2.3 is tested for the two presets above; other enhancements are not (see above).
-- In the H3 preset the scene picture sets the video's shape only; a start frame is not part of it.
-- The H3 "second pass" preset is not offered yet: it has not been verified.
+- LTX is tested with the two presets above (LTX 2.3, and LTX 2.5 by hand); most other enhancements have not been tried on LTX yet and are hidden there until they have.
+- In the H3 preset the scene picture sets the video's shape only; it is not a start frame.
+- A separate "second pass" H3 preset is not offered, because it was never verified on a GPU. For the same idea (first steps on a smaller picture, the rest at full size) use **Two stages** in Settings > Engine > Sampling. It works on H3 and is marked experimental.
