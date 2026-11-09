@@ -18,7 +18,7 @@ test("element CSS has no literal pixel sizes", () => {
     const css = readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const decl of css.split(/[;{}]/)) {
       if (/^\s*(--|@media|@container)/.test(decl)) continue;       // a token definition is where a number belongs; a breakpoint cannot use one
-      found += (decl.match(/(?<![\w.])-?(?:[2-9]|\d{2,})(?:\.\d+)?px\b/g) || []).length;     // 1px lines and 0 are borders and resets
+      found += [...decl.matchAll(/(?<![\w])-?(\d*\.?\d+)px\b/g)].filter((m) => ![0, 1].includes(Math.abs(Number(m[1])))).length;       // 0 and a 1px hairline are exempt; 1.5px and .5px... are not     // 1px lines and 0 are borders and resets
     }
   }
   assert.equal(found, 0, `${found} literal px values in element CSS: use a --sp-* step or a component size from tokens.css`);

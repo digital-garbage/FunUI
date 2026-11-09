@@ -52,6 +52,7 @@
 
   /* ── borders & states ───────────────────────────────────────────────── */
   --bw: 1px;
+  --ls-tight: 0.2px;                   /* letter spacing of display text */
   --disabled-opacity: 0.45;
 
   /* ── motion ─────────────────────────────────────────────────────────── */

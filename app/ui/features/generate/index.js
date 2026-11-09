@@ -104,12 +104,15 @@ export default {
         const drawn = new Map();
         const same = times > 1 ? (body) => { const key = JSON.stringify(body); if (!drawn.has(key)) drawn.set(key, expand(body)); return drawn.get(key); } : expand;
         let told = false;                                   // the wait is said once per Generate
-        for (const unit of Array.from({ length: times }, () => units).flat()) {
-          if (stopped) break;
-          while (!stopped && await upscaling()) {       // an Always upscale of the shot before may be running: the next shot waits for it
+        const waitForUpscale = async () => {       // an Always upscale of the shot before may be running: the next shot waits for it
+          while (!stopped && await upscaling()) {
             if (!told) { told = true; tell("Waiting for the upscale model to finish before the next shot."); }
             await new Promise((r) => setTimeout(r, 2000));
           }
+        };
+        for (const unit of Array.from({ length: times }, () => units).flat()) {
+          if (stopped) break;
+          await waitForUpscale();
           if (stopped) break;
           if (!p.project || p.project.id !== pid) { tell("Stopped: another project was opened."); break; }
           const root = unitRoot(snap, unit);
@@ -130,6 +133,7 @@ export default {
           if (unwired) tell(unwiredText(unwired, left));
           // The page's own guard does not see another tab: ComfyUI's queue does. Asked per shot: between this run's shots it is empty.
           if (app.api.projectQueued && (await app.api.projectQueued(pid))) { tell("This project already has a run in ComfyUI's queue (another tab or window?). Wait for it, or Stop it there."); break; }
+          await waitForUpscale();       // asked again right before queueing: the shot's inputs took time to build
           if (stopped) break;
           const done = g.waitForTerminal();             // listening before the run starts, so a fast one is not missed
           said = false;
@@ -205,6 +209,7 @@ export default {
         await Promise.all((app.beforeRun || []).map((f) => f().catch(() => {})));
         const { inputs, unwired, left } = await buildInputs({ project: snap, scene: root, slots: frozen, expand, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
         if (unwired) tell(unwiredText(unwired, left));
+        if (await upscaling()) return { error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
         const done = g.waitForTerminal();
         const queued = await g.generate({ sceneId: root.id, projectId: snap.id, inputs, slots: frozen });
         if (!queued) { done.cancel(); return { error: (g.run.state.error && g.run.state.error.message) || "The preview could not be queued. Is ComfyUI running?" }; }

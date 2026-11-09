@@ -17,3 +17,11 @@ test("each file is uploaded on its own, and a refused one is named without sinki
   assert.deepEqual(out.media.map((m) => m.id), ["a.png", "b.png"]);
   assert.match(out.problems[0], /big\.mov: HTTP 413/);
 });
+
+test("upscaleBusy asks the render module's busy route", async () => {
+  let seen;
+  globalThis.fetch = async (url, opts) => { seen = [url, (opts && opts.method) || "GET"]; return { ok: true, status: 200, json: async () => ({ busy: false }) }; };
+  await api.upscaleBusy();
+  assert.match(seen[0], /\/api\/m\/render\/upscale_busy$/);
+  assert.equal(seen[1], "GET");
+});

@@ -6,6 +6,7 @@
 
 ### Changed
 
+- **Old scenes whose Source was "empty" or "image" now carry the previous clip on (Continuity)**, and a picture dropped on an empty timeline makes a carry scene.
 - **Save Video quality is a setting now, and "high" is the default** (constant quality 16 where it was 23, a slower encoder preset): files are larger and encode a little slower, and clip trims and the final render re-encode at 16 instead of 23. Saved pipelines without the input get "high". The finished picture is also rounded to 8 bits instead of cut down, so every value is up to one level brighter than before.
 - **Auto Montage is gone** (the button, its window and its code). A saved project that already holds pieces it made loads normally: they stay on the timeline as ordinary copies and are still never regenerated.
 - **"Video detail" (Engine > Post) is gone.** The other Post settings (edge smoothing, auto contrast, auto brightness, colour strength) stay. A project or setting that still holds Video detail loads normally: its values are skipped and the Log says so once.

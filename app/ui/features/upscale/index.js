@@ -12,6 +12,7 @@ export default {
   modules: ["render"],
   setup({ host, app }) {
     const p = app.project, sel = app.selection;
+    const RETRIES = 480;                                  // 15 s apart: two hours of a generation
     const put = inPlace(host), busy = new Set(), heavy = new Set(), waited = new Map();       // waited: how often "Always" put a render off for a running generation
     const render = (id) => ((p.project || {}).scene_renders || {})[id];
     const target = () => {                               // the picked clip's generation unit root, when it has a render
@@ -61,7 +62,7 @@ export default {
         else c.toast.good({ text: "Upscaled: the render now plays the larger video." });
       } catch (err) {
         if (err.stopped) c.toast.info({ text: "Upscale stopped. The render stays as it was." });
-        else if (!pressed && /^ComfyUI is generating/.test(err.message || "") && (waited.get(key) || 0) < 60) {       // Always: not lost, tried again when the generation is over
+        else if (!pressed && /^ComfyUI is generating/.test(err.message || "") && (waited.get(key) || 0) < RETRIES) {       // Always: not lost, tried again when the generation is over
           if (!told) { told = true; c.toast.info({ text: "Upscale waits for the generation to finish." }); }
           waited.set(key, (waited.get(key) || 0) + 1);
           setTimeout(() => {                         // only for the same project, the same render and while Always is still on
@@ -69,7 +70,7 @@ export default {
             else { waited.delete(key); if (!waited.size) told = false; }
           }, 15000);
         }
-        else { gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
+        else { waited.delete(key); if (!waited.size) told = false; gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       }
       finally { busy.delete(key); heavy.delete(key); if (!heavy.size) app.has.delete("upscale.model"); draw(); }
     }

@@ -43,7 +43,7 @@
 }
 .cx-brand-name {
   font-family: var(--font-display); font-weight: 800;
-  font-size: var(--fs-3); letter-spacing: .2px; color: var(--text);
+  font-size: var(--fs-3); letter-spacing: var(--ls-tight); color: var(--text);
 }
 
 .cx-center { text-align: center; }

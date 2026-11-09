@@ -13,7 +13,7 @@ const STEPS = [
   { at: "button:⏱ Sampler", side: "top", title: "Sampler", text: "Steps, sampler, scheduler, seed and the common switches, one click from the timeline. While a run goes, the step count shows to its left." },
   { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole story in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
   { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a video clip or audio track from the bin, an effect or transition, a text or picture overlay. Next to it: Split, Remove, Export, Save to media bin and Separate audio." },
-  { at: "button:⧉ Render", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads the picked clips." },
+  { at: "button:⧉ Render|Rendering…", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads the picked clips." },
   { at: "main", side: "bottom", title: "FAQ", text: "Nothing happens? Check the ComfyUI chip at the top right and the Log window. Wrong look? Settings ▸ Appearance. Lost a layout? View ▸ Reset Layout. Lost a project? File ▸ Open recent. That is the tour: Help ▸ Start tour runs it again." },
 ];
 
@@ -25,9 +25,9 @@ export default {
     let at = -1, pop = null, target = null, watcher = null, queued = false;
     // The part pointed at can be redrawn (Generate becomes "Generating..."): the callout then follows the new node instead of a detached one.
     const follow = () => {
-      if (queued || !pop || !target || target.isConnected) return;
+      if (queued || !pop || !target || (target.isConnected && target.getBoundingClientRect().width)) return;       // gone from the page, or hidden
       queued = true;
-      requestAnimationFrame(() => { queued = false; if (pop && at >= 0 && target && !target.isConnected) show(at); });
+      requestAnimationFrame(() => { queued = false; if (pop && at >= 0 && target && !(target.isConnected && target.getBoundingClientRect().width)) show(at); });
     };
     const stop = () => { if (watcher) { watcher.disconnect(); watcher = null; } target = null; if (pop) { const p = pop; pop = null; p.close(); } at = -1; app.has.delete("tour.running"); };      // a flag the Help menu reads: features see copies of app, the Set is shared
     const shown = (i) => { const el = app.dom.landmark(STEPS[i].at); return el && el.getBoundingClientRect().width ? el : null; };
@@ -38,7 +38,7 @@ export default {
       if (i < 0 || i >= STEPS.length) return stop();
       at = i;
       app.has.add("tour.running");
-      if (!watcher && typeof MutationObserver === "function") { watcher = new MutationObserver(follow); watcher.observe(app.dom.body, { childList: true, subtree: true }); }
+      if (!watcher && typeof MutationObserver === "function") { watcher = new MutationObserver(follow); watcher.observe(app.dom.body, { childList: true, subtree: true }); watcher.observe(app.dom.body.ownerDocument.documentElement, { attributes: true, attributeFilter: ["class"] }); }
       const seen = STEPS.map((_, k) => k).filter((k) => k === i || shown(k)), place = seen.indexOf(i) + 1;       // numbered among the parts on screen, so the count has no gaps
       const s = STEPS[i], last = i === STEPS.length - 1;
       const body = c.region.stack({ gap: "sm", children: [c.label.section({ text: `${place} / ${seen.length} · ${s.title}` }), c.text.sm({ text: s.text }),
@@ -52,6 +52,6 @@ export default {
       else if (what === "tour.faq") show(STEPS.length - 1);
       else if (what === "tour.stop") stop();
     });
-    return () => { off(); app.has.delete("tour"); app.has.delete("tour.running"); };
+    return () => { off(); stop(); app.has.delete("tour"); app.has.delete("tour.running"); };
   },
 };
