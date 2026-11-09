@@ -33,7 +33,7 @@ SETTINGS = {
         "options": [{"value": "off", "label": "Off"},
                     {"value": "middle", "label": "Middle frame of the clip before"},
                     {"value": "memory", "label": "Memory from the last clips"}],
-        "hint": "Uses pictures from the previous clip as weak guides. Middle frame keeps the room and side characters; Memory uses one picture from each of the last clips and needs the JoyAI-Echo LoRA.",
+        "hint": "Uses pictures from the previous clip as weak guides. Middle frame keeps the room and side characters; Memory needs the JoyAI-Echo LoRA.",
     },
     "strength": {
         "type": "float", "default": 0.25, "min": 0.25, "max": 1.0, "step": 0.05,

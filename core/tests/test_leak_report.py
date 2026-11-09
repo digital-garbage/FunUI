@@ -1,9 +1,25 @@
 """The leak report names the holder of a model whose patcher is gone."""
 import gc
 
+import pytest
 import torch
 
 from core import leak_report
+
+
+@pytest.fixture(autouse=True)
+def _unwrapped():
+    """Another test may already have installed the report on the shared ComfyUI module; each test here starts from the plain functions."""
+    try:
+        import comfy.model_management as mm
+    except Exception:           # noqa: BLE001 -- ComfyUI absent: the tests that need it skip themselves
+        yield
+        return
+    cleanup, switch = mm.cleanup_models_gc, mm.LoadedModel._switch_parent
+    mm.cleanup_models_gc = lambda: None if getattr(cleanup, leak_report.TAG, False) else cleanup()
+    mm.LoadedModel._switch_parent = (lambda self: None) if getattr(switch, leak_report.TAG, False) else switch
+    yield
+    mm.cleanup_models_gc, mm.LoadedModel._switch_parent = cleanup, switch
 
 
 class Holder:

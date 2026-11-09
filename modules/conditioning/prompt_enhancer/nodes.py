@@ -86,7 +86,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.String.Input("chat", multiline=True, default="", optional=True,
                                 tooltip="Your comments on earlier rewrites (Composer > Chat)."),
                 io.Combo.Input("style", options=list(en.STYLES), default="default", optional=True,
-                               tooltip="default: the built-in instructions. dynamic: the same rules, but every shot gets a concrete action beat, a change over time and secondary motion. Typed Instructions override both."),
+                               tooltip="default: the built-in instructions. dynamic: adds a concrete action, a change over time and secondary motion to every shot. Typed Instructions override both."),
             ],
             outputs=[io.String.Output(display_name="enhanced"),
                      io.String.Output(display_name="status")],

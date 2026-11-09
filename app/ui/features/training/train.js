@@ -90,7 +90,7 @@ export function trainStep({ app, session, go, ui }) {
     live,
     c.hint.default({ text: used.length ? `${used.length} item${used.length > 1 ? "s" : ""} will be learned from (${caption} with tags). ${used.length - caption ? "Items without a caption are learned from with only the prefix and postfix." : ""}`.trim()
       : `"${session.name}" is empty. Add media in the Data step.` }),
-    hasAudioVae ? c.banner.info({ text: "This pipeline has an audio VAE, so it trains picture and sound together (H3). One clip at a time, so training is slow and needs a lot of memory. musubi-tuner's H3 recipe: learning rate 0.0001, rank 16, batch 1, bf16, gradient checkpointing, plus block swap. Its plain flow-matching loss undoes the few-step quality of a distilled (turbo) model; musubi adds a training adapter, guidance loss or teacher matching for that, which this trainer does not have." }) : null,
+    hasAudioVae ? c.banner.info({ text: "Trains picture and sound together, one clip at a time: slow, and needs a lot of memory. Start with learning rate 0.0001, rank 16, batch 1. A turbo model can lose its few-step quality." }) : null,
     c.group.default({ label: "Basics", rows: [name, preset,
       num("steps", "Steps", "More steps learn more and can overdo it.", { min: 1, max: 100000, step: 10 }),
       num("learning_rate", "Learning rate", "How big each step is. Lower is safer and slower.", { min: 0.0000001, max: 1, step: 0.0001, precision: 7 }),

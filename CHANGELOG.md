@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Reference sheet** (Assets panel, "Reference sheet..."): pick rows and columns, a picture and a label for each slot, and a title. You get one white sheet with the pictures in a grid, each labelled below and the title in the top left corner, saved to the media bin as a picture. Pictures come from the bin or an upload; each is cropped from the middle to the slot's shape.
+
 ## [5.2.0] "Classy Chopper" - 2026-11-08
 
 ### New: finishing touches for the finished video

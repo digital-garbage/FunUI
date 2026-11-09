@@ -53,7 +53,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Few-step PTD",
-        "hint": "Renders in the adapter file's own 4 to 8 steps, without CFG. Use the base the file was trained on, with SLA, turbo LoRAs and other enhancements off. Cannot start from a picture or mask.",
+        "hint": "Renders in the adapter's own 4 to 8 steps without CFG. Use the base it was trained on, with SLA and turbo LoRAs off. No picture or mask start.",
     },
     "adapter": {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",

@@ -53,11 +53,11 @@ export const modules = (app) => function mount() {
     const installed = mine.filter((m) => !isOff(m));
     const waiting = addons.filter((a) => a.state === "pending");
     page.set([notes.length ? c.banner.warn({ text: notes.join(" ") }) : null,
-      waiting.length ? c.banner.info({ text: `Restart ComfyUI to finish: ${waiting.map((a) => a.title).join(", ")} will be installed (their dependencies downloaded) while ComfyUI starts, and work after that.`, action: { label: "Restart ComfyUI", onClick: () => app.maintenance.restart() } }) : null,
+      waiting.length ? c.banner.info({ text: `Restart ComfyUI to finish installing ${waiting.map((a) => a.title).join(", ")}.`, action: { label: "Restart ComfyUI", onClick: () => app.maintenance.restart() } }) : null,
       ...section("Available modules", offered.map(addonRow)),
       ...section("Installed modules", [...onAddons.map(addonRow), ...CATEGORIES.flatMap(([key]) => installed.filter((m) => (m.category || "") === key).map(row))]),
       ...section("Disabled modules", [...offAddons.map(addonRow), ...mine.filter(isOff).map(row)]),
-      c.hint.default({ text: "A module you turn off here is off for this project only, and disappears from Engine settings. One that failed while generating is off for every project until its code is repaired or you turn it back on." }),
+      c.hint.default({ text: "A module turned off here is off for this project only. One that failed while generating is off everywhere until you turn it back on." }),
       master].filter(Boolean));
   }
   draw();

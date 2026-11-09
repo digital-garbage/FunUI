@@ -9,12 +9,12 @@ const STEPS = [
   { at: "zone:1", side: "left", title: "Preview", text: "The monitor plays the cut wherever the playhead is. Save frame puts the current picture in the media bin." },
   { at: "zone:2", side: "left", title: "Properties", text: "Project settings (size, length, postfix) and the picked scene's prompt, source, references and length." },
   { at: "zone:3", side: "top", title: "Timeline", text: "One clip per scene. Drag the edges to trim, press S to split, Space to play. Lanes below carry separated sound." },
-  { at: "button:▶ Generate|Generating…", side: "top", title: "Generate", text: "Makes every scene on the timeline, except left-out scenes and video clips; an earlier render of a scene stays as a take. Beside it: Selected makes only the picked scenes, Takes ×N makes the picked scene N times with only the seed changing, and Rate scene… lets FunUI learn your taste (Upscale and Interpolate appear there too once you switch them on). “Generate this scene” in Properties makes just the picked one." },
+  { at: "button:▶ Generate|Generating…", side: "top", title: "Generate", text: "Makes every scene on the timeline; earlier renders stay as takes. Beside it: Selected, Takes ×N (new seeds) and Rate scene… (teaches FunUI your taste)." },
   { at: "button:⏱ Sampler", side: "top", title: "Sampler", text: "Steps, sampler, scheduler, seed and the common switches, one click from the timeline. While a run goes, the step count shows to its left." },
   { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole story in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
-  { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a video clip or audio track from the bin, an effect or transition, a text or picture overlay. Next to it: Split, Remove, Export, Save to media bin and Separate audio." },
+  { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a clip, an effect, a transition or an overlay. Next to it: Split, Remove, Export and more." },
   { at: "button:⧉ Render|Rendering…", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads the picked clips." },
-  { at: "main", side: "bottom", title: "FAQ", text: "Nothing happens? Check the ComfyUI chip at the top right and the Log window. Wrong look? Settings ▸ Appearance. Lost a layout? View ▸ Reset Layout. Lost a project? File ▸ Open recent. That is the tour: Help ▸ Start tour runs it again." },
+  { at: "main", side: "bottom", title: "FAQ", text: "Nothing happens? Check the ComfyUI chip at the top right and the Log. Lost a layout? View ▸ Reset Layout. That is the tour; Help ▸ Start tour runs it again." },
 ];
 
 export default {

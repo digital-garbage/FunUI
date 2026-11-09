@@ -48,7 +48,7 @@ class FunUITrainLora(io.ComfyNode):
                 io.Combo.Input("weight_dtype", options=["default", "fp8_e4m3fn", "fp8_e5m2", "fp16", "bf16", "fp32"], default="default", tooltip="How the model file's weights are stored when it is loaded here."),
                 io.Combo.Input("compute_dtype", options=["default", "fp16", "bf16", "fp32"], default="default", tooltip="What the maths runs in when the model is loaded here."),
                 io.String.Input("postfix", default="", tooltip="Text put at the end of every caption."),
-                io.Int.Input("swap_blocks", default=0, min=0, max=128, tooltip="How many transformer blocks keep their weights in system memory, fetched one layer at a time: slower, and each one frees about a block's weight on the card. 0 keeps the whole model on the card."),
+                io.Int.Input("swap_blocks", default=0, min=0, max=128, tooltip="How many blocks wait in system memory to save VRAM, at the cost of speed. 0 keeps the whole model on the card."),
                 io.Int.Input("preview_every", default=0, min=0, max=100000, tooltip="Pause every this many steps so the pipeline can make a preview with the LoRA so far. 0 never pauses."),
                 io.Int.Input("save_every", default=0, min=0, max=100000, tooltip="Save a copy of the LoRA so far to the loras folder every this many steps, named <name>_step<N>. 0 saves only the finished one."),
                 io.String.Input("resume", default="", tooltip="The name of a paused run to carry on. Empty starts a new run."),

@@ -59,7 +59,7 @@ SETTINGS = {
     "back_up": {
         "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Noise added at the hand-over",
-        "hint": "How far back the full-size stage starts. 0: where the first stage stopped. Higher: more fresh noise, so soft or doubled outlines can be redrawn. Maximum 0.95.",
+        "hint": "How far back the full-size stage starts. 0: where stage one stopped. Higher: more fresh noise, which can redraw soft or doubled outlines.",
         "when": {"enabled": True},
     },
     "resize": {
@@ -72,7 +72,7 @@ SETTINGS = {
                     {"value": "upscaler", "label": "Latent upscaler"}],
         "renamed_options": {"trilinear": "bicubic"},   # removed: it was Bilinear here (time is never resampled)
         "label": "How the hand-over is enlarged",
-        "hint": "Plain methods are free. Latent upscaler uses H3's learned upscaler (models/latent_upscale_models) for learned detail instead of blur; one small pass per run.",
+        "hint": "Plain methods are free. Latent upscaler adds learned detail instead of blur, for one small extra pass.",
         "when": {"enabled": True},
     },
     "upscaler": {

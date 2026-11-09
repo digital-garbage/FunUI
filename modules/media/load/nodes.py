@@ -104,7 +104,7 @@ class FunUILoadMedia(io.ComfyNode):
                     tooltip="Read the whole video and its sound. Off: only the first frame, which is all a picture input needs."),
                 io.String.Input(
                     "prepare", default="", optional=True,
-                    tooltip="With full on: how to get the video ready, as JSON (fps, skip_first, cut_last, every_nth, frame_cap, width, height, fit, crop_*, multiple_of). Empty keeps all frames at 24 fps."),
+                    tooltip="With full on: how to prepare the video, as JSON (fps, width, height, fit, crop_*, ...). Empty keeps every frame at 24 fps."),
             ],
             outputs=[io.Image.Output(display_name="image"), io.Image.Output(display_name="frames"),
                      io.Audio.Output(display_name="audio")],

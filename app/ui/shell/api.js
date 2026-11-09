@@ -147,6 +147,7 @@ export const api = {
   /** The Stop button for Upscale and Interpolate jobs (Upscale's route; Interpolate has its own below). -> {stopped} */
   stopJob: (id) => call("POST", `/api/m/render/jobs/${encodeURIComponent(id)}/stop`),
   stopInterpolateJob: (id) => call("POST", `/api/m/interpolate/jobs/${encodeURIComponent(id)}/stop`),
+  refsheetMake: (body) => call("POST", "/api/m/refsheet/make", body),
   frameGeneration: () => call("GET", "/api/m/interpolate/frame_generation"),
   /** Interpolation is a background job of FunUI, not a ComfyUI prompt (that would make ComfyUI drop the workflow's loaded models). -> {job_id}. */
   interpolate: (media, options) => call("POST", "/api/m/interpolate/run", { media: { filename: media.filename, subfolder: media.subfolder || "", type: media.type === "temp" ? "temp" : "output" }, options }),

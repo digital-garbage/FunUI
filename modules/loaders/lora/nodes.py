@@ -51,12 +51,10 @@ class FunUILoraLoader(io.ComfyNode):
             if first:   # the original order: clip sits between slot 1's two strengths
                 inputs.append(io.Clip.Input("clip", optional=True, tooltip="Leave unwired for model-only LoRAs."))
             inputs.append(io.Float.Input(f"strength_clip{sfx}", default=1.0, min=-100.0, max=100.0, step=0.01, optional=True, extra_dict=mine,
-                                         tooltip="How strongly the LoRA changes the text encoder. Only used when a clip is wired, and not for a LoRA set to the First or Second stage (the text is encoded before sampling starts)."))
+                                         tooltip="How strongly the LoRA changes the text encoder. Needs a wired clip; not used for First or Second stage LoRAs."))
             inputs.append(io.Combo.Input(f"apply_to_stage{sfx}", options=list(dit_hooks.STAGES), default="Both", optional=True,
                                          extra_dict={**mine, "funui_needs_module": ["two_stage"]},
-                                         tooltip="Which part of a Two stages run this LoRA works in. First: the smaller picture. "
-                                                 "Second: the full-size steps. Only the model is changed for First or Second; "
-                                                 "the text encoder strength is not used."))
+                                         tooltip="Which part of a Two stages run this LoRA applies to. First: the smaller picture. Second: the full-size steps. Both only change the model."))
         return io.Schema(
             node_id="FunUILoraLoader",
             display_name="FunUI LoRA Loader",

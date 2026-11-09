@@ -18,6 +18,7 @@ export default [
   "./features/takes/index.js",
   "./features/rating/index.js",
   "./features/subjects/index.js",
+  "./features/refsheet/index.js",
   "./features/upscale/index.js",
   "./features/interpolate/index.js",
   "./features/revolver/index.js",

@@ -48,7 +48,7 @@ def test_no_hint_or_tooltip_is_an_essay():
     import ast
     import pathlib
     root = pathlib.Path(__file__).resolve().parents[2]
-    limit, long = 200, []
+    limit, long = 160, []
     for path in sorted(root.glob("modules/**/*.py")) + sorted(root.glob("core/*.py")):
         if "tests" in path.parts:
             continue
@@ -67,3 +67,18 @@ def test_no_hint_or_tooltip_is_an_essay():
                 if isinstance(text, str) and len(text) > limit:
                     long.append(f"{path.relative_to(root)}:{v.lineno} ({len(text)})")
     assert not long, f"hints over {limit} characters: {long}"
+
+
+def test_no_ui_hint_or_banner_is_an_essay():
+    """The same for the text the browser UI writes itself: hints, tooltips, banners, tour steps."""
+    import pathlib
+    import re
+    root = pathlib.Path(__file__).resolve().parents[2] / "app" / "ui"
+    pat = re.compile(r"""\b(hint|tooltip|title|text)\b["']?\s*[:=(]\s*(["'`])((?:(?!\2).){201,}?)\2""")
+    long = []
+    for path in sorted(root.rglob("*.js")):
+        if ".test." in path.name:
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            long += [f"{path.relative_to(root)}:{number} ({len(m.group(3))})" for m in pat.finditer(line) if "${" not in m.group(3)]
+    assert not long, f"UI text over 200 characters: {long}"

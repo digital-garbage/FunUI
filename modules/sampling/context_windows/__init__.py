@@ -43,7 +43,7 @@ SETTINGS = {
                 "hint": "Frames neighbouring windows share. More overlap joins smoother but runs slower; it must be shorter than the window.",
                 "when": {"enabled": True, "schedule": [v for v in SCHEDULES if v != "batched"]}},
     "schedule": {"type": "enum", "default": "standard_uniform", "label": "Window schedule",
-                 "hint": "Window layout. standard_uniform: shifts a little each step. standard_static: same every step. looped_uniform: the end wraps to the start. batched: no overlap.",
+                 "hint": "Window layout. standard_uniform: shifts each step. standard_static: fixed. looped_uniform: the end wraps to the start. batched: no overlap.",
                  "options": [{"value": v, "label": v} for v in SCHEDULES], "when": {"enabled": True}},
     "fuse": {"type": "enum", "default": "pyramid", "label": "Window blend",
              "hint": "How windows are blended. pyramid: trusts each window's middle most. overlap-linear: fades across the overlap. flat: plain average.",

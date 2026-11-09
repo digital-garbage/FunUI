@@ -34,7 +34,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Measure the run",
-        "hint": "Logs how grainy the picture is and how much it changes each step, and compares with the previous run of the same seed, steps and size. No extra model calls.",
+        "hint": "Logs how grainy the picture is and how much it changes each step, and compares with the last run of the same seed, steps and size.",
     },
 }
 

@@ -26,7 +26,7 @@ export default {
       onClick: () => app.maintenance?.cuda13(slow.title) }).node;
     slow.hidden = true;
     // Shot camera runs without spaCy, but aims its moves with plain word rules.
-    const rough = c.button.sm({ label: "Camera targets rougher", tone: "ghost", title: "Shot camera is on, but spaCy is not: camera moves aim with simple word rules and pick worse targets. Switch on Automatic camera and focus in Settings ▸ Modules.",
+    const rough = c.button.sm({ label: "Camera targets rougher", tone: "ghost", title: "spaCy is off, so camera moves aim less well. Switch on Automatic camera and focus in Settings ▸ Modules.",
       onClick: () => app.openSettings?.("modules") }).node;
     rough.hidden = true;
     // PTD runs its own four to eight hops and was trained without these: SLA, and any other enhancement that is on.

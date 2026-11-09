@@ -136,7 +136,7 @@ export const models = (app) => function mount() {
       painted = key;
       const busy = r.models.some((m) => m.state === "downloading");
       if (!r.models.some((m) => m.state !== "ready")) return row.set([]);          // both are there: nothing to offer
-      row.set([...((r.files || []).length ? [] : [c.banner.info({ text: "Veda needs its predictor file in ComfyUI/models/veda, and none is there. You can fetch it straight from Hugging Face; nothing is downloaded until you click." })]),
+      row.set([...((r.files || []).length ? [] : [c.banner.info({ text: "Veda needs a predictor file in ComfyUI/models/veda. You can fetch it from Hugging Face; nothing downloads until you click." })]),
         ...r.models.filter((m) => m.state !== "ready").map((m) => c.settingsRow.default({ label: `${m.title} · ${mb(m.size)}`, hint: m.state === "error" ? `Failed: ${m.error}` : m.state === "downloading" ? `${Math.floor(100 * m.done / m.size)}%` : m.hint,
           control: c.button.sm({ label: m.state === "downloading" ? "Downloading…" : m.state === "error" ? "Try again" : "Download", tone: "primary", disabled: busy,
             onClick: async () => { try { await api.vedaDownload(m.id); fetching = true; } catch (err) { c.toast.warn({ text: err.message }); } show(); } }) })),
@@ -163,7 +163,7 @@ export const models = (app) => function mount() {
     const spec = specs[slot.node];
     if (spec === undefined) return [c.hint.default({ text: "Loading…" })];
     const head = c.header.sm({ text: label(slot) });
-    if (spec === null && (ps.skipped && ps.skipped() || {})[slot.id]) return [head, c.banner.warn({ text: `${slot.node} is skipped: it is not available (its module did not load, or the node was rejected), so the run goes without it. The Log says why; when it is back, this node runs again.` })];
+    if (spec === null && (ps.skipped && ps.skipped() || {})[slot.id]) return [head, c.banner.warn({ text: `${slot.node} is skipped because it is not available, so the run goes without it. The Log says why.` })];
     if (spec === null) return [head, structure(slot), c.banner.warn({ text: `${slot.node} is not installed — this slot can't be edited or run. Install the pack that provides it, swap it for another node, or remove it.` }), installRow(slot.node)];
     const sockets = (spec.sockets || []).filter((w) => showing(w, slot, spec)).map((s) => c.field.default({ label: s.name, hint: s.required ? `${s.type} · needed` : s.type, control: wiring(slot, s.name, s.type, slot.inputs && slot.inputs[s.name], "Not connected") }));
     // A field that belongs to a module (the stage a LoRA works in belongs to Two stages) is not drawn while that module is absent or switched off.

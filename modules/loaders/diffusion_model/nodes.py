@@ -64,7 +64,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                 io.Boolean.Input("fp16_accumulation", default=False, optional=True,
                                  tooltip="Speeds up fp16 maths slightly, with a small quality trade-off. Needs a recent PyTorch and a GPU that supports it."),
                 io.Boolean.Input("sla", default=False, optional=True, extra_dict={"funui_requires": ["sparse_attention"]},
-                                 tooltip="Faster attention for MiniMax H3, with a quality trade-off. Needed for the SLA turbo LoRA to give any speedup. Requires Triton and an H3 model; otherwise it is skipped and the status says why."),
+                                 tooltip="Speeds up MiniMax H3 with a quality trade-off, and is what the SLA turbo LoRA needs. Requires Triton; skipped on other models."),
                 # SLA settings. Every one is validated at its default (see sla_attention);
                 # they are here because a knob whose value was measured is still a knob.
                 io.Float.Input("sla_sparsity", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "vsa"])), default=sla_attention.SLA_DEFAULTS["sparsity_ratio"],
@@ -87,11 +87,11 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                             min=0, max=8, optional=True,
                             tooltip="Runs the last N steps with normal attention for a cleaner finish. Costs extra time; 0 is fine for most runs."),
                 io.Boolean.Input("int8_convrot", default=False, optional=True,
-                                 tooltip="MiniMax H3 only: stores the big layers as int8 for about half the memory, with slightly different pictures. Skipped for files that are already quantized; the status says so."),
+                                 tooltip="MiniMax H3 only: about half the memory, with slightly different pictures. Skipped for files that are already quantized."),
                 # Added later, so after everything: saved workflows can store widget values by position.
                 io.Combo.Input("sla_engine", extra_dict=shows(("sla", [True]), ("sla_method", ["sla"])), options=list(sla_attention.ENGINES),
                                default=sla_attention.SLA_DEFAULTS["engine"], optional=True,
-                               tooltip="What runs the faster attention. comfy_kitchen is ComfyUI's own and needs comfy-kitchen 0.2.32+; triton is FunUI's and has more options. Falls back to triton if missing."),
+                               tooltip="What runs the faster attention. comfy_kitchen is ComfyUI's own and needs comfy-kitchen 0.2.32+; triton is FunUI's, with more options."),
                 io.String.Input("sla_dense_steps", extra_dict=shows(("sla", [True]), ("sla_method", ["sla", "sol-attn", "veda"])), default=sla_attention.SLA_DEFAULTS["dense_steps"],
                                 optional=True,
                                 tooltip="Steps that use normal attention, counted from 1 ('1', '1-2', '1,6'). The first step sets the layout, so it is exact by default. Blank or 0 means none."),
@@ -105,7 +105,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                                  tooltip="Triton engine: removes a faint double image on fast motion. Uses a little more memory."),
                 io.Combo.Input("sla_method", extra_dict=shows(("sla", [True])), options=list(sla_attention.METHODS),
                                default=sla_attention.SLA_DEFAULTS["method"], optional=True,
-                               tooltip="How the parts to skip are chosen. sla: a fixed share, what turbo LoRAs expect. sol-attn: adapts per block. vsa: only for models trained for it. veda: experimental, needs CUDA."),
+                               tooltip="How the parts to skip are chosen. sla: a fixed share. sol-attn: adapts per block. vsa: needs a model trained for it. veda: experimental, needs CUDA."),
                 io.Float.Input("sla_tau", extra_dict=shows(("sla", [True]), ("sla_method", ["sol-attn"])), default=sla_attention.SLA_DEFAULTS["tau"], min=0.0, max=4.0,
                                step=0.05, optional=True,
                                tooltip="sol-attn only: higher skips more attention. About 1.0 is gentle, 2.0 is aggressive."),

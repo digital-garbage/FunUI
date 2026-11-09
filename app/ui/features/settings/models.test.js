@@ -169,9 +169,9 @@ test("the Veda predictor row appears only for method veda with no file, names th
   assert.doesNotMatch(page.node.textContent, /Veda needs its predictor/);
   page.node.remove();
   page = await open({ sla: true, sla_method: "veda" });
-  assert.match(page.node.textContent, /none is there/);
+  assert.match(page.node.textContent, /needs a predictor file/);
   const text = page.node.textContent;
-  assert.ok(text.indexOf("veda_predictor") < text.indexOf("none is there") && text.indexOf("none is there") < text.indexOf("after_it"),
+  assert.ok(text.indexOf("veda_predictor") < text.indexOf("needs a predictor file") && text.indexOf("needs a predictor file") < text.indexOf("after_it"),
     "the download sits right under the predictor selector, before the next field, not at the bottom of the page");
   assert.match(page.node.textContent, /By downloading you accept the MiniMax H3 Community License/);
   assert.match(page.node.textContent, /275 MB|263 MB/);
@@ -184,13 +184,13 @@ test("the Veda predictor row appears only for method veda with no file, names th
   page.node.remove();
   page = await open({ sla: true, sla_method: "veda" });
   const buttons = () => [...page.node.querySelectorAll("button")].map((b) => b.textContent);
-  assert.doesNotMatch(page.node.textContent, /none is there/);
+  assert.doesNotMatch(page.node.textContent, /needs a predictor file/);
   assert.deepEqual(buttons().filter((t) => /Installed|Download/.test(t)), ["Download"], "one installed: only the missing one is offered");
   assert.match(page.node.textContent, /By downloading you accept/, "the licence stays while a button is shown");
   page.node.remove();
   state.files = ["a.safetensors", "b.safetensors"]; state.models[1].state = "ready";
   page = await open({ sla: true, sla_method: "veda" });
-  assert.doesNotMatch(page.node.textContent, /Installed|Download|By downloading|none is there/, "both installed: nothing to offer, so nothing is shown");
+  assert.doesNotMatch(page.node.textContent, /Installed|Download|By downloading|needs a predictor file/, "both installed: nothing to offer, so nothing is shown");
   page.node.remove();
 });
 

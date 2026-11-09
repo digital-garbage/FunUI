@@ -70,7 +70,7 @@ SETTINGS = {
     "polish": {
         "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
-        "hint": "0: off. Otherwise one extra full-size pass after the last step, starting from this noise level, as a short polish. From about 0.4 the sound is redrawn too.",
+        "hint": "0: off. Otherwise adds one extra full-size polish pass from this noise level. From about 0.4 the sound is redrawn too.",
         "when": {"enabled": True},
     },
 }

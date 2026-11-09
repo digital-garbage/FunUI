@@ -12,7 +12,7 @@ export default {
       const page = c.region.stack({ gap: "md" });
       const draw = (s, busy = false) => page.set([
         c.label.section({ text: "Shortcut revolver" }),
-        c.hint.default({ text: "Off: a seeded random pick that may repeat. On: no replacement is reused until the whole set has fired. A server setting for every browser and for generation; the open project remembers it." }),
+        c.hint.default({ text: "Off: a random pick that may repeat. On: nothing repeats until the whole set has been used." }),
         c.toggle.default({ label: "Shortcut revolver", checked: s.enabled, disabled: busy, onChange: (v) => save({ enabled: v, random: s.random }) }),
         s.enabled ? c.toggle.default({ label: "Random", hint: "Off: replacements fire in order, then the cycle restarts. On: any order, still no repeats. Changing either restarts all cycles.", checked: s.random, disabled: busy, onChange: (v) => save({ enabled: s.enabled, random: v }) }) : null,
       ].filter(Boolean));

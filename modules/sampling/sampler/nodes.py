@@ -116,10 +116,7 @@ class FunUISampler(io.ComfyNode):
                                tooltip="Below 1 starts partway through the schedule."),
                 io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
                 io.Sigmas.Input("sigmas", optional=True,
-                                tooltip="A schedule to run exactly as written. When wired, "
-                                        "steps, scheduler and denoise are not used. For a "
-                                        "second pass its first value is the strength: 0.4 "
-                                        "polishes, 0.8 reworks the shot."),
+                                tooltip="A schedule to run exactly as written; steps, scheduler and denoise are then unused. In a second pass its first value is the strength."),
             ],
             outputs=[
                 io.Latent.Output(display_name="latent"),

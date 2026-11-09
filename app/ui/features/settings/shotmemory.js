@@ -22,7 +22,7 @@ export const shotMemory = (app) => function mount() {
     const words = data.words || [], views = data.views || [];
     const details = data.details || [];
     const infusion = data.infusion || [];
-    if (!words.length && !views.length && !(data.arms || []).length && !details.length && !infusion.length) return page.set([c.emptyState.default({ icon: "◎", title: "Nothing learned yet", hint: "Learns which words, views and details you liked. Needs the Shot camera node with camera moves, shot views or liked details on in Engine, then rate your renders." })]);
+    if (!words.length && !views.length && !(data.arms || []).length && !details.length && !infusion.length) return page.set([c.emptyState.default({ icon: "◎", title: "Nothing learned yet", hint: "Learns which words, views and details you liked. Needs Shot camera with camera moves, views or liked details on; then rate your renders." })]);
     page.set([c.hint.default({ text: `${data.prompts} prompts seen · ${data.shots} shots reviewed. Forget anything that taught it the wrong thing.` }),
       ...(details.length ? [c.label.section({ text: "Liked details" }), ...details.map((d) => row(d.phrase, `${d.kept ? "will be added" : "dropped"} · liked ${d.good.toFixed(1)} · disliked ${d.bad.toFixed(1)}`, "detail", d.phrase))] : []),
       ...(views.length ? [c.label.section({ text: "Views" }), ...views.map((v) => row(v.view, `liked ${v.good.toFixed(1)} · disliked ${v.bad.toFixed(1)}`, "view", v.view))] : []),
