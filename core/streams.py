@@ -67,6 +67,15 @@ def with_options(args, kwargs, transformer_options):
     return args, {**kwargs, "transformer_options": transformer_options}
 
 
+def with_context(args, kwargs, context):
+    """The same call with another conditioning (c_crossattn): positional where comfy put it (2nd), by name otherwise."""
+    if len(args) > MODEL_ARGS.index("c_crossattn"):
+        args = list(args)
+        args[MODEL_ARGS.index("c_crossattn")] = context
+        return tuple(args), kwargs
+    return args, {**kwargs, "c_crossattn": context}
+
+
 def model_args(args, kwargs) -> dict:
     """An APPLY_MODEL wrapper's call, by name.
 

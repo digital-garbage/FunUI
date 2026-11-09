@@ -1,4 +1,4 @@
-"""Prompt markup -- (word:1.5), [phrase@2-4], [a|b]. A node-only module.
+"""Prompt markup -- (word:1.5) and [a|b]. A node-only module.
 
 Two nodes, because the markup has to be split around the encoder: it must come
 OUT before the encoder sees the text (Qwen reads "(word:1.5)" as punctuation in
@@ -9,13 +9,16 @@ to find the words in and a model to bias.
                           -> markup ---------------------> Apply Prompt Markup
                                                            (+ model, clip, latent)
 
-Where the words sit, and how seconds map to rows, is the MODEL's business: model
-modules announce `text_tokenizer`, `prompt_rows` and `video_time_rows`. With
+Where the words sit is the MODEL's business: model modules announce `text_tokenizer`
+and `prompt_rows`. With
 none that recognise the encoder, the markup is stripped and said to be unused --
 never silently ignored.
 
 The weight is an attention BIAS, and SLA runs any biased call dense, so a run
-with weights or timed phrases runs dense attention.
+with weights runs dense attention.
+
+`[a|b]` (two things that happen at once) changes nothing by itself: it leaves one prompt per option
+in the model for Noise merging to answer and merge.
 """
 
 from .nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup

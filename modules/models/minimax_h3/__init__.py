@@ -243,7 +243,6 @@ PROVIDES = {"training_adapt": _training_adapt, "empty_latent": empty_latent, "de
             "latent_upscaler": _load_upscaler, "rescale_conditioning": _rescale_pins,
             "text_tokenizer": _prompt_layout.text_tokenizer,
             "prompt_rows": _prompt_layout.prompt_rows,
-            "video_time_rows": _prompt_layout.video_time_rows,
             "query_rotation": _query_rotation,
             "video_stream": _video_stream,
             "text_rows": _text_rows}

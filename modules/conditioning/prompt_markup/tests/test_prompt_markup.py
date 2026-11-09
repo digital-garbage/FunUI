@@ -70,8 +70,9 @@ def _spy_masks(tiny, model):
 def test_the_node_strips_markup_and_reports_it():
     from modules.conditioning.prompt_markup.nodes import FunUIPromptMarkup
     clean, markup, status = FunUIPromptMarkup.execute("a (red:1.5) car [sits|runs]").result
-    assert clean == "a red car sits"
-    assert status == "1 weighted, 1 blended"
+    assert clean == "a red car sits while runs"
+    assert markup["variants"] == ["a red car sits", "a red car runs"]
+    assert status == "1 weighted, 2 alternative"
 
 
 def test_a_weight_biases_exactly_that_words_keys(tiny_h3):
@@ -92,35 +93,29 @@ def test_it_changes_the_output_and_weight_one_does_not(tiny_h3):
     assert not torch.allclose(tiny_h3.run(weighted)[0], base[0])
 
 
-def test_a_timed_phrase_is_masked_from_video_outside_its_window(tiny_h3):
-    # Latent frame 0 = pixel frame 0, frame 1 = pixel frames 1-4 at 24 fps;
-    # 0.05-0.2 s touches only latent frame 1 = video rows 4..8 of 8.
-    model, _p, status, _pos = _apply(tiny_h3, "a red [car@0.05-0.2] drives")
-    assert status == "1 timed phrase(s)"
-    calls = _spy_masks(tiny_h3, model)
-    # The text-only token refiner runs first on exactly the prompt: untouched.
-    n, m = calls[0]
-    assert n == int(tiny_h3.context.shape[1]) and m is None, "the refiner saw the window"
-    per_block = [(n, m) for n, m in calls if m is not None][:3]   # block 0's chunks
-    assert [n for n, _m in per_block] == [10, 4, 4]               # text+audio | video out | in
-    assert sum(n for n, _m in per_block) == tiny_h3_seq(tiny_h3)
-    key = [m.reshape(-1)[2].item() for _n, m in per_block]        # "car" is token 2
-    assert key[0] == 0.0, "text/audio rows lost the phrase"
-    assert key[1] == pytest.approx(-30.0), "video outside the window still sees it"
-    assert key[2] == 0.0, "video inside the window lost it"
+def test_the_options_of_a_pipe_become_one_prompt_each_and_the_main_prompt_holds_both(tiny_h3):
+    from modules.conditioning.prompt_markup.nodes import SIMUL
+    model, _p, status, pos = _apply(tiny_h3, "a girl [dances|zooms in] at dusk")
+    assert status == "2 simultaneous option(s)"
+    got = model.model_options["transformer_options"][SIMUL]
+    start, end = got["rows"]
+    assert got["cond_len"] == int(pos[0][0].shape[1]) and len(got["options"]) == 2
+    # Each option's rows are as long as the prompt as encoded, and the two differ from each other.
+    assert all(o.shape == (1, end - start, 48) for o in got["options"])
+    assert not torch.allclose(got["options"][0], got["options"][1])
+    plain, *_ = _apply(tiny_h3, "a girl dances at dusk")
+    assert plain.model_options.get("transformer_options", {}).get(SIMUL) is None
 
 
-def tiny_h3_seq(tiny):
-    video_rows = 2 * 2 * 2
-    return int(tiny.context.shape[1]) + video_rows + 2 * 3
-
-
-def test_a_blend_moves_only_the_prompt_rows_and_zero_strength_moves_nothing(tiny_h3):
-    _m, pos, status, original = _apply(tiny_h3, "a red car [drives|flies]")
-    assert status == "1 blend(s)"
-    assert not torch.allclose(pos[0][0], original[0][0])
-    _m, pos0, _s, original0 = _apply(tiny_h3, "a red car [drives|flies:0]")
-    assert torch.allclose(pos0[0][0], original0[0][0])
+def test_the_parser_picks_options_and_keeps_weights_aligned():
+    from modules.conditioning.prompt_markup import markup as mk
+    got = mk.parse("a (red:1.5) car [sits|runs] now [x:2] [one|two|three]")
+    assert got["clean"] == "a red car sits while runs now x one while two while three"
+    assert got["variants"] == ["a red car sits now x one", "a red car runs now x two"]
+    assert got["extra"] == 1
+    assert [(got["clean"][a:b], w) for a, b, w in got["weighted"]] == [("red", 1.5), ("x", 2.0)]
+    assert mk.parse("a [only|] one")["variants"] == []          # nothing to be simultaneous with
+    assert mk.parse(r"a \[sits|runs]")["variants"] == []        # an escaped bracket is text
 
 
 def test_an_encoder_no_model_module_knows_is_refused_out_loud(tiny_h3):
@@ -139,7 +134,7 @@ def test_an_encoder_no_model_module_knows_is_refused_out_loud(tiny_h3):
 
 def test_the_phrases_it_placed_are_published_for_anything_that_wants_to_look_at_them(tiny_h3):
     from modules.conditioning.prompt_markup.nodes import PHRASES
-    model, _p, _s, pos = _apply(tiny_h3, "a (red:1.5) car [drives@0.05-0.2]")
+    model, _p, _s, pos = _apply(tiny_h3, "a (red:1.5) car (drives:2)")
     published = model.model_options["transformer_options"][PHRASES]
     assert published["cond_len"] == int(pos[0][0].shape[1])
     assert [b - a for a, b in published["spans"]] == [1, 1]          # "red" and "drives": one token each

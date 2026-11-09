@@ -535,6 +535,9 @@ def expand(text: str, shortcuts: list[Shortcut] | None = None, seed: int = 0, co
         return _expand(text, shortcuts, seed, commit)
 
 
+_PIPE = re.compile(r"\s*\|\s*")
+
+
 def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
     """Every enabled shortcut's trigger, replaced with one of its
     replacements (random when there is more than one). Deterministic: the
@@ -578,7 +581,24 @@ def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
             return choice
         return m.group(0)  # unreachable: `combined` only matches a known group
 
-    expanded = re.sub(combined, replace, original, flags=re.IGNORECASE | re.UNICODE)
+    # Shortcuts joined by "|" are simultaneous actions: DANCE|ZOOM -> [dance text|zoom text], the markup Prompt
+    # markup reads. A "|" next to anything that is not a shortcut is left alone.
+    found = re.compile(combined, re.IGNORECASE | re.UNICODE)
+    pieces, pos = [], 0
+    while (m := found.search(original, pos)):
+        pieces.append(original[pos:m.start()])
+        chosen, seps, end = [replace(m)], [], m.end()
+        while (sep := _PIPE.match(original, end)) and (nxt := found.match(original, sep.end())):
+            seps.append(sep.group(0))
+            chosen.append(replace(nxt))
+            end = nxt.end()
+        if len(chosen) > 1 and all(c and not (set(c) & set("[]|")) for c in chosen):
+            pieces.append("[" + "|".join(chosen) + "]")
+        else:
+            pieces.append("".join(c + sp for c, sp in zip(chosen, [*seps, ""])))
+        pos = end
+    pieces.append(original[pos:])
+    expanded = "".join(pieces)
     if drew and commit:
         with _LOCK:
             _save_revolver(revolver)

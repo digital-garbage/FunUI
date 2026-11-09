@@ -1,6 +1,6 @@
-"""Where H3 puts the prompt, and how its time axis maps to rows.
+"""Where H3 puts the prompt.
 
-Three capabilities, so prompt markup never learns H3's layout:
+Two capabilities, so prompt markup never learns H3's layout:
 
 * `text_tokenizer(clip)` -- the raw HF tokenizer behind an H3 CLIP, for exact
   character -> token offsets. Tokenizing is free; re-encoding with Qwen3-VL-32B
@@ -11,16 +11,10 @@ Three capabilities, so prompt markup never learns H3's layout:
   marks text 1, vision 0, so it is the tail of the final run of 1s. Measured
   from the END so labels in front of it (an audio reference's "<Audio n>: ",
   which has no vision block) do not shift it.
-* `video_time_rows(samples, t0, t1)` -- a window in seconds as rows of the
-  target video, which is the last segment of the packed sequence.
 
 The conditioning block leads the packed sequence, so a row inside it is also a
 row of the sequence the attention runs over.
 """
-
-FPS = 24
-# Latent frame k spans FRAME_PER_TOKEN[k % 5] pixel frames (H3's 5k+2 grid).
-FRAME_PER_TOKEN = (1, 4, 4, 4, 4)
 
 
 def text_tokenizer(clip):
@@ -63,24 +57,3 @@ def prompt_rows(meta, cond_len, prompt_tokens):
     if end - start < prompt_tokens:
         return None                              # a different string was encoded
     return end - prompt_tokens, end
-
-
-def video_time_rows(samples, t0, t1):
-    """(video_rows, row_start, row_end) for a window in seconds, rows counted
-    from the start of the target video segment. None if it misses the clip."""
-    video = samples.unbind()[0] if getattr(samples, "is_nested", False) else samples
-    if getattr(video, "ndim", 0) != 5:
-        return None
-    latent_t = int(video.shape[2])
-    frame_rows = ((int(video.shape[3]) + 1) // 2) * ((int(video.shape[4]) + 1) // 2)
-    cum = [0]
-    for k in range(latent_t):
-        cum.append(cum[-1] + FRAME_PER_TOKEN[k % 5])
-    f0, f1 = int(round(t0 * FPS)), int(round(t1 * FPS))
-    if f1 <= f0 or f0 >= cum[-1]:
-        return None
-    k0 = max(k for k in range(latent_t) if cum[k] <= f0)
-    k1 = min(latent_t, max(k for k in range(latent_t) if cum[k] < f1) + 1)
-    if k1 <= k0:
-        return None
-    return latent_t * frame_rows, k0 * frame_rows, k1 * frame_rows

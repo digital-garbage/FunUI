@@ -37,7 +37,7 @@ export function enhance(app, own) {
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     page.set([
       c.label.section({ text: "Prompt enhancer" }),
-      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a@2-4] markup is lost in a rewrite." }),
+      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a|b] markup is lost in a rewrite." }),
       c.toggle.default({ label: "Enhance prompt", checked: on, onChange: (x) => set("enabled", x) }),
       ...(!on ? readout() : [
         pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here."),

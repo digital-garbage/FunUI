@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Simultaneous actions** (Noise merging): write `[dance|zoom]` in a prompt, or `DANCE|ZOOM` between two shortcuts, for two things that happen at the same time. At the steps you name, each action is answered on its own prompt from the same picture and noise, and the two answers are merged at your strength. The other steps read both ("dance while zoom"). Turned on by default inside Noise merging; costs one extra model pass per merged step. A `|` next to anything that is not a shortcut is left as typed. Two options per bracket.
+- **Removed: timed phrases `[phrase@2-4]`, and `[a|b]` as a blend of two prompts.** `[a|b]` now means two actions at once (above). `(word:1.5)` weights work as before.
 - **Reference sheet** (Assets panel, "Reference sheet..."): pick rows and columns, a picture and a label for each slot, and a title. You get one white sheet with the pictures in a grid, each labelled below and the title in the top left corner, saved to the media bin as a picture. Pictures come from the bin or an upload; each is cropped from the middle to the slot's shape.
 
 ## [5.2.0] "Classy Chopper" - 2026-11-08

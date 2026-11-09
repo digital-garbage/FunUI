@@ -1,5 +1,5 @@
 // Which shortcut triggers fit the word under the caret. Pure.
-const DELIMS = /[,\n;()[\]]/;       // a trigger lives between delimiters; brackets wrap one: (trigger:1.5), [trigger@1-3]
+const DELIMS = /[,\n;()[\]|]/;       // a trigger lives between delimiters; brackets wrap one: (trigger:1.5), and "|" separates simultaneous ones: [a|b]
 const MIN_QUERY = 2;
 
 /** Triggers containing `query` (prefix matches first), one row per distinct trigger. `library`: the shortcuts. */

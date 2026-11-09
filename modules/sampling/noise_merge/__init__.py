@@ -15,6 +15,10 @@ seed (and so is the sound, when the model has it). The two are then mixed:
 later input is its own last answer re-noised, the way a few-step sampler chains its steps. At the named steps its
 answer is blended into yours the same way. It costs one extra pass at every step up to the last one named.
 
+"Simultaneous actions": with `[A|B]` in the prompt (or `A|B` between two shortcuts), the named steps are answered
+once for each option -- the same picture and noise, a prompt that holds only that option -- and the answers are
+merged the same way, instead of the second-seed pass. The prompt outside those steps holds both ("A while B").
+
 Costs one extra model pass per merged step. The second pass is marked as a probe, so no
 learning feature records it.
 """
@@ -81,6 +85,12 @@ SETTINGS = {
         "hint": "How much of the step's noise the second pass swaps for the second seed's. 1: all of it. 0: no change.",
         "when": {"enabled": True, "what": "answers"},
     },
+    "actions": {
+        "type": "bool", "default": True,
+        "label": "Simultaneous actions",
+        "hint": "With [A|B] in the prompt, answers the steps above once for A and once for B and merges them, so both happen at once. Costs one extra pass per step.",
+        "when": {"enabled": True, "what": "answers"},
+    },
     "sound": {
         "type": "bool", "default": True,
         "label": "Merge sound too",
@@ -123,6 +133,36 @@ def second_input(x, a, sigma, seed, step, fresh):
     theta = fresh * torch.pi / 2
     noise = float(torch.cos(torch.tensor(theta))) * own + float(torch.sin(torch.tensor(theta))) * other
     return ((1.0 - sigma) * a.float() + sigma * noise).to(x.dtype)
+
+
+SIMUL = "funui_simultaneous"        # what Prompt markup leaves in transformer_options: {"rows", "options", "cond_len"}
+
+
+def _mix(out_a, out_b, named, strength, b_first, with_sound):
+    """Two full answers of one step -> (merged answer, how far apart they were), or None when either has no picture."""
+    split_a, split_b = streams.video_of(out_a, named), streams.video_of(out_b, named)
+    if split_a is None or split_b is None:
+        return None
+    (video_a, rebuild_a), (video_b, rebuild_b) = split_a, split_b
+    tail_a, tail_b = _sound(out_a, video_a), _sound(out_b, video_b)
+    diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
+    if b_first:
+        base, other, base_tail, other_tail, rebuild = video_a, video_b, tail_a, tail_b, rebuild_a
+    else:
+        base, other, base_tail, other_tail, rebuild = video_b, video_a, tail_b, tail_a, rebuild_b
+    merged = rebuild(merge(base, other, strength).to(base.dtype))
+    if with_sound and base_tail is not None and other_tail is not None:
+        n = merged.shape[-1] - base_tail.shape[-1]
+        merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
+    return merged, diff
+
+
+def _with_option(args, kwargs, context, simul, k):
+    """The call's conditioning with the prompt rows of option k, each brought to this call's device and dtype."""
+    rows = simul["rows"]
+    c = context.clone()
+    c[:, rows[0]:rows[1]] = simul["options"][k].to(device=c.device, dtype=c.dtype)
+    return streams.with_context(args, kwargs, c)
 
 
 def _sound(packed, video):
@@ -193,6 +233,7 @@ def install(patcher, values, key):
     with_sound = bool(values.get("sound", True))
     fresh = float(values.get("fresh", 1.0))
     parallel = values.get("what") == "parallel"
+    actions = bool(values.get("actions", True))
     last = max(wanted)
     chosen = int(values.get("seed", -1))
     live = {"seed": max(chosen, 0), "merged": 0, "prev": None}
@@ -214,8 +255,32 @@ def install(patcher, values, key):
     def apply_model(executor, x, t, *args, **kwargs):
         named = streams.model_args(args, kwargs)
         to = named.get("transformer_options") or {}
-        out = executor(x, t, *args, **kwargs)
         where = dit_hooks.current_step(to)
+        simul = to.get(SIMUL) if actions and not parallel else None
+        context = named.get("c_crossattn")
+        if (simul and where is not None and where[0] in wanted and not dit_hooks.probing(to)
+                and all(int(i) == 0 for i in (to.get("cond_or_uncond") or [0]))):
+            if (isinstance(context, torch.Tensor) and context.dim() == 3
+                    and int(context.shape[1]) == simul["cond_len"] and len(simul["options"]) > 1):
+                try:
+                    outs = []
+                    for k in (0, 1):
+                        args_k, kwargs_k = _with_option(args, kwargs, context, simul, k)
+                        outs.append(executor(x, t, *args_k, **kwargs_k))
+                    mixed = _mix(outs[0], outs[1], named, strength, b_first, with_sound)
+                    if mixed is not None:
+                        live["merged"] += 1
+                        log.info("FunUI Noise merging", f"step {where[0] + 1}: both actions answered separately, the "
+                                 f"answers differ by {mixed[1]:.1%}, merged at {strength:.2f}")
+                        return mixed[0]
+                except InterruptProcessingException:
+                    raise
+                except Exception as exc:            # noqa: BLE001
+                    log.broke("FunUI Noise merging", exc, "merging the simultaneous actions")
+                    return executor(x, t, *args, **kwargs)
+            else:
+                _say("Simultaneous actions skipped: another feature changed the prompt's conditioning")
+        out = executor(x, t, *args, **kwargs)
         if where is None or dit_hooks.probing(to) or where[0] > last or (where[0] not in wanted and not parallel):
             return out
         if any(int(i) != 0 for i in (to.get("cond_or_uncond") or [0])):
@@ -265,15 +330,8 @@ def install(patcher, values, key):
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
                      f"merged at {strength:.2f}{' (picture and sound)' if tail_a is not None and with_sound else ''}; "
                      f"the second pass took {took:.1f}s")
-            if b_first:
-                base, other, base_tail, other_tail, rebuild = video_a, video_b, tail_a, tail_b, rebuild_a
-            else:
-                base, other, base_tail, other_tail, rebuild = video_b, video_a, tail_b, tail_a, rebuild_b
-            merged = rebuild(merge(base, other, strength).to(base.dtype))
-            if with_sound and base_tail is not None and other_tail is not None:
-                n = merged.shape[-1] - base_tail.shape[-1]
-                merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
-            return merged
+            mixed = _mix(out, out_b, named, strength, b_first, with_sound)
+            return out if mixed is None else mixed[0]
         except InterruptProcessingException:
             raise                                   # Cancel stops the run, it is not a failed merge
         except Exception as exc:                    # noqa: BLE001

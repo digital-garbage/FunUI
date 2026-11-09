@@ -343,3 +343,13 @@ def test_a_corrupt_revolver_file_means_off_not_a_crash(store):
     assert shortcuts.revolver_settings() == {"enabled": False, "random": False}
     _abc(store)
     assert shortcuts.expand("lt", seed=3) in ("A", "B", "C")
+
+
+def test_shortcuts_joined_by_a_pipe_become_simultaneous_options_and_anything_else_is_left_alone():
+    items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]), shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"]),
+             shortcuts.Shortcut("box", ["box"], ["a [x] b"])]
+    expand = lambda t: shortcuts.expand(t, shortcuts=items, seed=1)           # noqa: E731
+    assert expand("A girl. DANCE | zoom. Dusk") == "A girl. [she dances|the camera zooms in]. Dusk"
+    assert expand("dance|walk") == "she dances|walk"                          # a phrase on one side: ignored
+    assert expand("dance|box") == "she dances|a [x] b"                        # a replacement that holds brackets: ignored
+    assert expand("dance, zoom") == "she dances, the camera zooms in"

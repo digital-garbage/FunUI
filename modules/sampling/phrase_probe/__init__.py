@@ -4,8 +4,8 @@ MEASUREMENT ONLY -- nothing about a generation changes. Switched on from Setting
 Refinement & Taste (off by default: it is research data, and the response map costs one
 extra model forward per phrase per call).
 
-The phrases are the ones Prompt Markup placed -- weighted `(word:1.5)` and timed
-`[phrase@2-4]` -- which it publishes into the model's transformer_options. That is read
+The phrases are the ones Prompt Markup placed -- weighted `(word:1.5)` --
+which it publishes into the model's transformer_options. That is read
 at run time, because this installs BEFORE the markup node runs in the pipeline.
 
 v4's first result (blocks 15-20 read the text, 29-34 and block 43 commit it, blocks 0-6 are
@@ -89,7 +89,7 @@ def install(patcher, values, key):
                              f"{rt or 'n/a'}; response grows most at {gt or 'n/a'}")
             elif live["on"]:
                 measure.problem = ("recording is on but this run had no phrases to measure: put a "
-                                   "(word:1.5) or [phrase@2-4] in the prompt")
+                                   "a (word:1.5) in the prompt")
                 log.once(f"{ID}:none", log.INFO, "FunUI Phrase probe", "Inactive | " + measure.problem)
             else:
                 measure.problem = None

@@ -142,7 +142,6 @@ A capability is a name in `PROVIDES`. Core defines none: the contract is between
 | `text_rows` | `(model_kwargs, length) -> bool mask` or `None` | which conditioning rows are the prompt's words |
 | `text_tokenizer` | `(clip) -> tokenizer` or `None` | a tokenizer that returns offsets |
 | `prompt_rows` | `(meta, cond_len, prompt_tokens) -> (start, end)` or `None` | |
-| `video_time_rows` | `(samples, t0, t1) -> (rows, start, end)` or `None` | window in seconds |
 | `target_rows` | `(mod_segments, seq_len, device, stream) -> bool mask` or `None` | `stream` is `"video"` or `"audio"` |
 | `query_rotation` | `(rope_freqs, seq_len) -> rotate(x, rows, inverse=False)` or `None` | |
 | `anchor_pin` | `(kwargs, transform) -> kwargs` or `None` | |
