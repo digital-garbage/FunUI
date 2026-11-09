@@ -130,12 +130,14 @@ def watch_switch(mm) -> bool:
         try:
             parent = self._parent_model()
             real = self.real_model() if callable(self.real_model) else None
+            if real is None:                # a lookup entry ComfyUI built and dropped, or one whose model is freed: nothing to lose
+                return original(self)
             _seen[0] += 1
             if parent is None or _seen[0] <= 40:          # a hand-over with no parent always shows; the others for the first 40 of the session
                 depth, p = 0, parent
                 while p is not None and getattr(p, "parent", None) is not None and depth < 50:
                     p, depth = p.parent, depth + 1
-                log.info("FunUI Leak", f"hand-over {_seen[0]}: a {type(real).__name__ if real is not None else 'dead'} patcher died; its parent is "
+                log.info("FunUI Leak", f"hand-over {_seen[0]}: a {type(real).__name__} patcher died; its parent is "
                          f"{'gone' if parent is None else type(parent).__name__ + f' with {depth} more above it'}; Python's gc running: {_in_gc[0]}")
         except Exception as exc:            # noqa: BLE001 -- a diagnostic must never stop a run
             log.failed("leak report", exc)

@@ -148,7 +148,7 @@ def test_a_hand_over_with_no_parent_is_logged_after_the_first_forty(monkeypatch)
     mm = type("MM", (), {})()
 
     class LM:
-        def __init__(self): self._parent_model = lambda: None; self.real_model = lambda: None
+        def __init__(self): self._parent_model = lambda: None; self.real_model = lambda: object()
         def _switch_parent(self): pass
     mm.LoadedModel = LM
     leak_report.watch_switch(mm)
@@ -175,10 +175,33 @@ def test_the_first_forty_hand_overs_with_a_parent_are_logged_and_the_forty_first
     mm = type("MM", (), {})()
 
     class LM:
-        def __init__(self): self._parent_model = lambda: object(); self.real_model = lambda: None
+        def __init__(self): self._parent_model = lambda: object(); self.real_model = lambda: object()
         def _switch_parent(self): pass
     mm.LoadedModel = LM
     leak_report.watch_switch(mm)
     for _ in range(45):
         LM()._switch_parent()
     assert len(lines) == 40
+
+
+def test_a_throwaway_entry_that_holds_no_model_is_not_reported(comfyui, capsys):
+    """Each time models are loaded ComfyUI builds a fresh entry per patcher to look it up, and drops it when the model is already
+    loaded. Such an entry holds no model, yet its hand-over still fires when the patcher dies: nothing can be lost there."""
+    import comfy.model_management as mm
+    import comfy.model_patcher as mp
+    original = mm.LoadedModel._switch_parent
+    try:
+        leak_report.watch_switch(mm)
+        base = torch.nn.Linear(2, 2)
+        base.model_config = type("C", (), {})()
+        parent = mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
+        child = parent.clone()
+        child.myself = child            # a cycle, so only Python's gc can free the pair: it clears the link to the parent first
+        mm.LoadedModel(child)           # the lookup entry, never loaded and never tracked
+        del parent, child
+        gc.collect()
+        assert "hand-over" not in capsys.readouterr().err
+    finally:
+        mm.LoadedModel._switch_parent = original
+        if leak_report._gc_flag in gc.callbacks:
+            gc.callbacks.remove(leak_report._gc_flag)
