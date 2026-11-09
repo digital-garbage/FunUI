@@ -241,6 +241,28 @@ test("Delete after picking files ends Select mode, and the bin's controls are pi
   host.remove();
 });
 
+test("deleting a pinned picture from the bin clears its pin, its aspect ratio pin and the scene references", async () => {
+  const doc = { fixed_source_image: "m2", fixed_references: { m2: 2, m1: 1 }, scenes: [{ id: "s1", source_image: "m2", references: ["m1", "m2"] }, { id: "s2", references: ["m2"] }] };
+  const project = { selected: doc.scenes[0], project: doc, setScene: () => {}, edit: (fn) => fn(doc) };
+  let list = [{ id: "m1", name: "cat.png", kind: "image" }, { id: "m2", name: "dog.png", kind: "image" }];
+  const api = { media: async () => ({ media: list }), deleteMedia: async (id) => { list = list.filter((m) => m.id !== id); } };
+  const host = document.createElement("div");
+  hub.setup({ host, app: { project, api, mediaPeek: {}, say: () => {}, on: () => () => {} } });
+  await new Promise((r) => setTimeout(r, 10));
+  document.body.append(host);
+  const btn = (t) => [...document.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith(t));
+  btn("Select").click();
+  [...host.querySelectorAll(".cx-cell")].find((x) => x.textContent.includes("dog.png")).click();
+  btn("Delete (1)").click();
+  await new Promise((r) => setTimeout(r, 10));
+  [...document.querySelectorAll("button")].filter((b) => b.textContent.trim() === "Delete").pop().click();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(doc.fixed_references, { m1: 1 });
+  assert.equal(doc.fixed_source_image, null);
+  assert.deepEqual(doc.scenes.map((x) => [x.source_image, x.references]), [["", ["m1"]], [undefined, []]]);
+  host.remove();
+});
+
 test("references are numbered per kind: the first sound is R1 even when a picture holds the first slot", async () => {
   const doc = { scenes: [{ id: "s1", references: ["m1", "m2", "m3"] }] };
   const project = { selected: doc.scenes[0], project: doc, setScene() {}, edit: (fn) => fn(doc) };
