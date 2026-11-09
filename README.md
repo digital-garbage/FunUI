@@ -30,10 +30,10 @@ How does it do it?
 - **Projects:** switch between different pipelines in one click.
 - **Presets:** you don't have to wire all nodes manually - built-in presets save you time on generic tasks.
 - **Controls:** fast access to sampler settings, project settings and customizable picker wheel - what's most used is most accessible.
-- **Features:** lots of operations such as upscaling, interpolation, inference speedup techniques, mixed precision - already built-in or can be activated and installed from Settings > Modules. For example, the faster attention method Veda is one switch there, and its model file is fetched from Settings > Models on your click.
+- **Features:** lots of operations such as upscaling, interpolation, inference speedup techniques, mixed precision - already built-in or can be activated and installed within 3 clicks.
 - **Designed to tend to your taste:** rate resulting videos and compatible features will react according to your ratings, gradually changing outputs according to your preferences.
 
-FunUI opens at `ComfyUI's host:port/fun/` in your browser after you start ComfyUI, e.g. `127.0.0.1:8888/fun` (the port depends on how you start ComfyUI).
+FunUI opens at `ComfyUI's host:port/fun/` in your browser after you start ComfyUI, e.g. `127.0.0.1:8888/fun`.
 
 ## A look around
 
