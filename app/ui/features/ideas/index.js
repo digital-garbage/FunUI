@@ -68,7 +68,7 @@ export default {
     const offFocus = [app.dom.onPage("focusin", onFocus), app.dom.onPage("focusout", onBlur)];
 
     app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
-      c.toggle.default({ label: "Shortcut ideas", hint: "Shows a 💡 beside the Story and Prompt boxes while you are in them. Click it for shortcuts to insert: pairings you use, what usually follows the previous shot, and categories this prompt does not use yet.",
+      c.toggle.default({ label: "Shortcut ideas", hint: "Shows a 💡 beside the Story and Prompt boxes with shortcut suggestions to insert, based on what you use.",
         checked: on(), onChange: (v) => { p.setPref("suggestions", v); if (!v) closeBulb(); } })] }));
     return () => { closeBulb(); clearTimeout(hold); offFocus.forEach((f) => f()); };
   },

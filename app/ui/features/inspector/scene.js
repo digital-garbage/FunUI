@@ -46,7 +46,7 @@ export function sceneRows(p, app) {
     ...(isSubclip(sc) ? [c.hint.default({ text: "This is a cut: its prompt and source belong to the first part." })] : [card(
       c.field.default({ label: "Prompt", control: c.textarea.md({ label: "Prompt", value: sc.text || "", rows: 4, onInput: (v) => p.setText(sc.id, v) }) }))]),
     c.label.section({ text: "Pictures" }),
-    card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture (or a video's first frame). Its shape sets this scene's aspect ratio (the project's Width/Height set the scale). It is the shape only for models that start from the scene's References (LTX image-to-video); a workflow that has its own start-picture input gets this picture there. The prompt enhancer can read it.",
+    card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture (or a video's first frame). Its shape sets the scene's aspect ratio; the project's Width and Height set the scale. The prompt enhancer can read it.",
       key: "source_image", multiple: false, kinds: ["image", "video"], empty: "— choose aspect ratio source —" }),
     mediaField(app, p, sc, { label: "References", key: "references", multiple: true, kinds: ["image", "video", "audio"], empty: "+ Add reference" })),
     c.label.section({ text: "Length" }),
