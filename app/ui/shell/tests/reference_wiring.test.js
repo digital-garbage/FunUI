@@ -209,3 +209,9 @@ test("a video's own sound with no free input to go to is said, not dropped", () 
   assert.equal(r.unwired, 1);
   assert.match(r.left[0].why, /video's own sound/);
 });
+
+test("a reference with no place is named by its kind and number", () => {
+  const r = wireReferences(["pic", "snd"], [refSlot(1)], [], {}, (id) => (id === "snd" ? "audio" : "image"), () => null);
+  assert.equal(r.left.length, 1);
+  assert.equal(r.left[0].what, "sound 1");
+});

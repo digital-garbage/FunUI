@@ -16,7 +16,7 @@
  * a reference would look like it was used; the caller is the one place that
  * knows this happened and must say so.
  */
-export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, routeOf, hasSound) {
+export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, routeOf, hasSound, leave) {
   const pool = slots || [];
   const overrides = {};
   const claimed = new Set(reservedSlotIds || []);
@@ -31,6 +31,7 @@ export function wireReferences(mediaIds, slots, reservedSlotIds, pins, kindOf, r
   const noun = { image: "picture", audio: "sound" };
   mediaIds.forEach((mediaId, i) => {
     const at = `assets.reference_${numbers[i]}`;
+    if (leave && leave.has(mediaId)) return;       // numbered like the rest, sent elsewhere (the start of a video-to-video run)
     const what = `${noun[kind(mediaId)] || kind(mediaId)} ${rank(i)}`;
     const slot = pool.find((s) => (s.roles || []).some((r) => r.at === at));
     if (!slot) { unwired += 1; left.push({ id: mediaId, at, what, why: "no slot with that role" }); return; }

@@ -172,6 +172,19 @@ test("a video-in pipeline takes the first video among the references as its star
   learn([]);
 });
 
+test("the start of a video-in pipeline is the lowest-numbered video, whatever the list order, and the other videos keep their numbers", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "va", name: "a.mp4", kind: "video" }, { id: "vb", name: "b.mp4", kind: "video" }]);
+  const slots = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id", video_frames: true, video_only: true }], inputs: {} }];
+  const run = (project) => buildInputs({ project: { video: {}, frame_rate: 25, ...project }, scene: { text: "x", references: ["va", "vb"] }, slots, expand: async () => null });
+  assert.equal((await run({})).inputs.src.media_id, "va");
+  assert.equal((await run({ fixed_references: { vb: 1 } })).inputs.src.media_id, "vb");          // pinned to 1, listed first
+  const r = await run({ fixed_references: { vb: 2 } });
+  assert.equal(r.inputs.src.media_id, "va", "va holds number 1 although vb is listed first");
+  assert.match(r.left.find((l) => l.id === "vb").what, /^video 2$/, "the one left over keeps the number the tile shows");
+  learn([]);
+});
+
 test("an LTX image-to-video pipeline starts from the first reference picture when none is picked, and keeps it as a reference", async () => {
   const { learn } = await import("../../shell/bin.js");
   learn([{ id: "vid", name: "v.mp4", kind: "video" }, { id: "pic", name: "p.png", kind: "image" }, { id: "pic2", name: "q.png", kind: "image" }]);

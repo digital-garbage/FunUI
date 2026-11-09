@@ -42,7 +42,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const wanted = (id) => kinds.get(id) === "video" || (!videoOnly && kinds.get(id) === "image");
   const fromRefs = takesVideo
     ? firstByNumber((id) => kinds.get(id) === "video") || (videoOnly ? null : firstByNumber(wanted)) : null;
-  if (fromRefs && kinds.get(fromRefs) === "video") plan.ids = plan.ids.filter((id) => id !== fromRefs);
+  const leave = new Set(fromRefs && kinds.get(fromRefs) === "video" ? [fromRefs] : []);       // the start video is not also a reference, but it keeps its number: the others do not move up
   const startId = takesVideo ? fromRefs || "" : scene.source_image;      // nothing picked: text to video follows by itself
   if (source) put(source.slot, "media_id", startId || "");    // "from a prompt" starts every shot without a picture
   // A pipeline that can take a whole video where it takes a picture (LTX) says so on the role: a picked VIDEO then
@@ -65,7 +65,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (off) put(off, like.unsend.input, false);
   }
   // A reference is placed from what the nodes offer, so a pipeline someone edited needs nothing declared for it.
-  const needed = plan.ids.length > 0;
+  const needed = plan.ids.some((id) => !leave.has(id));
   const info = new Map();
   if (needed && nodeInfo) {
     const classes = new Set();
@@ -79,7 +79,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const target = role && role.wireTo && (slots || []).find((x) => x.id === role.wireTo.slot);
     return target ? routeFor(kind, info.get(target.node), info.get(slot.node), target.id) : null;
   };
-  let { overrides, unwired, left } = wireReferences(plan.ids, slots, source ? [source.slot.id] : [], plan.pins, (id) => kinds.get(id), routeOf, (id) => sounds.has(id));
+  let { overrides, unwired, left } = wireReferences(plan.ids, slots, source ? [source.slot.id] : [], plan.pins, (id) => kinds.get(id), routeOf, (id) => sounds.has(id), leave);
   // An edited pipeline can keep a reference loader but not the node it fed (the identity node deleted, say): a value for a
   // slot that is not there would refuse the whole run, so that reference is said to be unused instead.
   const have = new Set((slots || []).map((s) => s.id));

@@ -282,7 +282,7 @@ test("the Training preview waits for an upscale model too, and the server's word
   assert.equal(queued, 1);
 });
 
-test("the next shot waits while an upscale model runs, and the Training preview says a reference that did not fit", async () => {
+test("the next shot waits while an upscale model runs", async () => {
   let queued = 0, busyNow = false, asked = 0;
   const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
   app.has = new Set();
@@ -290,4 +290,21 @@ test("the next shot waits while an upscale model runs, and the Training preview 
   await app.runner.units(["a"], 1);
   assert.equal(queued, 1);
   assert.ok(busyNow && asked >= 3, "the shot asked again and went on when the server said free");
+});
+
+test("the wait for an upscale model is said once per Generate, not once per shot", async () => {
+  const seen = [];
+  const watcher = new window.MutationObserver((rows) => rows.forEach((r) => r.addedNodes.forEach((n) => { for (const x of [n, ...(n.querySelectorAll ? n.querySelectorAll("*") : [])]) if (x.children && x.children.length === 0 && /Waiting for the upscale model/.test(x.textContent || "")) seen.push(x); })));
+  watcher.observe(document.body, { childList: true, subtree: true });
+  try {
+    let asked = 0, queued = 0;
+    const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
+    app.has = new Set();
+    app.api.upscaleBusy = async () => { asked += 1; return { busy: asked === 2 || asked === 5 }; };
+    await app.runner.units(["a"], 3);
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(queued, 3);
+    assert.ok(seen.length >= 1, "it was said");
+    assert.equal(seen.length, 1, "said once although two shots waited");
+  } finally { watcher.disconnect(); }
 });

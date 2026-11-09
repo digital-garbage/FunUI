@@ -56,7 +56,13 @@ export default {
     // `times` > 1: the same shots again, only the seed differing (the prompt's random picks are drawn once), so the takes can be compared.
     // `once`: for a single run only - {seed} uses that seed on every seed input; onQueued runs once ComfyUI has taken (or refused) the run.
     // This page's own upscale, or one the server still runs for a reloaded page or another tab.
-    const upscaling = async () => Boolean(app.has && app.has.has("upscale.model")) || Boolean(await Promise.resolve(app.api.upscaleBusy ? app.api.upscaleBusy() : null).then((r) => r && r.busy).catch(() => false));
+    const upscaling = async () => {
+      if (app.has && app.has.has("upscale.model")) return true;
+      let timer;
+      try { return Boolean(await Promise.race([Promise.resolve(app.api.upscaleBusy ? app.api.upscaleBusy() : null).then((r) => r && r.busy), new Promise((r) => { timer = setTimeout(() => r(false), 5000); })])); }
+      catch { return false; }       // a server that does not answer, or errs, is not "busy"
+      finally { clearTimeout(timer); }
+    };
     async function runUnits(units, times = 1, once = {}) {
       if (busy) { tell("A run is already going: wait for it, or Stop it."); return; }
       if (await upscaling()) { tell("An upscale model is running. It shares ComfyUI's model memory, so Generate when it has finished."); return; }
@@ -97,10 +103,11 @@ export default {
         const fixedSeed = times === 1 && p.pref("random_seed", true) === false;        // takes are compared across seeds: always fresh ones
         const drawn = new Map();
         const same = times > 1 ? (body) => { const key = JSON.stringify(body); if (!drawn.has(key)) drawn.set(key, expand(body)); return drawn.get(key); } : expand;
+        let told = false;                                   // the wait is said once per Generate
         for (const unit of Array.from({ length: times }, () => units).flat()) {
           if (stopped) break;
-          for (let waited = false; await upscaling() && !stopped; waited = true) {       // an Always upscale of the shot before may be running: the next shot waits for it
-            if (!waited) tell("Waiting for the upscale model to finish before the next shot.");
+          while (!stopped && await upscaling()) {       // an Always upscale of the shot before may be running: the next shot waits for it
+            if (!told) { told = true; tell("Waiting for the upscale model to finish before the next shot."); }
             await new Promise((r) => setTimeout(r, 2000));
           }
           if (stopped) break;
