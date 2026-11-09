@@ -1,6 +1,6 @@
 # FunUI (formerly FunPack)
 
-**FunUI v5 is here. It is a browser studio for video inside ComfyUI: a timeline with one clip per scene, a Composer for your prompts, pipeline cards instead of graphs, and modules that learn from your ratings - all on the regular ComfyUI backend.**
+**Welcome to FunUI repository - an open-source video generation and editing studio based on ComfyUI backend.**
 
 <p align="left">
   <a href="https://ko-fi.com/M4M61MBGIT"><img src="https://img.shields.io/badge/Support%20me%20on%20Ko--fi-FF5E5B?style=for-the-badge&amp;logo=kofi&amp;logoColor=white" alt="Ko-fi" height="36"></a>&nbsp;
@@ -9,25 +9,30 @@
 </p>
 
 > [!IMPORTANT]
-> FunUI is an open-source hobby project maintained by single person, available to you for zero cost. It means resources such as time and money are limited, and there is no "QA team" to review every single feature and report every bug.
-> If you discover a bug or wish to suggest a new feature, feel free to open a new issue in this repo's Issues.
+> Despite extensive multi-round testing and reviewing the code with AI agents and personally, some issues and/or undiscovered bugs still may remain in stable releases.
+> If you discover a bug or wish to suggest a new feature, please open a new issue in this repo's Issues.
 
 > [!NOTE]
-> **Why the rename?** This app started as two nodes made for experimenting with FramePack video model many months ago. FunPack naming was inspired by it, and through all these months what's been just two nodes became an own UI sitting on top of Comfy, with nodes that you can't even use directly from it - so calling it a "pack" would be rather a mislead. With this said, FunPack becomes FunUI - this naming reflects its true nature much better.
+> "ComfyUI-FunPack" on Comfy Registry and FunUI on GitHub is the same app.
 
 <p align="center"><img src="docs/images/studio.jpg" alt="FunUI studio: preview, scene settings and a six-clip timeline" width="900"></p>
 
-## What v5 is
+## What's FunUI?
 
-A rewrite from scratch, not an update of 4.x. Every feature is a module that announces itself, so nothing can be forgotten in the UI, no wire can be missed, and a module that fails to load is simply left out while the run carries on. Open it at `/fun/` in your browser.
+The main idea behind FunUI is gathering as many useful features as possible inside one app, while offering an thought-out interface designed for maximum speed of daily operations.
 
-- **Timeline studio**: one clip per scene, media bin, preview, takes, rating, Export, Render, a project wizard and a guided tour.
-- **Composer**: write the story in one box, with a cut word, templates, `$variables` and shortcuts.
-- **Models & Pipeline**: the pipeline as cards, not a graph. Pick files, swap or add nodes (any installed custom node), wire outputs to inputs, import a ComfyUI workflow. The server refuses what would not build and says why.
-- **Modules**: switch each feature on or off in Settings. A pipeline runs without an optional node whose module is missing, and tells you so.
-- **Learning from ratings**: rate a clip and the guidance, steering and prompt modules start acting on your taste once they have enough ratings.
+How does it do it?
 
-The full list of features, and what is proven and what is experimental, is in [CHANGELOG.md](CHANGELOG.md).
+- **Timeline:** add videos, audio, pictures, effects and text. Crop, split, move and render.
+- **Media bin:** upload media, select and clear aspect ratio sources and references/starting images in one click.
+- **Prompt management:** build your shortcuts (keywords that expand into full sentences and act like wildcards), use variables (type $variable_name in the prompt and it's replaced with its value), prepend and append text to each scene's prompt with Prefix and Postfix, and split scenes on timeline automatically with Cut words in your prompt.
+- **Projects:** switch between different pipelines in one click.
+- **Presets:** you don't have to wire all nodes manually - built-in presets save you time on generic tasks.
+- **Controls:** fast access to sampler settings, project settings and customizable picker wheel - what's most used is most accessible.
+- **Features:** lots of operations such as upscaling, interpolation, inference speedup techniques, mixed precision - already built-in or can be activated and installed within 3 clicks.
+- **Designed to tend to your taste:** rate resulting videos and compatible features will react according to your ratings, gradually changing outputs according to your preferences.
+
+FunUI opens at `ComfyUI's host:port/fun/` in your browser after you start ComfyUI, e.g. `127.0.0.1:8888/fun`.
 
 ## A look around
 
@@ -87,25 +92,17 @@ Teach the model your style from your own media and results you rated. Pick the d
 
 With git, inside your `ComfyUI/custom_nodes` directory:
 
-`git clone https://github.com/digital-garbage/FunUI`
+`git clone https://github.com/digital-garbage/FunUI && cd FunUI && pip install -r requirements.txt`
 
-`comfy-cli` (`comfy node install FunUI`) and ComfyUI-Manager install FunUI from Comfy Registry. Check Settings > About FunUI after installing to see which version you have.
+`comfy-cli` (`comfy node install ComfyUI-FunPack`) and ComfyUI-Manager install ComfyUI-FunPack from Comfy Registry. Check Settings > About FunUI after installing to see which version you have.
 
 ## Dependencies
 
-FunUI includes a [`requirements.txt`](requirements.txt) file for its Python dependencies.
-
-Install them with:
-
-`pip install -r requirements.txt`
-
-FunUI uses your existing ComfyUI/PyTorch install.
+FunUI uses your existing ComfyUI/PyTorch install. Optional dependencies install automatically when you install it from ComfyUI-Manager or comfy-cli, or can be manually installed from terminal: `pip install -r requirements.txt` inside FunUI folder.
 
 ## Models
 
-- **MiniMax H3**: the model v5 is built and tested around.
-- **Stable Diffusion 1.5**: experimental.
-- **LTX 2.3** (note: pictures are no longer dropped on the timeline for LTX; you choose them in the scene's References selector, and Image to Video and Video to Video are separate presets, so switch the preset to switch workflow): tested on a real model: Video to Video (direct) and Image to Video (start from References), each falling back to text to video when nothing is fed in; separate model files; LoRAs; Noise merging. Noise merging and the Attention explorer are the enhancements offered on LTX; the rest are held back there until proven. Please report problems in Issues.
+Manually tested on Hailuo MiniMax-H3, Lightricks LTX2.3, Lightricks LTX 2.5 and Stable Diffusion 1.5. Running other models using built-in modules is possible but not guaranteed.
 
 ## Documentation
 
@@ -114,10 +111,6 @@ Start with [How to start generating with FunUI](docs/how-to-start.md). The app a
 Writing a module or a UI feature? Start with [Developing FunUI](docs/README.md).
 
 Version history is available in [CHANGELOG.md](CHANGELOG.md).
-
-## Classic FunUI (4.x)
-
-FunPack 4 was a different app: Cutting Room, with Easy Gen as its simple mode, and no modules. It is no longer developed, but it is kept for anyone who prefers it: `git clone -b v4-classic https://github.com/digital-garbage/FunUI`, or browse the [`v4-classic`](https://github.com/digital-garbage/FunUI/tree/v4-classic) branch.
 
 ## Feedback
 
@@ -138,7 +131,7 @@ Thanks for understanding.
 
 ## Thank you
 
-I express my deepest gratitude to:
+I express my deepest gratitude to everyone who inspired FunUI, helped with its development and whose ideas have been ported into it:
 
 - ComfyUI and its whole community;
 - OpenAI and ChatGPT Codex;
