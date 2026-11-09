@@ -27,7 +27,7 @@ export const engine = (app) => function mount() {
         hint: "Every guidance module sits out of the run. Your choices are kept, switch it back off to restore them.",
         checked: gOff, onChange: (on) => ps.setGuidanceOff(on).then(draw) }) : null,
       category === "conditioning" && ps.modulesById()["conditioning_shot_camera"] ? c.toggle.default({ label: "Disable all automated camera prompt enhancement",
-        hint: "Shot camera stops adding cut times, views, reframes and camera moves to your prompt. Everything else stays as you set it. Your choices are kept.",
+        hint: "Shot camera stops adding cut times, views, reframes, camera moves and liked details to your prompt. Everything else stays as you set it. Your choices are kept.",
         checked: ps.cameraOff(), onChange: (on) => ps.setCameraOff(on).then(draw) }) : null,
       ...(category === "guidance" && gOff ? [c.hint.default({ text: "Guidance enhancements are disabled for this project. Their settings are hidden, not lost." })]
         : withSettings.filter((m) => (m.category || "") === category).flatMap((m) => [c.label.section({ text: m.title || m.id }),
