@@ -309,7 +309,7 @@ test("the wait for an upscale model is said once per Generate, not once per shot
   } finally { watcher.disconnect(); }
 });
 
-test("a busy check that errors or never answers does not block Generate, and Stop ends the wait", async () => {
+test("a busy check that errors does not block Generate, and Stop ends the wait", async () => {
   let queued = 0;
   const { app, host } = rig("idle", { generate: async () => { queued += 1; return true; } });
   app.has = new Set();

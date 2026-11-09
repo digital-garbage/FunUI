@@ -323,3 +323,14 @@ test("a carried picture goes after a pinned reference instead of into the free n
   assert.equal(r.inputs.r3.media_id, "frame");
   assert.equal(r.inputs.r1, undefined);
 });
+
+test("a carried picture with no reference number left is counted and said, and moves no other reference", async () => {
+  const refs = [{ id: "m", node: "Model" }, ...Array.from({ length: 16 }, (_, k) => ({ id: `r${k + 1}`, node: "Loader", roles: [{ at: `assets.reference_${k + 1}`, input: "media_id", wireTo: { slot: "m", input: `img${k + 1}` } }] }))];
+  const carry = [async () => ({ references: ["frame"], notes: [] })];
+  const r = await buildInputs({ project: { fixed_references: { q: 10, p: 16 } }, scene: { text: "", references: [] }, slots: refs, expand: async ({ text }) => ({ text }), hooks: carry });
+  assert.equal(r.inputs.r10.media_id, "q", "q keeps its number");
+  assert.equal(r.inputs.r16.media_id, "p");
+  assert.equal(Object.values(r.inputs).filter((v) => v.media_id === "frame").length, 0, "the frame is placed nowhere");
+  assert.equal(r.unwired, 1);
+  assert.equal(r.left.find((l) => l.id === "frame").what, "a carried picture");
+});

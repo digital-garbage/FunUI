@@ -32,10 +32,15 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); carried.push(id); }
   }
   // A carried picture goes after everything the scene and the project hold, not into a gap below a pinned reference (that would move the pinned one's model input off its number).
+  // With no number left it is not placed at all: it is counted and said.
+  const noRoom = [];
   if (carried.length) {
     const own = plan.ids.filter((id) => !carried.includes(id)), nums = referenceNumbers(own, plan.pins);
     let top = Math.max(0, ...nums);
-    plan.pins = { ...plan.pins, ...Object.fromEntries(carried.filter(() => top < MAX_REFERENCES).map((id) => [id, ++top])) };
+    const pins = { ...plan.pins };
+    for (const id of carried) { if (top < MAX_REFERENCES) pins[id] = ++top; else noRoom.push(id); }
+    plan.pins = pins;
+    plan.ids = plan.ids.filter((id) => !noRoom.includes(id));
   }
   // The scene's own picture (source_image) and its references are separate inputs with separate jobs: the picture gives the shape
   // (where a pipeline takes one), the references feed the model. Neither is read to decide the other.
@@ -120,6 +125,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const ignored = scene.source_image && (!source || (videoOnly && startId !== scene.source_image));
   if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: source ? "this pipeline starts from a video, not a picture" : "this pipeline starts from no picture" });
 
+  for (const id of noRoom) { unwired += 1; left.push({ id, at: "assets.reference", what: "a carried picture", why: `all ${MAX_REFERENCES} reference places are taken` }); }
   const prompt = rolesAt(slots, "generation.prompt")[0];
   let failedExpand = false;
   if (prompt) {
