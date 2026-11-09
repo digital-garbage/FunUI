@@ -10,9 +10,13 @@ The class below builds the tree exactly as ComfyUI does (so the noise of a seed 
 query to the tree's own span BEFORE torchsde sees it, which is the very same limit torchsde would apply, silently.
 """
 
+import warnings
+
 import torch
 
 _installed = False
+# torchsde clamps such a query itself, so the line is noise whenever the widened sampler below cannot be used or is bypassed.
+_START_WARNING = r"Should have t[ab]"
 
 
 def _internals_present(ksampling) -> bool:
@@ -41,6 +45,7 @@ def _log_skipped():
 def install():
     """Swap ComfyUI's BrownianTreeNoiseSampler for the widened one. Safe to call twice."""
     global _installed
+    warnings.filterwarnings("ignore", message=_START_WARNING)
     import comfy.k_diffusion.sampling as ksampling
     if _installed or getattr(ksampling.BrownianTreeNoiseSampler, "_funui_widened", False):
         _installed = True

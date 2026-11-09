@@ -123,3 +123,18 @@ def test_a_torchsde_with_other_internals_leaves_the_stock_sampler_in_place(monke
 
 def test_the_real_internals_are_recognised():
     assert _brownian()._internals_present(ksampling) is True
+
+
+def test_the_start_warning_is_silent_even_when_the_stock_sampler_stays(monkeypatch):
+    original = ksampling.BrownianTreeNoiseSampler
+    while getattr(original, "_funui_widened", False):
+        original = original.__mro__[1]
+    monkeypatch.setattr(ksampling, "BrownianTreeNoiseSampler", original)
+    mod = _brownian()
+    monkeypatch.setattr(mod, "_installed", False)
+    monkeypatch.setattr(mod, "_internals_present", lambda k: False)
+    sig = torch.tensor([0.9876543, 0.6, 0.4465445876])
+    with warnings.catch_warnings(record=True) as seen:
+        mod.install()
+        original(torch.zeros(1, 2, 3), sig.min(), sig.max(), seed=7, cpu=True)(sig[0], sig[2])
+    assert not [w for w in seen if "Should have" in str(w.message)]
