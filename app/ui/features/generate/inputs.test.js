@@ -324,6 +324,15 @@ test("a carried picture goes after a pinned reference instead of into the free n
   assert.equal(r.inputs.r1, undefined);
 });
 
+test("a carried picture takes the last number, several carried pictures take the next ones, and the one past the end is said in words", async () => {
+  const refs = [{ id: "m", node: "Model" }, ...Array.from({ length: 16 }, (_, k) => ({ id: `r${k + 1}`, node: "Loader", roles: [{ at: `assets.reference_${k + 1}`, input: "media_id", wireTo: { slot: "m", input: `img${k + 1}` } }] }))];
+  const carry = [async () => ({ references: ["f1", "f2"], notes: [] }), async () => ({ references: ["f3"], notes: [] })];
+  const r = await buildInputs({ project: { fixed_references: { q: 14 } }, scene: { text: "", references: [] }, slots: refs, expand: async ({ text }) => ({ text }), hooks: carry });
+  assert.deepEqual([r.inputs.r14.media_id, r.inputs.r15.media_id, r.inputs.r16.media_id], ["q", "f1", "f2"], "numbers 15 and 16 go to the first two carried pictures");
+  assert.equal(r.unwired, 1);
+  assert.match(r.left.find((l) => l.id === "f3").why, /no reference number is left/);
+});
+
 test("a carried picture with no reference number left is counted and said, and moves no other reference", async () => {
   const refs = [{ id: "m", node: "Model" }, ...Array.from({ length: 16 }, (_, k) => ({ id: `r${k + 1}`, node: "Loader", roles: [{ at: `assets.reference_${k + 1}`, input: "media_id", wireTo: { slot: "m", input: `img${k + 1}` } }] }))];
   const carry = [async () => ({ references: ["frame"], notes: [] })];

@@ -125,7 +125,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const ignored = scene.source_image && (!source || (videoOnly && startId !== scene.source_image));
   if (ignored) left.push({ id: scene.source_image, at: "assets.source_image", why: source ? "this pipeline starts from a video, not a picture" : "this pipeline starts from no picture" });
 
-  for (const id of noRoom) { unwired += 1; left.push({ id, at: "assets.reference", what: "a carried picture", why: `all ${MAX_REFERENCES} reference places are taken` }); }
+  for (const id of noRoom) { unwired += 1; left.push({ id, at: "assets.reference", what: "a carried picture", why: `no reference number is left after the pinned ones (the highest, ${MAX_REFERENCES}, is taken)` }); }
   const prompt = rolesAt(slots, "generation.prompt")[0];
   let failedExpand = false;
   if (prompt) {
