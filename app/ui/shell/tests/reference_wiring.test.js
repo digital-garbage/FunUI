@@ -215,3 +215,12 @@ test("a reference with no place is named by its kind and number", () => {
   assert.equal(r.left.length, 1);
   assert.equal(r.left[0].what, "sound 1");
 });
+
+test("the start video of a video-in run is numbered but not sent: the other videos keep the input of their number", () => {
+  const slot = (n) => ({ id: `ref_source_${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "r2v", input: "x" } }] });
+  const routeOf = (k, s, role) => routeFor(k, R2V, LOADER, role.wireTo.slot);
+  const r = wireReferences(["va", "vb"], [slot(1), slot(2)], [], {}, () => "video", routeOf, () => false, new Set(["va"]));
+  assert.equal(r.unwired, 0);
+  assert.equal(r.overrides.r2v["ref_videos.ref_video_1"][0], "ref_source_2", "vb is video 2 although va is not sent");
+  assert.equal(r.overrides.r2v["ref_videos.ref_video_0"], undefined);
+});

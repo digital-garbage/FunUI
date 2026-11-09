@@ -308,3 +308,22 @@ test("the wait for an upscale model is said once per Generate, not once per shot
     assert.equal(seen.length, 1, "said once although two shots waited");
   } finally { watcher.disconnect(); }
 });
+
+test("a busy check that errors or never answers does not block Generate, and Stop ends the wait", async () => {
+  let queued = 0;
+  const { app, host } = rig("idle", { generate: async () => { queued += 1; return true; } });
+  app.has = new Set();
+  app.api.upscaleBusy = async () => { throw new Error("down"); };
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 1, "an error counts as not busy");
+  // busy for good: the second shot waits; pressing the Generating… button stops it
+  let asked = 0;
+  app.api.upscaleBusy = async () => { asked += 1; return { busy: asked > 1 }; };
+  const run = app.runner.units(["a"], 2);
+  await new Promise((r) => setTimeout(r, 300));
+  [...host.querySelectorAll("button")].find((b) => /Stop/.test(b.textContent)).click();
+  const t = Date.now();
+  await run;
+  assert.ok(Date.now() - t < 3500, "the wait ended with Stop");
+  assert.equal(queued, 1, "no shot of the stopped run went");
+});

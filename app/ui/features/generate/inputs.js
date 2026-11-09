@@ -1,6 +1,6 @@
 // What one run sends: the scene's prompt (expanded with anchor/postfix/$variables), the project's video
 // settings, the scene's picked media -- each placed by the ROLE a pipeline slot declares, never by slot id.
-import { referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
+import { MAX_REFERENCES, referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
 import { DRIVEN } from "../../shell/scenes.js";
 import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
@@ -30,6 +30,12 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { hookNotes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
     outs.push(out);
     for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); carried.push(id); }
+  }
+  // A carried picture goes after everything the scene and the project hold, not into a gap below a pinned reference (that would move the pinned one's model input off its number).
+  if (carried.length) {
+    const own = plan.ids.filter((id) => !carried.includes(id)), nums = referenceNumbers(own, plan.pins);
+    let top = Math.max(0, ...nums);
+    plan.pins = { ...plan.pins, ...Object.fromEntries(carried.filter(() => top < MAX_REFERENCES).map((id) => [id, ++top])) };
   }
   // The scene's own picture (source_image) and its references are separate inputs with separate jobs: the picture gives the shape
   // (where a pipeline takes one), the references feed the model. Neither is read to decide the other.

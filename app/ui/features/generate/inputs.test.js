@@ -314,3 +314,12 @@ test("a picture on the scene (the aspect source) never changes what the referenc
   }
   learn([]);
 });
+
+test("a carried picture goes after a pinned reference instead of into the free number below it", async () => {
+  const refs = [{ id: "m", node: "Model" }, ...[1, 2, 3].map((n) => ({ id: `r${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "m", input: `img${n}` } }] }))];
+  const carry = [async () => ({ references: ["frame"], notes: [] })];
+  const r = await buildInputs({ project: { fixed_references: { pinned: 2 } }, scene: { text: "", references: [] }, slots: refs, expand: async ({ text }) => ({ text }), hooks: carry });
+  assert.equal(r.inputs.r2.media_id, "pinned", "the pinned picture keeps number 2");
+  assert.equal(r.inputs.r3.media_id, "frame");
+  assert.equal(r.inputs.r1, undefined);
+});
