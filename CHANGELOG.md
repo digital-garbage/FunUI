@@ -1,201 +1,187 @@
 # Changelog
 
+What is new in each version, in plain words. Newest first.
+
 ## [Unreleased]
 
 ## [5.2.0] "Classy Chopper" - 2026-11-08
 
+### New: finishing touches for the finished video
+
+- **Watermark.** Put a text or a picture from your media bin in any corner of the finished video (Settings > Engine > Post). You choose how see-through it is, how big, how far from the edge, and can add an outline. Transparent PNGs keep their transparency. Off by default.
+- **Picture clean-up options** (Settings > Engine > Post, all off by default): smooth jagged edges, auto contrast, auto brightness and colour strength. They are measured once for the whole clip, so nothing flickers.
+- **Interpolate** adds in-between frames to a finished video with NVIDIA's frame generation (2 to 4 times the frames, same length and sound). Needs an RTX card. Choose Never, a button next to the rating, or automatic after every render (Settings > Editor).
+- **Save Video quality is now a setting, and the default is "high".** Files are bigger and take a little longer to save; colours are also very slightly brighter than before.
+
+### New: faster and sharper generating
+
+- **Two stages** (Settings > Engine > Sampling, MiniMax H3): the first steps run on a smaller picture and the rest finish at full size. You can pick how the picture is enlarged in between, including a learned upscaler file.
+- **Veda sparse attention** (experimental, NVIDIA GPU): a quicker way to compute attention. The model file can be downloaded from Settings > Models.
+- **MXFP8 for the H3 loader** (Blackwell GPUs): roughly twice the matrix speed.
+- **Decode-only VAE** in the VAE Loader: a second, faster VAE used only for the last decoding step (for example the Sol-H3 VAE).
+- **Resolution rule** in Project settings: choose whether Width and Height mean the short side, the long side or the pixel count. New projects start on the short side; older projects keep their size.
+- **Run meter** (off by default) shows how grainy the picture is and how much it still changes each step, and compares it with your last run of the same seed. Handy to see what one setting did.
+
+### New: LoRAs, prompts and shortcuts
+
+- **LoRA Loader holds up to 8 LoRAs** and shows one slot at a time. Each can be applied to the first stage, the second stage or both (when Two stages is on).
+- **More LoRA files work**, including the Diffusers-style files such as NVIDIA's Open-H3-Regenerate-2K refiner.
+- **Prompt enhancer: Dynamic style** asks for a clear action, a change over time and secondary motion in every shot.
+- **Shortcuts: Find and replace, and Common phrases.** Search every shortcut at once, preview the changes, then apply them. Common phrases lists wording shared by several shortcuts so you can fix it in one place.
+- **Attention explorer: "Change the sound too"**. Turn it off to leave the sound's attention alone.
+
 ### Changed
 
-- **Old scenes whose Source was "empty" or "image" now carry the previous clip on (Continuity)**, and a picture dropped on an empty timeline makes a carry scene.
-- **Save Video quality is a setting now, and "high" is the default** (constant quality 16 where it was 23, a slower encoder preset): files are larger and encode a little slower, and clip trims and the final render re-encode at 16 instead of 23. Saved pipelines without the input get "high". The finished picture is also rounded to 8 bits instead of cut down, so every value is up to one level brighter than before.
-- **Auto Montage is gone** (the button, its window and its code). A saved project that already holds pieces it made loads normally: they stay on the timeline as ordinary copies and are still never regenerated.
-- **"Video detail" (Engine > Post) is gone.** The other Post settings (edge smoothing, auto contrast, auto brightness, colour strength) stay. A project or setting that still holds Video detail loads normally: its values are skipped and the Log says so once.
-- **LoRA Loader shows one slot at a time.** With no LoRA picked it shows only the first picker. Once a LoRA is chosen its strengths (and stage) appear, together with the picker for the next slot, and so on up to eight. A slot that already holds a LoRA never hides.
-- **Simpler Project and Scene settings.** The rarely used groups (Video input, Source trim, Final render size, Split preview) are folded under "More" and stay open once opened.
-- **"Start shots" is gone.** A scene with no picture and no references is made from the prompt alone; with references it starts from them in the way the model supports (image, video or reference to video).
-- **Scene settings lost what the timeline already does.** "Pause after this clip" is gone: drag a clip along the video lane and it lands where you drop it, with its edges sticking to neighbouring clips, the playhead and zero (Shift holds it free); the pause before it follows and what comes after moves along. "Source trim" is gone too (the clip's edges trim it, Alt on the left edge slides what plays), and so is the scene's "Source" choice, which is now decided by what the scene has.
-- **Video input is the project's only.** The per-scene copy and the "Reference videos use" choice are gone; scenes' old own settings are no longer read.
-- **Continuity moved into Project settings** as "Pass the last frame of previous scene as reference into next scene". The Continuity page left Settings; "Don't continue from a fade to black" is no longer a switch, a shot after a clip that ends dark always starts without a picture.
-
-- **Two stages: "Trilinear" is gone from the enlarge methods.** It gave exactly the same result as Bilinear (time is never resampled), so it was a duplicate with a misleading name. A project or setting that saved it now loads as Bicubic, the default (any enum setting can declare `renamed_options` for this).
+- **Simpler scene and project settings.** These are gone because the timeline already does the job: "Pause after this clip" (drag the clip instead; edges snap to neighbours and the playhead, Shift holds it free), "Source trim" (trim with the clip's edges), the scene's "Source" choice and "Start shots" (a scene now starts from what it has: a prompt, a picture or references).
+- **Video input is set once per project.** The separate per-scene copy is gone.
+- **Continuity moved to Project settings** as "Pass the last frame of previous scene as reference into next scene". A shot after a clip that ends dark always starts fresh.
+- **Auto Montage is gone.** Projects that already contain its pieces open normally; the pieces stay as ordinary clips.
+- **"Video detail" is gone** from Post settings. Projects that used it open normally and the Log mentions it once.
+- **Rarely used settings** (Video input, final render size, split preview) sit under "More".
+- **Scenes that used the old Source choices** now carry on from the previous clip like the default.
 
 ### Fixed
 
-- **A project opens with scene Source values that no longer exist (image, empty, mixed...) as the default**, so Continuity carries again for those scenes. **Generate (and the Training preview) is refused while an upscale model is running**, also after a page reload or in a second tab (they share ComfyUI's model memory). **The Fast & Simple R2V preset decodes with None when the Sol-H3 VAE is not installed**, instead of being refused. **The tour callout follows its button when it is redrawn or renamed (Generate becomes Generating…).** **Upscale "Always" tries again after a running generation, for the same project and render only.** **The timeline header is one row from 1024px wide.**
-- **Reference marks on the media tiles are numbered per kind**: the first sound is R1 even when a picture holds the first slot (it was R2), as the model's inputs are numbered.
-- **Pinned references feed the model input of their number, per kind** (a pinned sound or picture was wired by its place in the list). A video's own sound with no input to go to is said. The Training preview says a reference that did not fit. The next shot waits while an upscale model runs, and "looked for" names the picture or sound number.
-- **Settings of a module that no longer exists are cleared from a project when it opens** (such as the removed Video detail), and saved at once, so the Log stops warning about them. Nothing is cleared while a module failed to load, and a module a model merely hides keeps its settings.
-- **Save Video carries the sampler's own last picture to the next shot** (it was carrying the Post-processed one). **Interpolate keeps the full length at 3 and 4 times** (it ended up to 75 ms short of the sound). **LoRA training refuses a model it cannot copy with the reason** (MXFP8 or int8 conversion in the loader), and a ticked MXFP8 that was skipped no longer blocks training. LoRA files that spell their matrices lora_down and lora_up load like lora_A and lora_B.
-- **Model Loader: no more reload on every run, and no half-way eviction.** Two loaders of one file in one graph no longer reload the model each run. When the same file comes back with other settings (SLA method, attention...), ComfyUI frees the earlier copy when the run ends instead of evicting it half way. A ComfyUI that cannot free the earlier copy is said in the Log.
-- **Timeline is never shorter than its lanes**, even from a saved height. **LoRA files with Diffusers modules that have no place in H3** are counted and alerted. **A Stop pressed before Upscale or Interpolate gets its turn ends the job at once**, and only those two jobs wait for each other. **A removed watermark or upscaler file no longer refuses a render.** **A second-stage LoRA is said when Two stages is not running.** **Upscale with a model file is refused while ComfyUI has a generation running or queued** (and again when the job starts); RTX Super Resolution is not.
-- **No more "memory leak with model" warning when ComfyUI loses track of a model.** When a model's patcher died and its parent link was already gone, ComfyUI treated the model as leaked on every load although other cached patchers (the loader's, the LoRA's, a modifier's output) still held it. Such an entry is now pointed at the deepest live patcher of its model before ComfyUI's check, so the model is tracked again and is freed normally. The leak report in the Log also states each hand-over with no parent (and the first 40 others) and the state of each tracked model, so a real leak is easier to place.
-- **Build keeps a far-below-best draft's share of the odds**, and the word "constructor" is no weight.
-- **No more torchsde "Should have ta>=t0" warning** on SDE-type samplers (it appeared whenever the schedule's smallest sigma had a 7th decimal of 5 or more, e.g. with Two stages). ComfyUI's Brownian noise now limits a query to its own span before torchsde sees it, so torchsde's rounding never lands outside it. The noise itself is unchanged and the picture was never affected.
+- **Upscaling no longer makes the next generation reload all models.** Upscaling now runs beside ComfyUI instead of as one of its queued jobs. Generate is refused while an upscale model is working, so the two cannot fight over memory.
+- **The Model Loader no longer reloads the model on every run** when two loaders use the same file, and a switch of attention or SLA settings frees the earlier copy cleanly.
+- **No more false "memory leak" warning** from ComfyUI after a model's links were lost.
+- **No more "Should have ta>=t0" warning** with SDE-type samplers. Pictures were never affected.
+- **Reference numbers on media tiles match the model's inputs**, counted per kind (the first sound is R1 even if a picture holds the first slot). Pinned references go to the input of their own number, and the Log says when something had nowhere to go.
+- **LoRA training says why** when it cannot copy the model, and learns from LoRA files that name their parts `lora_down` and `lora_up`.
+- **The timeline is never shorter than its lanes**, the header fits one row from 1024px wide, and the guided tour follows buttons that get renamed.
+- **"Build" keeps weaker drafts in play** and no longer treats the word "constructor" as a weight.
+- **Stop works at once** while an Upscale or Interpolate waits for its turn.
+- **Settings of removed features** are cleared when a project opens, so the Log stops warning about them.
 
-### Added
+<details>
+<summary>Technical notes</summary>
 
-- **Watermark** (Settings > Engine > Post, off by default): a text or a picture from the media bin in a chosen corner of the finished video. Opacity, width (as a share of the video's width), distance from the edge, and an outline with its own size, colour and opacity; text also has its colour. A transparent PNG keeps its transparency and its outline follows its shape. It is laid on after the picture's other Post settings, so they never change it, and it is in the saved file only: the next shot's start picture does not carry it. A picture that is missing, or an empty text, is said in the Log and the video goes out without it.
-- **Prompt enhancer: Dynamic style.** A Style choice in the Enhance panel (default: unchanged). Dynamic keeps every rule of the default but asks for a concrete action beat, a change over time and secondary motion in each shot. Instructions you type still override it.
-- **Shortcuts: find, replace and common phrases.** The ⋯ menu in Shortcuts has Find and replace (search the text of every shortcut, preview each change, match case or not, whole words only or inside words too, then change them all in one go, or remove the phrase) and Common phrases (words and phrases of any length used in more than one shortcut, most shared first, with counts; pick one to correct it everywhere). Triggers are never touched.
+- Veda needs CUDA, Triton and a predictor file in `ComfyUI/models/veda`; with Veda the SLA sparsity, rising share and references settings are not read yet.
+- Two stages hands the second stage the model's clean guess; the first stage keeps the full picture's shape within a few percent.
+- Save Video "high" is constant quality 16 (it was 23) with a slower encoder preset, and the finished picture is rounded to 8 bits instead of truncated. Older saved pipelines get "high".
+- MXFP8 needs torch 2.10 or newer with CUDA 13; elsewhere it is skipped with a note.
+- Interpolate needs nvidia-vfx 0.2 or newer; switching the add-on on updates an older copy.
 
-- **Sparse attention method "veda"** (H3 loader, SLA on, method veda; Experimental, tested on a GPU). A small learned predictor (Veda, arXiv 2605.30325) picks which 128-token tiles of the attention map matter and an INT8 Triton kernel computes only those, at the predictor's own trained budget (90% for text-to-video). It needs CUDA and Triton and a predictor file in ComfyUI/models/veda, chosen in "veda_predictor" (auto takes the text-to-video file, else the first). Works with LoRA (it sees q/k/v after the LoRA), MXFP8 (weights only: q/k/v stay bf16), Two stages (a size the predictor was not trained for uses the nearest tile plan, and the log says so), dense steps and the attention backend, which keeps the text refiner, masked calls and short sequences. sla_sparsity, the rising share and the references choice are not read in this first version. When Veda cannot run, the status says why and the chosen backend is installed on its own. One log line per run in the SLA line's wording (calls, tile pairs kept, asked vs real sparsity, share of full attention computed, steps at full attention). The Triton kernel is checked against an exact reference on the GPU before first use; the torch half (tiles, predictor, selection, the override on a real tiny H3) is tested on CPU.
-- **Veda predictor download** (Settings > Models, shown only for method veda): a button per official file that is not in models/veda yet, directly under the predictor selector; nothing once both are there (text-to-video, reference-to-video) fetches it straight from Hugging Face on your click, with the MiniMax H3 Community License named and linked beside it. FunUI does not host or bundle the file. The download streams to a `.part` file and is kept only when its size and checksum match; taggers and this share one downloader (`core/fetch.py`).
-- **Run meter** (Settings > Engine > Sampling, off by default). Logs how grainy the picture is, across it and over time, and how much it still changes at each step, then compares with the previous run of the same seed. It adds no model call, so flipping one setting and rendering again shows what that setting did.
-- **Post settings for the finished video** (Settings > Engine > Post, all off or neutral by default): Smooth jagged edges (Light or Strong; FXAA-style, only strongly contrasting edge pixels are softened), Auto contrast, Auto brightness and Colour strength. Contrast and brightness are measured once from 16 frames spread over the clip and applied as one fixed curve, so nothing flickers from frame to frame. They run on the frames before encoding, so NVENC, its CPU fallback and every codec get the same picture. Save Video reads them from the pipeline's settings object (older saved pipelines are linked to it automatically). Tested on a GPU.
-- **LoRA Loader: "Apply to stage"** (First, Second or Both, per slot). Shown only while the Two stages module is present and not switched off for the project; the feature itself may stay off in the sampler settings. A LoRA set to First works only in the smaller first stage, one set to Second only in the full-size steps; Two stages hands each stage the model with its own LoRAs, and ComfyUI re-patches the weights between the stages. Only the model changes for First or Second (the text encoder is encoded before sampling, so its strength is not used). When Two stages is off, or a run cannot be cut in two, those LoRAs are not applied and the Log says so. Both is the old behaviour. Tried on a small model on the CPU with every feature switched on; also tested on a GPU.
-- **LoRA Loader reads LoRAs written for the Diffusers layout of H3** (separate q, k and v, `ff.net`, `transformer_blocks`), such as NVIDIA's Open-H3-Regenerate-2K refiner, which used to report "matched nothing". The names are translated, q, k and v are aimed at their rows of H3's fused attention weight, and the halves of the gated MLP are put in H3's order (its layout stores them the other way round, so without that the LoRA loads and quietly does the wrong thing). Strength 1.0, as the author says it is already folded in.
-- **Attention explorer: "Change the sound too"** (Settings > Engine > Sampling). Turn it off and only the picture's attention changes: the sound's rows keep the model's own attention and the sound is no longer one of the clip regions. On models that mix picture and sound in one sequence, Prompt focus stays off while the sound is kept as is. On by default, so nothing changes until you switch it.
-- **LoRA Loader: up to 8 LoRAs in one node.** Slots 2 to 8 add a file and their own model and text encoder strengths; they apply in order after slot 1, and a slot left on None is skipped. Slot 1 keeps its old inputs, so saved pipelines load unchanged, and chaining several loaders still works.
-- **Two stages: the first stage keeps the shape of the full picture.** Each side was rounded on its own, which bent the shape by up to 6 percent (a 18x31 latent got a 12x22 first stage), so the layout was decided in a squashed picture and then stretched. The grid is now chosen so width over height matches the full one (within a few percent, in even steps).
-- **Two stages: Latent upscaler as an option** (Settings > Engine > Sampling, "How the hand-over is enlarged"). Bicubic stays the default; plain choices Mitchell, Catmull-Rom, Lanczos, Bislerp, Bilinear, Trilinear (same as Bilinear here, time is never resampled), Area and Nearest-exact are there too (Lanczos is done on the numbers, not through 8-bit pictures as ComfyUI's would, which a latent cannot survive). Or pick Latent upscaler and a file from models/latent_upscale_models (H3's convolution upscaler) to enlarge the first stage's clean guess with the learned network instead. It runs at the ratio that reaches the full size (it works in even steps, then a bicubic trim fits the exact grid), once per run, on a small latent; the file is loaded once and kept while the upscaler is the chosen method, and leaves memory when you switch to another method or turn Two stages off. A missing or unreadable file falls back to bicubic with a note.
-- **Upscale no longer makes the next generation reload the models.** It ran as an extra ComfyUI prompt without the workflow's loaders, and ComfyUI's cache lets go of loaders a prompt does not use; it now runs as a background job of FunUI, beside ComfyUI's queue (Interrupt in ComfyUI no longer stops it).
-- **Interpolate** (module of its own, add-on **NVIDIA RTX Frame Generation**): adds in-between frames to a finished render with NVIDIA's RTX frame generation (2 to 4 times the frames; the length and the sound stay, 24 fps becomes 48 fps). Settings > Editor > Interpolate: Never, a button beside the rating, or always when a render finishes. Quality Fast, Balanced or Best, and 10-bit processing. It runs as a background job of FunUI, not as a ComfyUI prompt, so it does not make ComfyUI drop the workflow's loaded models (an extra prompt without loaders does exactly that, and the next generation reloads them); the NVIDIA model also stays loaded between presses. Works beside Upscale in either order and never runs twice on the same file. Needs an RTX card and nvidia-vfx 0.2 or newer: switching the add-on on moves an older nvidia-vfx up (nothing else is touched), and Super Resolution never moves a newer one back. ComfyUI's own RIFE/FILM interpolation nodes are a different thing and are not used. Works on a rental GPU (a few seconds for a clip).
-- **Project settings > Resolution is the** (H3, LTX image to video): what Width and Height mean once the scene picture sets the shape. Short side (the smaller number is the clip's shorter side), Long side (the larger is its longer side) or Pixel count (the old rule: about Width x Height pixels, which turned 1024x1024 into 1376x768 for a wide picture). New projects start on Short side; projects saved earlier keep Pixel count, so nothing changes size by itself. The H3 preset no longer needs the KJNodes ImageTransformKJ node for this (saved H3 pipelines are switched over on load).
-- **VAE Loader: Decode-only VAE (Optional)**: a second VAE used only for the final picture decode while the first still encodes (references, start pictures). For decoders without an encoder: MiniMax H3's Sol-H3-VAE (`sol_h3_vae.safetensors`, whole clip at once, about 2.5x faster decode, needs a ComfyUI newer than 0.43.1) and the X2 Detail VAE.
-- **H3 loader: MXFP8** (Blackwell GPUs): stores the attention and MLP weights of the middle blocks as MXFP8 (first 2 and last 3 blocks stay bf16) for about twice the matmul rate. Needs torch 2.10+ with CUDA 13; skipped with a note elsewhere. Tested on a rental GPU.
-- **Two stages** (Settings > Engine > Sampling, H3): the first steps of a run go on a smaller picture (First stage size, 0.7 by default), the model's clean guess is resized to the full size and the last steps finish there. Works with any sampler; skipped for a run that starts from a picture or a mask.
+</details>
 
 ## [5.1.0] "Classy Chopper" - 2026-10-27
 
+### New
+
+- **LTX 2.3 is tested on a real model**, with two presets: Video to Video (direct) and Image to Video (from References). Both fall back to text to video when no picture or video is given, and the run says so.
+- **Attention explorer** (needs a Taste key): each run tries a small attention change per group of blocks, and your ratings decide which changes stay. Works on MiniMax H3 and LTX.
+- **Noise merging** can run a whole second video beside yours from a second seed and blend the two, or mix the starting noise of two seeds.
+- **Identity bank** (LTX, needs a Taste key) keeps the look of clips you like and leans on it in the next ones. Not yet tried on a real LTX run.
+- **Guide frames** (LTX) use a picture from the clip before as a gentle guide for the next shot.
+- **Rising sparsity** for SLA: skip fewer attention blocks early and more late. One real H3 render kept its quality.
+- **Video input** (Project and Scene tabs): trim, resize, crop and re-time reference videos before the model sees them. Off by default.
+- **Temporal style: auto** picks a style for each shot from its own words.
+- **Flip width and height** button in Project settings.
+- **Block settings know the model**: they show how many blocks it has and keep your list inside that range.
+
 ### Changed
 
-- **LTX users: you no longer drop pictures on the timeline to feed the model.** The start picture is chosen in the scene's References selector (reference picture 1), and Image to Video and Video to Video are separate workflows: switch the preset (Settings > Models & Pipeline) to change between them; a pipeline is not interchangeable between the two.
-- **On LTX only Noise merging, the Attention explorer and Taste are offered for now.** Every other sampling and guidance enhancement (REINS, Block repeat, Identity bank, Guide frames, Shot memory, Camera move, Temporal style and the rest) is held back there until it has been proven on a real LTX run; H3 is unchanged. A model holds a module back with a `hides:<module id>` trait, so taking one off the list in `modules/models/ltx/__init__.py` (`HELD_BACK`) is all it takes to bring it back. Saved settings are kept; the Log says "held back for now".
-- **Load Media decodes only what it keeps**: a prepared video decodes just the kept frames and shapes each as it comes, and a picture input reads one frame, so a long clip no longer sits whole in memory.
-- **A clip named in Japanese (or any non-ASCII name) no longer fails a run on a machine whose console is not UTF-8.**
-- **Restoring a saved pipeline no longer adds another preset's input slots** (an Image to Video loader landing in a Video to Video pipeline made a picture reference fail with "identity: there is no such slot").
-- **The ComfyUI log survives a restart**: the console is kept on disk as it prints, and the Log window has a "Previous run" button for the run before the last start. The Log also says how much RAM and GPU memory is in use when a LoRA is applied and when sampling starts, so a run the box kills for memory leaves a trace.
-- **Shot camera and SLA are H3-only**: models announce `shot_prompts` and `sparse_attention` (only H3 does), shot camera requires the first and the loader's SLA fields the second, so both are hidden when an LTX model is picked.
+- **LTX: the start picture is now reference picture 1** in the scene's References selector instead of a picture dropped on the timeline. Image to Video and Video to Video are separate presets.
+- **On LTX, only Noise merging, the Attention explorer and Taste are offered for now.** The other enhancements come back once they have been proven on a real LTX run. Your saved settings are kept.
+- **Shot camera and SLA are shown for MiniMax H3 only.**
+- **Long clips use less memory** when loaded.
+- **The ComfyUI log survives a restart**, and the Log window has a "Previous run" button. It also notes RAM and GPU memory use, so a run that gets killed for memory leaves a trace.
 
 ### Fixed
 
-- **An older LTX Image to Video pipeline now falls back to text to video** when no picture is fed in (its start slot is upgraded on load to bypass the anchor and use a plain stand-in), instead of refusing to start. The fallback chain is now also run end to end in a test.
-- **Cancelling during a Noise merging second pass now cancels** instead of being swallowed as a failed merge.
-- **Identity bank's lock** no longer counts probe passes (such as Noise merging's second answer) as steps of the run.
-- **Attention explorer ratings made on H3 no longer teach LTX** under the same Taste key: the two model families keep their ratings apart.
-- **Guide frames** refuses a NaN position instead of crashing.
-
-### Added
-
-- **Block settings know the model**: the file's header gives its block count, the Blocks hint says "This model has blocks 0-47", and a list is cut to those blocks when you commit it.
-- **Temporal style: auto** picks a style for each shot from its own words (motion words punch, calm words hold, loop words loop).
-- **Randomizer, REINS and Block repeat on LTX** (new traits `block_scope` and `block_rows`); the other block-hook features stay H3-only. Whole-span repeat runs as each-block on LTX.
-- **Attention explorer on LTX**: the depth groups and the clip regions (four time bands of the picture, and the sound) work; Prompt focus stays H3-only and is left out on LTX.
-- **Identity bank** (LTX, needs a Taste key): keeps the attention look of the clips you like and leans on it in the next ones of the same size (BachVid), harder on steps where the picture is still changing (KV-Lock). Untested on a real LTX run.
-- **Guide frames** (LTX, Settings > Engine): lays the middle picture of the clip before, or one picture from each of the last clips (needs the JoyAI-Echo LoRA), into the shot as weak guides through ComfyUI's own LTX guide attention. The Image to Video preset has the new slot and crops the guides again before decoding.
-- **LTX 2.3 is tested** on a real model, with two presets: **Video to Video, direct** (the video is encoded and sampled again from part-way down the schedule; the sigmas slot, default `0.909375, 0.725, 0.421875, 0.0`, says how much changes) and **Image to Video, from References** (reference picture 1 is the start frame; nothing is picked twice). The earlier LTX presets (Text to Video, Image to Video, Anchor as guide, IC-LoRA) are gone. **Text to video is the fallback in both**: with no picture or video fed in, the anchor is bypassed (image to video) or a grey clip of the project's size and length is sampled with the whole schedule (video to video), and the run says so. Presets load separate files (diffusion model, video VAE, audio VAE, text encoder). LoRAs and Noise merging work on LTX; other enhancements are not tested there yet. Video to Video shows Width, Height and Length "(no video)" in Project settings for that fallback.
-- **LTX Image to Video takes its shape from the aspect source**: the picture on the timeline gives the clip its aspect ratio and the project's Width x Height give the pixel budget (new **FunUI Aspect Size** node), as on H3. With no such picture the project's own shape is used. It is not the start frame: that is reference picture 1.
-- **Flip width and height** button in Project settings, and on the Video input card.
-- **Video input** (Project and Scene tabs): reference videos (and, on LTX, a video picked as the scene start, fed as frames) from the Media bin can be got ready before the model sees them, like a video loader node: target width and height (fill, fit with bars, or stretch; rounded to a multiple), edge crop in percent, frame rate (project's, the video's own or a number), skip first N frames, cut last N, every Nth frame, frame cap. The sound is cut to match. One set per project and one per scene; a dropdown in Project settings says whose is used (Automatic: the project's when switched on, otherwise the scene's). Off by default, so existing projects load videos as before. Works for any model whose pipeline takes reference videos (MiniMax H3 today). Tested on made-up frames and an encoded file, not yet on a rental.
-- **Attention explorer** (needs a Taste key): each run tries a small attention change (sharper, as is or looser) per depth group of blocks, and your ratings decide which changes stay; how far a change goes learns from ratings too (or type your own). The Log names the exact blocks made sharper or looser. Also learns, per run: how strongly each group attends to your prompt ("Prompt focus"), and the clip's four time bands and its sound separately ("Clip regions"). A rating counts more for runs of a similar prompt, and a combination you liked on this prompt is reused (with some groups re-drawn). Zero extra model passes. Verified on H3 and LTX.
-- **Noise merging** (Settings > Engine > Sampling): "Merge" can also run a whole second video beside yours from the second seed ("Second run": one extra pass at every step up to the last one named, blended at the steps you name), or mix the run's starting noise with a second seed's (no extra cost, variance kept). Or, at the steps you name, the step is answered a second time on the same picture with different noise (a second seed), and the two pictures are blended at your strength. Merge order picks which one is the base. The second seed is random each run unless you type one. Picture and sound are both merged (the sound can be left out with "Merge sound too"). "Second pass new noise" sets how much of the step's own noise the second pass swaps for the second seed's (1 all, lower keeps more of your own). Costs one extra model pass per merged step. Verified on H3 and LTX.
-- **SLA rising sparsity** (diffusion model loader, `sla_sparsity_start`): skip fewer attention blocks on early steps and more on late ones, in a straight line up to `sla_sparsity`. Off at 0. One real H3 render (4 steps, 0.70 to 0.90): quality held, perhaps slightly better. Idea from GSRS (arXiv 2610.21129); only the schedule is taken, not its other parts.
+- Clip names in Japanese (or any non-ASCII name) no longer fail a run on a console that is not UTF-8.
+- Restoring a saved pipeline no longer adds another preset's input slots.
+- Older LTX Image to Video pipelines fall back to text to video when no picture is given, instead of refusing to start.
+- Cancelling during a Noise merging second pass now cancels.
+- Attention explorer ratings made on H3 no longer teach LTX.
+- Guide frames no longer crash on an invalid position.
 
 ## [5.0.3] "Classy Chopper" - 2026-10-25
 
 ### Changed
 
-- **FunPack is now FunUI.** It outgrew "pack": it is a full interface. New logo, a wink `;)`, before the name in the top-left corner and in Settings > About. Node ids, log lines and docs follow the new name (`FunUISampler`, `FunUI/Loaders` and so on). The 5.x codename is now "Classy Chopper".
-- **The app is served at `/fun/`** instead of `/funpack/`. The old address redirects.
+- **FunPack is now FunUI**, with a new logo. The 5.x codename is "Classy Chopper".
+- **The app moved to `/fun/`.** The old address redirects.
 - Picker wheel settings are saved with the project.
-- Repository moved to `digital-garbage/FunUI`; GitHub redirects the old address, so existing clones keep updating.
+- The repository moved to `digital-garbage/FunUI`; the old address redirects, so existing copies keep updating.
+- Projects, imported workflows and saved settings with old `FunPack` names are renamed as they load. Nodes already placed in ComfyUI's own graph under the old names need to be added again.
+- Decisiveness is now a "Commitment" slider from -10 to +10 (0 is off); a value saved by an older version resets to 0.
 
-### Added (experimental)
+### New (experimental)
 
-- **PTD few-step** (Settings > Engine > Sampling, MiniMax H3 only): renders in the 4 to 8 hops of a PTD adapter file from `ComfyUI/models/ptd` instead of a long schedule, with no CFG. Reads the EPFL fl2va and taobao-content-ai Ref2VA releases, as bf16 or int8, on the full or pruned base; ordinary LoRAs stack with it. The chosen sampler, steps and scheduler are replaced while it is on. Ported from ComfyUI-PTD-Compact (Nynxz). Runs on a real H3 (Ref2VA, 4 hops, int8); best with a turbo-merged base, SLA off and enhancements off.
-
-### Changed in Decisiveness
-
-- The manual setting is now a slider "Commitment" from -10 to +10 (0 is off). A value saved by an older version resets to 0.
-
-### Migrated on load
-
-- Projects, imported workflows and stored settings that carry old `FunPack…` names are renamed as they are read. Browser settings (wheel, welcome, timeline peek, model list) are carried over once. Nodes already placed in ComfyUI's own graph under the old `FunPack…` ids need adding again.
+- **PTD few-step** (MiniMax H3 only): renders in 4 to 8 steps using a PTD adapter file from `ComfyUI/models/ptd`. Ported from ComfyUI-PTD-Compact by Nynxz.
 
 ## [5.0.2] - 2026-10-22
 
 ### Changed
 
-- **Interface** follows Apple's Human Interface Guidelines more closely: roomier windows and gaps, text contrast of at least 4.5:1, nothing under 11px, a solid focus ring, a check mark and bolder label on selected choices, and a slider value you can type. Composer and Training open and close with a Genie motion; the preview picture scales to fit its stage.
-- README: new screenshots of the redesign and a clearer note on how the project is maintained.
+- **The interface follows Apple's Human Interface Guidelines more closely**: roomier windows, better text contrast, nothing under 11px, a clearer focus ring and selection marks, and sliders whose value you can type. The Composer and Training windows open with a Genie motion.
+- New README screenshots and a clearer note on how the project is maintained.
 
 ### Fixed
 
-- **Restart ComfyUI** no longer shows "Restarting ComfyUI…" twice while it waits.
+- "Restarting ComfyUI..." no longer appears twice.
 
 ## [5.0.1] - 2026-10-21
 
-Fixes from real H3 runs on rentals, plus the first usable LoRA training.
+Fixes from real H3 runs on rented GPUs, plus the first usable LoRA training.
+
+### New
+
+- **LoRA training on H3** with a step-by-step window (Data, Tags, Train, Results): previews at chosen steps, Pause and Resume, Restore and continue, live graphs and downloads.
+- **Gallery** for saved videos and pictures, with preview, Select mode and confirmed delete.
+- **15 reference slots for H3** (9 pictures, 3 videos, 3 sounds).
+- **Log colours**: a healthy log is plain text; warnings are amber and errors red.
+- A bypass switch per node in Models & Pipeline, and two new Quick wheel entries: Disable all enhancements and Fix the seed.
+- The loading window names the module being loaded.
+- Experimental: **Distilled Flow samplers** and **Sharpness**.
 
 ### Fixed
 
-- **Save Video** no longer loses a video when the GPU encoder will not open: it saves on the CPU and the Log says why. NaN/Inf sound is dropped with a warning and the video is kept.
-- **Reference videos and sound** (H3 Reference to Video) go to R2V's own video and audio inputs, are no longer cut to 15 seconds, and a video's soundtrack comes along. Verified on H3. Old projects get the new slots on open.
-- **Render** button was dark with near-black text.
-- **RTX VSR** says why a load failed (missing `libnvidia-ngx` on rentals).
-- **Taste direction** works on the CPU (no more cuda/cpu mismatch in the prompt nudge and score slider).
-- **Text-only H3 runs** no longer need the preset's `blank_like`.
-- The Log now survives a crash, and notes a project whose length changed on save.
-- Media upload shows percent and no longer stalls the server on big clips.
-- Shot Camera no longer re-encodes the H3 prompt on every run.
-
-### Added
-
-- **Log colours**: a healthy log is all plain text. Only lines that need a look are coloured: warnings and alerts in amber, errors and tracebacks in red, in the Log window and in the terminal.
-- **LoRA training** now runs on H3 with FunPack's own loop (ComfyUI stays the backend): block swap, previews at chosen steps, Pause and Resume, Restore and continue, copies saved every N steps, live loss and time graphs, downloads, encoded data reused between runs. Training window is a step-by-step wizard (Data, Tags, Train, Results). Verified on H3; other models still use ComfyUI's trainer and are untested.
-- **Gallery**: saved videos and pictures next to Temp files, with preview, Select mode and a confirmed delete.
-- **15 reference slots for H3** (9 pictures, 3 videos, 3 sounds); FunPack Load Media takes a picture, video or sound.
-- **Models & Pipeline**: a bypass toggle per node. Quick wheel: Disable all enhancements, Fix the seed.
-- **FunPack Timing** splits the time before step 1 into model preparation, setup and the first forward pass.
-- Loading window names the module being loaded.
-
-### Added (experimental)
-
-- **Distilled Flow samplers** (experimental, untested on a real model): plain names in every ComfyUI sampler list, no settings. `dflow_ord1` is Euler; `dflow_ord2` reuses the last prediction for second order (no extra model calls); `dflow_ord2_ab2` fades the second order in across the run. Sound riding in the latent stays first order. Back from 4.x; its extras (velocity bias, ALG, momentum, sharpness) are separate modules now.
-- **Sharpness** (experimental): wins back fine detail in the last part of the run with any sampler that calls the model once per step; no extra model calls. Settings > Engine > Sampling. Not the spatial latent sharpening that was tried and removed in 4.x.
+- **Save Video no longer loses a video** when the GPU encoder will not open; it saves on the CPU and says why.
+- **Reference videos and sound** now reach H3's video and audio inputs, are no longer cut to 15 seconds, and a video's own sound comes along.
+- The Render button was dark with near-black text.
+- RTX Super Resolution says why it failed to load.
+- Taste direction works on the CPU.
+- Text-only H3 runs no longer need a picture input.
+- The Log survives a crash.
+- Media upload shows progress and no longer stalls the server on big clips.
 
 ## [5.0.0] "Cunning Cranberry" - 2026-10-16
 
-A rewrite from scratch, not an update of 4.x. Same idea (a studio for video inside ComfyUI that learns from your ratings), new architecture: every feature is a module that announces itself, so a feature cannot be forgotten in the UI, a wire cannot be missed, and a failing optional feature module is left out while the run carries on. 4.x projects are not imported; see "Not carried over".
+A rewrite from scratch, not an update of 4.x. Same idea (a video studio inside ComfyUI that learns from your ratings), new design: every feature is a module that switches on or off by itself, and a feature that fails to load is left out while the run carries on. 4.x projects are not imported.
 
 ### What it is
 
-- **A browser studio at `/funpack/`**: timeline with one clip per scene, Composer (story in one box, cut word, templates, `$variables`, shortcuts), properties, media bin, preview, takes, rating, Export, Render, project wizard and guided tour.
-- **Models & Pipeline**: the pipeline as cards. Pick files, swap or add nodes (any installed custom node), wire one node's output into another's input, import a ComfyUI workflow. The server refuses what would not build and says why.
-- **Modules** (Settings ▸ Modules): each feature switches on or off on its own. A pipeline runs without an optional node whose module did not load, and says so. A module that fails during a run is left out of it, the log says why, and it stays off until its code changes and ComfyUI restarts, or you turn it back on.
-- **Learning from ratings**: a Taste key remembers ratings; the guidance, steering and prompt modules that use them start acting once they have enough ratings (a few liked clips for some, ten or more rated clips for others; some also need disliked ones) and say so when they need more.
+- **A browser studio** with a timeline, Composer (story in one box, templates, variables, shortcuts), properties, media bin, preview, takes, rating, Export and Render, project wizard and guided tour.
+- **Models & Pipeline**: the pipeline as cards. Pick files, swap or add nodes, import a ComfyUI workflow. It refuses what would not build and says why.
+- **Modules** (Settings > Modules): switch each feature on or off.
+- **Learning from ratings**: a Taste key remembers your ratings, and the features that use them start acting once there are enough.
 
 ### Models
 
-- **MiniMax H3**: the model v5 is built and tested around. Presets for reference to video; works text-only (no source picture). A second-pass preset exists in the code but is not offered until it has been verified.
+- **MiniMax H3**: the model v5 is built and tested around.
+- **LTX 2.x**: tested on a real model, including image to video from References.
 - **Stable Diffusion 1.5**: experimental.
-- **LTX 2.x**: tested on a real LTX model on a rental GPU, including image to video from References. Please report problems in Issues.
 
 ### Features
 
-- **Proven**: prompt markup, empty latent, second pass (the H3 preset for it is held back), loaders (diffusion model, CLIP, VAE, LoRA, checkpoint, media), cut opening, decode, save video, anchor de-staticking (ALG), randomizer, DynaShift, first-step seed search, modifiers, sampler, detail, shot camera, prompt enhancer, Render, taste modules (slider, guidance, prompt nudge, attention, REINS, early guidance), shot memory, decisiveness, late-branch guidance, momentum, velocity bias.
-- **Experimental**: continuity, identity transfer, negative erase, camera move, context windows, block influence, block repeat, phrase probe, shadow negative, temporal style, massive-activation steering, video-to-audio coupling, **LoRA training**.
-- **Prompt enhancer**: a language model rewrites each finished prompt. Has its own encoder pick (Composer ▸ Enhance ▸ Encoder), because H3's own encoder cannot write prose. Verified with Gemma 4.
-- **Auto Montage**: builds a new cut at the end of the timeline from your rendered clips; originals stay untouched, and the pieces are never regenerated or rated.
-- **Upscale** (a background job of FunUI like Interpolate, so it no longer makes ComfyUI drop the workflow's loaded models) a finished render with an upscale model (`.safetensors`) or NVIDIA RTX Super Resolution.
-- **LoRA training** (add-on, Settings > Modules): a Training window with four steps. Data (optional): drop files, pick from your Bin, or take your rated results (Liked, Disliked, Bad composition, Bad image, All). Tags: a caption editor beside every picture, a tag cloud, bulk edits and automatic tagging with downloadable tagger models. Train: all the settings, a live loss graph, Pause and Resume, and previews: every N steps training waits while your own pipeline makes a picture or clip with the LoRA so far, then carries on. Results: past runs. It trains everything in the set. H3 (picture and sound together) uses the module's own training loop with ComfyUI carrying the batches; other models use ComfyUI's trainer, with the loaders in your pipeline. **Experimental.** Verified on H3 on a rental GPU; other models are untested.
-- **Add-ons** (spaCy for automatic camera and focus, nvidia-vfx, onnxruntime for LoRA training) install on the next start after you switch them on.
+- **Prompt enhancer**: a language model rewrites each finished prompt (has its own encoder pick).
+- **Auto Montage**: builds a new cut from your rendered clips; originals stay untouched.
+- **Upscale** a finished render with an upscale model or NVIDIA RTX Super Resolution.
+- **LoRA training** (add-on, experimental): Data, Tags, Train and Results steps, with previews made by your own pipeline.
+- **Add-ons** (spaCy, nvidia-vfx, onnxruntime) install on the next start after you switch them on.
+- Many sampling and guidance features, some proven and some experimental. See Settings > Modules.
 
 ### Not carried over
 
-- 4.x projects and saved settings are not imported: start new projects in 5. ComfyUI workflow files can still be imported in Models & Pipeline.
-- Features that never proved out stay out: plateau step-cache, block steering, NVFP4 loader.
-- The unwired Engine Appearance module (the theme lives in Settings ▸ Appearance). Settings saved while it existed are ignored, not refused.
+- 4.x projects and settings are not imported; start new projects in 5. ComfyUI workflow files can still be imported.
+- Features that never proved out stay out.
 
 ### Known limits
 
-- **LTX 2.x is untested** (see Models).
-- **`.gguf` text encoders** need the ComfyUI-GGUF node pack and work only for architectures it understands; otherwise they are refused with a message. Gemma 4 `.gguf` does not work; a loader for it may come later.
-- **H3 start frame**: in the H3 preset the scene picture sets the video's shape only; a start frame is not part of it.
-- **H3 second pass** is held back: not offered until verified.
-- The ready-made pipelines need Save video, Load media, the loaders, the sampler and decode: if the module behind one of those fails to load, Generate names the missing node and refuses. The optional nodes (Enhance prompt, Shot camera, Prompt markup, Negative erase, Cut opening, Identity transfer) are skipped instead, with a note beside Generate, and their controls are hidden. Which nodes are optional is declared by the model module (MiniMax H3, LTX), so it applies while that module loads. The one exception: the Reference 1 picture of Identity transfer stays on screen and does nothing until the module is back.
-- Turning some modules on switches the model compiler off for the run, which costs sampling time.
+- `.gguf` text encoders need the ComfyUI-GGUF node pack and only work for architectures it understands.
+- On H3 the scene picture sets the video's shape only; it is not a start frame.
+- Some modules switch the model compiler off for the run, which costs sampling time.
 
-### Docs
-
-- [How to start generating with FunPack](docs/how-to-start.md).
+See [How to start generating](docs/how-to-start.md).
