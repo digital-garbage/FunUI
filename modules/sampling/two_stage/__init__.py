@@ -42,8 +42,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Two stages",
-        "hint": "Runs the first steps on a smaller picture and the last steps at the full size. Cheaper steps "
-                "up front, the same final size. Skipped for a run that starts from a picture or a mask.",
+        "hint": "Runs the first steps on a smaller picture and the last at full size: cheaper steps, same final size. Skipped when starting from a picture or mask.",
     },
     "size": {
         "type": "float", "default": 0.7, "min": 0.4, "max": 0.95, "step": 0.05,
@@ -60,9 +59,7 @@ SETTINGS = {
     "back_up": {
         "type": "float", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Noise added at the hand-over",
-        "hint": "How far back the full-size stage starts. 0 starts at the noise level where the first stage stopped; higher values start "
-                "earlier, adding more fresh noise to the enlarged picture, so the full-size stage can redraw soft or doubled outlines. "
-                "The top of the slider is held at 0.95: a full step back would repeat the previous step's noise level.",
+        "hint": "How far back the full-size stage starts. 0: where the first stage stopped. Higher: more fresh noise, so soft or doubled outlines can be redrawn. Maximum 0.95.",
         "when": {"enabled": True},
     },
     "resize": {
@@ -75,9 +72,7 @@ SETTINGS = {
                     {"value": "upscaler", "label": "Latent upscaler"}],
         "renamed_options": {"trilinear": "bicubic"},   # removed: it was Bilinear here (time is never resampled)
         "label": "How the hand-over is enlarged",
-        "hint": "The plain methods are free. Latent upscaler runs H3's learned latent upscaler (models/latent_upscale_models) "
-                "on the clean guess, so the added detail is learned instead of blurred; it costs one small network pass "
-                "once per run. The first stage size is kept, the upscaler is run at the ratio that reaches the full size.",
+        "hint": "Plain methods are free. Latent upscaler uses H3's learned upscaler (models/latent_upscale_models) for learned detail instead of blur; one small pass per run.",
         "when": {"enabled": True},
     },
     "upscaler": {

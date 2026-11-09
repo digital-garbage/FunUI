@@ -21,19 +21,17 @@ SETTINGS = {
         "type": "enum", "default": "off",
         "options": [{"value": "off", "label": "Off"}, {"value": "light", "label": "Light"}, {"value": "strong", "label": "Strong"}],
         "label": "Smooth jagged edges",
-        "hint": "Anti-aliasing like FXAA in games: only edges with strong contrast are softened, flat areas and texture stay. "
-                "Cheap on a GPU, noticeably slower on a CPU for 4K clips. "
-                "These look settings are in the saved file; a clip trimmed in the timeline starts the next shot from that file's picture, so it carries them too.",
+        "hint": "Smooths jagged edges by softening only high-contrast ones. Slower on a CPU for 4K clips.",
     },
     "auto_contrast": {
         "type": "bool", "default": False,
         "label": "Auto contrast",
-        "hint": "Stretches the clip's darkest and brightest levels (by at most 15% each) toward black and white. Measured once from 16 frames spread over the clip and applied as one fixed curve, so it never flickers.",
+        "hint": "Stretches the darkest and brightest levels toward black and white, by at most 15% each. Measured once over the clip, so it never flickers.",
     },
     "auto_brightness": {
         "type": "bool", "default": False,
         "label": "Auto brightness",
-        "hint": "Lifts or lowers the clip's midtones toward a middle level (within a mild range). Measured once from 16 frames spread over the clip, never per frame.",
+        "hint": "Moves the midtones toward a middle level, within a mild range. Measured once over the clip.",
     },
     "saturation": {
         "type": "float", "default": 1.0, "min": 0.5, "max": 1.5, "step": 0.05, "ui": "slider",
@@ -44,8 +42,7 @@ SETTINGS = {
         "type": "enum", "default": "off",
         "options": [{"value": "off", "label": "Off"}, {"value": "text", "label": "Text"}, {"value": "picture", "label": "Picture"}],
         "label": "Watermark",
-        "hint": "A text or a picture from the media bin in one corner of the finished video. It is laid on last, so the settings above never change it. "
-                "It is in the saved file only: the next shot's start picture and the Preview's own frames do not carry it (a clip trimmed short at its end starts the next shot from the saved file, so then it does).",
+        "hint": "Adds a text or a picture from the media bin in one corner of the finished video. It appears in the saved file only, not in the Preview.",
     },
     "watermark_text": {
         "type": "text", "default": "", "label": "Watermark text", "when": {"watermark": "text"},

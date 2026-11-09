@@ -29,8 +29,7 @@ SETTINGS = {
     "follow": {
         "type": "bool", "default": True,
         "label": "Follow the block map",
-        "hint": "Per-block features spread their strength by how much each block can take, from a profile of this model. "
-                "Nothing changes until a profile has been made.",
+        "hint": "Spreads each per-block feature's strength by how much each block can take. Does nothing until a profile of this model has been made.",
     },
 }
 

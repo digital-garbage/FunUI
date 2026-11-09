@@ -36,7 +36,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Identity bank",
-        "hint": "Keeps the look of the clips you like and leans on it in the next ones: the same character and place without a reference picture. Needs a Taste key and one liked clip of the same size.",
+        "hint": "Keeps the character and place of clips you like in the next ones, without a reference picture. Needs a Taste key and one liked clip of the same size.",
     },
     "strength": {
         "type": "float", "default": 0.1, "min": 0.0, "max": 0.6, "step": 0.02,

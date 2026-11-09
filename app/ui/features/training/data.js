@@ -103,7 +103,7 @@ export function dataStep({ app, session, go, ui }) {
     ratedNote.setText((n ? `${n} rated result${n > 1 ? "s" : ""} found in your projects. ${p ? `${p} picked: only those are added.` : "None picked: all are added."}` : "None found yet. Rate results in your projects and they appear here.") + left);
     addRated.node.disabled = !n || !open;
   }
-  const include = c.field.default({ label: "Captions include", hint: "What goes into the caption from each result's prompt. Shortcuts are expanded. Variables are filled in only when ticked, otherwise $name stays as written. Nothing ticked adds them with no caption.",
+  const include = c.field.default({ label: "Captions include", hint: "What goes into each caption from the result's prompt. Shortcuts are expanded; variables are filled in only when ticked, otherwise $name stays as written.",
     control: c.checklist.default({ label: "Captions include", items: INCLUDE, values: ui.include, onChange: async (v) => {
       ui.include = v;
       try { ui.rated = await app.api.trainRated(v.length ? v : ["none"]); } catch { /* the old captions stay */ }

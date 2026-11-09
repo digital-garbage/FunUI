@@ -83,7 +83,7 @@ SETTINGS = {
     "sound": {
         "type": "bool", "default": True,
         "label": "Change the sound too",
-        "hint": "Off: only the picture's attention changes and the sound is left as the model makes it. Prompt focus then stays off on models that mix picture and sound in one sequence.",
+        "hint": "Off: only the picture's attention changes; the sound is left as the model makes it.",
         "when": {"enabled": True},
     },
     "blocks": {

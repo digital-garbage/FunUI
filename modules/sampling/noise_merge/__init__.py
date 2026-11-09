@@ -51,13 +51,13 @@ SETTINGS = {
             {"value": "noise", "label": "Starting noise"},
         ],
         "label": "Merge", "ui": "segmented",
-        "hint": "Step answers: at chosen steps the model answers twice and the two pictures are blended (one extra pass each). Second run: a whole second video is denoised alongside yours from the second seed, and at the steps you name its answer is blended into yours (one extra pass at every step up to the last named one; the overlap look). Starting noise: the run starts from your seed's noise mixed with the second seed's, at no extra cost.",
+        "hint": "Step answers: the model answers twice at chosen steps and the pictures are blended. Second run: a whole second video from the second seed is blended in at chosen steps. Starting noise: mixes the second seed's noise into the start, at no extra cost.",
         "when": {"enabled": True},
     },
     "steps": {
         "type": "text", "default": "1",
         "label": "Steps",
-        "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the schedule's end are ignored. For Second run these are the steps where the blend happens; the second run itself goes from step 1 to the last one named.",
+        "hint": "Step numbers from 1, e.g. 1 or 2-3 or 1,4. Steps past the end of the schedule are ignored.",
         "when": {"enabled": True, "what": ["answers", "parallel"]},
     },
     "order": {
@@ -66,7 +66,7 @@ SETTINGS = {
             {"value": "a_into_b", "label": "A into B"},
         ],
         "label": "Merge order", "ui": "segmented",
-        "hint": "A is the picture your seed makes, B the same step on a second seed. The first named is blended in; the other is the base that keeps its overall look.",
+        "hint": "A is your seed's picture, B the same step on a second seed. The first one named is blended in; the other is the base.",
         "when": {"enabled": True, "what": ["answers", "parallel"]},
     },
     "strength": {
@@ -78,7 +78,7 @@ SETTINGS = {
     "fresh": {
         "type": "float", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Second pass new noise", "ui": "slider",
-        "hint": "How much of the step's own noise the second pass swaps for the second seed's. 1 swaps all of it; lower keeps more of your own noise, so B stays closer to A. 0 gives B = A and the merge changes nothing.",
+        "hint": "How much of the step's noise the second pass swaps for the second seed's. 1: all of it. 0: no change.",
         "when": {"enabled": True, "what": "answers"},
     },
     "sound": {

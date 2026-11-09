@@ -152,7 +152,7 @@ export const taste = (app) => function mount() {
       c.label.section({ text: "Block map" }),
       mapState && mapState.error ? c.banner.warn({ text: `Could not read the block map: ${mapState.error}` }) : null,
       mapState && mapState.problem ? c.banner.warn({ text: mapState.problem }) : null,
-      c.toggle.default({ label: "Profile the blocks on the next run", hint: "On: the next generation takes extra model calls on three of its steps and measures how much each group of blocks can take. It turns itself off once the map is saved.",
+      c.toggle.default({ label: "Profile the blocks on the next run", hint: "Measures how much each group of blocks can take. The next generation takes extra model calls on three steps, then this turns itself off.",
         checked: !!(mapState && mapState.enabled),
         onChange: async (on) => { try { await app.api.setBlockMap(on); } catch (err) { tell(err.message); } refreshMap(); } }),
       c.settingsRow.default({ label: "Saved maps", hint: "One per model size. Features follow a map when one exists for the loaded model.",

@@ -47,7 +47,7 @@ export const modules = (app) => function mount() {
     };
     const isOff = (m) => control[m.id].quarantine || ps.isOff(m.id);
     const notes = ps.saveNotes();
-    const master = c.toggle.default({ label: "Disable all enhancements", hint: "Every module above sits out, and so do shot camera's rewrites and continuity. Your choices are kept — switch it back off to restore them. Values typed into a node in Models & Pipeline (negative erase, int8, SLA…) are not touched. Handy for an A/B test of whether a feature does anything.",
+    const master = c.toggle.default({ label: "Disable all enhancements", hint: "Switches every feature above off at once, so you can compare with and without them. Your choices are kept; switch it back off to restore them.",
       checked: ps.allOff(), onChange: (on) => ps.setAllOff(on).then(draw) });
     const section = (label, rows) => rows.length ? [c.label.section({ text: label }), ...rows] : [];
     const installed = mine.filter((m) => !isOff(m));

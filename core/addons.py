@@ -47,13 +47,13 @@ ADDONS = (
      "hint": "Native upscaling for images and videos. Installs NVIDIA's own package, under its licence.",
      "requires": ("nvidia-vfx>=0.2",), "modules": ("nvvfx",), "offered": _nvidia_gpu},
     {"id": "nvidia_framegen", "title": "NVIDIA RTX Frame Generation",
-     "hint": "Adds in-between frames to finished videos (x2 and more). Installs NVIDIA's own package, under its licence; needs nvidia-vfx 0.2 or newer, and replaces an older one.",
+     "hint": "Adds in-between frames to finished videos (x2 to x4). Needs an RTX card and nvidia-vfx 0.2 or newer.",
      "requires": ("nvidia-vfx>=0.2",), "modules": ("nvvfx",), "floors": {"nvidia-vfx": "0.2"}, "offered": _nvidia_gpu},
     {"id": "camera", "title": "Automatic camera and focus",
      "hint": "Lets Shot camera aim camera moves, cuts, transitions and focus at the right things in your prompts, using spaCy.",
      "requires": ("spacy>=3.8,<3.9", PRESHED_PIN, _SPACY_MODEL), "modules": ("spacy", "en_core_web_sm"), "offered": lambda: True},
     {"id": "lora_training", "title": "LoRA training",
-     "hint": "Train your own LoRA from your media and rated results, with a tag editor and automatic tagging (onnxruntime). Training runs on ComfyUI's own trainer.",
+     "hint": "Train your own LoRA from your media and rated results. Installs onnxruntime for automatic tagging.",
      "requires": ("onnxruntime>=1.17",), "modules": ("onnxruntime",), "offered": lambda: True},
 )
 _BY_ID = {a["id"]: a for a in ADDONS}

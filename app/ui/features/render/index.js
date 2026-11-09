@@ -36,7 +36,7 @@ export default {
     }
     app.editorSettings.push(() => c.region.stack({ gap: "md", children: [
       c.label.section({ text: "Render" }),
-      c.toggle.default({ label: "Keep the clips' own frame rate", hint: "Off: the final video plays at the project's frame rate. On: it plays at the fastest rate the clips really have, for example after Interpolate, so no frames are dropped.",
+      c.toggle.default({ label: "Keep the clips' own frame rate", hint: "Off: the final video uses the project's frame rate. On: it uses the fastest rate among the clips (for example after Interpolate), so no frames are dropped.",
         checked: p.pref("renderRealFps", false) === true, onChange: (v) => p.setPref("renderRealFps", v) })] }));
     draw();
     const offered = offer(app, { id: "render-final", label: "Render", icon: "⧉", run: () => { if (!busy && p.project) render(); } });
