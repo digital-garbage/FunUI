@@ -41,14 +41,12 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Turbo sampler",
-        "hint": "Replaces the chosen sampler with a step rule made for few-step turbo runs. No extra model calls "
-                "(except the optional polish step). Works with any step count and with Two stages.",
+        "hint": "Replaces the sampler with a step rule made for few-step turbo runs. No extra model calls; works with any step count and Two stages.",
     },
     "keep_sampler": {
         "type": "bool", "default": False,
         "label": "Keep the chosen sampler",
-        "hint": "The chosen sampler stays in charge of the steps. Turbo adds its fresh noise and its polish step on top. "
-                "Second order late is not used, the sampler has its own.",
+        "hint": "The chosen sampler keeps the steps; Turbo adds fresh noise and a polish step on top.",
         "when": {"enabled": True},
     },
     "noise_start": {
@@ -72,8 +70,7 @@ SETTINGS = {
     "polish": {
         "type": "float", "default": 0.25, "min": 0.0, "max": 0.6, "step": 0.01,
         "label": "Polish step sigma", "ui": "slider",
-        "hint": "0 = off. One extra full-size model call after the last step, started from this noise level: a short "
-                "re-pass over the finished video. Costs one step. From about 0.4 the sound is redrawn too.",
+        "hint": "0: off. Otherwise one extra full-size pass after the last step, starting from this noise level, as a short polish. From about 0.4 the sound is redrawn too.",
         "when": {"enabled": True},
     },
 }

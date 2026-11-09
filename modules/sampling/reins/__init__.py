@@ -30,18 +30,18 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Taste steering (REINS)",
-        "hint": "REINS: at the chosen blocks, shifts the picture by (your liked runs − your disliked runs): toward liked AND away from disliked. Does nothing until the Taste key has 2+ liked and 2+ disliked runs. Picture only; sound follows.",
+        "hint": "Adds stylistic changes according to your ratings. Needs 2+ liked and 2+ disliked runs on the Taste key.",
     },
     "strength": {
         "type": "float", "default": 0.01, "min": 0.0, "max": 2.0, "step": 0.01,
         "label": "Strength", "ui": "slider",
-        "hint": "0 = only learn. Too high breaks the picture without warning; start low.",
+        "hint": "0 only learns. Start with a low value around 0.02; too high breaks the picture.",
         "when": {"enabled": True},
     },
     "blocks": {
         "type": "text", "model_blocks": True, "default": "43-44",
         "label": "Blocks",
-        "hint": "Where it steers, e.g. 43-44 or 0. Every block keeps learning either way.",
+        "hint": "Where it steers, e.g. 43-44. Recommended: any, except 0-2 and 46-49. Every block keeps learning either way.",
         "when": {"enabled": True},
     },
 }

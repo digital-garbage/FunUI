@@ -53,9 +53,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Few-step PTD",
-        "hint": "Renders in the adapter file's own 4 to 8 steps with no CFG. The sampler, steps and scheduler "
-                "are replaced; PTD cannot start from a picture or a mask. Use the base the file was trained on, "
-                "and switch off SLA, turbo LoRAs and other enhancements, which it was not trained with.",
+        "hint": "Renders in the adapter file's own 4 to 8 steps, without CFG. Use the base the file was trained on, with SLA, turbo LoRAs and other enhancements off. Cannot start from a picture or mask.",
     },
     "adapter": {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",
@@ -68,8 +66,7 @@ SETTINGS = {
         "type": "enum", "default": "exact",
         "options": [{"value": "exact", "label": "Exact"}, {"value": "fast", "label": "Fast"}],
         "label": "Block maths",
-        "hint": "Exact follows the arithmetic the adapters were trained with. Fast uses ComfyUI's own blocks, "
-                "about 4 to 8 percent quicker per step; only the rounding differs.",
+        "hint": "Exact: matches the training arithmetic. Fast: 4 to 8 percent quicker per step, only the rounding differs.",
         "when": {"enabled": True},
     },
 }

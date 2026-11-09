@@ -27,8 +27,7 @@ SETTINGS = {
     "style": {
         "type": "enum", "default": "natural", "label": "Temporal style",
         "options": [{"value": v, "label": v.replace("_", " ")} for v in STYLES],
-        "hint": "How motion feels. natural: unchanged. auto: each shot gets the style its own words ask for (motion words punch, calm words hold). accelerate, freeze: smoother, held motion (freeze most). decelerate: punchier, bigger steps. "
-                "pulse: repeated punch-then-ease. rapid start/end: punchy at the start and/or end. loop: the end joins the start.",
+        "hint": "How motion feels. natural: unchanged. auto: picks a style per shot from its words. accelerate, freeze: smoother, held motion. decelerate: punchier. pulse: punch then ease. rapid start/end: punchy at the start and/or end. loop: the end joins the start.",
     },
 }
 
