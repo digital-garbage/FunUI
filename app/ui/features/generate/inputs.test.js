@@ -93,14 +93,13 @@ test("the shot camera node is told which project this is, whatever roles the sav
 });
 
 test("text-only: a slot that can stand in for the picture is told the size of the slot that shapes it, and a picked picture is sent as is", async () => {
-  const like = { slot: "t", width: "target_width", height: "target_height", unsend: { slot: "e", input: "use_image" } };
+  const like = { slot: "t", width: "target_width", height: "target_height" };
   const s = [{ id: "src", roles: [{ at: "assets.source_image", input: "media_id", blank_like: like }] }, { id: "e", inputs: { use_image: true } },
     { id: "t", inputs: { target_width: 1344, target_height: 768 }, roles: [{ at: "project.video", input: "target_width" }] }];
   const run = (project, scene) => buildInputs({ project, scene, slots: s, expand: async () => null });
   const t2v = await run({ video: { target_width: 640 } }, {});
   assert.deepEqual(t2v.inputs.src, { media_id: "", blank_width: 640, blank_height: 768 });
-  assert.deepEqual(t2v.inputs.e, { use_image: false });                          // the enhancer is not handed the grey stand-in
-  assert.equal((await run({}, { source_image: "m1" })).inputs.e, undefined);
+  assert.equal(t2v.inputs.e, undefined);                                          // the stand-in never reaches the enhancer: it has no enhancer slot here
   assert.deepEqual((await run({}, { source_image: "m1" })).inputs.src, { media_id: "m1" });
   assert.deepEqual((await run({}, {})).inputs.src, { media_id: "", blank_width: 1344, blank_height: 768 });
 });
@@ -111,6 +110,22 @@ test("text-only on a pipeline saved before the preset named a stand-in: the resi
   const { inputs } = await buildInputs({ project: { video: { target_width: 640 } }, scene: {}, slots: s, expand: async () => null });
   assert.deepEqual(inputs.src, { media_id: "", blank_width: 640, blank_height: 768 });
   assert.deepEqual(inputs.e, { use_image: false });
+});
+
+test("the prompt enhancer is shown the first picture reference, never the aspect source", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "asp", name: "a.png", kind: "image" }, { id: "p1", name: "p1.png", kind: "image" }, { id: "p2", name: "p2.png", kind: "image" }]);
+  const s = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] },
+    { id: "e", node: "FunUIEnhancePrompt", inputs: { use_image: true, image: ["src", 0] } },
+    { id: "ref1", node: "Loader", roles: [{ at: "assets.reference_1", input: "media_id", wireTo: { slot: "r2v", input: "ref_images.ref_image_0" } }] },
+    { id: "ref2", node: "Loader", roles: [{ at: "assets.reference_2", input: "media_id", wireTo: { slot: "r2v", input: "ref_images.ref_image_1" } }] },
+    { id: "r2v", node: "Model", inputs: {} }];
+  const run = (scene) => buildInputs({ project: {}, scene, slots: s, expand: async () => null });
+  const withRefs = await run({ source_image: "asp", references: ["p1", "p2"] });
+  assert.deepEqual(withRefs.inputs.e, { image: ["ref1", 0] });
+  assert.equal(withRefs.inputs.src.media_id, "asp");                                 // the aspect source still gives the shape
+  assert.deepEqual((await run({ source_image: "asp", references: [] })).inputs.e, { use_image: false });
+  learn([]);
 });
 
 test("a video reference reaches the model's video input from a preset that says nothing about videos", async () => {

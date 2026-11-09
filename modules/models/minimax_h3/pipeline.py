@@ -61,8 +61,7 @@ def h3_reference_to_video():
          # `blank_like`: with no picture (text-only), buildInputs gives this node the size of that
          # slot's target_width/height, so a plain grey stand-in carries the project's own shape.
          "roles": [{"at": "assets.source_image", "input": "media_id",
-                    "blank_like": {"slot": "aspect", "width": "width", "height": "height",
-                                     "unsend": {"slot": "enhance", "input": "use_image"}}}],
+                    "blank_like": {"slot": "aspect", "width": "width", "height": "height"}}],
          "inputs": {"media_id": "", "blank_width": 0, "blank_height": 0}},
         # Width and height are the SCALE, set in Project settings like any other project resolution -- not the
         # dropped picture's own size (a 12-megapixel phone photo must not become the generation's resolution). The
@@ -81,8 +80,8 @@ def h3_reference_to_video():
         {"id": "enhance", "group": "Preparation", "node": "FunUIEnhancePrompt",
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"},
                    {"at": "generation.prompt", "input": "enabled", "label": "Enhance prompt"}],
-         "inputs": {"clip": ["clip", 0], "text": "", "enabled": False,
-                    "image": ["source_image", 0]}},
+         # The picture it is shown is the scene's first picture reference, linked per run by the app.
+         "inputs": {"clip": ["clip", 0], "text": "", "enabled": False}},
         # Off by default (its own switches in Settings): writes cut times, views and camera moves into [Shot N] blocks.
         {"id": "shot_camera", "group": "Preparation", "node": "FunUIShotCamera",
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],

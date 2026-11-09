@@ -65,15 +65,13 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (use) put(source.slot, "prepare", videoInputJson(use, project, scene));
   }
   // A project saved before the preset said so still has this shape: a picture-resizing slot is enough to know a stand-in fits.
-  const resizer = (slots || []).find((s) => s.node === "ImageTransformKJ"), enhancer = (slots || []).find((s) => s.node === "FunUIEnhancePrompt");
-  const like = source && (source.role.blank_like || (resizer && { slot: resizer.id, width: "target_width", height: "target_height", ...(enhancer ? { unsend: { slot: enhancer.id, input: "use_image" } } : {}) }));
+  const resizer = (slots || []).find((s) => s.node === "ImageTransformKJ");
+  const like = source && (source.role.blank_like || (resizer && { slot: resizer.id, width: "target_width", height: "target_height" }));
   if (like && !raw[source.slot.id].media_id) {          // text-only: a plain picture of the size the pipeline asks for stands in
     const target = (slots || []).find((s) => s.id === like.slot) || { inputs: {} };
     const size = (name) => (raw[target.id] || {})[name] ?? (target.inputs || {})[name];
     put(source.slot, "blank_width", Number(size(like.width)) || 0);
     put(source.slot, "blank_height", Number(size(like.height)) || 0);
-    const off = like.unsend && (slots || []).find((s) => s.id === like.unsend.slot);      // a stand-in is not a picture to show anyone
-    if (off) put(off, like.unsend.input, false);
   }
   // A reference is placed from what the nodes offer, so a pipeline someone edited needs nothing declared for it.
   const needed = plan.ids.some((id) => !leave.has(id));
@@ -100,6 +98,13 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     unwired += 1; left.push({ id: link && (overrides[link[0]] || {}).media_id, at: "a reference", why: `the slot it feeds (${id}) is not in this pipeline` });
   }
   for (const [id, fields] of Object.entries(overrides)) raw[id] = { ...raw[id], ...fields };
+  // The prompt enhancer is shown the first picture reference (the picture an image-start model starts from); the aspect source only gives the shape.
+  // With no picture reference there is nothing to show, whatever picture the pipeline was saved wiring to it.
+  const shown = firstByNumber((id) => kinds.get(id) === "image" && !leave.has(id));
+  const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
+  for (const e of (slots || []).filter((s) => s.node === "FunUIEnhancePrompt")) {
+    if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
+  }
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
   const prepare = activeVideoInput(project);
   if (prepare) for (const [id, fields] of Object.entries(overrides)) if (fields.full && fields.media_id && kinds.get(fields.media_id) === "video") raw[id].prepare = videoInputJson(prepare, project, scene);
