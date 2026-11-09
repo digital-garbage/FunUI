@@ -48,10 +48,17 @@ test("it is hidden when the server has no refsheet module, and the button opens 
   assert.match(button.textContent, /Reference sheet/);
   button.click();
   await new Promise((r) => setTimeout(r, 20));
-  const picks = [...document.querySelectorAll("select")].filter((s) => /Picture for slot/.test(s.getAttribute("aria-label") || ""));
-  assert.equal(picks.length, 6);
-  assert.deepEqual([...picks[0].options].map((o) => o.textContent), ["Empty", "front.png", "Upload a picture…"]);       // a video is not offered
-  picks[0].value = "a"; picks[0].dispatchEvent(new Event("change", { bubbles: true }));
+  const buttons = (text) => [...document.querySelectorAll("button")].filter((b) => b.textContent.includes(text));
+  assert.equal(buttons("Choose picture…").length, 6);
+  assert.ok(document.body.textContent.includes("Rows") && document.body.textContent.includes("Columns") && document.body.textContent.includes("Slot format"));      // every control has a visible label
+  buttons("Choose picture…")[0].click();
+  await new Promise((r) => setTimeout(r, 20));
+  const tiles = [...document.querySelectorAll("[role=option]")];
+  assert.deepEqual(tiles.map((t) => t.textContent), ["front.png"]);                 // the bin's pictures only: a video is not offered
+  assert.ok(tiles[0].querySelector("img").getAttribute("src").endsWith("/a/thumb"));
+  tiles[0].click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(buttons("Change: front.png").length, 1);
   const make = [...document.querySelectorAll("button")].find((b) => b.textContent === "Make sheet");
   make.click();
   await new Promise((r) => setTimeout(r, 20));
