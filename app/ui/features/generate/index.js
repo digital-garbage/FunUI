@@ -136,6 +136,7 @@ export default {
           if (!p.project || p.project.id !== pid) { tell("Stopped: another project was opened."); break; }          // the wait can take minutes
           // The page's own guard does not see another tab: ComfyUI's queue does. Asked per shot: between this run's shots it is empty.
           if (app.api.projectQueued && (await app.api.projectQueued(pid))) { tell("This project already has a run in ComfyUI's queue (another tab or window?). Wait for it, or Stop it there."); break; }
+          if (!p.project || p.project.id !== pid) { tell("Stopped: another project was opened."); break; }          // the queue answer can take seconds
           const done = g.waitForTerminal();             // listening before the run starts, so a fast one is not missed
           said = false;
           current = snap.scenes.findIndex((s) => s.id === root.id) + 1;

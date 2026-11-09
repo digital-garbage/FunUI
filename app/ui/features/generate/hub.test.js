@@ -327,3 +327,13 @@ test("a busy check that errors does not block Generate, and Stop ends the wait",
   assert.ok(Date.now() - t < 3500, "the wait ended with Stop");
   assert.equal(queued, 1, "no shot of the stopped run went");
 });
+
+test("a project opened while ComfyUI's queue is being asked about is not run", async () => {
+  let queued = 0;
+  const { app, doc } = rig("idle", { generate: async () => { queued += 1; return true; } });
+  app.has = new Set();
+  app.api.upscaleBusy = async () => ({ busy: false });
+  app.api.projectQueued = async () => { app.project.project = { ...doc, id: "Other" }; return false; };
+  await app.runner.units(["a"], 1);
+  assert.equal(queued, 0);
+});
