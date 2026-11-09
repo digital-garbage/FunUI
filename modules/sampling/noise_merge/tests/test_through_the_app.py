@@ -138,3 +138,42 @@ def test_a_second_run_through_the_h3_sampler_adds_one_pass_per_step_up_to_the_la
     status, merged = _sample(model, _saved_by_the_app(server, values))
     _s, plain = _sample(model, _saved_by_the_app(server, off))
     assert merged == plain + 3
+
+
+def test_simultaneous_actions_run_through_the_real_h3_model_where_the_prompt_is_refined_before_sampling(server, model):
+    """The model refines the prompt once per run (text_dim 48 -> hidden 64), so an option's prompt must go
+    through the same step: the sampler's conditioning is not the encoder's output."""
+    import importlib
+    from comfy.nested_tensor import NestedTensor
+    from core import log
+    from modules.conditioning.prompt_markup.nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
+    from modules.sampling.sampler.nodes import FunUISampler
+    clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
+    values = dict(APP_VALUES, noise_merge={"enabled": True, "steps": "2", "strength": 0.5, "seed": 3})
+    patched, _ = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
+        _saved_by_the_app(server, values)).result[0]).result
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+    positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
+    patched, positive, status = FunUIApplyPromptMarkup.execute(
+        patched, clip, positive, {"samples": NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))}, markup).result
+    assert status == "2 simultaneous option(s)"
+    forwards = []
+    hook = patched.model.diffusion_model.register_forward_pre_hook(
+        lambda m, a, k: forwards.append((a[2] if len(a) > 2 else k["context"]).detach().clone()), with_kwargs=True)
+    log.new_run()
+    seen_before = len(log.history())
+    latent = {"samples": NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))}
+    try:
+        out = FunUISampler.execute(patched, positive, positive, latent, seed=1, steps=4, cfg=1.0,
+                                   sampler_name="lcm", scheduler="beta", denoise=1.0)
+    finally:
+        hook.remove()
+    assert len(forwards) == 5                                      # 4 steps; the named one is answered once per action
+    assert all(c.shape[-1] == 64 for c in forwards)                # every call holds the refined prompt, option or not
+    assert not torch.allclose(forwards[1], forwards[2])            # the two answers of step 2 read different prompts
+    assert torch.allclose(forwards[0], forwards[3]) and torch.allclose(forwards[3], forwards[4])
+    assert all(torch.isfinite(p).all() for p in out.result[0]["samples"].unbind())
+    texts = [e["message"] for e in log.history()[seen_before:]]
+    assert any(t.startswith("step 2: both actions answered separately") for t in texts), texts
+    assert not any("failed while merging" in t or "Simultaneous actions skipped" in t for t in texts), texts

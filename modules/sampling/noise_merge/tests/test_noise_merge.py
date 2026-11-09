@@ -196,38 +196,55 @@ def test_mixed_noise_brings_the_other_noise_to_the_first_ones_device():
 
 
 def _simul_to(i, options, cond_len=5):
-    return {**_to(i), "funui_simultaneous": {"rows": (1, 4), "options": options, "cond_len": cond_len}}
+    return {**_to(i), "funui_simultaneous": {"options": options, "cond_len": cond_len}}
+
+
+class _Refining:
+    """A named executor like comfy's: the model sits on `class_obj`, and its text preparation changes the width."""
+
+    def __init__(self, fn, width):
+        self.fn, self.class_obj = fn, self
+        self.diffusion_model = self
+        self.proj = torch.nn.Linear(48, width, bias=False).requires_grad_(False)
+
+    def preprocess_text_embeds(self, text):
+        return self.proj(text.to(self.proj.weight.dtype))
+
+    def get_dtype_inference(self):
+        return torch.float32
+
+    def __call__(self, *a, **k):
+        return self.fn(*a, **k)
 
 
 def test_simultaneous_actions_answer_a_named_step_once_per_option_and_merge(tiny_h3):
     wrap, _ = _load(tiny_h3, steps="2", strength=0.5)
     x0, shapes = _packed()
-    ctx = torch.randn(1, 5, 48)
-    opts = [torch.randn(1, 3, 48, dtype=torch.float64), torch.randn(1, 3, 48, dtype=torch.float64)]
+    ctx = torch.randn(1, 5, 64)                                                 # what the sampler holds: already refined, wider
+    raw = [torch.randn(1, 5, 48, dtype=torch.float64), torch.randn(1, 5, 48, dtype=torch.float64)]
     seen = []
 
-    def model(x, t, c_concat, c_crossattn, *a, **k):
+    def call(x, t, c_concat, c_crossattn, *a, **k):
         seen.append(c_crossattn)
-        return x0 + 0.1 * x * c_crossattn[:, 1:4].mean()
+        return x0 + 0.1 * x * c_crossattn.mean()
 
-    wrap(model, x0.clone(), _sched()[0:1], None, ctx, None, _simul_to(0, opts), latent_shapes=shapes)
+    model = _Refining(call, 64)
+    wrap(model, x0.clone(), _sched()[0:1], None, ctx, None, _simul_to(0, raw), latent_shapes=shapes)
     assert len(seen) == 1 and torch.equal(seen[0], ctx)                         # step 1 is not named: the prompt as is
     seen.clear()
-    out = wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, _simul_to(1, opts), latent_shapes=shapes)
+    out = wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, _simul_to(1, raw), latent_shapes=shapes)
     assert len(seen) == 2                                                       # no global pass, no second-seed pass
-    for got, opt in zip(seen, opts):
-        assert got.dtype == ctx.dtype and got.shape == ctx.shape                # the option follows the conditioning
-        assert torch.allclose(got[:, 1:4], opt.to(ctx.dtype))
-        assert torch.equal(got[:, :1], ctx[:, :1]) and torch.equal(got[:, 4:], ctx[:, 4:])
-    assert torch.equal(ctx, ctx.clone()) and out.shape == x0.shape
-    plain = model(x0, None, None, ctx)
-    assert not torch.allclose(out, plain)
+    for got, opt in zip(seen, raw):
+        assert got.dtype == ctx.dtype and got.shape == ctx.shape                # refined like the model's own, same dtype
+        assert torch.allclose(got, model.preprocess_text_embeds(opt.to(torch.float32)), atol=1e-5)
+    assert not torch.allclose(seen[0], seen[1]) and out.shape == x0.shape
+    assert not torch.allclose(out, call(x0, None, None, ctx))
 
 
 def test_simultaneous_actions_are_skipped_when_the_conditioning_changed_or_the_switch_is_off(tiny_h3):
     x0, shapes = _packed()
     ctx = torch.randn(1, 5, 48)
-    opts = [torch.randn(1, 3, 48), torch.randn(1, 3, 48)]
+    opts = [torch.randn(1, 5, 48), torch.randn(1, 5, 48)]
     for values, to in ((dict(actions=True), _simul_to(1, opts, cond_len=9)), (dict(actions=False), _simul_to(1, opts))):
         wrap, _ = _load(tiny_h3, steps="2", strength=0.5, fresh=0.0, **values)
         seen = []

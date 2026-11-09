@@ -10,7 +10,7 @@ from . import markup as mk
 MARKUP = io.Custom("FUNUI_MARKUP")
 KEY = "funui_markup.prompt"
 PHRASES = "funui_markup_phrases"   # the transformer_options key the phrase probe reads
-SIMUL = "funui_simultaneous"        # ... and the one Noise merging reads: the prompt rows and one set of rows per option
+SIMUL = "funui_simultaneous"        # ... and the one Noise merging reads: one whole conditioning per option, not yet refined by the model
 
 
 def _ask(capability, *args):
@@ -120,7 +120,12 @@ class FunUIApplyPromptMarkup(io.ComfyNode):
             if got is None:
                 _say("a [a|b] option's prompt could not be placed; the options are off")
             else:
-                dit_hooks.publish(patched, SIMUL, {"rows": rows, "options": got, "cond_len": cond_len})
+                whole = []
+                for rows_k in got:                     # the full conditioning, as encoded, with this option's prompt rows
+                    raw = cond.clone()
+                    raw[:, rows[0]:rows[1]] = rows_k.to(device=raw.device, dtype=raw.dtype)
+                    whole.append(raw)
+                dit_hooks.publish(patched, SIMUL, {"options": whole, "cond_len": cond_len})
                 said.append(f"{len(got)} simultaneous option(s)")
         w_spans = mk.token_spans(offsets, weighted or [])
         if w_spans:

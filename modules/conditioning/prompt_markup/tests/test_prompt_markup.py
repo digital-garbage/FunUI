@@ -98,10 +98,11 @@ def test_the_options_of_a_pipe_become_one_prompt_each_and_the_main_prompt_holds_
     model, _p, status, pos = _apply(tiny_h3, "a girl [dances|zooms in] at dusk")
     assert status == "2 simultaneous option(s)"
     got = model.model_options["transformer_options"][SIMUL]
-    start, end = got["rows"]
     assert got["cond_len"] == int(pos[0][0].shape[1]) and len(got["options"]) == 2
-    # Each option's rows are as long as the prompt as encoded, and the two differ from each other.
-    assert all(o.shape == (1, end - start, 48) for o in got["options"])
+    # Each option is a whole conditioning of the encoded size; the two differ only in the prompt rows.
+    assert all(o.shape == pos[0][0].shape for o in got["options"])
+    differ = (got["options"][0] != got["options"][1]).any(dim=-1)[0].nonzero().flatten()
+    assert len(differ) and int(differ.max()) - int(differ.min()) < pos[0][0].shape[1]
     assert not torch.allclose(got["options"][0], got["options"][1])
     plain, *_ = _apply(tiny_h3, "a girl dances at dusk")
     assert plain.model_options.get("transformer_options", {}).get(SIMUL) is None

@@ -135,7 +135,7 @@ def second_input(x, a, sigma, seed, step, fresh):
     return ((1.0 - sigma) * a.float() + sigma * noise).to(x.dtype)
 
 
-SIMUL = "funui_simultaneous"        # what Prompt markup leaves in transformer_options: {"rows", "options", "cond_len"}
+SIMUL = "funui_simultaneous"        # what Prompt markup leaves in transformer_options: {"options", "cond_len"}
 
 
 def _mix(out_a, out_b, named, strength, b_first, with_sound):
@@ -157,12 +157,18 @@ def _mix(out_a, out_b, named, strength, b_first, with_sound):
     return merged, diff
 
 
-def _with_option(args, kwargs, context, simul, k):
-    """The call's conditioning with the prompt rows of option k, each brought to this call's device and dtype."""
-    rows = simul["rows"]
-    c = context.clone()
-    c[:, rows[0]:rows[1]] = simul["options"][k].to(device=c.device, dtype=c.dtype)
-    return streams.with_context(args, kwargs, c)
+def _option_context(base, simul, k, like, cache):
+    """Option k's whole conditioning, put through the model's own text preparation (H3 refines the prompt once per
+    run, so the sampler's conditioning is no longer the encoder's output), on the device and dtype of `like`."""
+    key = (k, like.device, like.dtype, tuple(like.shape))
+    if key not in cache:
+        raw = simul["options"][k]
+        prepare = getattr(getattr(base, "diffusion_model", None), "preprocess_text_embeds", None)
+        with torch.no_grad():
+            if prepare is not None:
+                raw = prepare(raw.to(device=like.device, dtype=base.get_dtype_inference()))
+            cache[key] = raw.to(device=like.device, dtype=like.dtype)
+    return cache[key]
 
 
 def _sound(packed, video):
@@ -236,16 +242,17 @@ def install(patcher, values, key):
     actions = bool(values.get("actions", True))
     last = max(wanted)
     chosen = int(values.get("seed", -1))
-    live = {"seed": max(chosen, 0), "merged": 0, "prev": None}
+    live = {"seed": max(chosen, 0), "merged": 0, "prev": None, "options": {}}
 
     def start(executor, *args, **kwargs):
         live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
-        live["merged"], live["prev"] = 0, None
+        live["merged"], live["prev"], live["options"] = 0, None, {}
         log.info("FunUI Noise merging", f"on: {'second run, ' if parallel else ''}steps {values.get('steps')}, strength {strength:.2f}, "
                  f"second seed {live['seed']}")
         try:
             return executor(*args, **kwargs)
         finally:
+            live["options"].clear()
             if not live["merged"]:
                 _say("Inactive | no step of this run matched the steps you named "
                      "(or the model was not called as a plain prompt step)")
@@ -265,7 +272,9 @@ def install(patcher, values, key):
                 try:
                     outs = []
                     for k in (0, 1):
-                        args_k, kwargs_k = _with_option(args, kwargs, context, simul, k)
+                        args_k, kwargs_k = streams.with_context(
+                            args, kwargs, _option_context(getattr(executor, "class_obj", None), simul, k, context,
+                                                          live["options"]))
                         outs.append(executor(x, t, *args_k, **kwargs_k))
                     mixed = _mix(outs[0], outs[1], named, strength, b_first, with_sound)
                     if mixed is not None:
