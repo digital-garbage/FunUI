@@ -64,7 +64,7 @@ test("Always tries a render again after a running generation, for as long as it 
 });
 
 test("Always does not try again when the render was replaced, the mode was switched off or another project is open", async () => {
-  for (const change of [(d) => { d.scene_renders = { a: d.scene_renders.a }; }, (d) => { d.editor_settings.upscaleMode = "never"; }]) {
+  for (const change of [(d) => { d.scene_renders = { a: d.scene_renders.a }; }, (d) => { d.editor_settings.upscaleMode = "never"; }, (d) => { d.id = "Q"; }]) {
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       const { doc, render, calls } = always(BUSY);

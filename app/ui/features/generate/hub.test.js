@@ -286,10 +286,10 @@ test("the next shot waits while an upscale model runs", async () => {
   let queued = 0, busyNow = false, asked = 0;
   const { app } = rig("idle", { generate: async () => { queued += 1; return true; } });
   app.has = new Set();
-  app.api.upscaleBusy = async () => { asked += 1; if (asked === 2) busyNow = true; return { busy: asked === 2 }; };       // free at the click, busy once before the first shot
+  app.api.upscaleBusy = async () => { asked += 1; if (asked === 3) busyNow = true; return { busy: asked === 3 }; };       // free at the click and before the first shot, busy only right before queueing
   await app.runner.units(["a"], 1);
   assert.equal(queued, 1);
-  assert.ok(busyNow && asked >= 3, "the shot asked again and went on when the server said free");
+  assert.ok(busyNow && asked >= 4, "the shot asked again right before queueing and went on when the server said free");
 });
 
 test("the wait for an upscale model is said once per Generate, not once per shot", async () => {

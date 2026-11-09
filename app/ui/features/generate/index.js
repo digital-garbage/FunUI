@@ -131,10 +131,11 @@ export default {
           for (const x of placed || []) app.api.carryLog(pid, { scene_id: root.id, ...x }).catch(() => {});        // the Log records where a carried picture went; no toast
           if (unusedPicture) tell(`The scene's picture (${names.get(unusedPicture) || unusedPicture}) is not used: this pipeline starts from a video, not a picture.`);
           if (unwired) tell(unwiredText(unwired, left));
-          // The page's own guard does not see another tab: ComfyUI's queue does. Asked per shot: between this run's shots it is empty.
-          if (app.api.projectQueued && (await app.api.projectQueued(pid))) { tell("This project already has a run in ComfyUI's queue (another tab or window?). Wait for it, or Stop it there."); break; }
           await waitForUpscale();       // asked again right before queueing: the shot's inputs took time to build
           if (stopped) break;
+          if (!p.project || p.project.id !== pid) { tell("Stopped: another project was opened."); break; }          // the wait can take minutes
+          // The page's own guard does not see another tab: ComfyUI's queue does. Asked per shot: between this run's shots it is empty.
+          if (app.api.projectQueued && (await app.api.projectQueued(pid))) { tell("This project already has a run in ComfyUI's queue (another tab or window?). Wait for it, or Stop it there."); break; }
           const done = g.waitForTerminal();             // listening before the run starts, so a fast one is not missed
           said = false;
           current = snap.scenes.findIndex((s) => s.id === root.id) + 1;

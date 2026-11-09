@@ -41,6 +41,7 @@ export default {
     const stillThere = (pid, key) => p.project && p.project.id === pid
       && Object.values(p.project.scene_renders || {}).some((r) => r && r.media && keyOf(r.media) === key);
     async function run(media, pressed = false, project = null) {
+      let again = false;                                  // a retry is on its way: the wait count stays
       if (!p.project) return;
       if (!media || wentThrough(media, "upscale")) return;                    // never upscale twice, even after an interpolation in between
       const key = keyOf(media), pid = project || p.project.id;
@@ -64,7 +65,7 @@ export default {
         if (err.stopped) c.toast.info({ text: "Upscale stopped. The render stays as it was." });
         else if (!pressed && /^ComfyUI is generating/.test(err.message || "") && (waited.get(key) || 0) < RETRIES) {       // Always: not lost, tried again when the generation is over
           if (!told) { told = true; c.toast.info({ text: "Upscale waits for the generation to finish." }); }
-          waited.set(key, (waited.get(key) || 0) + 1);
+          waited.set(key, (waited.get(key) || 0) + 1); again = true;
           setTimeout(() => {                         // only for the same project, the same render and while Always is still on
             if (stillThere(pid, key) && p.pref("upscaleMode", "never") === "always") run(media, false, pid);
             else { waited.delete(key); if (!waited.size) told = false; }
@@ -72,7 +73,7 @@ export default {
         }
         else { waited.delete(key); if (!waited.size) told = false; gaveUp(media, "upscale"); c.toast.warn({ text: `Upscale failed: ${err.message}` }); }
       }
-      finally { busy.delete(key); heavy.delete(key); if (!heavy.size) app.has.delete("upscale.model"); draw(); }
+      finally { if (!again) { waited.delete(key); if (!waited.size) told = false; } busy.delete(key); heavy.delete(key); if (!heavy.size) app.has.delete("upscale.model"); draw(); }
     }
 
     function draw() {
