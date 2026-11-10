@@ -212,3 +212,14 @@ def test_the_module_list_is_sent_once_and_then_answered_304(server):
     assert status == 200 and headers["cache-control"] == "no-cache" and headers["etag"]
     assert get(f"If-None-Match: {headers['etag']}\r\n")[0] == 304
     assert get('If-None-Match: "stale"\r\n')[0] == 200
+
+
+def test_a_pipe_between_two_saved_shortcuts_reaches_the_prompt_as_options_over_http(server):
+    for name, text in (("Dance", "[Shot 1] she dances"), ("Zoom", "the camera zooms in | slowly")):
+        status, _ = _request(server, "POST", "/fun/api/shortcuts", {"name": name, "triggers": [name.upper()], "replacements": [text]})
+        assert status == 200
+    status, resp = _request(server, "POST", "/fun/api/prompt/expand", {"text": "A girl. DANCE|ZOOM. Dusk", "anchor": "cinematic"})
+    assert status == 200
+    assert resp["text"] == "cinematic A girl. ⟦[Shot 1] she dances¦the camera zooms in | slowly⟧. Dusk"
+    status, typed = _request(server, "POST", "/fun/api/prompt/expand", {"text": "A girl [DANCE|ZOOM]. Dusk"})
+    assert typed["text"] == "A girl ⟦[Shot 1] she dances¦the camera zooms in | slowly⟧. Dusk"
