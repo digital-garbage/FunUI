@@ -74,12 +74,16 @@ def install(patcher, values, key):
     live = {"cache": {}, "used": 0, "seen": False}
 
     def start(executor, *args, **kwargs):
-        live["cache"], live["used"], live["seen"] = {}, 0, False
+        # Two stages is two sampler calls of one run: the counters run across both, and the verdict comes after the last.
+        stage = dit_hooks.stage_of(getattr(executor, "class_obj", None))
+        if stage != 2:
+            live["used"], live["seen"] = 0, False
+        live["cache"] = {}
         try:
             return executor(*args, **kwargs)
         finally:
             live["cache"].clear()
-            if not live["used"]:
+            if stage != 1 and not live["used"]:
                 _say("Inactive | the prompt had no [A|B] options (a bare A|B counts only between two shortcuts)"
                      if not live["seen"] else
                      "Inactive | none of the steps named here is a step of this run")

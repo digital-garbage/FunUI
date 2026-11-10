@@ -239,15 +239,19 @@ def install(patcher, values, key):
     live = {"seed": max(chosen, 0), "merged": 0, "prev": None, "options": {}}
 
     def start(executor, *args, **kwargs):
+        # Two stages is two sampler calls of one run: merges counted in the first still count, and the verdict comes after the last.
+        stage = dit_hooks.stage_of(getattr(executor, "class_obj", None))
         live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
-        live["merged"], live["prev"], live["options"] = 0, None, {}
+        live["prev"], live["options"] = None, {}
+        if stage != 2:
+            live["merged"] = 0
         log.info("FunUI Step merging", f"on: {'second run, ' if parallel else ''}steps {values.get('steps')}, strength {strength:.2f}, "
                  f"second seed {live['seed']}")
         try:
             return executor(*args, **kwargs)
         finally:
             live["options"].clear()
-            if not live["merged"]:
+            if stage != 1 and not live["merged"]:
                 _say("Inactive | no step of this run matched the steps you named "
                      "(or the model was not called as a plain prompt step)")
 

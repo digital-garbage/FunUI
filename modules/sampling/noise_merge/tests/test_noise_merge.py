@@ -297,3 +297,68 @@ def test_the_new_noise_slider_decides_what_the_second_option_starts_from(tiny_h3
         got[fresh] = starts[1]
     assert torch.equal(got[0.0], x0)                                           # 0: the same noise for both options
     assert not torch.allclose(got[1.0], x0) and got[1.0].dtype == x0.dtype and got[1.0].device == x0.device
+
+
+def test_the_inactive_verdict_comes_after_the_last_stage_and_counts_both(tiny_h3):
+    """Two stages is two sampler calls: a merge made in the first one must not be called 'inactive' by the second."""
+    from comfy.patcher_extension import WrappersMP
+    from core import dit_hooks, log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+
+    class Guider:
+        pass
+
+    def run(patched, stage, merged):
+        start = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws][-1]
+        guider = Guider()
+        if stage:
+            setattr(guider, dit_hooks.STAGE, stage)
+
+        class Executor:
+            class_obj = guider
+
+            def __call__(self, *a, **k):
+                return merged and None
+
+        log._reset()
+        start(Executor())
+        return [e["message"] for e in log.history() if "Inactive" in e["message"]]
+
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, "steps": "1"}}).result
+    assert run(patched, 1, False) == []                    # a second stage is still to come
+    assert len(run(patched, 2, False)) == 1                # nothing merged in either stage: said once, after the last
+    assert len(run(patched, None, False)) == 1             # a plain run is its own last stage
+
+
+def test_a_merge_in_the_first_stage_is_not_called_inactive_by_the_second(tiny_h3):
+    from comfy.patcher_extension import WrappersMP
+    from core import dit_hooks, log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, "steps": "1"}}).result
+    start = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws][-1]
+    apply = [w for ws in patched.wrappers[WrappersMP.APPLY_MODEL].values() for w in ws][-1]
+    x0, shapes = _packed()
+    ctx = torch.randn(1, 5, 48)
+    opts = [torch.randn(1, 5, 48), torch.randn(1, 5, 48)]
+
+    class Guider:
+        pass
+
+    def stage(n, merges):
+        guider = Guider()
+        setattr(guider, dit_hooks.STAGE, n)
+
+        class Executor:
+            class_obj = guider
+
+            def __call__(self, *a, **k):
+                if merges:
+                    apply(lambda x, *a, **k: x0, x0.clone(), _sched()[0:1], None, ctx, None, _simul_to(0, opts),
+                          latent_shapes=shapes)
+
+        start(Executor())
+
+    log._reset()
+    stage(1, True)
+    stage(2, False)
+    assert not [e for e in log.history() if "Inactive" in e["message"]]
