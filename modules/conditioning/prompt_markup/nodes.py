@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from comfy_api.latest import io
 
-from ..._core import dit_hooks, log, patching, registry as registry_mod
+from ..._core import control as control_mod, dit_hooks, log, patching, registry as registry_mod, schema as schema_mod
 from . import markup as mk
 
 MARKUP = io.Custom("FUNUI_MARKUP")
@@ -26,6 +26,16 @@ def _say(message):
     log.once(f"prompt_markup:{message}", log.ALERT, "FunUI Prompt Markup", message)
 
 
+def _main_mode(settings):
+    """How the main prompt reads an [A|B] (Step merging > Main prompt reads); "while" unless that is switched on and set."""
+    spec = registry_mod.current().specs.get("noise_merge")
+    if spec is None or control_mod.all_off(settings):
+        return "while"
+    clean, _problems = schema_mod.check_values(spec, (settings or {}).get("noise_merge"))
+    mode = clean.get("main") if clean.get("enabled") and clean.get("actions", True) else None
+    return mode if mode in mk.MAIN_MODES else "while"
+
+
 class FunUIPromptMarkup(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -35,15 +45,16 @@ class FunUIPromptMarkup(io.ComfyNode):
             category="FunUI/Conditioning",
             description="Take (word:1.5) and [a|b] out of a prompt, so the encoder sees clean text "
                         "and the markup can be applied properly.",
-            inputs=[io.String.Input("text", multiline=True, default="")],
+            inputs=[io.String.Input("text", multiline=True, default=""),
+                    io.Custom("FUNUI_SETTINGS").Input("settings", optional=True)],
             outputs=[io.String.Output(display_name="clean"),
                      MARKUP.Output(display_name="markup"),
                      io.String.Output(display_name="status")],
         )
 
     @classmethod
-    def execute(cls, text: str) -> io.NodeOutput:
-        parsed = mk.parse(text or "")
+    def execute(cls, text: str, settings=None) -> io.NodeOutput:
+        parsed = mk.parse(text or "", main=_main_mode(settings))
         n = {"weighted": len(parsed["weighted"]), "alternative": len(parsed["variants"])}
         status = (", ".join(f"{v} {k}" for k, v in n.items() if v) or "no markup")
         return io.NodeOutput(parsed["clean"], parsed, status)

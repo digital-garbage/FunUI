@@ -87,7 +87,7 @@ def h3_reference_to_video():
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
          "inputs": {"text": ["enhance", 0], "settings": ["settings", 0], "length": 124, "frame_rate": 24.0}},
         {"id": "markup", "group": "Preparation", "node": "FunUIPromptMarkup",
-         "inputs": {"text": ["shot_camera", 0]}},
+         "inputs": {"text": ["shot_camera", 0], "settings": ["settings", 0]}},
         {"id": "r2v", "group": "Preparation", "node": "MiniMaxH3ReferenceToVideo",
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],
          "inputs": {

@@ -91,6 +91,17 @@ SETTINGS = {
         "hint": "With [A|B] in the prompt, answers the steps above once for each option and merges them, so both happen at once. One extra pass per step.",
         "when": {"enabled": True, "what": "answers"},
     },
+    "main": {
+        "type": "enum", "default": "while", "options": [
+            {"value": "while", "label": "A while B"},
+            {"value": "space", "label": "A B"},
+            {"value": "first", "label": "Only A"},
+            {"value": "second", "label": "Only B"},
+        ],
+        "label": "Main prompt reads",
+        "hint": "What the prompt says outside the merged steps. Each merged step answers A and B alone.",
+        "when": {"enabled": True, "what": "answers", "actions": True},
+    },
     "sound": {
         "type": "bool", "default": True,
         "label": "Merge sound too",

@@ -141,3 +141,26 @@ def test_the_phrases_it_placed_are_published_for_anything_that_wants_to_look_at_
     assert [b - a for a, b in published["spans"]] == [1, 1]          # "red" and "drives": one token each
     plain, *_ = _apply(tiny_h3, "a red car drives")
     assert PHRASES not in plain.model_options.get("transformer_options", {})
+
+
+def test_the_main_prompt_can_read_both_options_joined_by_while_or_a_space_or_just_one():
+    from modules.conditioning.prompt_markup import markup as mk
+    text = "a girl [dances|zooms in] at dusk"
+    assert mk.parse(text)["clean"] == "a girl dances while zooms in at dusk"
+    assert mk.parse(text, main="space")["clean"] == "a girl dances zooms in at dusk"
+    assert mk.parse(text, main="first")["clean"] == "a girl dances at dusk"
+    assert mk.parse(text, main="second")["clean"] == "a girl zooms in at dusk"
+    for main in ("while", "space", "first", "second"):                       # the options themselves never change
+        assert mk.parse(text, main=main)["variants"] == ["a girl dances at dusk", "a girl zooms in at dusk"]
+
+
+def test_the_node_reads_the_choice_from_step_merging_only_while_it_is_switched_on(comfyui_registry=None):
+    from modules.conditioning.prompt_markup.nodes import FunUIPromptMarkup
+    text = "a girl [dances|zooms in] at dusk"
+    run = lambda nm: FunUIPromptMarkup.execute(text, {"noise_merge": nm}).result[0]          # noqa: E731
+    assert run({"enabled": True, "main": "space"}) == "a girl dances zooms in at dusk"
+    assert run({"enabled": True, "main": "second"}) == "a girl zooms in at dusk"
+    assert run({"enabled": True, "actions": False, "main": "second"}) == "a girl dances while zooms in at dusk"
+    assert run({"enabled": False, "main": "second"}) == "a girl dances while zooms in at dusk"
+    off = FunUIPromptMarkup.execute(text, {"_off": {"all": True}, "noise_merge": {"enabled": True, "main": "second"}}).result[0]
+    assert off == "a girl dances while zooms in at dusk"

@@ -26,8 +26,8 @@ _BRACKET_WEIGHTED = re.compile(r"(?<!\\)\[([^\[\]@|]*?):\s*(" + _NUM + r")\s*\]"
 _ALTERNATIVES = re.compile(r"(?<!\\)\[([^\[\]|]+(?:\|[^\[\]|]+)+)\]")
 _MARKUP = re.compile("|".join(p.pattern for p in (_ALTERNATIVES, _WEIGHTED, _BRACKET_WEIGHTED)))
 
-# The prompt carries each option in turn, joined like this (what the model reads outside the merged steps).
-JOINER = " while "
+# What the main prompt (the one read outside the merged steps) holds of an [A|B]: both joined, A only or B only.
+MAIN_MODES = {"while": " while ", "space": " ", "first": None, "second": None}
 MAX_OPTIONS = 2
 # Below this a weight means "remove": log(0) is -inf, which is NaN the moment a
 # query attends to nothing else.
@@ -45,10 +45,10 @@ def _options(raw):
     return [o.strip() for o in raw.split("|") if o.strip()]
 
 
-def parse(text, pick=None):
+def parse(text, pick=None, main="while"):
     """-> {"clean", "weighted": [(c0, c1, w)], "variants": [clean text per option], "extra": n}, char spans
-    into `clean`. `clean` holds every option joined; with `pick` k it holds option k of each [A|B] instead
-    (how the variants are made)."""
+    into `clean`. `clean` holds the options as `main` says ("while": "A while B", "space": "A B", "first"/"second":
+    that option alone); with `pick` k it holds option k of each [A|B] instead (how the variants are made)."""
     out = {"clean": text or "", "weighted": [], "variants": [], "extra": 0}
     if not text or ("(" not in text and "[" not in text):
         return out
@@ -62,7 +62,13 @@ def parse(text, pick=None):
                 phrase = opts[0] if opts else ""
             else:
                 found = max(found, len(opts))
-                phrase = (JOINER.join(opts) if pick is None else opts[min(pick, len(opts) - 1)])
+                if pick is None and main in ("first", "second"):
+                    pick_here = 0 if main == "first" else 1
+                elif pick is None:
+                    pick_here = None
+                else:
+                    pick_here = pick
+                phrase = (MAIN_MODES.get(main, " while ").join(opts) if pick_here is None else opts[min(pick_here, len(opts) - 1)])
         else:
             phrase = m.group(2) if m.group(2) is not None else m.group(4)
             weight = m.group(3) if m.group(3) is not None else m.group(5)
