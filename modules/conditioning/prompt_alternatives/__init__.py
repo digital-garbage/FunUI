@@ -1,4 +1,4 @@
-"""Alternative prompts: what an `[A|B]` in the prompt (or `A|B` between two shortcuts) means for the run.
+"""Alternating prompts: what an `[A|B]` in the prompt (or `A|B` between two shortcuts) means for the run.
 
 `[A|B]` gives the run two prompts, A and B, each holding only its own option. Three things use them:
 
@@ -17,7 +17,7 @@ from comfy.patcher_extension import WrappersMP
 from ..._core import dit_hooks, log, streams
 
 ID = "prompt_alternatives"
-TITLE = "Alternative prompts"
+TITLE = "Alternating prompts"
 MOUNT = "settings.general"
 STAGE = "conditioning"
 CATEGORY = "conditioning"
@@ -58,7 +58,7 @@ SETTINGS = {
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunUI Alternative prompts", message)
+    log.once(f"{ID}:{message}", level, "FunUI Alternating prompts", message)
 
 
 def install(patcher, values, key):

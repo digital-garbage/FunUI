@@ -15,7 +15,7 @@ seed (and so is the sound, when the model has it). The two are then mixed:
 later input is its own last answer re-noised, the way a few-step sampler chains its steps. At the named steps its
 answer is blended into yours the same way. It costs one extra pass at every step up to the last one named.
 
-"Simultaneous actions": with `[A|B]` in the prompt (or `A|B` between two shortcuts) and Alternative prompts >
+"Simultaneous actions": with `[A|B]` in the prompt (or `A|B` between two shortcuts) and Alternating prompts >
 "Read A and B separately" on, the named steps are answered
 once for each option -- the same picture and noise, a prompt that holds only that option -- and the answers are
 merged the same way, instead of the second-seed pass. The prompt outside those steps holds both ("A while B").

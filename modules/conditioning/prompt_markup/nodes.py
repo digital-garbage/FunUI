@@ -27,7 +27,7 @@ def _say(message):
 
 
 def _alternatives(settings):
-    """-> (how the main prompt reads an [A|B], whether A and B are also read separately), from Alternative prompts."""
+    """-> (how the main prompt reads an [A|B], whether A and B are also read separately), from Alternating prompts."""
     spec = registry_mod.current().specs.get("prompt_alternatives")
     if spec is None or control_mod.all_off(settings):
         return "while", False
