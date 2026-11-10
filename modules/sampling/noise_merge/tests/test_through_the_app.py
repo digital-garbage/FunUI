@@ -235,3 +235,20 @@ def test_a_merged_step_wins_over_an_assigned_step(server, model):
     finally:
         hook.remove()
     assert len(seen) == 5 and not torch.allclose(seen[1], seen[2])           # step 2 made two calls: A, then B
+
+
+def test_alternating_prompts_say_why_they_did_nothing(server, model):
+    """No [A|B] in the prompt, or no named step in the run: two different sentences."""
+    from comfy.nested_tensor import NestedTensor
+    from core import log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
+    from modules.sampling.sampler.nodes import FunUISampler
+    shapes = NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))
+    cond = [[torch.randn(1, 5, 48), {}]]
+    checked = FunUIModifierSettings.execute(_saved_by_the_app(server, dict(
+        APP_VALUES, noise_merge={"enabled": False}, prompt_alternatives={"separate": True, "b_steps": "1"}))).result[0]
+    patched, _ = FunUILoadModifiers.execute(model, checked).result
+    log._reset()
+    FunUISampler.execute(patched, cond, cond, {"samples": shapes}, seed=1, steps=3, cfg=1.0,
+                         sampler_name="lcm", scheduler="beta", denoise=1.0)
+    assert any("the prompt had no [A|B] options" in e["message"] for e in log.history())

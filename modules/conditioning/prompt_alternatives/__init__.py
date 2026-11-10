@@ -71,17 +71,18 @@ def install(patcher, values, key):
     steps = {**{i - 1: 1 for i in b if i >= 1}, **{i - 1: 0 for i in a if i >= 1}}      # step index -> option; A wins an overlap
     if not steps:
         return None
-    live = {"cache": {}, "used": 0}
+    live = {"cache": {}, "used": 0, "seen": False}
 
     def start(executor, *args, **kwargs):
-        live["cache"], live["used"] = {}, 0
+        live["cache"], live["used"], live["seen"] = {}, 0, False
         try:
             return executor(*args, **kwargs)
         finally:
             live["cache"].clear()
             if not live["used"]:
-                _say("Inactive | no step of this run read an option (needs [A|B] in the prompt, "
-                     "and steps inside the schedule)")
+                _say("Inactive | the prompt had no [A|B] options (a bare A|B counts only between two shortcuts)"
+                     if not live["seen"] else
+                     "Inactive | none of the steps named here is a step of this run")
 
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, start)
 
@@ -90,6 +91,7 @@ def install(patcher, values, key):
         to = named.get("transformer_options") or {}
         where = dit_hooks.current_step(to)
         simul, context = to.get(SIMUL), named.get("c_crossattn")
+        live["seen"] = live["seen"] or bool(simul)
         if (not simul or where is None or where[0] not in steps or to.get(streams.OPTION_PINNED)
                 or dit_hooks.probing(to) or any(int(i) != 0 for i in (to.get("cond_or_uncond") or [0]))):
             return executor(x, t, *args, **kwargs)
