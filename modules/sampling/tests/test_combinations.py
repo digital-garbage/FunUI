@@ -29,6 +29,7 @@ FEATURES = {
     "attention_temperature": {"temperature": 1.1},
     "stas": {"block": 1},
     "noise_merge": {"seed": 5},
+    "prompt_alternatives": {"a_steps": "1-2", "b_steps": "3"},
     "sharpness": {},
     "run_meter": {},
     "late_branch": {"block": 2},

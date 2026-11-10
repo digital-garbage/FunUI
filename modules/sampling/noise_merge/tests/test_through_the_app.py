@@ -176,3 +176,61 @@ def test_simultaneous_actions_run_through_the_real_h3_model_where_the_prompt_is_
     texts = [e["message"] for e in log.history()]
     assert any(t.startswith("step 2: both actions answered separately") for t in texts), texts
     assert not any("failed while merging" in t or "Simultaneous actions skipped" in t for t in texts), texts
+
+
+def test_alternative_prompts_read_a_different_option_on_each_assigned_step_on_the_real_h3_model(server, model):
+    """One call per step as usual; steps 1-2 read A, step 3 reads B, the rest the main prompt."""
+    import importlib
+    from comfy.nested_tensor import NestedTensor
+    from modules.conditioning.prompt_markup.nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
+    from modules.sampling.sampler.nodes import FunUISampler
+    clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
+    values = dict(APP_VALUES, noise_merge={"enabled": False},
+                  prompt_alternatives={"main": "while", "a_steps": "1-2", "b_steps": "3"})
+    patched, status = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
+        _saved_by_the_app(server, values)).result[0]).result
+    assert "prompt_alternatives" in status
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+    positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
+    shapes = NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))
+    patched, positive, _ = FunUIApplyPromptMarkup.execute(patched, clip, positive, {"samples": shapes}, markup).result
+    seen = []
+    hook = patched.model.diffusion_model.register_forward_pre_hook(
+        lambda m, a, k: seen.append((a[2] if len(a) > 2 else k["context"]).detach().clone()), with_kwargs=True)
+    try:
+        FunUISampler.execute(patched, positive, positive, {"samples": shapes}, seed=1, steps=5, cfg=1.0,
+                             sampler_name="lcm", scheduler="beta", denoise=1.0)
+    finally:
+        hook.remove()
+    assert len(seen) == 5                                                  # no extra pass anywhere
+    assert torch.allclose(seen[0], seen[1]) and not torch.allclose(seen[1], seen[2])       # A, A, then B
+    assert torch.allclose(seen[3], seen[4]) and not torch.allclose(seen[3], seen[0])      # the main prompt after
+    assert not torch.allclose(seen[3], seen[2])
+
+
+def test_a_merged_step_wins_over_an_assigned_step(server, model):
+    """Step 2 is both merged (A and B answered) and assigned to B: the merge still answers A then B."""
+    import importlib
+    from comfy.nested_tensor import NestedTensor
+    from modules.conditioning.prompt_markup.nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
+    from modules.sampling.sampler.nodes import FunUISampler
+    clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
+    values = dict(APP_VALUES, noise_merge={"enabled": True, "steps": "2", "fresh": 0.0},
+                  prompt_alternatives={"b_steps": "2"})
+    patched, _ = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
+        _saved_by_the_app(server, values)).result[0]).result
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+    positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
+    shapes = NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))
+    patched, positive, _ = FunUIApplyPromptMarkup.execute(patched, clip, positive, {"samples": shapes}, markup).result
+    seen = []
+    hook = patched.model.diffusion_model.register_forward_pre_hook(
+        lambda m, a, k: seen.append((a[2] if len(a) > 2 else k["context"]).detach().clone()), with_kwargs=True)
+    try:
+        FunUISampler.execute(patched, positive, positive, {"samples": shapes}, seed=1, steps=4, cfg=1.0,
+                             sampler_name="lcm", scheduler="beta", denoise=1.0)
+    finally:
+        hook.remove()
+    assert len(seen) == 5 and not torch.allclose(seen[1], seen[2])           # step 2 made two calls: A, then B

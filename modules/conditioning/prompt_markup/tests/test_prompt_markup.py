@@ -154,13 +154,12 @@ def test_the_main_prompt_can_read_both_options_joined_by_while_or_a_space_or_jus
         assert mk.parse(text, main=main)["variants"] == ["a girl dances at dusk", "a girl zooms in at dusk"]
 
 
-def test_the_node_reads_the_choice_from_step_merging_only_while_it_is_switched_on(comfyui_registry=None):
+def test_the_node_reads_the_choice_from_alternative_prompts():
     from modules.conditioning.prompt_markup.nodes import FunUIPromptMarkup
     text = "a girl [dances|zooms in] at dusk"
-    run = lambda nm: FunUIPromptMarkup.execute(text, {"noise_merge": nm}).result[0]          # noqa: E731
-    assert run({"enabled": True, "main": "space"}) == "a girl dances zooms in at dusk"
-    assert run({"enabled": True, "main": "second"}) == "a girl zooms in at dusk"
-    assert run({"enabled": True, "actions": False, "main": "second"}) == "a girl dances while zooms in at dusk"
-    assert run({"enabled": False, "main": "second"}) == "a girl dances while zooms in at dusk"
-    off = FunUIPromptMarkup.execute(text, {"_off": {"all": True}, "noise_merge": {"enabled": True, "main": "second"}}).result[0]
+    run = lambda settings: FunUIPromptMarkup.execute(text, settings).result[0]               # noqa: E731
+    assert run({"prompt_alternatives": {"main": "space"}}) == "a girl dances zooms in at dusk"
+    assert run({"prompt_alternatives": {"main": "second"}}) == "a girl zooms in at dusk"
+    assert run({}) == "a girl dances while zooms in at dusk" and run(None) == run({})
+    off = run({"_off": {"all": True}, "prompt_alternatives": {"main": "second"}})
     assert off == "a girl dances while zooms in at dusk"

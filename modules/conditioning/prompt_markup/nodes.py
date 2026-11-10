@@ -27,12 +27,12 @@ def _say(message):
 
 
 def _main_mode(settings):
-    """How the main prompt reads an [A|B] (Step merging > Main prompt reads); "while" unless that is switched on and set."""
-    spec = registry_mod.current().specs.get("noise_merge")
+    """How the main prompt reads an [A|B] (Alternative prompts > Main prompt reads); "while" when unset."""
+    spec = registry_mod.current().specs.get("prompt_alternatives")
     if spec is None or control_mod.all_off(settings):
         return "while"
-    clean, _problems = schema_mod.check_values(spec, (settings or {}).get("noise_merge"))
-    mode = clean.get("main") if clean.get("enabled") and clean.get("actions", True) else None
+    clean, _problems = schema_mod.check_values(spec, (settings or {}).get("prompt_alternatives"))
+    mode = clean.get("main")
     return mode if mode in mk.MAIN_MODES else "while"
 
 

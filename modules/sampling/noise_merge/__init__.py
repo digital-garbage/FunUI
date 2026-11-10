@@ -91,17 +91,6 @@ SETTINGS = {
         "hint": "With [A|B] in the prompt, answers the steps above once for each option and merges them, so both happen at once. One extra pass per step.",
         "when": {"enabled": True, "what": "answers"},
     },
-    "main": {
-        "type": "enum", "default": "while", "options": [
-            {"value": "while", "label": "A while B"},
-            {"value": "space", "label": "A B"},
-            {"value": "first", "label": "Only A"},
-            {"value": "second", "label": "Only B"},
-        ],
-        "label": "Main prompt reads",
-        "hint": "What the prompt says outside the merged steps. Each merged step answers A and B alone.",
-        "when": {"enabled": True, "what": "answers", "actions": True},
-    },
     "sound": {
         "type": "bool", "default": True,
         "label": "Merge sound too",
@@ -180,20 +169,6 @@ def _second_x(x, out, named, sigma, seed, step, fresh, with_sound):
         n = x_b.shape[-1] - tail_a.shape[-1]
         x_b = torch.cat([x_b[..., :n], second_input(x[..., n:], tail_a.detach(), sigma, seed + 1, step, fresh)], dim=-1)
     return x_b
-
-
-def _option_context(base, simul, k, like, cache):
-    """Option k's whole conditioning, put through the model's own text preparation (H3 refines the prompt once per
-    run, so the sampler's conditioning is no longer the encoder's output), on the device and dtype of `like`."""
-    key = (k, like.device, like.dtype, tuple(like.shape))
-    if key not in cache:
-        raw = simul["options"][k]
-        prepare = getattr(getattr(base, "diffusion_model", None), "preprocess_text_embeds", None)
-        with torch.no_grad():
-            if prepare is not None:
-                raw = prepare(raw.to(device=like.device, dtype=base.get_dtype_inference()))
-            cache[key] = raw.to(device=like.device, dtype=like.dtype)
-    return cache[key]
 
 
 def _sound(packed, video):
@@ -297,9 +272,9 @@ def install(patcher, values, key):
                 try:
                     outs, x_k = [], x
                     for k in (0, 1):
-                        args_k, kwargs_k = streams.with_context(
-                            args, kwargs, _option_context(getattr(executor, "class_obj", None), simul, k, context,
-                                                          live["options"]))
+                        args_k, kwargs_k = streams.with_context(args, kwargs, streams.option_context(
+                            getattr(executor, "class_obj", None), simul["options"][k], context, live["options"], k))
+                        args_k, kwargs_k = streams.with_options(args_k, kwargs_k, {**to, streams.OPTION_PINNED: True})
                         outs.append(executor(x_k, t, *args_k, **kwargs_k))
                         if k == 0 and fresh > 0.0:
                             # The second option starts from partly new noise: the step's own noise, turned `fresh`

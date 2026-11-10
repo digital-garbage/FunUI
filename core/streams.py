@@ -76,6 +76,25 @@ def with_context(args, kwargs, context):
     return args, {**kwargs, "c_crossattn": context}
 
 
+#: Set on a call that already carries its own chosen prompt option, so no other feature swaps the prompt again.
+OPTION_PINNED = "funui_option_pinned"
+
+
+def option_context(base, raw, like, cache, name):
+    """A whole conditioning `raw` (as the encoder made it), put through the model's own text preparation (H3 refines the
+    prompt once per run, so the sampler's conditioning is no longer the encoder's output), on the device and dtype of
+    `like`. Kept in `cache` under `name` and the shape, device and dtype, so each option is prepared once per run."""
+    import torch
+    key = (name, like.device, like.dtype, tuple(like.shape))
+    if key not in cache:
+        prepare = getattr(getattr(base, "diffusion_model", None), "preprocess_text_embeds", None)
+        with torch.no_grad():
+            if prepare is not None:
+                raw = prepare(raw.to(device=like.device, dtype=base.get_dtype_inference()))
+            cache[key] = raw.to(device=like.device, dtype=like.dtype)
+    return cache[key]
+
+
 def model_args(args, kwargs) -> dict:
     """An APPLY_MODEL wrapper's call, by name.
 
