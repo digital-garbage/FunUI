@@ -1,4 +1,4 @@
-"""Noise merging: at chosen steps, run the step a second time on the same picture with
+"""Step merging: at chosen steps, run the step a second time on the same picture with
 different noise and blend the two answers.
 
 Step N is answered twice. Picture A is the run's own answer. Picture B is the answer to
@@ -35,7 +35,7 @@ from comfy.patcher_extension import WrappersMP
 from ..._core import dit_hooks, log, streams
 
 ID = "noise_merge"
-TITLE = "Noise merging"
+TITLE = "Step merging"
 MOUNT = "generation.sampling"
 STAGE = "sampling"
 CATEGORY = "sampling"
@@ -45,7 +45,7 @@ REQUIRES = ["temporal_latent"]
 SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
-        "label": "Noise merging",
+        "label": "Step merging",
         "hint": "At the steps below, answers the step twice with different noise and blends the two. Costs one extra pass per merged step.",
     },
     "what": {
@@ -107,7 +107,7 @@ SETTINGS = {
 
 
 def _say(message, level=log.ALERT):
-    log.once(f"{ID}:{message}", level, "FunUI Noise merging", message)
+    log.once(f"{ID}:{message}", level, "FunUI Step merging", message)
 
 
 def merge(base, other, strength):
@@ -213,7 +213,7 @@ def install_noise(patcher, values, key):
         seed = run_seed["seed"]
         other = torch.randn(noise.shape, generator=torch.Generator().manual_seed(seed)).to(noise)
         if not second_stage:
-            log.info("FunUI Noise merging", f"on: starting noise mixed with the second seed's ({seed}) at "
+            log.info("FunUI Step merging", f"on: starting noise mixed with the second seed's ({seed}) at "
                      f"strength {strength:.2f}, no extra pass")
         return executor(model_wrap, sigmas, extra_args, callback, mix_noise(noise, other, strength),
                         latent_image, denoise_mask, disable_pbar)
@@ -247,7 +247,7 @@ def install(patcher, values, key):
     def start(executor, *args, **kwargs):
         live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
         live["merged"], live["prev"], live["options"] = 0, None, {}
-        log.info("FunUI Noise merging", f"on: {'second run, ' if parallel else ''}steps {values.get('steps')}, strength {strength:.2f}, "
+        log.info("FunUI Step merging", f"on: {'second run, ' if parallel else ''}steps {values.get('steps')}, strength {strength:.2f}, "
                  f"second seed {live['seed']}")
         try:
             return executor(*args, **kwargs)
@@ -279,13 +279,13 @@ def install(patcher, values, key):
                     mixed = _mix(outs[0], outs[1], named, strength, b_first, with_sound)
                     if mixed is not None:
                         live["merged"] += 1
-                        log.info("FunUI Noise merging", f"step {where[0] + 1}: both actions answered separately, the "
+                        log.info("FunUI Step merging", f"step {where[0] + 1}: both actions answered separately, the "
                                  f"answers differ by {mixed[1]:.1%}, merged at {strength:.2f}")
                         return mixed[0]
                 except InterruptProcessingException:
                     raise
                 except Exception as exc:            # noqa: BLE001
-                    log.broke("FunUI Noise merging", exc, "merging the simultaneous actions")
+                    log.broke("FunUI Step merging", exc, "merging the simultaneous actions")
                     return executor(x, t, *args, **kwargs)
             else:
                 _say("Simultaneous actions skipped: another feature changed the prompt's conditioning")
@@ -335,7 +335,7 @@ def install(patcher, values, key):
                     return out
             live["merged"] += 1
             diff = float((video_a - video_b).norm() / video_a.norm().clamp(min=1e-8))
-            log.info("FunUI Noise merging",
+            log.info("FunUI Step merging",
                      f"step {where[0] + 1}: second answer differs from the first by {diff:.1%}, "
                      f"merged at {strength:.2f}{' (picture and sound)' if tail_a is not None and with_sound else ''}; "
                      f"the second pass took {took:.1f}s")
@@ -344,7 +344,7 @@ def install(patcher, values, key):
         except InterruptProcessingException:
             raise                                   # Cancel stops the run, it is not a failed merge
         except Exception as exc:                    # noqa: BLE001
-            log.broke("FunUI Noise merging", exc, "merging the second answer")
+            log.broke("FunUI Step merging", exc, "merging the second answer")
             return out
 
     patcher.add_wrapper_with_key(WrappersMP.APPLY_MODEL, key, apply_model)

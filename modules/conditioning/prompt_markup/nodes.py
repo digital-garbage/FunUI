@@ -10,7 +10,7 @@ from . import markup as mk
 MARKUP = io.Custom("FUNUI_MARKUP")
 KEY = "funui_markup.prompt"
 PHRASES = "funui_markup_phrases"   # the transformer_options key the phrase probe reads
-SIMUL = "funui_simultaneous"        # ... and the one Noise merging reads: one whole conditioning per option, not yet refined by the model
+SIMUL = "funui_simultaneous"        # ... and the one Step merging reads: one whole conditioning per option, not yet refined by the model
 
 
 def _ask(capability, *args):
@@ -78,7 +78,7 @@ class FunUIApplyPromptMarkup(io.ComfyNode):
             display_name="FunUI Apply Prompt Markup",
             category="FunUI/Conditioning",
             description="Apply the markup FunUI Prompt Markup took out: weights on the model, and one "
-                        "prompt per [a|b] option for Noise merging to use.",
+                        "prompt per [a|b] option for Step merging to use.",
             inputs=[io.Model.Input("model"), io.Clip.Input("clip"),
                     io.Conditioning.Input("positive"), io.Latent.Input("latent"),
                     MARKUP.Input("markup")],

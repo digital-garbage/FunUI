@@ -160,7 +160,7 @@ def install(patcher, values, key):
         out = executor(x, t, *args, **kwargs)
         named = streams.model_args(args, kwargs)
         if not locking or dit_hooks.probing(named.get("transformer_options") or {}):
-            return out                       # a probe pass (noise merging's second answer) is not a step of this run
+            return out                       # a probe pass (step merging's second answer) is not a step of this run
         split = streams.video_of(out, named)
         if split is None:
             return out

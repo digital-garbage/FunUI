@@ -21,7 +21,7 @@ What it contributes, and what it deliberately does NOT:
 * **Decode** -- the picture through the video VAE, the sound through the audio VAE.
 
 Tested on a real LTX 2.3 (2026-10-27): Video to Video direct, Image to Video from References, separate
-loaders, LoRAs and Noise merging. Other enhancements are not tested on LTX yet; the shapes are also checked
+loaders, LoRAs and Step merging. Other enhancements are not tested on LTX yet; the shapes are also checked
 against fakes and ComfyUI's own stock nodes, and the pipelines against the graph builder.
 """
 
@@ -64,7 +64,7 @@ def detect(keys) -> bool:
 
 
 #: Enhancements that run on LTX but have not been proven on a real run there: held back (hidden) until they have.
-#: Proven on LTX so far: Noise merging and the Attention explorer. Take an id off this list once it has been.
+#: Proven on LTX so far: Step merging and the Attention explorer. Take an id off this list once it has been.
 HELD_BACK = ("conditioning_identity_transfer", "guide_frames", "camera_move", "shot_memory", "audio_coupling", "decisiveness",
              "dynashift", "momentum", "output_guidance", "reins", "sharpness", "trajectory_guidance", "velocity_bias", "alg",
              "attention_temperature", "block_repeat", "context_windows", "explore_first_step", "identity_bank", "prompt_nudge",

@@ -18,7 +18,7 @@ The weight is an attention BIAS, and SLA runs any biased call dense, so a run
 with weights runs dense attention.
 
 `[a|b]` (two things that happen at once) changes nothing by itself: it leaves one prompt per option
-in the model for Noise merging to answer and merge.
+in the model for Step merging to answer and merge.
 """
 
 from .nodes import FunUIApplyPromptMarkup, FunUIPromptMarkup

@@ -1,4 +1,4 @@
-"""Noise merging, from the settings the app saves to the finished H3 sampling run.
+"""Step merging, from the settings the app saves to the finished H3 sampling run.
 
 The app posts its module values to /fun/api/pipeline; the pipeline's settings node carries them as
 one JSON string; Load Modifiers installs them on the model; FunUISampler samples with ComfyUI's own
@@ -161,8 +161,7 @@ def test_simultaneous_actions_run_through_the_real_h3_model_where_the_prompt_is_
     forwards = []
     hook = patched.model.diffusion_model.register_forward_pre_hook(
         lambda m, a, k: forwards.append((a[2] if len(a) > 2 else k["context"]).detach().clone()), with_kwargs=True)
-    log.new_run()
-    seen_before = len(log.history())
+    log._reset()                                                   # only this run's messages are looked at below
     latent = {"samples": NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))}
     try:
         out = FunUISampler.execute(patched, positive, positive, latent, seed=1, steps=4, cfg=1.0,
@@ -174,6 +173,6 @@ def test_simultaneous_actions_run_through_the_real_h3_model_where_the_prompt_is_
     assert not torch.allclose(forwards[1], forwards[2])            # the two answers of step 2 read different prompts
     assert torch.allclose(forwards[0], forwards[3]) and torch.allclose(forwards[3], forwards[4])
     assert all(torch.isfinite(p).all() for p in out.result[0]["samples"].unbind())
-    texts = [e["message"] for e in log.history()[seen_before:]]
+    texts = [e["message"] for e in log.history()]
     assert any(t.startswith("step 2: both actions answered separately") for t in texts), texts
     assert not any("failed while merging" in t or "Simultaneous actions skipped" in t for t in texts), texts

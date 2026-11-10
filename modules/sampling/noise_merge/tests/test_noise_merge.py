@@ -1,4 +1,4 @@
-"""Noise merging: the maths and the wrapper on a packed H3 latent."""
+"""Step merging: the maths and the wrapper on a packed H3 latent."""
 
 import pytest
 import torch

@@ -10,7 +10,7 @@ offsets pointing into a string that no longer existed):
 * `[A|B]` -- simultaneous actions: two things that happen at the same time.
   The prompt the model normally reads holds both ("A while B"); `variants` holds
   one prompt per option with the others left out, for the sampler to answer
-  separately and merge (Noise merging > Simultaneous actions).
+  separately and merge (Step merging > Simultaneous actions).
 
 Weighting only exists because the text is IN the attention sequence (H3's
 single packed stream). Scaling embeddings would not work: Qwen's rows are
