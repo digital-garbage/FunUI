@@ -3,8 +3,10 @@
 `[A|B]` gives the run two prompts, A and B, each holding only its own option. Three things use them:
 
 * the main prompt, read on every step that has no option assigned: "A while B" (default), "A B", only A or only B;
-* the per-step fields below: the steps that read only A and the steps that read only B, one model call per step as usual;
-* Step merging > Simultaneous actions: its merged steps answer A and B separately and mix the answers.
+With "Read A and B separately" on (off by default), two more things use them:
+
+* the per-step fields: the steps that read only A and the steps that read only B, one model call per step as usual;
+* Step merging: its merged steps answer A and B separately and mix the answers.
 
 A step named in Step merging is answered by both options whatever is set here.
 """
@@ -25,6 +27,11 @@ STATUS = "experimental"
 SIMUL = "funui_simultaneous"
 
 SETTINGS = {
+    "separate": {
+        "type": "bool", "default": False,
+        "label": "Read A and B separately",
+        "hint": "Lets steps read A or B alone, and Step merging answer both. Off: [A|B] only shapes the main prompt.",
+    },
     "main": {
         "type": "enum", "default": "while", "options": [
             {"value": "while", "label": "A while B"},
@@ -33,17 +40,19 @@ SETTINGS = {
             {"value": "second", "label": "Only B"},
         ],
         "label": "Main prompt reads",
-        "hint": "What the prompt says on steps with no option assigned below.",
+        "hint": "What the prompt says on steps that read neither option alone.",
     },
     "a_steps": {
         "type": "text", "default": "",
         "label": "Steps that read only A",
-        "hint": "Step numbers from 1, e.g. 1-2 or 1,4. Needs [A|B] in the prompt.",
+        "hint": "Step numbers from 1, e.g. 1-2 or 1,4. Needs [A|B] in the prompt and the switch above.",
+        "when": {"separate": True},
     },
     "b_steps": {
         "type": "text", "default": "",
         "label": "Steps that read only B",
         "hint": "Step numbers from 1, e.g. 3-5. A step in both fields reads A.",
+        "when": {"separate": True},
     },
 }
 
@@ -53,6 +62,8 @@ def _say(message, level=log.ALERT):
 
 
 def install(patcher, values, key):
+    if not values.get("separate"):
+        return None
     a, bad_a = dit_hooks.parse_blocks(values.get("a_steps"), 100000)
     b, bad_b = dit_hooks.parse_blocks(values.get("b_steps"), 100000)
     for p in bad_a + bad_b:

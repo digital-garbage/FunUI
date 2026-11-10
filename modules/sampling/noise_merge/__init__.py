@@ -15,7 +15,8 @@ seed (and so is the sound, when the model has it). The two are then mixed:
 later input is its own last answer re-noised, the way a few-step sampler chains its steps. At the named steps its
 answer is blended into yours the same way. It costs one extra pass at every step up to the last one named.
 
-"Simultaneous actions": with `[A|B]` in the prompt (or `A|B` between two shortcuts), the named steps are answered
+"Simultaneous actions": with `[A|B]` in the prompt (or `A|B` between two shortcuts) and Alternative prompts >
+"Read A and B separately" on, the named steps are answered
 once for each option -- the same picture and noise, a prompt that holds only that option -- and the answers are
 merged the same way, instead of the second-seed pass. The prompt outside those steps holds both ("A while B").
 
@@ -83,12 +84,6 @@ SETTINGS = {
         "type": "float", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05,
         "label": "Second pass new noise", "ui": "slider",
         "hint": "How much of the step's noise the second pass swaps for the second seed's. 1: all of it. 0: no change.",
-        "when": {"enabled": True, "what": "answers"},
-    },
-    "actions": {
-        "type": "bool", "default": True,
-        "label": "Simultaneous actions",
-        "hint": "With [A|B] in the prompt, answers the steps above once for each option and merges them, so both happen at once. One extra pass per step.",
         "when": {"enabled": True, "what": "answers"},
     },
     "sound": {
@@ -232,14 +227,13 @@ def install(patcher, values, key):
     for p in problems:
         _say(f"ignored step entry: {p}")
     strength = float(values.get("strength", 0.5))
-    if not wanted or strength <= 0.0:
-        _say("off: " + ("no valid steps named" if not wanted else "strength is 0"))
+    if not wanted:
+        _say("off: no valid steps named")
         return None
     b_first = values.get("order", "b_into_a") == "b_into_a"
     with_sound = bool(values.get("sound", True))
     fresh = float(values.get("fresh", 1.0))
     parallel = values.get("what") == "parallel"
-    actions = bool(values.get("actions", True))
     last = max(wanted)
     chosen = int(values.get("seed", -1))
     live = {"seed": max(chosen, 0), "merged": 0, "prev": None, "options": {}}
@@ -263,23 +257,32 @@ def install(patcher, values, key):
         named = streams.model_args(args, kwargs)
         to = named.get("transformer_options") or {}
         where = dit_hooks.current_step(to)
-        simul = to.get(SIMUL) if actions and not parallel else None
+        simul = to.get(SIMUL) if not parallel else None
         context = named.get("c_crossattn")
         if (simul and where is not None and where[0] in wanted and not dit_hooks.probing(to)
                 and all(int(i) == 0 for i in (to.get("cond_or_uncond") or [0]))):
             if (isinstance(context, torch.Tensor) and context.dim() == 3
                     and int(context.shape[1]) == simul["cond_len"] and len(simul["options"]) > 1):
                 try:
-                    outs, x_k = [], x
-                    for k in (0, 1):
+                    # Strength 0 keeps the base's answer and strength 1 (with fully new noise, so the second run does
+                    # not start from the first one's picture) is the other's alone: that one is the only pass made.
+                    base_k, other_k = (0, 1) if b_first else (1, 0)
+                    only = base_k if strength <= 0.0 else other_k if strength >= 1.0 and fresh >= 1.0 else None
+                    outs, x_k = {}, x
+                    for k in ((only,) if only is not None else (0, 1)):
                         args_k, kwargs_k = streams.with_context(args, kwargs, streams.option_context(
                             getattr(executor, "class_obj", None), simul["options"][k], context, live["options"], k))
                         args_k, kwargs_k = streams.with_options(args_k, kwargs_k, {**to, streams.OPTION_PINNED: True})
-                        outs.append(executor(x_k, t, *args_k, **kwargs_k))
-                        if k == 0 and fresh > 0.0:
+                        outs[k] = executor(x_k, t, *args_k, **kwargs_k)
+                        if k == 0 and fresh > 0.0 and only is None:
                             # The second option starts from partly new noise: the step's own noise, turned `fresh`
                             # of the way toward the second seed's, around the first option's picture.
                             x_k = _second_x(x, outs[0], named, float(t.max()), live["seed"], where[0], fresh, with_sound)
+                    if only is not None:
+                        live["merged"] += 1
+                        log.info("FunUI Step merging", f"step {where[0] + 1}: only {'AB'[only]} read "
+                                 f"(strength {strength:.2f}, new noise {fresh:.2f}), nothing to merge")
+                        return outs[only]
                     mixed = _mix(outs[0], outs[1], named, strength, b_first, with_sound)
                     if mixed is not None:
                         live["merged"] += 1
@@ -294,8 +297,8 @@ def install(patcher, values, key):
             else:
                 _say("Simultaneous actions skipped: another feature changed the prompt's conditioning")
         out = executor(x, t, *args, **kwargs)
-        if where is None or dit_hooks.probing(to) or where[0] > last or (where[0] not in wanted and not parallel):
-            return out
+        if strength <= 0.0 or where is None or dit_hooks.probing(to) or where[0] > last or (where[0] not in wanted and not parallel):
+            return out                              # strength 0 keeps your own answer: no second pass to blend in
         if any(int(i) != 0 for i in (to.get("cond_or_uncond") or [0])):
             return out                              # a negative-prompt call: guidance is for the prompt's picture
         try:

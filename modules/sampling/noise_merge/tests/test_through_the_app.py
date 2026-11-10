@@ -150,10 +150,11 @@ def test_simultaneous_actions_run_through_the_real_h3_model_where_the_prompt_is_
     from modules.sampling.modifiers.nodes import FunUILoadModifiers, FunUIModifierSettings
     from modules.sampling.sampler.nodes import FunUISampler
     clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
-    values = dict(APP_VALUES, noise_merge={"enabled": True, "steps": "2", "strength": 0.5, "seed": 3})
-    patched, _ = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
-        _saved_by_the_app(server, values)).result[0]).result
-    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+    values = dict(APP_VALUES, noise_merge={"enabled": True, "steps": "2", "strength": 0.5, "seed": 3},
+                  prompt_alternatives={"separate": True})
+    checked = FunUIModifierSettings.execute(_saved_by_the_app(server, values)).result[0]
+    patched, _ = FunUILoadModifiers.execute(model, checked).result
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk", checked).result
     positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
     patched, positive, status = FunUIApplyPromptMarkup.execute(
         patched, clip, positive, {"samples": NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))}, markup).result
@@ -187,11 +188,11 @@ def test_alternative_prompts_read_a_different_option_on_each_assigned_step_on_th
     from modules.sampling.sampler.nodes import FunUISampler
     clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
     values = dict(APP_VALUES, noise_merge={"enabled": False},
-                  prompt_alternatives={"main": "while", "a_steps": "1-2", "b_steps": "3"})
-    patched, status = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
-        _saved_by_the_app(server, values)).result[0]).result
+                  prompt_alternatives={"separate": True, "main": "while", "a_steps": "1-2", "b_steps": "3"})
+    checked = FunUIModifierSettings.execute(_saved_by_the_app(server, values)).result[0]
+    patched, status = FunUILoadModifiers.execute(model, checked).result
     assert "prompt_alternatives" in status
-    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk", checked).result
     positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
     shapes = NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))
     patched, positive, _ = FunUIApplyPromptMarkup.execute(patched, clip, positive, {"samples": shapes}, markup).result
@@ -218,10 +219,10 @@ def test_a_merged_step_wins_over_an_assigned_step(server, model):
     from modules.sampling.sampler.nodes import FunUISampler
     clip = importlib.import_module("modules.conditioning.prompt_markup.tests.test_prompt_markup").FakeH3Clip()
     values = dict(APP_VALUES, noise_merge={"enabled": True, "steps": "2", "fresh": 0.0},
-                  prompt_alternatives={"b_steps": "2"})
-    patched, _ = FunUILoadModifiers.execute(model, FunUIModifierSettings.execute(
-        _saved_by_the_app(server, values)).result[0]).result
-    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk").result
+                  prompt_alternatives={"separate": True, "b_steps": "2"})
+    checked = FunUIModifierSettings.execute(_saved_by_the_app(server, values)).result[0]
+    patched, _ = FunUILoadModifiers.execute(model, checked).result
+    clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk", checked).result
     positive = clip.encode_from_tokens_scheduled(clip.tokenize(clean))
     shapes = NestedTensor((torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)))
     patched, positive, _ = FunUIApplyPromptMarkup.execute(patched, clip, positive, {"samples": shapes}, markup).result

@@ -38,7 +38,7 @@ def _encode(clip, text):
 def _apply(tiny, raw):
     from modules.conditioning.prompt_markup.nodes import (FunUIApplyPromptMarkup,
                                                           FunUIPromptMarkup)
-    clean, markup, _ = FunUIPromptMarkup.execute(raw).result
+    clean, markup, _ = FunUIPromptMarkup.execute(raw, {"prompt_alternatives": {"separate": True}}).result
     clip = FakeH3Clip()
     positive = _encode(clip, clean)
     tiny.context = positive[0][0]
@@ -163,3 +163,16 @@ def test_the_node_reads_the_choice_from_alternative_prompts():
     assert run({}) == "a girl dances while zooms in at dusk" and run(None) == run({})
     off = run({"_off": {"all": True}, "prompt_alternatives": {"main": "second"}})
     assert off == "a girl dances while zooms in at dusk"
+
+
+def test_the_options_are_only_kept_for_the_sampler_when_the_switch_is_on(tiny_h3):
+    from modules.conditioning.prompt_markup.nodes import SIMUL, FunUIApplyPromptMarkup, FunUIPromptMarkup
+    for settings, kept in (({"prompt_alternatives": {"separate": False}}, False), (None, False),
+                           ({"prompt_alternatives": {"separate": True}}, True)):
+        clean, markup, _ = FunUIPromptMarkup.execute("a girl [dances|zooms in] at dusk", settings).result
+        clip = FakeH3Clip()
+        positive = _encode(clip, clean)
+        tiny_h3.context = positive[0][0]
+        model, _pos, status = FunUIApplyPromptMarkup.execute(
+            tiny_h3.patcher, clip, positive, {"samples": tiny_h3.video}, markup).result
+        assert (model.model_options["transformer_options"].get(SIMUL) is not None) == kept, settings

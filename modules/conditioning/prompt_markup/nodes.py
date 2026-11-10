@@ -26,14 +26,14 @@ def _say(message):
     log.once(f"prompt_markup:{message}", log.ALERT, "FunUI Prompt Markup", message)
 
 
-def _main_mode(settings):
-    """How the main prompt reads an [A|B] (Alternative prompts > Main prompt reads); "while" when unset."""
+def _alternatives(settings):
+    """-> (how the main prompt reads an [A|B], whether A and B are also read separately), from Alternative prompts."""
     spec = registry_mod.current().specs.get("prompt_alternatives")
     if spec is None or control_mod.all_off(settings):
-        return "while"
+        return "while", False
     clean, _problems = schema_mod.check_values(spec, (settings or {}).get("prompt_alternatives"))
     mode = clean.get("main")
-    return mode if mode in mk.MAIN_MODES else "while"
+    return (mode if mode in mk.MAIN_MODES else "while"), bool(clean.get("separate"))
 
 
 class FunUIPromptMarkup(io.ComfyNode):
@@ -54,7 +54,9 @@ class FunUIPromptMarkup(io.ComfyNode):
 
     @classmethod
     def execute(cls, text: str, settings=None) -> io.NodeOutput:
-        parsed = mk.parse(text or "", main=_main_mode(settings))
+        main, separate = _alternatives(settings)
+        parsed = mk.parse(text or "", main=main)
+        parsed["separate"] = separate
         n = {"weighted": len(parsed["weighted"]), "alternative": len(parsed["variants"])}
         status = (", ".join(f"{v} {k}" for k, v in n.items() if v) or "no markup")
         return io.NodeOutput(parsed["clean"], parsed, status)
@@ -103,7 +105,8 @@ class FunUIApplyPromptMarkup(io.ComfyNode):
         patched = patching.clone(model)
         patching.strip(patched, "funui_markup.")
         dit_hooks.publish(patched, SIMUL, None)
-        weighted, variants = (markup or {}).get("weighted"), (markup or {}).get("variants")
+        weighted = (markup or {}).get("weighted")
+        variants = (markup or {}).get("variants") if (markup or {}).get("separate") else None
         if not (weighted or variants):
             return io.NodeOutput(patched, positive, "no markup")
 

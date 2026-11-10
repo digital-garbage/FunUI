@@ -91,12 +91,16 @@ def test_the_answer_changes_and_order_matters(tiny_h3):
     assert not torch.allclose(a[1], p[1])             # the sound is merged too
 
 
-def test_nothing_named_or_strength_zero_installs_nothing(tiny_h3):
+def test_nothing_named_installs_nothing_and_strength_zero_makes_no_second_pass(tiny_h3):
     from comfy.patcher_extension import WrappersMP
     from modules.sampling.modifiers.nodes import FunUILoadModifiers
-    for bad in ({"steps": "x"}, {"strength": 0.0}):
-        patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, **bad}}).result
-        assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, "steps": "x"}}).result
+    assert not patched.wrappers.get(WrappersMP.APPLY_MODEL)
+    wrap, _ = _load(tiny_h3, steps="1", strength=0.0)
+    x0, shapes = _packed()
+    calls = []
+    wrap(lambda x, *a, **k: calls.append(1) or x0, x0.clone(), _sched()[0:1], None, None, None, _to(0), latent_shapes=shapes)
+    assert len(calls) == 1
 
 
 def test_a_negative_seed_is_new_each_run_and_a_number_is_kept(tiny_h3):
@@ -241,20 +245,38 @@ def test_simultaneous_actions_answer_a_named_step_once_per_option_and_merge(tiny
     assert not torch.allclose(out, call(x0, None, None, ctx))
 
 
-def test_simultaneous_actions_are_skipped_when_the_conditioning_changed_or_the_switch_is_off(tiny_h3):
+def test_simultaneous_actions_are_skipped_when_the_conditioning_changed(tiny_h3):
     x0, shapes = _packed()
     ctx = torch.randn(1, 5, 48)
     opts = [torch.randn(1, 5, 48), torch.randn(1, 5, 48)]
-    for values, to in ((dict(actions=True), _simul_to(1, opts, cond_len=9)), (dict(actions=False), _simul_to(1, opts))):
-        wrap, _ = _load(tiny_h3, steps="2", strength=0.5, fresh=0.0, **values)
+    wrap, _ = _load(tiny_h3, steps="2", strength=0.5, fresh=0.0)
+    seen = []
+
+    def model(x, t, c_concat, c_crossattn, *a, **k):
+        seen.append(c_crossattn)
+        return x0 + 0.1 * x
+
+    wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, _simul_to(1, opts, cond_len=9), latent_shapes=shapes)
+    assert all(torch.equal(c, ctx) for c in seen)                              # every call carries the prompt as it was
+
+
+def test_strength_decides_which_options_are_read_and_both_ends_need_one_pass_only(tiny_h3):
+    x0, shapes = _packed()
+    ctx = torch.randn(1, 5, 48)
+    opts = [torch.full((1, 5, 48), 1.0), torch.full((1, 5, 48), 2.0)]
+    for order, strength, fresh, expect in (("b_into_a", 1.0, 1.0, [2.0]),       # B alone: its input needs nothing from A
+                                           ("b_into_a", 1.0, 0.5, [1.0, 2.0]),   # B starts from A's picture: A must run
+                                           ("b_into_a", 0.5, 1.0, [1.0, 2.0]),
+                                           ("a_into_b", 1.0, 1.0, [1.0])):       # the other way round, 1 means A
+        wrap, _ = _load(tiny_h3, steps="2", strength=strength, fresh=fresh, order=order)
         seen = []
 
         def model(x, t, c_concat, c_crossattn, *a, **k):
-            seen.append(c_crossattn)
+            seen.append(float(c_crossattn.mean()))
             return x0 + 0.1 * x
 
-        wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, to, latent_shapes=shapes)
-        assert all(torch.equal(c, ctx) for c in seen)                          # every call carries the prompt as it was
+        wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, _simul_to(1, opts), latent_shapes=shapes)
+        assert seen == expect, (order, strength, fresh, seen)
 
 
 def test_the_new_noise_slider_decides_what_the_second_option_starts_from(tiny_h3):
