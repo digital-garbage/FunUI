@@ -535,6 +535,9 @@ def expand(text: str, shortcuts: list[Shortcut] | None = None, seed: int = 0, co
         return _expand(text, shortcuts, seed, commit)
 
 
+#: How the prompt carries "A or B" options once the raw text has been split: ⟦A¦B⟧. Not "[A|B]", because expanded
+#: shortcuts and variables may hold brackets and bars of their own ("[Shot 1]").
+ALT_OPEN, ALT_SEP, ALT_CLOSE = "⟦", "¦", "⟧"
 _PIPE = re.compile(r"\s*\|\s*")
 
 
@@ -581,8 +584,8 @@ def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
             return choice
         return m.group(0)  # unreachable: `combined` only matches a known group
 
-    # Shortcuts joined by "|" are simultaneous actions: DANCE|ZOOM -> [dance text|zoom text], the markup Prompt
-    # markup reads. A "|" next to anything that is not a shortcut is left alone.
+    # Shortcuts joined by "|" are alternatives: DANCE|ZOOM -> ⟦dance text¦zoom text⟧, which Prompt markup reads.
+    # A "|" next to anything that is not a shortcut is left alone.
     found = re.compile(combined, re.IGNORECASE | re.UNICODE)
     pieces, pos = [], 0
     while (m := found.search(original, pos)):
@@ -592,8 +595,8 @@ def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
             seps.append(sep.group(0))
             chosen.append(replace(nxt))
             end = nxt.end()
-        if len(chosen) > 1 and all(c and not (set(c) & set("[]|")) for c in chosen):
-            pieces.append("[" + "|".join(chosen) + "]")
+        if len(chosen) > 1 and all(chosen):
+            pieces.append(ALT_OPEN + ALT_SEP.join(chosen) + ALT_CLOSE)
         else:
             pieces.append("".join(c + sp for c, sp in zip(chosen, [*seps, ""])))
         pos = end

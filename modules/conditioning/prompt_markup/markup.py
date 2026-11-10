@@ -23,7 +23,9 @@ import re
 _NUM = r"-?(?:\d+\.\d*|\.\d+|\d+)"
 _WEIGHTED = re.compile(r"(?<!\\)\(([^():]*?):\s*(" + _NUM + r")\s*\)")
 _BRACKET_WEIGHTED = re.compile(r"(?<!\\)\[([^\[\]@|]*?):\s*(" + _NUM + r")\s*\]")
-_ALTERNATIVES = re.compile(r"(?<!\\)\[([^\[\]|]+(?:\|[^\[\]|]+)+)\]")
+_TYPED_ALTERNATIVES = re.compile(r"(?<!\\)\[([^\[\]|]+(?:\|[^\[\]|]+)+)\]")
+OPEN, SEP, CLOSE = "⟦", "¦", "⟧"          # core/shortcuts: how the app carries the options once it has split the raw text
+_ALTERNATIVES = re.compile(OPEN + "([^" + OPEN + SEP + CLOSE + "]+(?:" + SEP + "[^" + OPEN + SEP + CLOSE + "]+)+)" + CLOSE)
 _MARKUP = re.compile("|".join(p.pattern for p in (_ALTERNATIVES, _WEIGHTED, _BRACKET_WEIGHTED)))
 
 # What the main prompt (the one read outside the merged steps) holds of an [A|B]: both joined, A only or B only.
@@ -42,7 +44,7 @@ OVERLAP_HEADROOM = 1.5
 
 
 def _options(raw):
-    return [o.strip() for o in raw.split("|") if o.strip()]
+    return [o.strip() for o in raw.split(SEP) if o.strip()]
 
 
 def parse(text, pick=None, main="while"):
@@ -50,8 +52,9 @@ def parse(text, pick=None, main="while"):
     into `clean`. `clean` holds the options as `main` says ("while": "A while B", "space": "A B", "first"/"second":
     that option alone); with `pick` k it holds option k of each [A|B] instead (how the variants are made)."""
     out = {"clean": text or "", "weighted": [], "variants": [], "extra": 0}
-    if not text or ("(" not in text and "[" not in text):
+    if not text or ("(" not in text and "[" not in text and OPEN not in text):
         return out
+    text = _TYPED_ALTERNATIVES.sub(lambda m: OPEN + SEP.join(m.group(1).split("|")) + CLOSE, text)
     pieces, pos, width, found = [], 0, 0, 0
     for m in _MARKUP.finditer(text):
         pieces.append(text[pos:m.start()])

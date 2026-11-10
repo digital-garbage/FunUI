@@ -345,11 +345,20 @@ def test_a_corrupt_revolver_file_means_off_not_a_crash(store):
     assert shortcuts.expand("lt", seed=3) in ("A", "B", "C")
 
 
-def test_shortcuts_joined_by_a_pipe_become_simultaneous_options_and_anything_else_is_left_alone():
-    items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]), shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"]),
-             shortcuts.Shortcut("box", ["box"], ["a [x] b"])]
+def test_shortcuts_joined_by_a_pipe_become_options_and_anything_else_is_left_alone():
+    items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]),
+             shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"]),
+             shortcuts.Shortcut("box", ["box"], ["[Shot 1] a | b"])]
     expand = lambda t: shortcuts.expand(t, shortcuts=items, seed=1)           # noqa: E731
-    assert expand("A girl. DANCE | zoom. Dusk") == "A girl. [she dances|the camera zooms in]. Dusk"
+    assert expand("A girl. DANCE | zoom. Dusk") == "A girl. ⟦she dances¦the camera zooms in⟧. Dusk"
     assert expand("dance|walk") == "she dances|walk"                          # a phrase on one side: ignored
-    assert expand("dance|box") == "she dances|a [x] b"                        # a replacement that holds brackets: ignored
+    assert expand("dance|box") == "⟦she dances¦[Shot 1] a | b⟧"                # brackets and bars inside a shortcut are fine
     assert expand("dance, zoom") == "she dances, the camera zooms in"
+
+
+def test_typed_options_are_split_before_shortcuts_and_variables_put_brackets_of_their_own_in():
+    from core import prompt_build
+    items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]), shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"])]
+    variables = [{"name": "s2", "value": "[Shot 1] flat 2d"}, {"name": "s3", "value": "[Shot 1] glossy | 3d"}]
+    out = prompt_build.build("[$s2|$s3] dance|zoom [Shot 2] plain", shortcuts=items, variables=variables, seed=1)
+    assert out == "⟦[Shot 1] flat 2d¦[Shot 1] glossy | 3d⟧ ⟦she dances¦the camera zooms in⟧ [Shot 2] plain"

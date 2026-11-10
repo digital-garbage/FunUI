@@ -15,7 +15,7 @@ from . import enhance as en
 RUNS = collections.deque(maxlen=20)
 
 
-_MARKUP = re.compile(r"\([^()]*:\s*[\d.]+\)|\[[^\]]*\|[^\]]*\]")
+_MARKUP = re.compile(r"\([^()]*:\s*[\d.]+\)|\[[^\]]*\|[^\]]*\]|⟦[^⟧]*⟧")
 
 
 _LOADED = {}      # one entry: the last separate encoder, so a second Generate does not load a 9 GB file again

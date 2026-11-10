@@ -18,7 +18,20 @@ cycle-safety that recursion needs).
 
 from __future__ import annotations
 
+import re
+
 from . import shortcuts as shortcuts_mod
+
+
+#: A typed [A|B], found in the raw text (before any shortcut or variable has put brackets of its own in).
+_TYPED_ALTERNATIVES = re.compile(r"(?<!\\)\[([^\[\]|]+(?:\|[^\[\]|]+)+)\]")
+
+
+def _protect(m):
+    opts = [o.strip() for o in m.group(1).split("|") if o.strip()]
+    if len(opts) < 2:
+        return m.group(0)
+    return shortcuts_mod.ALT_OPEN + shortcuts_mod.ALT_SEP.join(opts) + shortcuts_mod.ALT_CLOSE
 
 
 def build(scene_text: str, *, anchor: str = "", postfix: str = "",
@@ -27,5 +40,6 @@ def build(scene_text: str, *, anchor: str = "", postfix: str = "",
     anchor = (anchor or "").strip()
     postfix = (postfix or "").strip() if postfix_enabled else ""
     combined = " ".join(p for p in (anchor, str(scene_text or "").strip(), postfix) if p)
+    combined = _TYPED_ALTERNATIVES.sub(_protect, combined)
     expanded = shortcuts_mod.expand(combined, shortcuts=shortcuts, seed=seed, commit=commit)
     return shortcuts_mod.resolve_variables(expanded, variables)

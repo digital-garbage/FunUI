@@ -176,3 +176,9 @@ def test_the_options_are_only_kept_for_the_sampler_when_the_switch_is_on(tiny_h3
         model, _pos, status = FunUIApplyPromptMarkup.execute(
             tiny_h3.patcher, clip, positive, {"samples": tiny_h3.video}, markup).result
         assert (model.model_options["transformer_options"].get(SIMUL) is not None) == kept, settings
+
+
+def test_options_from_the_app_survive_brackets_and_bars_inside_them():
+    from modules.conditioning.prompt_markup import markup as mk
+    got = mk.parse("⟦[Shot 1] flat 2d¦[Shot 1] glossy | 3d⟧ ⟦she dances¦the camera zooms in⟧ [Shot 2] plain")
+    assert got["variants"] == ["[Shot 1] flat 2d she dances [Shot 2] plain", "[Shot 1] glossy | 3d the camera zooms in [Shot 2] plain"]
