@@ -88,7 +88,7 @@ SETTINGS = {
     "actions": {
         "type": "bool", "default": True,
         "label": "Simultaneous actions",
-        "hint": "With [A|B] in the prompt, answers the steps above once for A and once for B and merges them, so both happen at once. Costs one extra pass per step.",
+        "hint": "With [A|B] in the prompt, answers the steps above once for each option and merges them, so both happen at once. One extra pass per step.",
         "when": {"enabled": True, "what": "answers"},
     },
     "sound": {
@@ -155,6 +155,20 @@ def _mix(out_a, out_b, named, strength, b_first, with_sound):
         n = merged.shape[-1] - base_tail.shape[-1]
         merged = torch.cat([merged[..., :n], merge(base_tail, other_tail, strength).to(merged.dtype)], dim=-1)
     return merged, diff
+
+
+def _second_x(x, out, named, sigma, seed, step, fresh, with_sound):
+    """The input for a second pass over `x` after `out` answered it: the step's noise turned `fresh` of the way toward
+    the second seed's noise around out's picture (and sound), on x's own device and dtype. x itself when out has no picture."""
+    split_x, split_a = streams.video_of(x, named), streams.video_of(out, named)
+    if split_x is None or split_a is None:
+        return x
+    video_a, tail_a = split_a[0].detach(), _sound(out, split_a[0])
+    x_b = split_x[1](second_input(split_x[0], video_a, sigma, seed, step, fresh))
+    if tail_a is not None and with_sound:
+        n = x_b.shape[-1] - tail_a.shape[-1]
+        x_b = torch.cat([x_b[..., :n], second_input(x[..., n:], tail_a.detach(), sigma, seed + 1, step, fresh)], dim=-1)
+    return x_b
 
 
 def _option_context(base, simul, k, like, cache):
@@ -270,12 +284,16 @@ def install(patcher, values, key):
             if (isinstance(context, torch.Tensor) and context.dim() == 3
                     and int(context.shape[1]) == simul["cond_len"] and len(simul["options"]) > 1):
                 try:
-                    outs = []
+                    outs, x_k = [], x
                     for k in (0, 1):
                         args_k, kwargs_k = streams.with_context(
                             args, kwargs, _option_context(getattr(executor, "class_obj", None), simul, k, context,
                                                           live["options"]))
-                        outs.append(executor(x, t, *args_k, **kwargs_k))
+                        outs.append(executor(x_k, t, *args_k, **kwargs_k))
+                        if k == 0 and fresh > 0.0:
+                            # The second option starts from partly new noise: the step's own noise, turned `fresh`
+                            # of the way toward the second seed's, around the first option's picture.
+                            x_k = _second_x(x, outs[0], named, float(t.max()), live["seed"], where[0], fresh, with_sound)
                     mixed = _mix(outs[0], outs[1], named, strength, b_first, with_sound)
                     if mixed is not None:
                         live["merged"] += 1

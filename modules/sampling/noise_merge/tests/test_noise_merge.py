@@ -255,3 +255,23 @@ def test_simultaneous_actions_are_skipped_when_the_conditioning_changed_or_the_s
 
         wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, to, latent_shapes=shapes)
         assert all(torch.equal(c, ctx) for c in seen)                          # every call carries the prompt as it was
+
+
+def test_the_new_noise_slider_decides_what_the_second_option_starts_from(tiny_h3):
+    x0, shapes = _packed()
+    ctx = torch.randn(1, 5, 48)
+    opts = [torch.randn(1, 5, 48), torch.randn(1, 5, 48)]
+    got = {}
+    for fresh in (0.0, 1.0):
+        wrap, _ = _load(tiny_h3, steps="2", strength=0.5, fresh=fresh, seed=5)
+        starts = []
+
+        def model(x, t, c_concat, c_crossattn, *a, **k):
+            starts.append(x.clone())
+            return x0 + 0.1 * x
+
+        wrap(model, x0.clone(), _sched()[1:2], None, ctx, None, _simul_to(1, opts), latent_shapes=shapes)
+        assert len(starts) == 2 and torch.equal(starts[0], x0)                 # the first option always gets the step's input
+        got[fresh] = starts[1]
+    assert torch.equal(got[0.0], x0)                                           # 0: the same noise for both options
+    assert not torch.allclose(got[1.0], x0) and got[1.0].dtype == x0.dtype and got[1.0].device == x0.device
