@@ -16,3 +16,14 @@ test("a rated clip says so: liked or disliked, whichever word the rating is save
   const { mood } = await import("./lanes.js");
   assert.deepEqual(["10", "3", "Disliked: bad image", "7|loved", "", "-Just forget it-", "weird", "Perfect", "Awful", "Wrong appearance"].map(mood), ["liked", "disliked", "disliked", "liked", "", "", "", "liked", "disliked", ""]);
 });
+
+test("a picture render shows as its picture on the clip; a video render keeps the picture the scene starts from", () => {
+  const p = { num_frames_per_scene: 1, frame_rate: 1,
+    scenes: [{ id: "a", text: "x", source_image: "m1" }, { id: "b", text: "y", source_image: "m2" }],
+    scene_renders: { a: { media: { filename: "FunUI_00001_.png", subfolder: "s", type: "output" } }, b: { media: { filename: "b.mp4", subfolder: "", type: "output" } } } };
+  const [a, b] = videoLane(p, [], "").clips;
+  const u = new URL(a.thumbs[0], "http://x");
+  assert.equal(u.pathname, "/fun/api/m/render/poster");
+  assert.deepEqual(Object.fromEntries(u.searchParams), { filename: "FunUI_00001_.png", subfolder: "s", type: "output" });
+  assert.deepEqual(b.thumbs, ["/fun/api/media/m2/thumb"]);
+});

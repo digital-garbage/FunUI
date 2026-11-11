@@ -357,3 +357,42 @@ def test_clip_starts_follow_the_renders_own_clock_gaps_and_overlapping_seams():
              {"scene_id": "b", "dur": 3.0, "transition": "crossfade", "tdur": 0.5},
              {"scene_id": "c", "dur": 1.0}]
     assert stitch._clip_starts(clips) == {"a": 0.0, "b": 2.5, "c": 5.0}
+
+
+# --- a picture render ----------------------------------------------------------
+
+
+def _picture(path, size=(161, 121)):
+    from PIL import Image
+    Image.new("RGB", size, (200, 40, 40)).save(path)
+    return path
+
+
+@needs_ffmpeg
+def test_a_picture_render_plays_as_a_clip_of_the_length_asked_with_even_sides(comfy):
+    _picture(comfy.output / "p.png")
+    path = files.clip_path({"filename": "p.png", "subfolder": "", "type": "output", "in": 0, "dur": 1.5})
+    seconds, w, h, audio = probe(path)
+    assert abs(seconds - 1.5) < 0.2 and (w, h) == (160, 120) and not audio
+    assert files.clip_path({"filename": "p.png", "subfolder": "", "type": "output", "in": 0, "dur": 1.5}) == path      # made once
+    longer = files.clip_path({"filename": "p.png", "subfolder": "", "type": "output", "in": 0.5, "dur": 2.0})
+    assert longer != path and probe(longer)[0] > 2.3            # a window that starts later has the picture for it
+
+
+@needs_ffmpeg
+def test_a_picture_render_trims_previews_and_exports_like_any_clip(comfy):
+    _picture(comfy.output / "p.png", (160, 120))
+    make_clip(comfy.output / "v.mp4", seconds=1.0)
+    spec = {"filename": "p.png", "subfolder": "", "type": "output", "in": 0, "dur": 1.0}
+    out = files.temp_file("seg.mp4")
+    files.trim(files.clip_path(spec), out, 0, 1.0)
+    assert abs(probe(out)[0] - 1.0) < 0.2
+    rendered = stitch.render(projects.Project(width=160, height=120), [clip("p.png", dur=1.0), clip("v.mp4", dur=1.0)])
+    got = comfy.temp / rendered["media"]["filename"] if rendered["media"].get("type") == "temp" else comfy.output / rendered["media"]["filename"]
+    assert abs(probe(got)[0] - 2.0) < 0.3
+    thumb = files.temp_file("thumb.jpg")
+    files.poster(str(comfy.output / "p.png"), thumb)                 # the timeline's small still of a picture render
+    assert os.path.getsize(thumb) > 0
+    still = files.temp_file("last.png")
+    files.last_frame(files.clip_path(spec), still, 0, 1.0)
+    assert os.path.getsize(still) > 0

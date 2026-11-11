@@ -15,6 +15,7 @@ different bytes under a browser that is mid-stream.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -38,8 +39,33 @@ def comfy_path(filename, subfolder="", kind="output") -> str | None:
     return video_pipe.comfy_path(filename, subfolder, kind, comfy_dir)    # through this module's comfy_dir, which tests replace
 
 
+PICTURES = (".png", ".jpg", ".jpeg", ".webp")
+STILL_FPS = 24
+
+
+def is_picture(path: str) -> bool:
+    return str(path).lower().endswith(PICTURES)
+
+
+def still_clip(path: str, seconds: float) -> str:
+    """A picture file played as a clip: the picture held for `seconds`, made once and kept in ComfyUI's temp folder.
+
+    Everything after a render (preview segments, trims, the last frame, export) reads clips, so a picture render becomes one
+    here, at the one place they all ask for a file. Without sound; the sides are made even for H.264."""
+    seconds = max(0.1, round(float(seconds or 0), 2))
+    sig = signature(path)
+    out = temp_file("funui_still_" + hashlib.md5(f"{path}|{sig[0]}|{sig[1]}|{seconds}".encode()).hexdigest()[:16] + ".mp4")
+    if not os.path.isfile(out):
+        run([ffmpeg(), "-y", "-loop", "1", "-framerate", str(STILL_FPS), "-i", path, "-t", f"{seconds:.2f}",
+             "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264", "-crf", REENCODE_CRF, "-pix_fmt", "yuv420p",
+             "-movflags", "+faststart", out])
+    if not os.path.isfile(out) or os.path.getsize(out) == 0:
+        raise ClipError("a picture could not be turned into a clip")
+    return out
+
+
 def clip_path(clip: dict) -> str:
-    """The file a clip spec points at: a media-library id, or a ComfyUI file."""
+    """The file a clip spec points at: a media-library id, or a ComfyUI file (a picture comes back as a clip of the length asked)."""
     ref = clip.get("bin_media_ref")
     if ref:
         found = media.path_for(ref) if media.is_id(ref) else None
@@ -49,6 +75,8 @@ def clip_path(clip: dict) -> str:
     path = comfy_path(clip.get("filename"), clip.get("subfolder") or "", clip.get("type") or "output")
     if not path or not os.path.isfile(path):
         raise ClipError("A clip's file is not on disk: generate it again, then try this.")
+    if is_picture(path):
+        return still_clip(path, float(clip.get("in") or 0) + float(clip.get("dur") or 1))
     return path
 
 

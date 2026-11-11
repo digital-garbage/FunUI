@@ -5,6 +5,9 @@
 /** A pipeline role that `drives` the plan's length or rate is fed from the project number the timeline draws. */
 export const DRIVEN = { frames: "num_frames_per_scene", fps: "frame_rate" };
 
+/** A render that is a picture file, not a clip. */
+export const isPicture = (name) => /\.(png|jpe?g|webp)$/i.test(name || "");
+
 export const genUnitId = (sc) => (sc && (sc.gen_unit_id || sc.id)) || "";
 export const isVideoClip = (sc) => Boolean(sc && sc.source && sc.source.type === "video");
 export const isGenerative = (sc) => Boolean(sc) && !isVideoClip(sc) && !sc.reused;       // a reused copy (from older projects) only replays media that already exists

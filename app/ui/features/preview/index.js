@@ -1,14 +1,13 @@
 // The monitor and its transport: plays the cut, clip after clip, wherever the playhead is. The playhead is the one
 // clock: playing moves it, seeking (scrubber, ruler, picking a clip) moves it, and the picture follows it.
 import { composer as c } from "../../composer/composer.js";
-import { segments, totalSeconds, isVideoClip, isSubclip } from "../../shell/scenes.js";
+import { segments, totalSeconds, isVideoClip, isSubclip, isPicture } from "../../shell/scenes.js";
 import { viewUrl } from "../../shell/run.js";
 
 const pad = (n) => String(Math.floor(n)).padStart(2, "0");
 export const timecode = (sec, fps) => { const s = Math.max(0, sec), w = Math.floor(s); return [pad(w / 3600), pad((w % 3600) / 60), pad(w % 60), pad((s - w) * (fps || 25))].join(":"); };
 
-/** A render that is a picture file, not a clip. */
-export const isPicture = (name) => /\.(png|jpe?g|webp)$/i.test(name || "");
+export { isPicture };
 
 /** Where a clip's picture comes from: {url, from} (`from` = seconds into the file), or null when there is none yet.
  *  A generated clip is played from the server's own trimmed copy, never the raw render: ComfyUI's saver writes the index at
