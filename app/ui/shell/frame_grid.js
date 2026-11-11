@@ -21,3 +21,7 @@ export async function learnGrid(api, slots) {
   try { Object.assign(specs, (await api.describeNodes(missing)).nodes || {}); } catch { missing.forEach((n) => { specs[n] = null; }); }
   return true;
 }
+
+/** Whether the pipeline takes a length or a rate from the project at all. A model that makes a picture holds it for a fixed time, so
+ *  there is nothing to set: the Length and FPS controls are not offered. A pipeline not known yet offers them. */
+export const offersLength = (slots) => !(slots && slots.length) || slots.some((s) => (s.roles || []).some((r) => r.drives === "frames" || r.drives === "fps"));

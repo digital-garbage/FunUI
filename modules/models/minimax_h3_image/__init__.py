@@ -5,9 +5,8 @@ the 16x latent grid, has no sound stream and reads at most 16 pictures: the firs
 picture to edit (`<Picture 1>` in the prompt), the others are references (`<Picture 2>`, ...).
 It samples in 6 steps at CFG 1 and works best around 4 to 16 megapixels.
 
-Like every image model here, its picture is held for the clip's length, so the editor gets a clip
-made the same way as any other. A held 16-megapixel frame is about 48 MB in memory: keep the
-length short at large sizes.
+The result is a picture file (PNG), not a clip. The pipeline offers no Length or FPS; the preset sets
+the project's Length and FPS to 1, so a scene made with it counts as one second on the timeline.
 
 The checkpoint is recognised by its header: the packed-DiT keys of H3 with no audio projection.
 Everything the model needs at run time (the image latent, the picture labels, the sigma grid
@@ -31,6 +30,9 @@ _ABSENT = "audio_patch_proj.weight"
 #: How many pictures the model reads (the one to edit and its references).
 MAX_REFERENCES = 16
 
+#: The project numbers the preset sets: one frame at one frame per second.
+PROJECT = {"num_frames_per_scene": 1, "frame_rate": 1}
+
 
 def detect(keys) -> bool:
     keyset = set(keys)
@@ -52,7 +54,6 @@ def probe_traits(keys) -> list:
 
 
 def text_to_image():
-    video = {"at": "project.video", "input": "fps", "label": "FPS", "drives": "fps"}
     slots = [
         {"id": "model", "group": "Loaders", "node": "FunUIDiffusionModelLoader", "inputs": {
             "weight_dtype": "default", "compute_dtype": "default", "attention": "default"}},
@@ -94,11 +95,8 @@ def text_to_image():
 
         {"id": "decode", "group": "Render", "node": "FunUIDecode",
          "inputs": {"samples": ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0]}},
-        {"id": "hold", "group": "Render", "node": "RepeatImageBatch",
-         "roles": [{"at": "project.video", "input": "amount", "label": "Length", "drives": "frames"}],
-         "inputs": {"image": ["decode", 0], "amount": 1}},
-        {"id": "save", "group": "Render", "node": "FunUISaveVideo", "roles": [video],
-         "inputs": {"images": ["hold", 0], "fps": 24.0, "filename_prefix": "FunUI", "settings": ["settings", 0]}},
+        {"id": "save", "group": "Render", "node": "SaveImage",
+         "inputs": {"images": ["decode", 0], "filename_prefix": "FunUI"}},
     ]
     for n in range(1, MAX_REFERENCES + 1):
         # Not wired here: an unused picture input is simply absent. The app wires the ones a scene has, per run.
@@ -111,8 +109,8 @@ def text_to_image():
 
 
 def presets():
-    return [{"id": "minimax_h3_image", "title": "MiniMax H3-Image · Text to Image and Edit (held as a clip)",
-             "slots": text_to_image()}]
+    return [{"id": "minimax_h3_image", "title": "MiniMax H3-Image · Text to Image and Edit",
+             "slots": text_to_image(), "project": PROJECT}]
 
 
 PROVIDES = {"detect": detect, "probe_traits": probe_traits, "pipeline_presets": presets}

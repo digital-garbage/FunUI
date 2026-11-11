@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gridOf, learnGrid } from "./frame_grid.js";
+import { gridOf, learnGrid, offersLength } from "./frame_grid.js";
 
 test("the frame grid is read from the model's own length input: H3 17k+5, LTX 8k+1, a plain count none", async () => {
   const slots = [{ id: "r2v", node: "H3Node", roles: [{ at: "project.video", input: "length", drives: "frames" }] },
@@ -13,4 +13,15 @@ test("the frame grid is read from the model's own length input: H3 17k+5, LTX 8k
   const ltx = [{ node: "LtxNode", roles: [{ drives: "frames", input: "length" }] }];
   await learnGrid({ describeNodes: async () => ({ nodes: { LtxNode: { widgets: [{ name: "length", min: 1, step: 8 }] } } }) }, ltx);
   assert.deepEqual(gridOf(ltx), { step: 8, base: 1, fps: null });
+});
+
+test("Length and FPS are offered when a pipeline takes them, or is not known yet, and not for one that holds a picture for a fixed time", () => {
+  const length = { id: "r", roles: [{ at: "project.video", input: "length", drives: "frames" }] };
+  const rate = { id: "s", roles: [{ at: "project.video", input: "fps", drives: "fps" }] };
+  const size = { id: "a", roles: [{ at: "project.video", input: "width" }] };
+  assert.equal(offersLength([size, length]), true);
+  assert.equal(offersLength([size, rate]), true);
+  assert.equal(offersLength([size, { id: "x" }]), false);
+  assert.equal(offersLength([]), true);
+  assert.equal(offersLength(undefined), true);
 });

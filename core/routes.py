@@ -328,7 +328,9 @@ def register(routes, prefix=None):
                 if isinstance(preset, dict) and preset.get("id") and preset.get("slots"):
                     found.append({"id": preset["id"], "title": preset.get("title") or preset["id"],
                                   "module": spec.id, "slots": preset["slots"],
-                                  "prefs": preset.get("prefs") if isinstance(preset.get("prefs"), dict) else {}})
+                                  "prefs": preset.get("prefs") if isinstance(preset.get("prefs"), dict) else {},
+                                  # project numbers the pipeline goes with (a picture model: 1 frame at 1 fps)
+                                  "project": {k: v for k, v in (preset.get("project") or {}).items() if k in ("num_frames_per_scene", "frame_rate") and isinstance(v, int)}})
         return web.json_response({"presets": found})
 
     @routes.post(P + "/api/pipeline/import")

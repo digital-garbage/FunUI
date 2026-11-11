@@ -2,7 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { namesOf, pick } from "./mediapick.js";
 import { effFrames, effFps, genUnitId, isSubclip, seconds, snapFrames } from "../../shell/scenes.js";
-import { gridOf } from "../../shell/frame_grid.js";
+import { gridOf, offersLength } from "../../shell/frame_grid.js";
 import { restoreToPlan } from "../../shell/edits.js";
 
 const MODES = [{ value: "project", label: "Project default" }, { value: "timeline", label: "Timeline trim" }, { value: "custom", label: "Custom" }];
@@ -37,7 +37,7 @@ function drift(sc, open) {
 export const card = (...children) => c.card.default({ children: children.flat().filter(Boolean) });
 
 export function sceneRows(p, app) {
-  const sc = p.selected, open = p.project;
+  const sc = p.selected, open = p.project, slots = app.pipeline && (app.pipeline.view || app.pipeline.slots)();
   if (!sc) return [c.emptyState.default({ icon: "▭", title: "No scene", hint: "Add one on the timeline." })];
   const cuts = p.scenes.filter((s) => genUnitId(s) === genUnitId(sc)).length > 1;
   return [
@@ -49,13 +49,14 @@ export function sceneRows(p, app) {
     card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture. Its shape sets the aspect ratio; the project's Width and Height set the size.",
       key: "source_image", multiple: false, kinds: ["image", "video"], empty: "— choose aspect ratio source —" }),
     mediaField(app, p, sc, { label: "References", key: "references", multiple: true, kinds: ["image", "video", "audio"], empty: "+ Add reference" })),
-    c.label.section({ text: "Length" }),
-    card(c.field.row({ fields: [
-      lengthField(p, sc, "Frames", "frames_mode", "frames", effFrames(sc, open), gridOf(app.pipeline && (app.pipeline.view || app.pipeline.slots)())),
-      lengthField(p, sc, "FPS", "fps_mode", "fps", effFps(sc, open)),
-    ] }),
-    drift(sc, open),
-    c.button.md({ label: "Generate this scene", tone: "primary", onClick: () => app.say("generate.scene") })),
+    ...(offersLength(slots) ? [c.label.section({ text: "Length" }),
+      card(c.field.row({ fields: [
+        lengthField(p, sc, "Frames", "frames_mode", "frames", effFrames(sc, open), gridOf(slots)),
+        lengthField(p, sc, "FPS", "fps_mode", "fps", effFps(sc, open)),
+      ] }),
+      drift(sc, open),
+      c.button.md({ label: "Generate this scene", tone: "primary", onClick: () => app.say("generate.scene") }))] : [
+      card(c.button.md({ label: "Generate this scene", tone: "primary", onClick: () => app.say("generate.scene") }))]),
     card(c.checkboxRow.default({ label: "Exclude from full generation", hint: "Generate leaves this scene out.", checked: Boolean(sc.excluded), onChange: (v) => p.setScene(sc.id, "excluded", v) })),
     c.banner.info({ text: "Made with the project's pipeline and Engine settings", action: { label: "Engine settings →", onClick: () => app.openSettings && app.openSettings("engine") } }),
   ];

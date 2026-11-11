@@ -54,3 +54,17 @@ def test_the_preset_builds_a_real_graph_and_is_offered(registered):
     assert refs[0]["roles"][0]["wireTo"] == {"slot": "cond", "input": "images.image_1"}     # image_1 is the picture to edit
     sampler = next(s for s in slots if s["id"] == "sampler")["inputs"]
     assert (sampler["steps"], sampler["cfg"], sampler["sampler_name"], sampler["scheduler"]) == (6, 1.0, "euler", "simple")
+
+
+def test_it_saves_a_picture_and_offers_no_length_or_fps(registered):
+    from core import graph, routes
+    from modules.models.minimax_h3_image import PROJECT, presets, text_to_image
+
+    slots = {s["id"]: s for s in text_to_image()}
+    assert not [r for s in slots.values() for r in s.get("roles") or [] if r.get("drives") in ("frames", "fps")]
+    assert slots["save"]["node"] == "SaveImage" and "hold" not in slots          # a PNG, not a clip
+    assert PROJECT == {"num_frames_per_scene": 1, "frame_rate": 1} and presets()[0]["project"] == PROJECT
+    prompt, _problems = graph.build(list(slots.values()))
+    assert [n["class_type"] for n in prompt.values()].count("SaveImage") == 1
+    served = [p for _s, make in routes.modules().providers("pipeline_presets") for p in make() if p["id"] == "minimax_h3_image"]
+    assert served and served[0]["project"] == PROJECT

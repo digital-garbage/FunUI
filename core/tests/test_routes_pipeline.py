@@ -532,6 +532,13 @@ def test_a_module_provided_preset_is_offered(server, registered):
     assert preset["slots"]
 
 
+def test_a_picture_model_preset_carries_the_project_numbers_it_goes_with(server, registered):
+    _status, body = _request(server, "GET", "/fun/api/pipeline/presets")
+    image = next(p for p in body["presets"] if p["id"] == "minimax_h3_image")
+    assert image["project"] == {"num_frames_per_scene": 1, "frame_rate": 1}
+    assert next(p for p in body["presets"] if p["id"] == "minimax_h3_reference_to_video")["project"] == {}      # a video model changes none
+
+
 def test_a_comfyui_workflow_imports_into_slots_that_build_a_real_graph(server, registered):
     """Over HTTP, against ComfyUI's own nodes: the API export of a plain text-to-image graph."""
     from core import graph
