@@ -13,7 +13,7 @@ Everything the model needs at run time (the image latent, the picture labels, th
 shipped inside the file) is ComfyUI's own.
 """
 
-from ..._core import traits as _traits
+from ..._core import dit_hooks as _dit_hooks, traits as _traits
 
 ID = "model_minimax_h3_image"
 TITLE = "MiniMax H3-Image"
@@ -39,12 +39,33 @@ def detect(keys) -> bool:
     return any(all(f"{p}{k}" in keyset for k in _PRESENT) and f"{p}{_ABSENT}" not in keyset for p in _PREFIXES)
 
 
+MODEL_CLASS = "comfy.ldm.minimax.model.MiniMaxH3ImageModel"
+
+#: What this model announces beyond core's own reading: its blocks are the H3 blocks (REINS reads the picture's rows
+#: through them, the Attention explorer scales their attention). Block repeat and Attention temperature work the same way
+#: but nobody has tried them on this model, so they stay hidden.
+ANNOUNCED = ["block_rows", "block_scope", "hides:block_repeat", "hides:attention_temperature"]
+
+
+def is_image_model(model) -> bool:
+    return _traits.has_block(model, MODEL_CLASS)
+
+
+def traits(model):
+    return ANNOUNCED if is_image_model(model) else ()
+
+
+def probe_blocks(keys):
+    """How many transformer blocks the file has, read off its header."""
+    return _dit_hooks.count_indexed(keys, tuple(f"{p}blocks." for p in _PREFIXES))
+
+
 def probe_traits(keys) -> list:
     """What core reads off the loaded model (a 3-axis latent with a length-1 time axis, flow prediction), said before it loads."""
     if not detect(keys):
         return []
     from comfy.latent_formats import MiniMaxH3Video
-    found = ["predict_flow"]
+    found = ["predict_flow", *ANNOUNCED]
     rank = _traits.LATENT_RANK.get(MiniMaxH3Video.latent_dimensions)
     if rank:
         found.append(rank)
@@ -113,4 +134,5 @@ def presets():
              "slots": text_to_image(), "project": PROJECT}]
 
 
-PROVIDES = {"detect": detect, "probe_traits": probe_traits, "pipeline_presets": presets}
+TRAITS = traits
+PROVIDES = {"detect": detect, "probe_traits": probe_traits, "probe_blocks": probe_blocks, "pipeline_presets": presets}

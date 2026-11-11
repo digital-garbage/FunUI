@@ -400,6 +400,10 @@ def install(patcher, values, key):
     video_width, sound_width = getattr(dm, "inner_dim", None), getattr(dm, "audio_inner_dim", None)
     if paired:
         signature.append(1)            # ratings made on a packed-sequence model (H3) must not teach a paired one
+    silent = not paired and getattr(dm, "audio_latents_dim", 1) is None      # a picture-only model (H3-Image): no sound to spare, no clip time to cut into regions
+    if silent:
+        regions, sound = False, True
+        signature.append(2)            # and what was rated on a model with a sound stream must not teach one without
     if focus and paired:
         focus = False                  # the prompt's rows are not one run of the sequence here: that part is H3's
     if not sound and not paired:
