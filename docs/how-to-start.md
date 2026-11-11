@@ -24,6 +24,7 @@ Start ComfyUI as usual and open `/fun/` on the same address, for example `http:/
 |---|---|
 | MiniMax H3 · Reference to Video, MiniMax H3 · Fast & Simple R2V | The model FunUI is built and tested around. |
 | Stable Diffusion 1.5 · Text to Image (held as a clip) | Experimental. |
+| MiniMax H3-Image · Text to Image and Edit (held as a clip) | Experimental. Add pictures as references: the first is the picture to edit (`<Picture 1>` in the prompt), the others are references (`<Picture 2>`, ...), up to 16. Uses 6 steps at CFG 1; Width and Height set the size (about 4 megapixels is a good start). |
 | LTX 2.3 · Image to Video, from References, LTX 2.3 · Video to Video, direct | Tested on a real model, with LoRAs, Step merging and Attention explorer. Other enhancements are not tested on LTX yet; please report problems in [Issues](https://github.com/digital-garbage/FunUI/issues). |
 
 ## 4. Pick your files
