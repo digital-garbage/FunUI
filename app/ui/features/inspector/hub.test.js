@@ -142,3 +142,24 @@ test("a group opened in the panel stays open when the panel redraws", async () =
   assert.equal(group().open, true);
   host.remove();
 });
+
+test("a pipeline that saves a picture and takes no length offers no Frames or FPS, on the Project tab or the Scene tab", async () => {
+  let fire;
+  const doc = { id: "P", frame_rate: 1, num_frames_per_scene: 1, video: { width: 768, height: 512 }, scenes: [{ id: "a", text: "x" }], scene_renders: {} };
+  const p = { project: doc, video: doc.video, get scenes() { return doc.scenes; }, get selected() { return doc.scenes[0]; }, selectedId: "a",
+    setText: () => {}, setScene: () => {}, setField: () => {}, setVideo: () => {}, edit: (fn) => fn(doc) };
+  const size = { id: "a", roles: [{ at: "project.video", input: "width", label: "Width" }], inputs: { width: 768 } };
+  let slots = [size, { id: "save", node: "SaveImage" }];
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { dom: createDom(), project: p, on: (fn) => { fire = fn; return () => {}; }, api: {}, say: () => {}, pipeline: { slots: () => slots } } });
+  const words = () => host.textContent;
+  assert.ok(!words().includes("Frames") && !words().includes("FPS"), "no Length on the Scene tab");
+  [...host.querySelectorAll("[role=radio]")].find((b) => b.textContent === "Project").click();
+  assert.ok(!words().includes("Frames") && !words().includes("FPS") && !words().includes("per shot"), "no Frames, FPS or seconds per shot on the Project tab");
+  assert.ok(words().includes("Width"), "the size is still there");
+  slots = [size, { id: "save", node: "FunUISaveVideo" }];                  // a clip pipeline offers them
+  fire("change");
+  assert.ok(words().includes("FPS"));
+  host.remove();
+});

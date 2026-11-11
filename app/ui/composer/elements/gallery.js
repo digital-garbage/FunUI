@@ -366,15 +366,16 @@ define("viewer", "media", ({ src, kind = "image", empty = "Nothing yet", onError
     setValue: (next) => show(next, kind),
     setSource: (next, nextKind, file) => show(next, nextKind || kind, file),
     /**
-     * The video frame on screen right now, as a PNG blob -- null if nothing is
-     * playing or there is no frame yet to draw (a video that has not loaded
+     * The video frame (or the picture) on screen right now, as a PNG blob -- null if nothing is
+     * shown or there is nothing yet to draw (a video that has not loaded
      * its first frame has no dimensions to capture at).
      */
     captureFrame() {
-      if (currentKind !== "video" || !mediaEl || !mediaEl.videoWidth) return Promise.resolve(null);
+      const w = mediaEl && (mediaEl.videoWidth || mediaEl.naturalWidth), h = mediaEl && (mediaEl.videoHeight || mediaEl.naturalHeight);
+      if (!w) return Promise.resolve(null);
       const canvas = document.createElement("canvas");
-      canvas.width = mediaEl.videoWidth;
-      canvas.height = mediaEl.videoHeight;
+      canvas.width = w;
+      canvas.height = h;
       canvas.getContext("2d").drawImage(mediaEl, 0, 0);
       return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     },

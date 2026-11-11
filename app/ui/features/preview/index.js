@@ -2,9 +2,13 @@
 // clock: playing moves it, seeking (scrubber, ruler, picking a clip) moves it, and the picture follows it.
 import { composer as c } from "../../composer/composer.js";
 import { segments, totalSeconds, isVideoClip, isSubclip } from "../../shell/scenes.js";
+import { viewUrl } from "../../shell/run.js";
 
 const pad = (n) => String(Math.floor(n)).padStart(2, "0");
 export const timecode = (sec, fps) => { const s = Math.max(0, sec), w = Math.floor(s); return [pad(w / 3600), pad((w % 3600) / 60), pad(w % 60), pad((s - w) * (fps || 25))].join(":"); };
+
+/** A render that is a picture file, not a clip. */
+export const isPicture = (name) => /\.(png|jpe?g|webp)$/i.test(name || "");
 
 /** Where a clip's picture comes from: {url, from} (`from` = seconds into the file), or null when there is none yet.
  *  A generated clip is played from the server's own trimmed copy, never the raw render: ComfyUI's saver writes the index at
@@ -13,6 +17,7 @@ export function sourceOf(sc, open, dur) {
   if (isVideoClip(sc)) return sc.source && sc.source.media_ref ? { url: `/fun/api/media/${encodeURIComponent(sc.source.media_ref)}/file`, from: sc.source_in || 0 } : null;
   const r = (open.scene_renders || {})[sc.id];
   if (!(r && r.media)) return null;
+  if (isPicture(r.media.filename)) return { url: viewUrl(r.media), from: 0, picture: true };          // a picture file is shown as it is, never cut as a clip
   const q = new URLSearchParams({ filename: r.media.filename || "", subfolder: r.media.subfolder || "", type: r.media.type || "output", render_in: String(r.inSec || 0), src_in: String(sc.source_in || 0), dur: String(dur) });
   if (sc.effects && sc.effects.reverse) q.set("rev", "1");
   return { url: `/fun/api/m/render/projects/${encodeURIComponent(open.id)}/preview-segment/${encodeURIComponent(sc.id)}?${q}`, from: 0 };
@@ -55,6 +60,7 @@ export default {
 
     let playing = false, shown = null, seg = null, from = 0, quiet = false;
     const open = () => p.project;
+    const video = () => (viewer.element && viewer.element.tagName === "VIDEO" ? viewer.element : null);          // null while a picture is on screen
     const segAt = (t) => (open() ? segmentAt(open(), t) : null);
     const total = () => (open() ? totalSeconds(open()) : 0);
 
@@ -65,9 +71,9 @@ export default {
       shown = key; from = src ? src.from : 0;
       viewer.node.hidden = !src; empty.node.hidden = Boolean(src);
       frame.setDisabled(!src);
-      viewer.setSource(src ? `${src.url}#t=${src.from}` : null, "video");
+      viewer.setSource(src ? (src.picture ? src.url : `${src.url}#t=${src.from}`) : null, src && src.picture ? "image" : "video");
       const v = viewer.element;
-      if (!v) return;
+      if (!v || v.tagName !== "VIDEO") return;           // a picture has no clock of its own: the playhead's does the timing
       v.addEventListener("timeupdate", () => onTime(v));
       v.addEventListener("ended", () => { if (playing && seg) head.set(seg.start + seg.dur); });
       if (playing) v.play().catch(() => {});
@@ -83,7 +89,7 @@ export default {
       show(seg);
       head.playing = playing;
       drawAnchor();
-      const v = viewer.element;
+      const v = video();
       if (v && seg) {       // the clip's own sound: its volume, nothing when moved to a lane of its own or dropped by the project
         const sc = seg.scene, vol = sc.audio_separated || (open() || {}).keep_original_audio === false ? 0 : Math.max(0, Math.min(1, sc.audio_volume != null ? +sc.audio_volume : 1));
         if (Number.isFinite(vol) && v.volume !== vol) v.volume = vol;
@@ -96,13 +102,13 @@ export default {
       scrub.setValue(head.at);
       time.setText(timecode(head.at, open() && open().frame_rate));
       play.node.firstChild.textContent = playing ? "⏸" : "▶"; play.node.title = playing ? "Pause" : "Play";
-      if (playing && viewer.element) viewer.element.paused && viewer.element.play().catch(() => {});
-      if (!playing && viewer.element) viewer.element.pause();
+      if (playing && video()) video().paused && video().play().catch(() => {});
+      if (!playing && video()) video().pause();
     }
     // Gaps and clips with no picture have nothing to play, so the clock itself walks the playhead through them.
     const walk = setInterval(() => {
       if (!playing) return;
-      const v = viewer.element;
+      const v = video();
       if (seg && v && !v.paused) onTime(v);                        // timeupdate is too slow to catch a short clip's end
       else head.set(head.at + 0.04);
       if (head.at >= total()) { head.set(Math.min(head.at, total())); pause(); }       // back on the end first: past it there is no clip, and the picture would drop and reload

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { timecode, sourceOf, segmentAt } from "./index.js";
+import { timecode, sourceOf, segmentAt, isPicture } from "./index.js";
 
 test("timecode is hours:minutes:seconds:frames at the project rate", () => {
   assert.equal(timecode(0, 25), "00:00:00:00");
@@ -25,4 +25,15 @@ test("at the very end of the cut the last clip stays on screen instead of the em
   assert.equal(segmentAt(open, 2).id, "b", "a boundary belongs to the clip that starts there");
   assert.equal(segmentAt(open, 4).id, "b", "playback stopped at the end: the last frame stays");
   assert.equal(segmentAt(open, 5), null);
+});
+
+test("a render that is a picture file is shown as the picture itself, straight from ComfyUI, not as a cut clip", () => {
+  const open = { id: "p", scene_renders: { a: { media: { filename: "FunUI_00001_.png", subfolder: "x", type: "output" } }, b: { media: { filename: "b.mp4", subfolder: "", type: "output" } } } };
+  const got = sourceOf({ id: "a" }, open, 1);
+  assert.equal(got.picture, true);
+  const u = new URL(got.url, "http://x");
+  assert.equal(u.pathname, "/view");
+  assert.deepEqual(Object.fromEntries(u.searchParams), { filename: "FunUI_00001_.png", subfolder: "x", type: "output" });
+  assert.equal(sourceOf({ id: "b" }, open, 1).picture, undefined);
+  assert.deepEqual(["a.PNG", "a.jpg", "a.jpeg", "a.webp", "a.mp4", "", undefined].map(isPicture), [true, true, true, true, false, false, false]);
 });

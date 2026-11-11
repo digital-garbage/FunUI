@@ -22,6 +22,6 @@ export async function learnGrid(api, slots) {
   return true;
 }
 
-/** Whether the pipeline takes a length or a rate from the project at all. A model that makes a picture holds it for a fixed time, so
- *  there is nothing to set: the Length and FPS controls are not offered. A pipeline not known yet offers them. */
-export const offersLength = (slots) => !(slots && slots.length) || slots.some((s) => (s.roles || []).some((r) => r.drives === "frames" || r.drives === "fps"));
+/** Whether Length and FPS mean anything for the pipeline. A pipeline that saves a picture (SaveImage) and takes no length or rate
+ *  has no clip to time, so they are not offered. Any other pipeline, and one not known yet, offers them. */
+export const offersLength = (slots) => !(slots && slots.length) || slots.some((s) => (s.roles || []).some((r) => r.drives === "frames" || r.drives === "fps")) || !slots.some((s) => s.node === "SaveImage");

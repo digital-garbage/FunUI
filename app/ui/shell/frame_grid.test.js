@@ -15,13 +15,15 @@ test("the frame grid is read from the model's own length input: H3 17k+5, LTX 8k
   assert.deepEqual(gridOf(ltx), { step: 8, base: 1, fps: null });
 });
 
-test("Length and FPS are offered when a pipeline takes them, or is not known yet, and not for one that holds a picture for a fixed time", () => {
+test("Length and FPS are not offered only for a pipeline that saves a picture and takes no length or rate", () => {
   const length = { id: "r", roles: [{ at: "project.video", input: "length", drives: "frames" }] };
   const rate = { id: "s", roles: [{ at: "project.video", input: "fps", drives: "fps" }] };
   const size = { id: "a", roles: [{ at: "project.video", input: "width" }] };
-  assert.equal(offersLength([size, length]), true);
-  assert.equal(offersLength([size, rate]), true);
-  assert.equal(offersLength([size, { id: "x" }]), false);
+  const picture = { id: "p", node: "SaveImage" };
+  assert.equal(offersLength([size, picture]), false);
+  assert.equal(offersLength([size, picture, length]), true);
+  assert.equal(offersLength([size, picture, rate]), true);
+  assert.equal(offersLength([size, { id: "x", node: "FunUISaveVideo" }]), true);     // a clip with no length input (an imported workflow): the project numbers still time it
   assert.equal(offersLength([]), true);
   assert.equal(offersLength(undefined), true);
 });

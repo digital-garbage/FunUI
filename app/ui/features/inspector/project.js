@@ -1,7 +1,7 @@
 // The Project tab: what the whole project makes.
 import { composer as c } from "../../composer/composer.js";
 import { DRIVEN, isVideoClip, segments, snapFrames } from "../../shell/scenes.js";
-import { gridOf } from "../../shell/frame_grid.js";
+import { gridOf, offersLength } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
 import { fold } from "./fold.js";
@@ -98,12 +98,13 @@ export function projectRows(p, slots, api, app = {}) {
   const fps = pick("frame_rate")[0] || num(p, "FPS", "frame_rate", 25);
   const size = controls.filter((x) => x !== frames && x !== fps);
   const per = (open.num_frames_per_scene || 97) / (open.frame_rate || 25);
+  const timed = offersLength(slots);               // a pipeline that holds a picture for a fixed time takes no length or rate
   return [
     c.label.section({ text: "Project" }),
     card(c.field.default({ label: "Project name", control: c.input.md({ label: "Project name", value: open.name || "", onCommit: (v) => p.rename(v) }) })),
     c.label.section({ text: "Video settings" }),
-    card(c.field.row({ fields: [frames.field, fps.field] }),
-      c.hint.default({ text: `≈ ${per.toFixed(2)} s per shot` }),
+    card(timed ? c.field.row({ fields: [frames.field, fps.field] }) : null,
+      timed ? c.hint.default({ text: `≈ ${per.toFixed(2)} s per shot` }) : null,
       size.length ? c.field.row({ fields: size.map((x) => x.field) }) : null,
       flip(p, size),
       basis(p, slots),
