@@ -14,7 +14,7 @@ def test_all_modifiers_install_together_in_a_sane_order(tiny_h3, tmp_path, monke
     from modules.system.taste import store
     monkeypatch.setattr(store, "ROOT", tmp_path / "taste")
     settings = {"taste": {"key": "fox"}}
-    for m, extra in {"dynashift": {}, "output_guidance": {}, "trajectory_guidance": {}, "score_slider": {},
+    for m, extra in {"echoshift": {}, "dynashift": {}, "output_guidance": {}, "trajectory_guidance": {}, "score_slider": {},
                      "decisiveness": {}, "shot_memory": {}, "late_branch": {"block": 2},
                      "stas": {"block": 1}, "camera_move": {"pan_x": 0.3},
                      "reins": {"blocks": "3"}}.items():

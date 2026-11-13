@@ -42,7 +42,7 @@ FEATURES = {
     "block_influence": {},
     "phrase_probe": {},
     "block_repeat": {"blocks": "1-2"},
-    "dynashift": {},
+    "echoshift": {}, "dynashift": {},
     "momentum": {},
     "output_guidance": {},
     "prompt_nudge": {},
@@ -96,6 +96,7 @@ def _stage_lora(model, stage):
 STAGES = {                                   # one stage, and Two stages with its default resize (CFG is 1: H3 and LTX run at 1)
     "one-stage": None,
     "two-stages": {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5},
+    "two-stages-own-sampler": {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.5, "sampler2": "dpmpp_2m_sde", "scheduler2": "karras"},
 }
 SAMPLERS = ["euler", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_sde"]      # the SDE ones draw Brownian noise
 

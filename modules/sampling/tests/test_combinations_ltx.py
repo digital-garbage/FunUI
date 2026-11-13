@@ -12,7 +12,7 @@ import torch
 from modules.sampling.tests.test_combinations import EXEMPT, FEATURES as H3_FEATURES, LTX_ONLY, NOT_ACTIVE, _fingerprint, _status_line
 
 FEATURES = {
-    "alg": {}, "dynashift": {}, "momentum": {}, "output_guidance": {}, "prompt_nudge": {}, "score_slider": {},
+    "alg": {}, "echoshift": {}, "dynashift": {}, "momentum": {}, "output_guidance": {}, "prompt_nudge": {}, "score_slider": {},
     "trajectory_guidance": {}, "velocity_bias": {}, "reins": {"blocks": "1"}, "attention_bandit": {},
     "attention_temperature": {"temperature": 1.1}, "noise_merge": {"seed": 5}, "sharpness": {}, "run_meter": {}, "decisiveness": {},
     "shot_memory": {}, "turbo_sampler": {}, "camera_move": {"pan_x": 0.3}, "explore_first_step": {},

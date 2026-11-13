@@ -158,7 +158,7 @@ def _loop_audio_tail_frames(mask):
 
 def make_loop_temporal_wrapper(old_wrapper):
     """Build the loop-style model_function_wrapper. Installed INNERMOST (closest to
-    apply_model): prediction-modifying wrappers layered above it (dynashift, output
+    apply_model): prediction-modifying wrappers layered above it (echoshift, output
     guidance, …) must see canonical-orientation inputs and outputs — the roll exists
     only for the duration of the base forward. The per-step shift follows a van der
     Corput sequence, reset whenever sigma jumps back up (a new scene/run)."""

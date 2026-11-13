@@ -90,10 +90,10 @@ def test_a_plain_video_latent_keeps_the_old_behaviour():
 
 def test_the_run_says_how_big_the_edits_were_or_that_there_were_none():
     log._reset()
-    s, x, out, d = input_steer.Steer("DynaShift"), _x(), _x() + 1, torch.ones(1, 1, 12) * 0.1
+    s, x, out, d = input_steer.Steer("EchoShift"), _x(), _x() + 1, torch.ones(1, 1, 12) * 0.1
     _edit(s, 2, x, out, d)
     s.begin(x, _t(3), _to(3))
-    assert any("DynaShift" in r["source"] and "Active |" in r["message"] for r in log.history())
+    assert any("EchoShift" in r["source"] and "Active |" in r["message"] for r in log.history())
     log._reset()
     quiet = input_steer.Steer("Quiet")
     quiet.begin(x, _t(3), _to(3))

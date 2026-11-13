@@ -145,7 +145,9 @@ export function createPipelineState(rawApi, { answerMs = ANSWER_MS } = {}) {
         let parsed;
         try { parsed = JSON.parse(v); } catch (_) { return; }
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-        Object.entries(parsed).forEach(([moduleId, own]) => {
+        Object.entries(parsed).forEach(([moduleId0, own]) => {
+          // Before it was renamed, EchoShift was saved as "dynashift" (its settings have a "threshold"); DynaShift is a new feature.
+          const moduleId = moduleId0 === "dynashift" && own && typeof own === "object" && "threshold" in own ? "echoshift" : moduleId0;
           if (!sinks && !known.has(moduleId)) return;
           if (installed && moduleId !== "_off" && !installed.has(moduleId)) return;       // a removed or renamed module's settings leave the project at the next save
           if (own && typeof own === "object") merged[moduleId] = { ...(merged[moduleId] || {}), ...own };

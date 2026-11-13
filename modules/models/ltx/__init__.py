@@ -17,7 +17,7 @@ What it contributes, and what it deliberately does NOT:
   silent clip while reporting success, so it refuses instead.
 * **`ltx_av`** -- the trait the LTX-only modules require (audio coupling, context windows...).
 * **The picture inside a sampling-time latent** (`video_stream`) -- video first, then audio, the same
-  arrangement H3 uses, so ALG, DynaShift and the guidance modules find the picture.
+  arrangement H3 uses, so ALG, EchoShift and the guidance modules find the picture.
 * **Decode** -- the picture through the video VAE, the sound through the audio VAE.
 
 Tested on a real LTX 2.3 (2026-10-27): Video to Video direct, Image to Video from References, separate
@@ -66,7 +66,7 @@ def detect(keys) -> bool:
 #: Enhancements that run on LTX but have not been proven on a real run there: held back (hidden) until they have.
 #: Proven on LTX so far: Step merging and the Attention explorer. Take an id off this list once it has been.
 HELD_BACK = ("conditioning_identity_transfer", "guide_frames", "camera_move", "shot_memory", "audio_coupling", "decisiveness",
-             "dynashift", "momentum", "output_guidance", "reins", "sharpness", "trajectory_guidance", "velocity_bias", "alg",
+             "echoshift", "dynashift", "momentum", "output_guidance", "reins", "sharpness", "trajectory_guidance", "velocity_bias", "alg",
              "attention_temperature", "block_repeat", "context_windows", "explore_first_step", "identity_bank", "prompt_nudge",
              "score_slider", "temporal_style")
 

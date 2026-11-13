@@ -176,7 +176,7 @@ KIND_INFO = {
     "block_influence": ("Block influence", "Research: how much each block pushes the picture, for the four-group report"),
     "shot_memory": ("Shot memory", "Camera and shot choices that were liked or disliked"),
     "q_steer": ("Taste attention", "Attention steering learned from ratings"),
-    "dynashift": ("DynaShift", "Steers the picture away from disliked results, late in the run"),
+    "dynashift": ("EchoShift", "Steers the picture away from disliked results, late in the run"),
     "decisiveness": ("Decisiveness", "How firmly steps commit, learned from ratings"),
     "stas": ("Massive-activation steering", "Steering on the strongest channels, learned from ratings"),
     "x0_final": ("Taste guidance", "Output guidance learned from ratings"),

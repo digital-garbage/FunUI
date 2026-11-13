@@ -396,6 +396,15 @@ test("a setting changed while another project's pipeline goes in is built on tha
   assert.deepStrictEqual(PS.currentValues().sharpen, { enabled: false, amount: 0.5 });
 });
 
+test("settings saved under the old DynaShift id (now EchoShift) move to echoshift; the new DynaShift starts from its defaults", async () => {
+  const PS = load([]);
+  lastApi.modules = async () => ({ modules: [
+    { id: "echoshift", settings: { enabled: { type: "bool", default: false }, threshold: { type: "float", default: 0.6 } } },
+    { id: "dynashift", settings: { enabled: { type: "bool", default: false }, start: { type: "float", default: 1.5 } } }] });
+  await PS.adopt([sink({ dynashift: { enabled: true, threshold: 0.7 } })]);
+  assert.deepStrictEqual([PS.currentValues().echoshift, PS.currentValues().dynashift], [{ enabled: true, threshold: 0.7 }, { enabled: false, start: 1.5 }]);
+});
+
 test("a new project made while another project's pipeline goes in inherits it, never a half-replaced one", async () => {
   const posts = [];
   const PS = load(posts, { delay: 30 });
