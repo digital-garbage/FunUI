@@ -363,3 +363,27 @@ def test_a_stage_lora_is_said_not_applied_when_two_stages_is_not_running_at_all(
     monkeypatch.setattr(log, "once", lambda key, level, title, text: said.append((key, text)))
     FunUILoadModifiers.execute(loaded, {"two_stage": {"enabled": True}})
     assert any(k == "two_stage:stage_loras_off" and "not applied" in t for k, t in said)
+
+
+def test_the_full_size_stage_can_use_its_own_sampler_and_scheduler(model):
+    base = {"enabled": True, "size": 0.5, "steps": 2, "back_up": 0.0}
+    _n, _o, plain = _run(model, base)
+    _n, _o, heun = _run(model, {**base, "sampler2": "heun"})
+    assert plain == [(4, 4), (4, 4), (8, 8), (8, 8)]
+    assert heun[:2] == [(4, 4), (4, 4)] and len(heun) > len(plain)          # heun calls the model twice on the steps that move
+    same = _run(model, {**base, "sampler2": "", "scheduler2": ""})[2]
+    assert same == plain                                                    # "same as the first stage" changes nothing
+    seen = []
+    note = _run(model, {**base, "scheduler2": "karras"}, seen=seen)[0]
+    assert "karras" in note and seen[0][:3] == pytest.approx([1.0, 0.9, 0.7]) and seen[-1][-1] == 0.0
+    assert seen[-1][3] != pytest.approx(0.3)                                # the last steps follow karras, not the given curve
+    _run(model, {**base, "scheduler2": "no_such_scheduler", "sampler2": "no_such_sampler"})       # an unknown name is the first stage's
+
+
+def test_a_scheduler_that_cannot_join_the_hand_over_falls_back(monkeypatch):
+    import comfy.samplers
+    from modules.sampling.two_stage.stages import second_schedule
+    monkeypatch.setattr(comfy.samplers, "calculate_sigmas", lambda ms, name, n: torch.linspace(0.2, 0.0, n + 1))
+    second = torch.tensor([0.8, 0.3, 0.0], dtype=torch.float64)
+    out = second_schedule(None, "x", torch.tensor([1.0, 0.9, 0.7, 0.3, 0.0]), 2, second)
+    assert out[0] == 0.8 and out.dtype == torch.float64 and bool((out[1:] < out[:-1]).all())

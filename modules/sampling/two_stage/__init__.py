@@ -12,6 +12,7 @@ It installs on the model, so it works with any sampler. Not yet run on a real H3
 
 from comfy.patcher_extension import WrappersMP
 
+import comfy.samplers
 import folder_paths
 
 from ..._core import dit_hooks, log
@@ -75,6 +76,20 @@ SETTINGS = {
         "hint": "Plain methods are free. Latent upscaler adds learned detail instead of blur, for one small extra pass.",
         "when": {"enabled": True},
     },
+    "sampler2": {
+        "type": "enum", "default": "", "keep_missing": True,
+        "options": [{"value": "", "label": "Same as the first stage"}] + [{"value": n, "label": n} for n in comfy.samplers.SAMPLER_NAMES],
+        "label": "Sampler for the full size",
+        "hint": "Lets the last steps use another sampler. Leave on the first stage's to change nothing.",
+        "when": {"enabled": True},
+    },
+    "scheduler2": {
+        "type": "enum", "default": "", "keep_missing": True,
+        "options": [{"value": "", "label": "Same as the first stage"}] + [{"value": n, "label": n} for n in comfy.samplers.SCHEDULER_NAMES],
+        "label": "Scheduler for the full size",
+        "hint": "Spaces the last steps by another scheduler, joined at the hand-over. Leave on the first stage's to change nothing.",
+        "when": {"enabled": True},
+    },
     "upscaler": {
         "type": "enum", "keep_missing": True, "default": (_files() or [""])[0],
         "options": _options(),
@@ -83,6 +98,10 @@ SETTINGS = {
         "when": {"enabled": True, "resize": "upscaler"},
     },
 }
+
+
+def _known(name, names):
+    return name if name in names else None          # "" and a name ComfyUI no longer has both mean "same as the first stage"
 
 
 def install(patcher, values, key):
@@ -99,9 +118,11 @@ def install(patcher, values, key):
     nofile = values.get("resize") == "upscaler" and not resize
     if nofile:
         log.once("two_stage:no_upscaler_file", log.WARNING, TITLE, "Latent upscaler is chosen but no file is picked (models/latent_upscale_models is empty), so the hand-over is enlarged by Bicubic")
-    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5))))
+    patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5)),
+                                  _known(values.get("sampler2"), comfy.samplers.SAMPLER_NAMES), _known(values.get("scheduler2"), comfy.samplers.SCHEDULER_NAMES)))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
-    return f"first {steps} step(s) at {size:.0%} of the size" + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else "")
+    other = [n for n in (values.get("sampler2"), values.get("scheduler2")) if _known(n, comfy.samplers.SAMPLER_NAMES + comfy.samplers.SCHEDULER_NAMES)]
+    return f"first {steps} step(s) at {size:.0%} of the size" + (f", full size by {'/'.join(other)}" if other else "") + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else "")
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}
