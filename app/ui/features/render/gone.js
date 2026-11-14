@@ -1,5 +1,5 @@
 // Renders live in ComfyUI's temp folder, which ComfyUI empties when it starts. A project opened afterwards still names them:
-// this asks the server which files are gone and forgets those renders and takes, so the clips read "not made yet" instead of failing to play.
+// this asks the server which files are gone and forgets those renders and takes (their ratings are kept), so the clips read "not made yet" instead of failing to play.
 import { composer as c } from "../../composer/composer.js";
 import { keyOf, renderFiles, forgetGone } from "../../shell/renders.js";
 
@@ -25,7 +25,7 @@ export default {
   setup({ app }) {
     const look = async () => {
       const n = await forgetGoneRenders(app.project, app.api);
-      if (n) c.toast.warn({ text: `${n} generated file(s) of this project are gone (ComfyUI removes them when it restarts). Their clips can be generated again.` });
+      if (n) c.toast.warn({ text: `${n} generated file(s) of this project are gone (ComfyUI removes them when it restarts). Their clips can be generated again; their ratings are kept.` });
     };
     look();
     return app.on((what) => { if (what === "open") look(); });

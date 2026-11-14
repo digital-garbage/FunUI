@@ -475,6 +475,9 @@ class Project:
     scene_renders: dict = field(default_factory=dict)
     #: Earlier takes of a scene: {scene id: [{media, promptId, rating}]}, newest last; the one on the clip is scene_renders'.
     scene_variants: dict = field(default_factory=dict)
+    #: Ratings of renders whose files are gone (generated files do not outlive a ComfyUI restart): [{rating, rated: {text, at}, promptId}].
+    #: A rating is about the prompt it was given to, so it is kept without the video.
+    past_ratings: list = field(default_factory=list)
     scene_ghosts: list = field(default_factory=list)
     #: Cut order (scene ids in TIMELINE order), empty = follow the plan; True once reordered by hand.
     timeline_order: list = field(default_factory=list)
@@ -539,6 +542,7 @@ class Project:
             generation_meta=_blob(d.get("generation_meta"), dict),
             scene_renders=_blob(d.get("scene_renders"), dict),
             scene_variants=_blob(d.get("scene_variants"), dict),
+            past_ratings=_dicts(d.get("past_ratings")),
             scene_ghosts=_dicts(d.get("scene_ghosts")),
             timeline_order=[i for i in _blob(d.get("timeline_order"), list) if is_token(i)],
             timeline_manually_ordered=_bool(d.get("timeline_manually_ordered")),

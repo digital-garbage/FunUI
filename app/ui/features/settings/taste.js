@@ -13,6 +13,7 @@ export function ratedIn(project) {
     if (t && t.rating) labelled++;
   }
   for (const s of (project && project.scenes) || []) if (s.rating) labelled++;
+  for (const r of (project && project.past_ratings) || []) { if (r && r.promptId) ids.add(r.promptId); if (r && r.rating) labelled++; }       // ratings of renders whose files are gone
   return { ids: [...ids], labelled };
 }
 
@@ -55,6 +56,7 @@ export const taste = (app) => function mount() {
     app.project.edit((pr) => {
       for (const s of pr.scenes) { s.rating = ""; s.rated = {}; }
       for (const takes of Object.values(pr.scene_variants || {})) for (const t of takes || []) { t.rating = ""; t.rated = {}; }
+      pr.past_ratings = [];
       return pr;
     });
     if (failed) tell(`Some ratings could not be cleared: ${failed}`);

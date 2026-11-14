@@ -92,6 +92,24 @@ def stats() -> dict:
         if proj is None:
             continue
         prev: set[str] | None = None
+
+        def count(label, rated):
+            v, text, at = vote(label), rated.get("text"), rated.get("at")
+            ok = v and isinstance(text, str) and text.strip()
+            hit = fired(text) if ok else ()
+            if ok:
+                voted.append((text, v))
+            when = at if isinstance(at, (int, float)) and not isinstance(at, bool) else 0      # undated: oldest
+            for k in hit:
+                votes.setdefault(k, []).append((when, v))
+                for b in hit:
+                    if k < b:
+                        votes.setdefault((k, b), []).append((when, v))
+
+        # Ratings of renders whose files are gone: the video is not needed to know which prompt was liked.
+        for past in proj.past_ratings:
+            if isinstance(past.get("rated"), dict):
+                count(past.get("rating"), past["rated"])
         by_id = {sc.id: sc for sc in proj.scenes}
         # Timeline (cut) order, as v4 mined it; the plan order until a clip was moved by hand.
         order = [i for i in proj.timeline_order if i in by_id] or [sc.id for sc in proj.scenes]
@@ -108,17 +126,7 @@ def stats() -> dict:
             takes = [(t.get("rating"), t.get("rated")) for t in proj.scene_variants.get(sc.id) or []
                      if isinstance(t, dict) and isinstance(t.get("rated"), dict) and not (now and on_clip(t))]
             for label, rated in [(sc.rating, sc.rated or {"text": sc.text}), *takes]:
-                v, text, at = vote(label), rated.get("text"), rated.get("at")
-                ok = v and isinstance(text, str) and text.strip()
-                hit = fired(text) if ok else ()
-                if ok:
-                    voted.append((text, v))
-                when = at if isinstance(at, (int, float)) and not isinstance(at, bool) else 0      # undated: oldest
-                for k in hit:
-                    votes.setdefault(k, []).append((when, v))
-                    for b in hit:
-                        if k < b:
-                            votes.setdefault((k, b), []).append((when, v))
+                count(label, rated)
             # Habits: what the cut uses now.
             if sc.excluded or sc.reused or not (sc.text or "").strip():       # a reused copy replays a shot, it is not a new one
                 continue

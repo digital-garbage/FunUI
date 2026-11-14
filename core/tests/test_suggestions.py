@@ -103,6 +103,16 @@ def test_ratings_outlive_a_regenerate_a_cleared_text_and_a_left_out_clip():
     assert suggestions.stats()["scores"] == {"rain": 0.5, "neon": 1.5, "fox": 1.5}
 
 
+def test_ratings_of_renders_whose_files_are_gone_still_count():
+    for n in ("rain", "neon"):
+        shortcuts.save({"name": n, "triggers": [n], "replacements": ["r"]})
+    saved = projects.save(projects.Project(name="x", scenes=[projects.Scene(id="a", text="something else")],
+        past_ratings=[{"rating": "1", "rated": {"text": "rain"}, "promptId": "p1"}, {"rating": "10", "rated": {"text": "neon", "at": 5}},
+                      {"rating": "10"}, "junk"]))
+    assert projects.get(saved.id).past_ratings == [{"rating": "1", "rated": {"text": "rain"}, "promptId": "p1"}, {"rating": "10", "rated": {"text": "neon", "at": 5}}, {"rating": "10"}]
+    assert suggestions.stats()["scores"] == {"rain": 0.5, "neon": 1.5}
+
+
 def test_a_trigger_lower_reshapes_is_still_found_as_the_expander_finds_it():
     items = [shortcuts.Shortcut(name="big", triggers=["İstanbul"], replacements=["<b>"]),
              shortcuts.Shortcut(name="small", triggers=["istanbul"], replacements=["<s>"])]

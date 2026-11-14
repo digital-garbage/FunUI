@@ -70,23 +70,42 @@ export function renderFiles(p) {
   return [...seen.values()];
 }
 
-/** Forget every render and take whose file is gone (`gone`: a Set of keyOf names). A clip left without a render is "not made yet" again,
- *  and its rating goes with the video it was about. -> true when something was forgotten. */
+const MAX_PAST_RATINGS = 5000;
+
+/** Forget every render and take whose file is gone (`gone`: a Set of keyOf names). A clip left without a render is "not made yet" again.
+ *  A rating is about the prompt it was given to, not about the file: each one moves to the project's `past_ratings`
+ *  ({rating, rated: {text, at}, promptId}), where what learns from ratings still reads it. -> true when something was forgotten. */
 export function forgetGone(p, gone) {
   let hit = false;
   const dead = (m) => Boolean(m && m.filename && gone.has(keyOf(m)));
+  const keep = (rating, rated, text, promptId) => {
+    if (!rating) return;
+    const about = { ...(rated || {}) };
+    if (typeof about.text !== "string") about.text = text || "";
+    (p.past_ratings ||= []).push({ rating, rated: about, ...(promptId ? { promptId } : {}) });
+  };
+  const onClip = new Map();                 // scene id -> the render that was on it: its take holds the same rating, kept once
   for (const [id, r] of Object.entries(p.scene_renders || {})) {
     if (!dead(r && r.media)) continue;
-    delete p.scene_renders[id];
     const sc = (p.scenes || []).find((s) => s.id === id);
+    onClip.set(id, r);
+    if (sc && !(sc.cut_offset_frames > 0)) keep(sc.rating, sc.rated, r.text ?? sc.text, r.promptId);       // a cut half shares its unit's rating: counted on the first half only
     if (sc) Object.assign(sc, { rating: "", rated: {} });
+    delete p.scene_renders[id];
     hit = true;
   }
   for (const [id, list] of Object.entries(p.scene_variants || {})) {
-    const keep = (list || []).filter((t) => !dead(t && t.media));
-    if (keep.length === (list || []).length) continue;
-    if (keep.length) p.scene_variants[id] = keep; else delete p.scene_variants[id];
+    const was = onClip.get(id);
+    const same = (t) => was && (was.promptId ? t.promptId === was.promptId : (t.media || {}).filename === (was.media || {}).filename);
+    const left = [];
+    for (const t of list || []) {
+      if (!dead(t && t.media)) { left.push(t); continue; }
+      if (!same(t)) keep(t.rating, t.rated, t.text, t.promptId);
+    }
+    if (left.length === (list || []).length) continue;
+    if (left.length) p.scene_variants[id] = left; else delete p.scene_variants[id];
     hit = true;
   }
+  if (p.past_ratings && p.past_ratings.length > MAX_PAST_RATINGS) p.past_ratings.splice(0, p.past_ratings.length - MAX_PAST_RATINGS);
   return hit;
 }

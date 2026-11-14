@@ -155,3 +155,9 @@ test("the block map panel shows the profile switch and the saved maps, and Clear
   mapSwitch.click(); await tick(); await tick();
   assert.deepEqual(sets, [false]);
 });
+
+test("ratings kept from renders whose files are gone are counted too, and their runs can still be cleared", () => {
+  const { ids, labelled } = ratedIn({ ...rated(), past_ratings: [{ rating: "9", rated: { text: "x" }, promptId: "gone1" }, { rating: "2", rated: { text: "y" } }] });
+  assert.deepEqual(ids.sort(), ["gone1", "p0", "p1"]);
+  assert.equal(labelled, 4);
+});

@@ -13,13 +13,26 @@ test("every file a project names is listed once: the render on each clip and eve
   assert.deepEqual(renderFiles({}), []);
 });
 
-test("a render whose file is gone is forgotten with its takes and its rating; what is still on disk stays", () => {
+test("a render whose file is gone is forgotten with its takes; what is still on disk stays", () => {
   const p = project();
   assert.equal(forgetGone(p, new Set([keyOf(temp("a2.mp4")), keyOf(temp("a1.mp4"))])), true);
   assert.deepEqual(Object.keys(p.scene_renders), ["b"]);
   assert.deepEqual(p.scene_variants, { b: [{ media: temp("b1.mp4"), promptId: "r3" }] });
   assert.deepEqual([p.scenes[0].rating, p.scenes[0].rated, p.scenes[1].rating], ["", {}, "7"]);
   assert.equal(forgetGone(p, new Set(["temp//nothing.mp4"])), false);
+});
+
+test("ratings are kept without the files: each moves to the project's past ratings with the prompt it was given to, once", () => {
+  const p = { id: "p", scenes: [{ id: "a", text: "now", rating: "8", rated: { text: "a fox", at: 5 } }, { id: "b", text: "typed", rating: "3" }, { id: "c", text: "half", cut_offset_frames: 10, rating: "8" }],
+    scene_renders: { a: { media: temp("a2.mp4"), promptId: "r2", text: "a fox" }, b: { media: temp("b1.mp4"), text: "as sent" }, c: { media: temp("a2.mp4"), promptId: "r2" } },
+    scene_variants: { a: [{ media: temp("a1.mp4"), promptId: "r1", rating: "9", rated: { text: "rain" } }, { media: temp("a0.mp4"), promptId: "r0", rating: "" },
+      { media: temp("a2.mp4"), promptId: "r2", rating: "8", rated: { text: "a fox" } }] } };       // the last take is the one on the clip
+  forgetGone(p, new Set(["a2.mp4", "a1.mp4", "a0.mp4", "b1.mp4"].map((f) => keyOf(temp(f)))));
+  assert.deepEqual(p.past_ratings, [
+    { rating: "8", rated: { text: "a fox", at: 5 }, promptId: "r2" },
+    { rating: "3", rated: { text: "as sent" } },                              // no text was kept with the rating: the prompt the render was made from
+    { rating: "9", rated: { text: "rain" }, promptId: "r1" }]);
+  assert.deepEqual([p.scenes.map((s) => s.rating), p.scene_renders, p.scene_variants], [["", "", ""], {}, {}]);
 });
 
 const holder = (open) => ({ project: open, edit(fn) { return fn(this.project); } });
