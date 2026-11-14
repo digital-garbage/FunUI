@@ -15,6 +15,7 @@ export default [
   "./features/menus/index.js",
   "./features/render/index.js",
   "./features/render/selected.js",
+  "./features/render/gone.js",
   "./features/takes/index.js",
   "./features/rating/index.js",
   "./features/subjects/index.js",

@@ -78,7 +78,7 @@ DEFAULT = [
     {"id": "decode", "group": "Render", "node": "FunUIDecode", "inputs": {
         "samples": ["sampler", 0], "vae": ["vae", 0], "model": ["model", 0]}},
 
-    {"id": "save", "group": "Render", "node": "SaveImage", "inputs": {
+    {"id": "save", "group": "Render", "node": "FunUISavePicture", "inputs": {
         "images": ["decode", 0], "filename_prefix": "FunUI"}},
 ]
 

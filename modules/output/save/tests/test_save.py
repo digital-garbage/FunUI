@@ -281,13 +281,15 @@ def test_saved_pipelines_get_the_settings_link_and_a_saved_pipeline_keeps_its_ow
 def _save_setup(tmp_path, monkeypatch):
     monkeypatch.setattr(nodes, "encode", lambda path, *a, **k: open(path, "wb").write(b"x") and "libx264")
     monkeypatch.setattr(nodes, "keep_last_frame", lambda *a: None)
-    monkeypatch.setattr(nodes.folder_paths, "get_output_directory", lambda: str(tmp_path))
-    monkeypatch.setattr(nodes.FunUISaveVideo, "hidden", type("H", (), {"extra_pnginfo": None, "prompt": None, "unique_id": "7"})(), raising=False)
+    monkeypatch.setattr(nodes.folder_paths, "get_temp_directory", lambda: str(tmp_path))
+    monkeypatch.setattr(nodes.folder_paths, "get_output_directory", lambda: str(tmp_path / "output-is-never-written"))
+    for node in (nodes.FunUISaveVideo, nodes.FunUISavePicture):
+        monkeypatch.setattr(node, "hidden", type("H", (), {"extra_pnginfo": {"workflow": {"a": 1}}, "prompt": {"1": "x"}, "unique_id": "7"})(), raising=False)
     monkeypatch.setattr(nodes, "_last_saved", {})
     monkeypatch.setattr(nodes, "_lost", {})
 
 
-def test_an_emptied_output_folder_never_gives_a_new_video_a_deleted_videos_name(tmp_path, monkeypatch):
+def test_an_emptied_folder_never_gives_a_new_video_a_deleted_videos_name(tmp_path, monkeypatch):
     import torch
     _save_setup(tmp_path, monkeypatch)
     images = torch.rand(2, 16, 16, 3)
@@ -319,10 +321,10 @@ def test_comfyui_saves_again_instead_of_answering_with_a_deleted_file(tmp_path, 
     import execution
     import folder_paths
     import nodes as comfy_nodes
-    out = tmp_path / "out"
+    out = tmp_path / "temp"
     out.mkdir()
-    monkeypatch.setattr(folder_paths, "output_directory", str(out))
-    monkeypatch.setattr(folder_paths, "temp_directory", str(tmp_path / "temp"))
+    monkeypatch.setattr(folder_paths, "output_directory", str(tmp_path / "out"))
+    monkeypatch.setattr(folder_paths, "temp_directory", str(out))
     monkeypatch.setitem(comfy_nodes.NODE_CLASS_MAPPINGS, "FunUISaveVideo", nodes.FunUISaveVideo)
     monkeypatch.setattr(nodes, "_last_saved", {})
     monkeypatch.setattr(nodes, "_lost", {})
@@ -344,11 +346,55 @@ def test_comfyui_saves_again_instead_of_answering_with_a_deleted_file(tmp_path, 
         sent.clear()
         executor.execute(copy.deepcopy(prompt), f"p{n}", {"client_id": "c"}, ["2"])
         assert executor.success, sent
-        return [d["output"]["images"][0]["filename"] for e, d in sent if e == "executed"][-1]
+        shown = [d["output"]["images"][0] for e, d in sent if e == "executed"][-1]
+        assert shown["type"] == "temp"
+        return shown["filename"]
+
+    videos = lambda: [f for f in os.listdir(out) if f.endswith(".mp4")]       # the kept last picture sits in the same folder
 
     first = run(1)
-    assert run(2) == first and os.listdir(out) == [first], "nothing changed: the remembered answer, no second file"
+    assert run(2) == first and videos() == [first], "nothing changed: the remembered answer, no second file"
     os.remove(out / first)
     third = run(3)
-    assert third != first and os.listdir(out) == [third], "the answer named a deleted file, so the video is saved again"
-    assert run(4) == third and os.listdir(out) == [third]
+    assert third != first and videos() == [third], "the answer named a deleted file, so the video is saved again"
+    assert run(4) == third and videos() == [third]
+    assert not (tmp_path / "out").exists(), "nothing is written into ComfyUI's output folder"
+
+
+def test_a_video_is_saved_in_the_temp_folder_and_says_so(tmp_path, monkeypatch):
+    import torch
+    _save_setup(tmp_path, monkeypatch)
+    shown = nodes.FunUISaveVideo.execute(torch.rand(2, 16, 16, 3)).ui.as_dict()["images"][0]
+    assert shown["type"] == "temp" and (tmp_path / shown["filename"]).is_file()
+    assert not (tmp_path / "output-is-never-written").exists()
+
+
+def test_pictures_are_saved_as_png_in_the_temp_folder_under_names_never_used_twice(tmp_path, monkeypatch):
+    import torch
+    from PIL import Image
+    _save_setup(tmp_path, monkeypatch)
+    images = torch.rand(2, 12, 20, 3)
+    first = nodes.FunUISavePicture.execute(images).ui.as_dict()["images"]
+    assert [i["type"] for i in first] == ["temp", "temp"] and len({i["filename"] for i in first}) == 2
+    with Image.open(tmp_path / first[0]["filename"]) as im:
+        assert im.size == (20, 12) and "prompt" in im.info and "workflow" in im.info
+        assert np.array_equal(np.array(im), (images[0].clamp(0, 1) * 255).round().byte().numpy())
+    for name in os.listdir(tmp_path):
+        os.remove(tmp_path / name)                       # emptied: ComfyUI counts from 00001 again
+    again = nodes.FunUISavePicture.execute(images).ui.as_dict()["images"]
+    assert again[0]["filename"].startswith("FunUI_00001_") and again[0]["filename"] != first[0]["filename"]
+    assert not (tmp_path / "output-is-never-written").exists()
+    node = nodes.FunUISavePicture
+    assert node.fingerprint_inputs() == 0
+    os.remove(tmp_path / again[-1]["filename"])
+    assert node.fingerprint_inputs() == 1 and node.fingerprint_inputs() == 1
+
+
+def test_comfyuis_own_picture_savers_in_a_saved_pipeline_become_ours():
+    from modules.output.save import upgrade
+    slots = [{"id": "d", "node": "VAEDecode", "inputs": {}},
+             {"id": "a", "node": "SaveImage", "inputs": {"images": ["d", 0], "filename_prefix": "mine"}},
+             {"id": "b", "node": "PreviewImage", "inputs": {"images": ["d", 0]}}]
+    got = upgrade(slots, lambda node: [])
+    assert got[1] == {"id": "a", "node": "FunUISavePicture", "inputs": {"images": ["d", 0], "filename_prefix": "mine"}}
+    assert got[2] == {"id": "b", "node": "FunUISavePicture", "inputs": {"images": ["d", 0], "filename_prefix": "FunUI"}}

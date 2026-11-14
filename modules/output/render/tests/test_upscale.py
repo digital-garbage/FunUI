@@ -93,11 +93,12 @@ def test_run_writes_the_upscaled_file_beside_the_original_without_a_comfy_prompt
     import sys
     import types
     make_clip(str(comfy.output / "a.mp4"), seconds=0.5, size="64x48", rate=10, audio=True)
-    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output)))
+    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output), get_temp_directory=lambda: str(comfy.temp)))
     monkeypatch.setattr(rtx, "make", lambda o: (lambda x: x.repeat_interleave(2, 1).repeat_interleave(2, 2)))
     got = upscale.run({"filename": "a.mp4", "subfolder": "", "type": "output"}, rtx.NAME, {"quality": "HIGH"})
-    assert got == {"media": {"filename": "a_rtx_high.mp4", "subfolder": "funui_upscaled", "type": "output"}}
-    assert upscale.probe(str(comfy.output / "funui_upscaled" / "a_rtx_high.mp4"))[:2] == (128, 96)
+    assert got == {"media": {"filename": "a_rtx_high.mp4", "subfolder": "funui_upscaled", "type": "temp"}}, "with the renders, in the folder ComfyUI empties when it starts"
+    assert upscale.probe(str(comfy.temp / "funui_upscaled" / "a_rtx_high.mp4"))[:2] == (128, 96)
+    assert not (comfy.output / "funui_upscaled").exists()
     with pytest.raises(RuntimeError, match="not in the output folder"):
         upscale.run({"filename": "gone.mp4"}, rtx.NAME)
 
@@ -111,7 +112,7 @@ def test_an_upscaled_or_interpolated_file_inherits_the_lossless_last_frame_of_it
     monkeypatch.setattr(video_pipe, "comfy_dir", lambda kind: str(comfy.output if kind == "output" else comfy.temp))
     make_clip(str(comfy.output / "a.mp4"), seconds=0.5, size="64x48", rate=10, audio=True)
     (comfy.temp / "funui_last_a.png").write_bytes(b"png-as-the-sampler-made-it")
-    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output)))
+    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output), get_temp_directory=lambda: str(comfy.temp)))
     monkeypatch.setattr(framegen, "make", lambda o: (lambda prev, cur, i: []))
     monkeypatch.setattr(video_pipe, "stream_file", lambda src, dst, fn, interrupted, mult: open(dst, "wb").close() or 1)
     got = interp.interpolate({"filename": "a.mp4", "subfolder": "", "type": "output"}, {"multiplier": 2})["media"]["filename"]

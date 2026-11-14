@@ -22,6 +22,6 @@ export async function learnGrid(api, slots) {
   return true;
 }
 
-/** Whether Length and FPS mean anything for the pipeline. A pipeline that saves a picture (SaveImage) and takes no length or rate
+/** Whether Length and FPS mean anything for the pipeline. A pipeline that saves a picture and takes no length or rate
  *  has no clip to time, so they are not offered. Any other pipeline, and one not known yet, offers them. */
-export const offersLength = (slots) => !(slots && slots.length) || slots.some((s) => (s.roles || []).some((r) => r.drives === "frames" || r.drives === "fps")) || !slots.some((s) => s.node === "SaveImage");
+export const offersLength = (slots) => !(slots && slots.length) || slots.some((s) => (s.roles || []).some((r) => r.drives === "frames" || r.drives === "fps")) || !slots.some((s) => s.node === "FunUISavePicture" || s.node === "SaveImage");

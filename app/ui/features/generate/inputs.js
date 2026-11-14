@@ -19,10 +19,10 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (v !== undefined && v !== null && v !== "") put(slot, role.input, v);
   }
   if (seed) for (const { slot, role } of rolesAt(slots, "generation.seed")) put(slot, role.input, seed());      // null: the seed node's own number runs
-  // ComfyUI's own savers number a file by what is in the output folder now: empty the folder and the next file takes the name
+  // ComfyUI's own savers write into the output folder and number a file by what is in it now: empty the folder and the next file takes the name
   // of a deleted one, which projects, takes and the browser's cache still know as the old picture. A short random part
-  // makes the name this run's alone. FunUI Save Video does the same for itself.
-  for (const slot of (slots || []).filter((s) => s.node !== "FunUISaveVideo" && typeof (s.inputs || {}).filename_prefix === "string" && s.inputs.filename_prefix))
+  // makes the name this run's alone. FunUI Save Video and FunUI Save Picture do the same for themselves.
+  for (const slot of (slots || []).filter((s) => !String(s.node || "").startsWith("FunUISave") && typeof (s.inputs || {}).filename_prefix === "string" && s.inputs.filename_prefix))
     put(slot, "filename_prefix", `${slot.inputs.filename_prefix}_${Math.random().toString(16).slice(2, 10).padEnd(8, "0")}`);
   for (const slot of (slots || []).filter((s) => s.node === "FunUIShotCamera")) put(slot, "project", project.id || "");      // what the node keeps per project (the words focus infusion draws on), also for pipelines saved before it was asked for
   const source = rolesAt(slots, "assets.source_image")[0];

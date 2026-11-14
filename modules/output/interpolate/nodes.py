@@ -1,4 +1,4 @@
-"""The interpolation itself: a finished file in the output folder in, a new one beside it out.
+"""The interpolation itself: a finished file in, a new one out (in ComfyUI's temp folder).
 
 It runs beside ComfyUI as a background job of the page, NOT as a ComfyUI prompt: a prompt with no loaders in it makes ComfyUI's
 cache let go of the loaders (and the models) of the workflow that ran before, so the next generation would load them again.
@@ -21,7 +21,7 @@ def interpolate(media, options, interrupted=lambda: None) -> dict:
     try:
         import folder_paths
     except ImportError as exc:
-        raise InterpolateError("ComfyUI is not here to say where the output folder is.") from exc
+        raise InterpolateError("ComfyUI is not here to say where its folders are.") from exc
     src = video_pipe.comfy_path(media.get("filename"), media.get("subfolder") or "", media.get("type") or "output")
     if not src or not os.path.isfile(src):
         raise InterpolateError(f"{media.get('filename')} is not in the {media.get('type') or 'output'} folder (anymore).")
@@ -30,7 +30,7 @@ def interpolate(media, options, interrupted=lambda: None) -> dict:
         fn = framegen.make(opts)
     except (ValueError, RuntimeError) as exc:
         raise InterpolateError(str(exc)) from exc
-    out_dir = os.path.join(folder_paths.get_output_directory(), SUBFOLDER)
+    out_dir = os.path.join(folder_paths.get_temp_directory(), SUBFOLDER)       # with the renders: gone when ComfyUI starts
     os.makedirs(out_dir, exist_ok=True)
     name = video_pipe.free_name(out_dir, media["filename"], f"x{opts['multiplier']}")
     try:
@@ -39,4 +39,4 @@ def interpolate(media, options, interrupted=lambda: None) -> dict:
         raise InterpolateError(str(exc)) from exc
     video_pipe.inherit_last_frame(media["filename"], name)       # the next shot continues from the picture before this step, not after it
     log.info("FunUI Interpolate", f"{media['filename']} x{opts['multiplier']} ({opts['mode']}): {frames} frames -> {SUBFOLDER}/{name}")
-    return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "output"}}
+    return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "temp"}}

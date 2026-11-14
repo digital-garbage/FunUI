@@ -21,6 +21,7 @@ test("Length and FPS are not offered only for a pipeline that saves a picture an
   const size = { id: "a", roles: [{ at: "project.video", input: "width" }] };
   const picture = { id: "p", node: "SaveImage" };
   assert.equal(offersLength([size, picture]), false);
+  assert.equal(offersLength([size, { id: "p", node: "FunUISavePicture" }]), false);
   assert.equal(offersLength([size, picture, length]), true);
   assert.equal(offersLength([size, picture, rate]), true);
   assert.equal(offersLength([size, { id: "x", node: "FunUISaveVideo" }]), true);     // a clip with no length input (an imported workflow): the project numbers still time it

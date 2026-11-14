@@ -1,4 +1,4 @@
-"""Save a video as MP4 into ComfyUI's output folder, fast: H.264 on the GPU's encoder by default.
+"""Save a video as MP4 into ComfyUI's temp folder, fast: H.264 on the GPU's encoder by default.
 
 Core's SaveVideo encodes with libx264 through PyAV, and FFmpeg's library default is ONE thread -- on a
 rental's CPU that is where a run's last half-minute went. Here the GPU's own encoder (NVENC) does it when
@@ -228,24 +228,73 @@ _lost: dict = {}
 
 
 def unique_name(filename, counter):
-    """ComfyUI numbers a file by what is in the output folder now, so emptying the folder starts again at 00001 and a new
+    """ComfyUI numbers a file by what is in its folder now, so emptying the folder starts again at 00001 and a new
     video would take the name of a deleted one. Projects, takes and the browser's cache know a video by its name, and they
     would show the deleted one. A short random part after the number makes every name belong to one video only."""
     return f"{filename}_{counter:05}_{uuid.uuid4().hex[:8]}.mp4"
 
 
+def times_lost(node):
+    """ComfyUI skips a node whose inputs did not change and answers with the result it remembers. For a saver that is the
+    name of a saved file: when that file was deleted since, the remembered answer names nothing. The number returned here
+    (the node's fingerprint) goes up once for each deleted file, which makes ComfyUI save again."""
+    path = _last_saved.get(node)
+    if path and not os.path.isfile(path):
+        del _last_saved[node]
+        _lost[node] = _lost.get(node, 0) + 1
+    return _lost.get(node, 0)
+
+
+class FunUISavePicture(io.ComfyNode):
+    """ComfyUI's Save Image writes into the output folder under a name that an emptied folder hands out again. This one writes
+    into the temp folder, under a name of its own."""
+
+    @classmethod
+    def fingerprint_inputs(cls, **_):
+        return times_lost(("picture", getattr(cls.hidden, "unique_id", None)))
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="FunUISavePicture",
+            display_name="FunUI Save Picture",
+            category="FunUI/Output",
+            description="Save pictures as PNG in ComfyUI's temp folder (emptied when ComfyUI starts), each under a name that is never used twice.",
+            inputs=[io.Image.Input("images"), io.String.Input("filename_prefix", default="FunUI")],
+            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.unique_id],
+            is_output_node=True,
+            outputs=[],
+        )
+
+    @classmethod
+    def execute(cls, images, filename_prefix="FunUI") -> io.NodeOutput:
+        from PIL import Image
+        from PIL.PngImagePlugin import PngInfo
+        folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
+            filename_prefix, folder_paths.get_temp_directory(), images.shape[2], images.shape[1])
+        info = None
+        if not args.disable_metadata:
+            info = PngInfo()
+            if cls.hidden.prompt is not None:
+                info.add_text("prompt", json.dumps(cls.hidden.prompt))
+            for key, value in (cls.hidden.extra_pnginfo or {}).items():
+                info.add_text(key, json.dumps(value))
+        results, token = [], uuid.uuid4().hex[:8]
+        for n, image in enumerate(images):
+            file = f"{filename}_{counter + n:05}_{token}.png"
+            pixels = (image.detach().float().cpu().clamp(0, 1) * 255).round().byte().numpy()
+            Image.fromarray(pixels).save(os.path.join(folder, file), pnginfo=info, compress_level=4)
+            results.append(ui.SavedResult(file, subfolder, io.FolderType.temp))
+        if results:
+            _last_saved[("picture", getattr(cls.hidden, "unique_id", None))] = os.path.join(folder, results[-1].filename)
+        log.info("FunUI Save Picture", f"{len(results)} picture(s), the last one {results[-1].filename if results else 'none'}")
+        return io.NodeOutput(ui=ui.SavedImages(results))
+
+
 class FunUISaveVideo(io.ComfyNode):
     @classmethod
     def fingerprint_inputs(cls, **_):
-        """ComfyUI skips a node whose inputs did not change and answers with the result it remembers. For this node that is
-        the name of a saved file: when that file was deleted since, the remembered answer names nothing. The number returned
-        here goes up once for each deleted file, which makes ComfyUI save the video again."""
-        node = getattr(cls.hidden, "unique_id", None)
-        path = _last_saved.get(node)
-        if path and not os.path.isfile(path):
-            del _last_saved[node]
-            _lost[node] = _lost.get(node, 0) + 1
-        return _lost.get(node, 0)
+        return times_lost(getattr(cls.hidden, "unique_id", None))
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -253,7 +302,7 @@ class FunUISaveVideo(io.ComfyNode):
             node_id="FunUISaveVideo",
             display_name="FunUI Save Video",
             category="FunUI/Output",
-            description="Save as MP4: on the GPU's encoder (H.264 or H.265) when there is one, otherwise H.264 on every CPU core.",
+            description="Save as MP4 in ComfyUI's temp folder (emptied when ComfyUI starts): on the GPU's encoder (H.264 or H.265) when there is one, otherwise H.264 on every CPU core.",
             inputs=[
                 io.Image.Input("images"),
                 io.Audio.Input("audio", optional=True),
@@ -278,7 +327,7 @@ class FunUISaveVideo(io.ComfyNode):
         frames = to_frames(images, look)
         width, height = frames.shape[2], frames.shape[1]
         folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
-            filename_prefix, folder_paths.get_output_directory(), width, height)
+            filename_prefix, folder_paths.get_temp_directory(), width, height)       # the temp folder: ComfyUI empties it when it starts, so no video of an earlier session is left to be shown
         metadata = None
         if not args.disable_metadata:
             metadata = {**(cls.hidden.extra_pnginfo or {}), **({"prompt": cls.hidden.prompt} if cls.hidden.prompt is not None else {})} or None
@@ -288,4 +337,4 @@ class FunUISaveVideo(io.ComfyNode):
         _last_saved[getattr(cls.hidden, "unique_id", None)] = os.path.join(folder, file)
         log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + "".join(f", {k} {v}" for k, v in look.items() if v != DEFAULTS[k]))
         keep_last_frame(file, to_frames(images[-1:])[-1])             # the sampler's own picture: the Post look belongs to the file, not to the next shot's start
-        return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))
+        return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.temp)]))

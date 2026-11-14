@@ -1,17 +1,17 @@
-// Two places a file can be found: the gallery (what was saved, and stays) and the temp folder (what ComfyUI wipes on restart).
+// Two places a file can be found: the temp folder (everything generated; ComfyUI empties it when it starts) and ComfyUI's output folder (what other workflows saved; FunUI writes nothing there).
 // Clicking a file looks at it here; it can be opened in its own tab, or deleted after a question.
 import { composer } from "../../composer/composer.js";
 
 const ICON = { image: "▦", video: "▶", audio: "♪" };
-const PLACES = [{ value: "output", label: "Saved" }, { value: "temp", label: "Temp files" }];
-const EMPTY = { output: "Nothing saved yet", temp: "Nothing in the temp directory" };
+const PLACES = [{ value: "temp", label: "Generated" }, { value: "output", label: "Output folder" }];
+const EMPTY = { output: "Nothing in the output folder", temp: "Nothing generated since ComfyUI started" };
 const url = (f, where) => `/view?${new URLSearchParams({ filename: f.filename, subfolder: f.subfolder || "", type: where })}`;
 const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const when = (t) => new Date((Number(t) || 0) * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 const id = (f) => `${f.subfolder}/${f.filename}`;
 
 export function mount({ dom, setFooter, close }) {
-  let where = "output", files = [], payload = {}, looking = null, selecting = false, grid = null;
+  let where = "temp", files = [], payload = {}, looking = null, selecting = false, grid = null;
   const picked = new Set();
   const body = composer.region.stack({ gap: "md", fill: true, label: "Files" });
   const content = composer.region.stack({ gap: "sm", fill: true, label: "Files in this folder" });
@@ -28,7 +28,7 @@ export function mount({ dom, setFooter, close }) {
 
   async function remove(f) {
     const ok = await composer.modal.dialogue({ title: "Delete file", tone: "danger", confirmLabel: "Delete",
-      message: `Delete “${f.filename}” from ${where === "output" ? "your saved files" : "the temp folder"} for good? It does not go to the trash.` }).result;
+      message: `Delete “${f.filename}” from ${where === "output" ? "the output folder" : "the generated files"} for good? It does not go to the trash.` }).result;
     if (!ok) return;
     setFooter({ note: payload.path || "", actions: [composer.button.md({ label: "Deleting…", disabled: true })] });
     try { await erase(f); } catch (err) { footer(); return composer.toast.warn({ text: `Could not delete it: ${err.message}` }); }
@@ -47,7 +47,7 @@ export function mount({ dom, setFooter, close }) {
   async function removePicked() {
     const list = files.filter((f) => picked.has(id(f)));
     const ok = await composer.modal.dialogue({ title: `Delete ${list.length} files`, tone: "danger", confirmLabel: `Delete ${list.length}`,
-      message: `Delete ${list.length} files from ${where === "output" ? "your saved files" : "the temp folder"} for good? They do not go to the trash.` }).result;
+      message: `Delete ${list.length} files from ${where === "output" ? "the output folder" : "the generated files"} for good? They do not go to the trash.` }).result;
     if (!ok) return;
     let gone = 0, done = 0, why = "";
     const bar = composer.progress.bar({ value: 0, max: list.length, label: "Deleting" });

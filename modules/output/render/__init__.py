@@ -50,6 +50,11 @@ def routes(table, base, web):
     async def _result(req):
         return await serving.result(req)
 
+    @table.post(base + "/gone")
+    async def _gone(req):
+        body = await body_of(req)
+        return web.json_response(await asyncio.to_thread(serving.gone, body.get("media")))
+
     @table.get(base + "/poster")
     async def _poster(req):
         return await serving.poster(req)

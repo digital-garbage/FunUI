@@ -4,7 +4,7 @@ Core's SaveVideo encodes on one CPU thread; on a rental that was most of the tim
 """
 
 from . import watermark
-from .nodes import FunUISaveVideo
+from .nodes import FunUISavePicture, FunUISaveVideo
 
 ID = "output_save"
 TITLE = "Save video"
@@ -13,7 +13,7 @@ CATEGORY = "post"
 MOUNT = "settings.general"
 STATUS = "proven"
 
-NODES = [FunUISaveVideo]
+NODES = [FunUISaveVideo, FunUISavePicture]
 
 # Engine > Post. Every one is off (or neutral) by default; the node reads them from the pipeline's settings object.
 SETTINGS = {
@@ -103,6 +103,11 @@ def upgrade(slots, outputs):
     A SaveVideo left with no feed takes the one picture source nothing else reads (its sound too).
     `outputs(node)` -> that node's output types. -> the slots, changed or not."""
     slots = [dict(s) for s in slots]
+    # ComfyUI's own picture savers become FunUI Save Picture: the temp folder, and a file name that is never handed out twice.
+    for s in slots:
+        if s["node"] in ("SaveImage", "PreviewImage"):
+            inputs = s.get("inputs") or {}
+            s.update(node="FunUISavePicture", inputs={k: v for k, v in {"images": inputs.get("images"), "filename_prefix": inputs.get("filename_prefix", "FunUI")}.items() if v is not None})
     by_id = {s["id"]: s for s in slots}
     read = {v[0] for s in slots for v in (s.get("inputs") or {}).values() if _link(v)}
     drop = set()

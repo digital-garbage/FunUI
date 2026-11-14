@@ -61,14 +61,14 @@ def run(media, model, rtx_options="{}", interrupted=lambda: None) -> dict:
         from comfy_extras.nodes_upscale_model import ImageUpscaleWithModel, UpscaleModelLoader
         loaded = UpscaleModelLoader.execute(model).result[0]
         fn, tag = (lambda x: ImageUpscaleWithModel.execute(loaded, x).result[0]), model
-    out_dir = os.path.join(folder_paths.get_output_directory(), SUBFOLDER)
+    out_dir = os.path.join(folder_paths.get_temp_directory(), SUBFOLDER)       # with the renders: gone when ComfyUI starts
     os.makedirs(out_dir, exist_ok=True)
     name = free_name(out_dir, media["filename"], tag)
     frames = upscale_file(src, os.path.join(out_dir, name), fn, interrupted)
     from ..._core import log, video_pipe
     video_pipe.inherit_last_frame(media["filename"], name)       # a following shot continues from the sampler's own picture
     log.info("FunUI Upscale", f"{media['filename']} with {tag}: {frames} frames -> {SUBFOLDER}/{name}")
-    return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "output"}}
+    return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "temp"}}
 
 
 try:

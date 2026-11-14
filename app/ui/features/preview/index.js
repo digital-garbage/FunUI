@@ -16,7 +16,7 @@ export function sourceOf(sc, open, dur) {
   if (isVideoClip(sc)) return sc.source && sc.source.media_ref ? { url: `/fun/api/media/${encodeURIComponent(sc.source.media_ref)}/file`, from: sc.source_in || 0 } : null;
   const r = (open.scene_renders || {})[sc.id];
   if (!(r && r.media)) return null;
-  // `v` names the run that made the file: a file name alone can come to mean another video (an emptied output folder starts numbering again),
+  // `v` names the run that made the file: a file name alone can come to mean another video (an emptied folder starts numbering again),
   // and an address that did not change is neither loaded again by the player nor asked for again by the browser.
   if (isPicture(r.media.filename)) return { url: viewUrl(r.media) + (r.promptId ? `&v=${encodeURIComponent(r.promptId)}` : ""), from: 0, picture: true };          // a picture file is shown as it is, never cut as a clip
   const q = new URLSearchParams({ filename: r.media.filename || "", subfolder: r.media.subfolder || "", type: r.media.type || "output", render_in: String(r.inSec || 0), src_in: String(sc.source_in || 0), dur: String(dur) });

@@ -26,3 +26,11 @@ def test_delete_removes_a_media_file_and_nothing_else(monkeypatch, tmp_path):
     assert not temp_files.delete("a.png", "sub", "output")["deleted"], "a second delete should say it is gone"
     assert not temp_files.delete("a.png", "", "input")["deleted"]
     assert not temp_files.delete("a.png", "su\0b", "output")["deleted"], "a NUL byte must be refused, not raise"
+
+
+def test_the_generated_list_shows_results_and_not_the_apps_own_working_copies(monkeypatch, tmp_path):
+    (tmp_path / "funui_upscaled").mkdir()
+    for name in ("FunUI_00001_3fa94c1e.mp4", "funui_preview_p_s1_1.mp4", "funui_last_FunUI_00001_3fa94c1e.png", "funui_poster_ab.jpg", "funui_upscaled/FunUI_00001_3fa94c1e_rtx_high.mp4"):
+        (tmp_path / name).write_bytes(b"x")
+    monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
+    assert sorted(f["filename"] for f in temp_files.listing(where="temp")["files"]) == ["FunUI_00001_3fa94c1e.mp4", "FunUI_00001_3fa94c1e_rtx_high.mp4"]

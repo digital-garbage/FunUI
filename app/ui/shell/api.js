@@ -160,6 +160,8 @@ export const api = {
     } catch { return false; }
   },
   renderLibrary: () => call("GET", "/api/m/render/library"),
+  /** Which of these renders have no file any more. -> {known, gone: [indices]} */
+  rendersGone: (media) => call("POST", "/api/m/render/gone", { media }),
   lastFrame: (pid, body) => call("POST", `/api/m/render/projects/${encodeURIComponent(pid)}/last-frame`, body),
   carryLog: (pid, body) => call("POST", `/api/m/render/projects/${encodeURIComponent(pid)}/carry-log`, body),
   suggestionStats: () => call("GET", "/api/shortcuts/suggestion_stats"),

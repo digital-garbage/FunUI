@@ -1,10 +1,8 @@
-"""What ComfyUI has in its temp directory, and what it has saved in its output directory.
+"""What ComfyUI has in its temp directory and in its output directory.
 
-Previews and other transient outputs land in temp, and they are wiped when the
-server restarts -- so "where did that go?" has an answer for as long as the
-server has been up, and this is where it is. Saved videos and pictures land in
-output and stay, which makes that the gallery: the same listing, and the one
-thing temp does not need, a way to delete.
+Everything FunUI generates (clips, pictures, upscales, interpolations, previews) lands in temp, and ComfyUI empties
+temp when it starts: nothing of an earlier session is left to be shown as if it were new. FunUI writes nothing
+into output; it is listed because other workflows on the same ComfyUI save there, with a way to delete.
 
 Only media, and only what can be shown: a temp directory also fills with
 whatever any node felt like writing, and a browser listing 400 .pt files is not
@@ -25,6 +23,10 @@ KINDS = {
 #: A long session can leave thousands. The window shows the newest; the rest are
 #: on disk and nobody scrolls to them.
 MAX_FILES = 500
+
+
+#: Files the app makes for itself in temp (preview cuts, small stills, kept last pictures): copies of what is listed, never listed themselves.
+WORKING = "funui_"
 
 
 def kind_of(name: str) -> str | None:
@@ -80,7 +82,7 @@ def listing(limit: int = MAX_FILES, where: str = "temp") -> dict:
     for root, _dirs, names in os.walk(base):
         for name in names:
             kind = kind_of(name)
-            if not kind:
+            if not kind or (not saved and name.startswith(WORKING)):
                 continue
             full = os.path.join(root, name)
             try:
@@ -97,8 +99,8 @@ def listing(limit: int = MAX_FILES, where: str = "temp") -> dict:
             })
 
     found.sort(key=lambda f: f.get("mtime", 0), reverse=True)
-    detail = "" if found else ("Nothing saved yet. A saved video or picture lands here." if saved
-                                else "Nothing here. Temp files are wiped when ComfyUI restarts.")
+    detail = "" if found else ("FunUI saves nothing here. What other workflows save shows up here." if saved
+                                else "Nothing generated yet. These files are removed when ComfyUI restarts: export what you want to keep, or save it to the media bin.")
     return {"files": found[:limit], "path": base, "detail": detail}
 
 

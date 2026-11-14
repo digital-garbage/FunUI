@@ -60,3 +60,33 @@ const gaveUpWatchers = [];
 /** A step that was due on `media` (an "always" mode) could not run: whoever waited for it may go on without it. */
 export const gaveUp = (media, step) => { for (const fn of gaveUpWatchers) fn(media, step); };
 export const onGaveUp = (fn) => { gaveUpWatchers.push(fn); };
+
+/** Every render file a project names (the one on each clip and every take), once each. */
+export function renderFiles(p) {
+  const seen = new Map();
+  const add = (m) => { if (m && m.filename && !seen.has(keyOf(m))) seen.set(keyOf(m), { filename: m.filename, subfolder: m.subfolder || "", type: m.type || "output" }); };
+  Object.values(p.scene_renders || {}).forEach((r) => add(r && r.media));
+  Object.values(p.scene_variants || {}).forEach((list) => (list || []).forEach((t) => add(t && t.media)));
+  return [...seen.values()];
+}
+
+/** Forget every render and take whose file is gone (`gone`: a Set of keyOf names). A clip left without a render is "not made yet" again,
+ *  and its rating goes with the video it was about. -> true when something was forgotten. */
+export function forgetGone(p, gone) {
+  let hit = false;
+  const dead = (m) => Boolean(m && m.filename && gone.has(keyOf(m)));
+  for (const [id, r] of Object.entries(p.scene_renders || {})) {
+    if (!dead(r && r.media)) continue;
+    delete p.scene_renders[id];
+    const sc = (p.scenes || []).find((s) => s.id === id);
+    if (sc) Object.assign(sc, { rating: "", rated: {} });
+    hit = true;
+  }
+  for (const [id, list] of Object.entries(p.scene_variants || {})) {
+    const keep = (list || []).filter((t) => !dead(t && t.media));
+    if (keep.length === (list || []).length) continue;
+    if (keep.length) p.scene_variants[id] = keep; else delete p.scene_variants[id];
+    hit = true;
+  }
+  return hit;
+}

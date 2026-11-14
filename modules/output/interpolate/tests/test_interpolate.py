@@ -89,7 +89,7 @@ def test_the_job_writes_a_doubled_file_beside_the_original(comfy, monkeypatch):
     import types
     from modules.output.interpolate import nodes
     make_clip(str(comfy.output / "a.mp4"), seconds=1.0, size="64x48", rate=10, audio=True)
-    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output)))
+    monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output), get_temp_directory=lambda: str(comfy.temp)))
     monkeypatch.setattr(nodes.video_pipe, "comfy_dir", lambda kind: str(comfy.output))
     last = [None]
 
@@ -103,7 +103,8 @@ def test_the_job_writes_a_doubled_file_beside_the_original(comfy, monkeypatch):
         return torch.stack(out)
     monkeypatch.setattr(nodes.framegen, "make", lambda o: between)
     got = nodes.interpolate({"filename": "a.mp4", "subfolder": "", "type": "output"}, {})["media"]
-    assert got == {"filename": "a_x2.mp4", "subfolder": "funui_interpolated", "type": "output"}
-    assert upscale.probe(str(comfy.output / "funui_interpolated" / "a_x2.mp4")) == (64, 48, "20/1", True)
+    assert got == {"filename": "a_x2.mp4", "subfolder": "funui_interpolated", "type": "temp"}, "with the renders, in the folder ComfyUI empties when it starts"
+    assert upscale.probe(str(comfy.temp / "funui_interpolated" / "a_x2.mp4")) == (64, 48, "20/1", True)
+    assert not (comfy.output / "funui_interpolated").exists()
     with pytest.raises(nodes.InterpolateError, match="not in the output folder"):
         nodes.interpolate({"filename": "../x.mp4"}, {})

@@ -121,7 +121,7 @@ async def playable(path: str) -> str:
 def cache_headers(q, seconds: int) -> dict:
     """How long a browser may keep an answer without asking again.
 
-    A render is addressed by its file name, and a name can come to mean another video (the output folder was emptied and
+    A render is addressed by its file name, and a name can come to mean another video (its folder was emptied and
     a saver started numbering again). So the browser asks every time, and an unchanged file costs one short "not modified"
     answer. Only an address that also names the run that made the video (`v`) is kept for `seconds`."""
     return {"Cache-Control": f"private, max-age={int(seconds)}" if q.get("v") else "private, no-cache"}
@@ -171,6 +171,24 @@ async def poster(request) -> "web.StreamResponse":
     except files.ClipError as exc:
         raise web.HTTPBadGateway(reason=str(exc).splitlines()[-1][:120] if str(exc) else "no still")
     return web.FileResponse(out, headers={"Content-Type": "image/jpeg", **cache_headers(q, 86400)})
+
+
+def gone(media_list) -> dict:
+    """Which of these renders ({filename, subfolder, type}) have no file any more: {"known": bool, "gone": [indices]}.
+
+    Renders live in ComfyUI's temp folder, which ComfyUI empties when it starts. A project still naming them would show
+    clips that cannot play, so the app asks here and forgets the ones that are gone. `known` False: ComfyUI's folders
+    cannot be asked (not running under ComfyUI), so nothing may be concluded."""
+    if not (files.comfy_dir("temp") and files.comfy_dir("output")):
+        return {"known": False, "gone": []}
+    out = []
+    for i, m in enumerate(media_list if isinstance(media_list, list) else []):
+        if not isinstance(m, dict):
+            continue
+        path = files.comfy_path(m.get("filename"), m.get("subfolder") or "", m.get("type") or "output")
+        if not path or not os.path.isfile(path):
+            out.append(i)
+    return {"known": True, "gone": out}
 
 
 # --- preview segments ---------------------------------------------------------

@@ -336,3 +336,17 @@ def test_a_kept_last_picture_older_than_its_video_belongs_to_an_earlier_video_an
     status, got = _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1"})
     assert status == 200
     assert Image.open(media.path_for(got["media_id"])).convert("RGB").getpixel((3, 3)) != (200, 40, 40)
+
+
+def test_renders_whose_files_are_gone_are_named_and_nothing_is_concluded_without_comfyui(comfy, server, monkeypatch):
+    """The temp folder was emptied (ComfyUI restarted): the app asks which of a project's renders are still there."""
+    (comfy.temp / "kept.mp4").write_bytes(b"x")
+    (comfy.output / "old.mp4").write_bytes(b"x")
+    asked = [{"filename": "kept.mp4", "subfolder": "", "type": "temp"}, {"filename": "wiped.mp4", "subfolder": "", "type": "temp"},
+             {"filename": "old.mp4", "subfolder": "", "type": "output"}, {"filename": "kept.mp4", "subfolder": "", "type": "output"},
+             {"filename": "../../etc/passwd", "type": "temp"}, "junk"]
+    status, got = _post(server, f"{BASE}/gone", {"media": asked})
+    assert status == 200 and got == {"known": True, "gone": [1, 3, 4]}
+    assert _post(server, f"{BASE}/gone", {"media": "junk"})[1] == {"known": True, "gone": []}
+    monkeypatch.setattr(files, "comfy_dir", lambda kind: None)
+    assert _post(server, f"{BASE}/gone", {"media": asked})[1] == {"known": False, "gone": []}, "no ComfyUI to ask: nothing is called gone"

@@ -626,7 +626,7 @@ def test_an_empty_temp_directory_says_why_it_is_empty(server, monkeypatch, tmp_p
     monkeypatch.setattr(temp_files, "temp_dir", lambda: str(tmp_path))
     status, body = _request(server["port"], "GET", "/fun/api/temp")
     assert body["files"] == []
-    assert "wiped" in body["detail"]
+    assert "removed when ComfyUI restarts" in body["detail"]
 
 
 def test_no_comfyui_is_a_different_answer_from_an_empty_directory(server, monkeypatch):
