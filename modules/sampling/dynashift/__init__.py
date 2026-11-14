@@ -34,13 +34,13 @@ SETTINGS = {
         "hint": "Bends the noise levels of the chosen scheduler, built for turbo and few-step runs. No extra model calls.",
     },
     "start": {
-        "type": "float", "default": 1.5, "min": 0.01, "max": 100.0, "step": 0.01,
+        "type": "float", "default": 1.5, "min": 0.01, "max": 100.0, "step": 0.5,
         "label": "Shift at the start", "ui": "slider",
         "hint": "Above 1 spends the early steps on layout and motion, below 1 on detail. 1 = no change.",
         "when": {"enabled": True},
     },
     "end": {
-        "type": "float", "default": 1.0, "min": 0.01, "max": 100.0, "step": 0.01,
+        "type": "float", "default": 1.0, "min": 0.01, "max": 100.0, "step": 0.5,
         "label": "Shift at the end", "ui": "slider",
         "hint": "The same for the last steps; the shift moves from the start value to this one across the run.",
         "when": {"enabled": True},
