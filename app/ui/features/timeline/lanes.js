@@ -2,7 +2,7 @@
 import { segments, isVideoClip, isPicture, effFps } from "../../shell/scenes.js";
 
 /** A small still of a picture render, from the render module's poster route. */
-const stillOf = (m) => `/fun/api/m/render/poster?filename=${encodeURIComponent(m.filename)}&subfolder=${encodeURIComponent(m.subfolder || "")}&type=${encodeURIComponent(m.type || "output")}`;
+const stillOf = (m, run) => `/fun/api/m/render/poster?filename=${encodeURIComponent(m.filename)}&subfolder=${encodeURIComponent(m.subfolder || "")}&type=${encodeURIComponent(m.type || "output")}${run ? `&v=${encodeURIComponent(run)}` : ""}`;       // `run`: the run that made the file, so a reused file name is not answered from the browser's cache
 
 const first = (t) => ((t || "").split("\n")[0] || "").slice(0, 80);
 
@@ -30,7 +30,7 @@ export function videoLane(p, picked, focus, actions = () => [], ghostActions = (
         id: sc.id, start: seg.start, dur: seg.dur, trim: true,
         rating: mood(sc.rating) || undefined,
         head: [isVideoClip(sc) ? "▶ video" : rendered ? "✓" : "◌", ...(sc.source_image ? ["◐"] : []), `${seg.dur.toFixed(1)}s`, ...(mood(sc.rating) ? [mood(sc.rating) === "liked" ? "★" : "✕"] : []), ...tags(sc)],
-        thumbs: renders[sc.id] && renders[sc.id].media && isPicture(renders[sc.id].media.filename) ? [stillOf(renders[sc.id].media)]       // a picture render shows as that picture
+        thumbs: renders[sc.id] && renders[sc.id].media && isPicture(renders[sc.id].media.filename) ? [stillOf(renders[sc.id].media, renders[sc.id].promptId)]       // a picture render shows as that picture
           : sc.source_image ? [`/fun/api/media/${encodeURIComponent(sc.source_image)}/thumb`] : undefined,       // else the picture it starts from
         title: first(sc.text) || "(empty scene)",
         selected: picked.includes(sc.id), focus: sc.id === focus, excluded: Boolean(sc.excluded),

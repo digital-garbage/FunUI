@@ -117,6 +117,7 @@ def listing() -> list[dict]:
     if fresh:
         with _LOCK:
             _save_index(items)
+    forget_cleared_scratch()
     out = [it for it in items if not it.get("scratch") and (config.MEDIA_DIR / it.get("filename", "")).is_file()]      # scratch files are not the user's: never listed
     out.sort(key=lambda i: i.get("added", 0), reverse=True)
     return out
@@ -186,6 +187,23 @@ def save_scratch(orig_name: str, data: bytes, folder) -> dict:
         items.append(entry)
         _save_index(items)
     return entry
+
+
+def forget_cleared_scratch() -> int:
+    """Drop every working picture whose file is gone (ComfyUI's temp folder was emptied, or ComfyUI restarted), with its
+    thumbnail, so nothing about it is left to be answered later. -> how many were dropped."""
+    with _LOCK:
+        items = _load_index()
+        gone = [it for it in items if it.get("scratch") and not Path(it.get("filename", "")).is_file()]
+        if not gone:
+            return 0
+        _save_index([it for it in items if it not in gone])
+    for it in gone:
+        try:
+            _thumb_file(it.get("id", "")).unlink(missing_ok=True)
+        except OSError:
+            pass
+    return len(gone)
 
 
 def path_for(mid: str) -> Path | None:

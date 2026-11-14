@@ -358,3 +358,13 @@ test("a carried picture with no reference number left is counted and said, and m
   assert.equal(r.unwired, 1);
   assert.equal(r.left.find((l) => l.id === "frame").what, "a carried picture");
 });
+
+test("a ComfyUI saver's file name is this run's alone; FunUI Save Video names its own files", async () => {
+  const savers = [{ id: "img", node: "SaveImage", inputs: { filename_prefix: "FunUI" } }, { id: "vid", node: "FunUISaveVideo", inputs: { filename_prefix: "FunUI" } }, { id: "x", node: "Other", inputs: {} }];
+  const one = (await buildInputs({ project: {}, scene: {}, slots: savers, expand: async () => null })).inputs;
+  const two = (await buildInputs({ project: {}, scene: {}, slots: savers, expand: async () => null })).inputs;
+  assert.match(one.img.filename_prefix, /^FunUI_[0-9a-f]{8}$/);
+  assert.notEqual(one.img.filename_prefix, two.img.filename_prefix, "an emptied output folder cannot hand a new picture a deleted one's name");
+  assert.equal(one.vid, undefined);
+  assert.equal(one.x, undefined);
+});

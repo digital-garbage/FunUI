@@ -27,3 +27,10 @@ test("a picture render shows as its picture on the clip; a video render keeps th
   assert.deepEqual(Object.fromEntries(u.searchParams), { filename: "FunUI_00001_.png", subfolder: "s", type: "output" });
   assert.deepEqual(b.thumbs, ["/fun/api/media/m2/thumb"]);
 });
+
+test("a picture render's still names the run that made it, so a reused file name does not show the deleted picture", () => {
+  const media = { filename: "FunUI_00001_.png", subfolder: "", type: "output" };
+  const thumb = (promptId) => videoLane({ num_frames_per_scene: 1, frame_rate: 1, scenes: [{ id: "a", text: "x" }], scene_renders: { a: { media, promptId } } }, [], "").clips[0].thumbs[0];
+  assert.notEqual(thumb("run-1"), thumb("run-2"));
+  assert.equal(new URL(thumb("run-2"), "http://x").searchParams.get("v"), "run-2");
+});

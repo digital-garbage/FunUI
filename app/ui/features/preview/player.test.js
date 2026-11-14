@@ -37,3 +37,14 @@ test("a render that is a picture file is shown as the picture itself, straight f
   assert.equal(sourceOf({ id: "b" }, open, 1).picture, undefined);
   assert.deepEqual(["a.PNG", "a.jpg", "a.jpeg", "a.webp", "a.mp4", "", undefined].map(isPicture), [true, true, true, true, false, false, false]);
 });
+
+test("a render's address names the run that made it, so a file name that came to mean another video is loaded again", () => {
+  const media = { filename: "FunUI_00001_.mp4", subfolder: "", type: "output" };
+  const before = sourceOf({ id: "a" }, { id: "p", scene_renders: { a: { media, promptId: "run-1" } } }, 2).url;
+  const after = sourceOf({ id: "a" }, { id: "p", scene_renders: { a: { media, promptId: "run-2" } } }, 2).url;     // the output folder was emptied; the next run got the same name
+  assert.notEqual(before, after);
+  assert.equal(new URL(after, "http://x").searchParams.get("v"), "run-2");
+  const picture = { filename: "FunUI_00001_.png", subfolder: "", type: "output" };
+  assert.notEqual(sourceOf({ id: "a" }, { id: "p", scene_renders: { a: { media: picture, promptId: "run-1" } } }, 1).url,
+    sourceOf({ id: "a" }, { id: "p", scene_renders: { a: { media: picture, promptId: "run-2" } } }, 1).url);
+});

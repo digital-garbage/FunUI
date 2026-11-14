@@ -365,3 +365,18 @@ def test_a_video_says_whether_it_has_sound(tmp_path, monkeypatch):
     a = media.save_upload("s.mp4", silent.read_bytes())
     b = media.save_upload("l.mp4", loud.read_bytes())
     assert (a["sound"], b["sound"]) == (False, True)
+
+
+def test_a_working_picture_whose_file_was_cleared_is_forgotten_with_its_thumbnail(store, tmp_path):
+    temp = tmp_path / "temp"
+    kept = media.save_upload("ref.png", b"\x89PNG fake bytes")
+    gone = media.save_scratch("last_frame_s1.png", b"\x89PNG\r\n\x1a\n", temp)
+    thumb = store / "thumbnails" / f"{gone['id']}.jpg"
+    thumb.parent.mkdir(parents=True, exist_ok=True)
+    thumb.write_bytes(b"jpg")
+    assert media.get(gone["id"]) and media.path_for(gone["id"])
+    for f in temp.iterdir():
+        f.unlink()                                  # ComfyUI's temp folder is emptied (by hand, or by a restart)
+    assert [m["id"] for m in media.listing()] == [kept["id"]]
+    assert media.get(gone["id"]) is None and not thumb.exists(), "nothing is left that could be answered later"
+    assert media.forget_cleared_scratch() == 0

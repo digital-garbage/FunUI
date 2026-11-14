@@ -12,6 +12,7 @@ import json
 import math
 import os
 import time
+import uuid
 from fractions import Fraction
 
 import av
@@ -221,7 +222,31 @@ def _values(settings):
     return clean
 
 
+#: The file each Save Video node (by its id in the graph) wrote last, and how many times that file was found deleted.
+_last_saved: dict = {}
+_lost: dict = {}
+
+
+def unique_name(filename, counter):
+    """ComfyUI numbers a file by what is in the output folder now, so emptying the folder starts again at 00001 and a new
+    video would take the name of a deleted one. Projects, takes and the browser's cache know a video by its name, and they
+    would show the deleted one. A short random part after the number makes every name belong to one video only."""
+    return f"{filename}_{counter:05}_{uuid.uuid4().hex[:8]}.mp4"
+
+
 class FunUISaveVideo(io.ComfyNode):
+    @classmethod
+    def fingerprint_inputs(cls, **_):
+        """ComfyUI skips a node whose inputs did not change and answers with the result it remembers. For this node that is
+        the name of a saved file: when that file was deleted since, the remembered answer names nothing. The number returned
+        here goes up once for each deleted file, which makes ComfyUI save the video again."""
+        node = getattr(cls.hidden, "unique_id", None)
+        path = _last_saved.get(node)
+        if path and not os.path.isfile(path):
+            del _last_saved[node]
+            _lost[node] = _lost.get(node, 0) + 1
+        return _lost.get(node, 0)
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -242,7 +267,7 @@ class FunUISaveVideo(io.ComfyNode):
                                tooltip="How closely the file keeps the picture. standard: small files, but fine texture can smear. high: clean, bigger file. maximum: near lossless, large."),
                 io.Custom("FUNUI_SETTINGS").Input("settings", optional=True),
             ],
-            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo],
+            hidden=[io.Hidden.prompt, io.Hidden.extra_pnginfo, io.Hidden.unique_id],
             is_output_node=True,
             outputs=[],
         )
@@ -257,9 +282,10 @@ class FunUISaveVideo(io.ComfyNode):
         metadata = None
         if not args.disable_metadata:
             metadata = {**(cls.hidden.extra_pnginfo or {}), **({"prompt": cls.hidden.prompt} if cls.hidden.prompt is not None else {})} or None
-        file = f"{filename}_{counter:05}_.mp4"
+        file = unique_name(filename, counter)
         t = time.perf_counter()
         used = encode(os.path.join(folder, file), frames, float(fps), audio, metadata, encoder, codec, quality)
+        _last_saved[getattr(cls.hidden, "unique_id", None)] = os.path.join(folder, file)
         log.info("FunUI Save Video", f"{file}: {len(frames)} frames in {time.perf_counter() - t:.1f}s with {used}, quality {quality}" + "".join(f", {k} {v}" for k, v in look.items() if v != DEFAULTS[k]))
         keep_last_frame(file, to_frames(images[-1:])[-1])             # the sampler's own picture: the Post look belongs to the file, not to the next shot's start
         return io.NodeOutput(ui=ui.PreviewVideo([ui.SavedResult(file, subfolder, io.FolderType.output)]))

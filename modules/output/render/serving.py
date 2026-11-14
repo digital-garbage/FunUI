@@ -118,6 +118,15 @@ async def playable(path: str) -> str:
         raise web.HTTPBadGateway(reason="Video could not be prepared for playback (remux failed).")
 
 
+def cache_headers(q, seconds: int) -> dict:
+    """How long a browser may keep an answer without asking again.
+
+    A render is addressed by its file name, and a name can come to mean another video (the output folder was emptied and
+    a saver started numbering again). So the browser asks every time, and an unchanged file costs one short "not modified"
+    answer. Only an address that also names the run that made the video (`v`) is kept for `seconds`."""
+    return {"Cache-Control": f"private, max-age={int(seconds)}" if q.get("v") else "private, no-cache"}
+
+
 def saved_name(identity, ext="") -> str:
     """What the browser's own "Save video as" calls the file: a hash of which video it is, never ComfyUI's FunUI_00001_.
     The same video always gets the same name, so saving it twice overwrites or asks instead of piling up copies."""
@@ -140,7 +149,7 @@ async def result(request) -> "web.StreamResponse":
     name = saved_name(path)
     if ctype.startswith("video/"):
         path = await playable(path)
-    return web.FileResponse(path, headers={"Content-Type": ctype,
+    return web.FileResponse(path, headers={"Content-Type": ctype, **cache_headers(q, 3600),
                                            "Content-Disposition": f'inline; filename="{name}"'})
 
 
@@ -161,7 +170,7 @@ async def poster(request) -> "web.StreamResponse":
         raise web.HTTPNotFound()
     except files.ClipError as exc:
         raise web.HTTPBadGateway(reason=str(exc).splitlines()[-1][:120] if str(exc) else "no still")
-    return web.FileResponse(out, headers={"Content-Type": "image/jpeg", "Cache-Control": "private, max-age=86400"})
+    return web.FileResponse(out, headers={"Content-Type": "image/jpeg", **cache_headers(q, 86400)})
 
 
 # --- preview segments ---------------------------------------------------------
@@ -245,7 +254,10 @@ def lossless_last(src: str, clip: dict) -> str | None:
     if not have or float(clip["in"]) + float(clip["dur"] or 0) < have - 1.5 / (clip["fps"] or 25.0):
         return None                 # trimmed short of the render's end: that picture is not this clip's last
     found = os.path.join(files.comfy_dir("temp") or "", video_pipe.last_frame_name(src))
-    return found if os.path.isfile(found) and os.path.getsize(found) else None
+    if not (os.path.isfile(found) and os.path.getsize(found)):
+        return None
+    # The picture is written right after its video. One older than the video belongs to an earlier video of the same name.
+    return found if os.path.getmtime(found) >= os.path.getmtime(src) - 1.0 else None
 
 
 def last_frame(project, scene_id: str, render: dict | None = None, window: dict | None = None, first: bool = False, at_fraction=None) -> dict:
@@ -312,7 +324,7 @@ async def segment(request, project) -> "web.StreamResponse":
     key = (f"{project.id}:{scene_id}:{clip['filename']}:{clip['subfolder']}:{clip['type']}:"
            f"{clip['in']}:{clip['dur']}:{'rev' if reverse else ''}:{sig[0]}:{sig[1]}")
     async with _lock(key):
-        headers = {"Cache-Control": "private, max-age=3600",
+        headers = {**cache_headers(q, 3600),
                    "Content-Disposition": f'inline; filename="{saved_name(key, ".mp4")}"'}
         hit = _segments.get(key)
         if hit and os.path.isfile(hit[1]):

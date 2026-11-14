@@ -120,7 +120,7 @@ def test_a_scene_segment_is_exactly_the_window_the_export_would_use(comfy, serve
     moov_at_end(comfy.output / "a.mp4", 4.0)
     proj = _project(comfy, source_in=0.5, frames=50, frames_mode="timeline")     # 2 s at 25 fps, from 0.5 + 0.5
     status, headers, body = get(server, f"{BASE}/projects/{proj.id}/preview-segment/s1")
-    assert status == 200 and headers["Cache-Control"] == "private, max-age=3600"
+    assert status == 200 and headers["Cache-Control"] == "private, no-cache", "known by file name alone: the browser asks again each time"
     assert re.fullmatch(r'inline; filename="[0-9a-f]{12}\.mp4"', headers["Content-Disposition"]), "Save video as: a hash, not ComfyUI's name"
     assert get(server, f"{BASE}/projects/{proj.id}/preview-segment/s1")[1]["Content-Disposition"] == headers["Content-Disposition"], "the same video keeps its name"
     (comfy.root / "seg.mp4").write_bytes(body)
@@ -290,3 +290,49 @@ def test_last_frame_takes_the_lossless_copy_when_the_clip_ends_with_the_render(c
     serving._frames.clear()
     b = _post(server, f"{BASE}/projects/{short.id}/last-frame", {"scene_id": "s1"})[1]
     assert Image.open(media.path_for(b["media_id"])).convert("RGB").getpixel((3, 3)) != (200, 40, 40)
+
+
+@needs_ffmpeg
+def test_a_new_video_under_a_deleted_videos_name_is_what_plays_and_the_browser_is_told_to_ask(comfy, server):
+    """The output folder was emptied and ComfyUI numbered from 00001 again: the name the project holds now means another video."""
+    make_clip(comfy.output / "a.mp4", 4.0, size="160x120")
+    proj = _project(comfy, source_in=0.5, frames=50, frames_mode="timeline")
+    url = f"{BASE}/projects/{proj.id}/preview-segment/s1"
+    status, headers, old = get(server, url)
+    assert status == 200 and headers["Cache-Control"] == "private, no-cache"
+    assert get(server, url, headers={"If-None-Match": headers["Etag"]})[0] == 304, "an unchanged video costs one short answer"
+    old_poster = get(server, f"{BASE}/poster?filename=a.mp4&type=output")
+    assert old_poster[1]["Cache-Control"] == "private, no-cache"
+    (comfy.output / "a.mp4").unlink()
+    make_clip(comfy.output / "a.mp4", 4.0, size="320x240")              # another video, same name
+    status, _h, new = get(server, url, headers={"If-None-Match": headers["Etag"]})
+    assert status == 200 and new != old, "the browser's copy of the deleted video is not confirmed"
+    (comfy.root / "seg.mp4").write_bytes(new)
+    assert probe(comfy.root / "seg.mp4")[1:3] == (320, 240)
+    status, _h, poster = get(server, f"{BASE}/poster?filename=a.mp4&type=output", headers={"If-None-Match": old_poster[1]["Etag"]})
+    assert status == 200 and poster != old_poster[2]
+    assert get(server, f"{BASE}/result?filename=a.mp4&type=output")[1]["Cache-Control"] == "private, no-cache"
+
+
+@needs_ffmpeg
+def test_an_address_that_names_the_run_may_be_kept_by_the_browser(comfy, server):
+    make_clip(comfy.output / "a.mp4", 4.0)
+    proj = _project(comfy, source_in=0.5, frames=50, frames_mode="timeline")
+    assert get(server, f"{BASE}/projects/{proj.id}/preview-segment/s1?v=run1")[1]["Cache-Control"] == "private, max-age=3600"
+    assert get(server, f"{BASE}/poster?filename=a.mp4&type=output&v=run1")[1]["Cache-Control"] == "private, max-age=86400"
+
+
+@needs_ffmpeg
+def test_a_kept_last_picture_older_than_its_video_belongs_to_an_earlier_video_and_is_not_used(comfy, server):
+    import os
+    from PIL import Image
+    from core import media
+    Image.new("RGB", (32, 24), (200, 40, 40)).save(comfy.temp / "funui_last_a.png")
+    make_clip(comfy.output / "a.mp4", 2.5)
+    old = os.path.getmtime(comfy.output / "a.mp4") - 3600
+    os.utime(comfy.temp / "funui_last_a.png", (old, old))             # kept an hour before this video was written
+    proj = _project(comfy, frames=50, frames_mode="timeline")
+    serving._frames.clear()
+    status, got = _post(server, f"{BASE}/projects/{proj.id}/last-frame", {"scene_id": "s1"})
+    assert status == 200
+    assert Image.open(media.path_for(got["media_id"])).convert("RGB").getpixel((3, 3)) != (200, 40, 40)
