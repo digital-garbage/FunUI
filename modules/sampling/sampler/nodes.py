@@ -26,7 +26,7 @@ import latent_preview
 import torch
 from comfy_api.latest import io
 
-from ..._core import chain as chain_mod, log, patching, registry as registry_mod, run as run_mod, sysinfo
+from ..._core import chain as chain_mod, dit_hooks, log, patching, registry as registry_mod, run as run_mod, sysinfo
 from ..._core import control as control_mod, relations as relations_mod, schema as schema_mod, traits as traits_mod
 
 # The hook points this sampler offers. A modifier asking for anything else is
@@ -293,7 +293,13 @@ class FunUISampler(io.ComfyNode):
 
         def with_modifiers(denoiser, x, step_sigmas, extra_args=None, callback=None,
                            disable=None, **options):
-            seen = {"index": 0}
+            # Two stages: this call is only one stage's part of the run, so the step number and the schedule the
+            # modifiers see are the run's, not the stage's own (stage 2 begins where stage 1 stopped).
+            guider = getattr(denoiser, "inner_model", None)
+            whole = getattr(guider, dit_hooks.FULL, None)
+            first = (len(whole) - len(step_sigmas)) if whole is not None and dit_hooks.stage_of(guider) == 2 else 0
+            seen = {"index": first}
+            step_sigmas_seen = whole if whole is not None else step_sigmas
 
             class Watched:
                 """Transparent, except that every model call is a step."""
@@ -303,7 +309,7 @@ class FunUISampler(io.ComfyNode):
 
                 def __call__(self, latent, sigma, **kwargs):
                     ctx = chain_mod.Step(
-                        index=seen["index"], sigma=sigma, sigmas=step_sigmas,
+                        index=seen["index"], sigma=sigma, sigmas=step_sigmas_seen,
                         total=total, run=run,
                         anchor=getattr(denoiser, "latent_image", None))
                     latent = chain.process(ctx, latent)

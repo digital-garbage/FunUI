@@ -271,3 +271,47 @@ class _TraitlessModel:
     without needing weights."""
 
     model = None
+
+
+def test_modifier_step_numbers_count_across_both_stages(registry, comfyui):
+    """With Two stages the second stage's modifier calls continue the count (step 3 of 4 is the first of stage 2),
+    and `sigmas` is the whole schedule, not the stage's own part."""
+    import torch
+    from core import chain as chain_mod, dit_hooks, patching
+    from modules.sampling.sampler.nodes import FunUISampler
+
+    modifier = _Modifier()
+    seen_ctx = []
+    modifier.process = lambda ctx, latent: seen_ctx.append((ctx.index, ctx.total, len(ctx.sigmas))) or latent
+    registry.specs["m"] = _spec("m", lambda values, accepts: modifier, hooks=["latent"])
+    chain, _ = FunUISampler._chain(_TraitlessModel(), None, patching.Dropped())
+
+    whole = torch.tensor([1.0, 0.8, 0.5, 0.3, 0.0])
+
+    class Guider:
+        pass
+
+    guider = Guider()
+    setattr(guider, dit_hooks.FULL, whole)
+
+    def inner(denoiser, x, sigmas, extra_args=None, callback=None, disable=None, **options):
+        for s in sigmas[:-1]:
+            denoiser(x, s)
+        return x
+
+    class Sampler:
+        sampler_function = staticmethod(inner)
+        extra_options = {}
+        inpaint_options = {}
+
+    class Denoiser:
+        inner_model = guider
+
+        def __call__(self, latent, sigma, **kw):
+            return latent
+
+    wrapped = FunUISampler._with_chain(Sampler(), chain, whole, "run")
+    for stage, part in ((1, whole[:3]), (2, whole[2:])):
+        setattr(guider, dit_hooks.STAGE, stage)
+        wrapped.sampler_function(Denoiser(), torch.zeros(1), part)
+    assert seen_ctx == [(0, 4, 5), (1, 4, 5), (2, 4, 5), (3, 4, 5)]
