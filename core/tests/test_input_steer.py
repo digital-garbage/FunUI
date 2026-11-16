@@ -248,3 +248,12 @@ def test_a_plain_latent_says_edits_land_on_the_answer():
     log._reset()
     input_steer.Steer("t").begin(torch.randn(1, 4, 2, 4, 4), _t(1), _to(1))
     assert _said("not packed")
+
+
+def test_a_polish_pass_after_the_last_step_is_inert_and_not_reported():
+    from core import dit_hooks
+    s, x, out = input_steer.Steer("t"), _x(), _x()
+    log._reset()
+    polish = s.begin(x, torch.tensor([0.123]), _to(2) | {"sigmas": torch.tensor([0.123]), dit_hooks.AFTER_LAST: True})
+    assert polish.gate == 0.0 and polish.keep(out, out + 1) is out
+    assert not any("not a step of the schedule" in r["message"] for r in log.history())

@@ -86,6 +86,8 @@ def _say(message):
 def _in_window(args, steps):
     if steps == 0:
         return True
+    if (args.get("transformer_options") or {}).get(dit_hooks.AFTER_LAST):
+        return steps > 0                                # a polish pass after the last step: with "the last N", not "the first N"
     where = dit_hooks.current_step(args.get("transformer_options"))
     if where is None:
         # Fails OPEN -- repeat every step -- and says so, rather than quietly

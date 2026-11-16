@@ -106,8 +106,8 @@ class Steer:
             self._say(log.INFO, "this latent is not packed (not H3), so edits land on the model's "
                                 "own answer, as before; the last step is edited too", "plain latent")
             return Call(x, dit_hooks.late_half(to), steering=True)
-        if dit_hooks.probing(to):
-            return Call(x, 0.0, keep=lambda out, _steered: out)   # a discarded candidate
+        if dit_hooks.probing(to) or (to or {}).get(dit_hooks.AFTER_LAST):
+            return Call(x, 0.0, keep=lambda out, _steered: out)   # a discarded candidate, or a polish pass after the last step
         where = dit_hooks.current_step(to)
         if where is None:
             self._say(log.ALERT, "this call is not a step of the schedule (a midpoint call), so "

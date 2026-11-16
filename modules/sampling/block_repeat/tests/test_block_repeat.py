@@ -92,3 +92,13 @@ def test_video_only_span_leaves_audio_as_a_single_pass_would(tiny_h3):
     out = tiny_h3.run(patched)
     assert torch.allclose(out[1], base[1], atol=1e-6), "audio got the loop"
     assert not torch.allclose(out[0], base[0])
+
+
+def test_a_polish_pass_after_the_last_step_is_not_reported_and_follows_the_window_side(tiny_h3):
+    from core import dit_hooks, log
+    from .. import _in_window
+    log._reset()
+    after = {"transformer_options": {dit_hooks.AFTER_LAST: True, "sample_sigmas": torch.tensor([1.0, 0.5, 0.0]),
+                                     "sigmas": torch.tensor([0.2])}}
+    assert _in_window(after, 2) is True and _in_window(after, -2) is False
+    assert not any("could not tell which step" in r["message"] for r in log.history())
