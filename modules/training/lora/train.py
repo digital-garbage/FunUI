@@ -194,6 +194,10 @@ def _run(model, clip, vae, audio_vae, set_name: str, cfg: dict, prompt_id: str =
         try:
             resume = loop.load_checkpoint(cfg["resume"], torch)
         except ValueError as exc:
+            now = jobs.snapshot()
+            if now["run"] == cfg["resume"] and now["state"] in ("done", "stopped", "training"):
+                log.info("FunUI LoRA training", f"a second request to carry on run {cfg['resume']} was ignored: that run is {now['state']}")      # the window asked twice, or after the run ended
+                return ""
             failed = exc
     run_id = jobs.begin(set_name, cfg["name"], cfg["steps"], cfg, prompt_id, {"run": cfg["resume"], "loss": resume["loss"], "times": resume.get("times"), "seconds": resume.get("seconds")} if resume else None)        # first, so a refusal below is shown in the window and not only in ComfyUI's log
     try:

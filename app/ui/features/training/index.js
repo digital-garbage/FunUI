@@ -129,6 +129,11 @@ export default {
     const setRun = (patch) => Object.assign(ui.run, patch);
     const start = () => launch("");
     async function launch(resumeId) {
+      if (ui.launching) return;                       // one request to ComfyUI at a time: a second one queues a run that finds the first already over
+      ui.launching = true;
+      try { await launchRun(resumeId); } finally { ui.launching = false; }
+    }
+    async function launchRun(resumeId) {
       const doc = session.doc;
       if (!doc) return;
       await session.flush();

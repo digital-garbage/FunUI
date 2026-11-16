@@ -464,6 +464,16 @@ def test_a_run_that_cannot_be_resumed_says_why(run_env):
     assert jobs.snapshot()["state"] == "error"
 
 
+def test_a_second_request_to_carry_on_a_finished_run_is_ignored(run_env):
+    from modules.training.lora import train
+    _, jobs = run_env
+    train.run(tiny_h3_patcher(), FakeClip(), FakeVae(), FakeAudioVae(), "tiny", settings(steps=2))
+    done = jobs.snapshot()
+    assert done["state"] == "done"
+    assert train.run(tiny_h3_patcher(), FakeClip(), FakeVae(), FakeAudioVae(), "tiny", settings(steps=2, resume=done["run"])) == ""
+    assert jobs.snapshot()["state"] == "done" and jobs.snapshot()["lora"] == done["lora"]
+
+
 def test_copies_of_the_lora_so_far_are_saved_as_name_stepN(run_env):
     tmp_path, jobs = run_env
     from modules.training.lora import train
