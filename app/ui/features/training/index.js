@@ -18,6 +18,7 @@ const STEPS = {
 };
 const POLL = 1000;
 const QUEUE_WAIT = 60000;
+const BUSY_WAIT = 1000, BUSY_TRIES = 120;
 
 const smooth = (values) => {                       // a gentle moving average, so the trend shows through a noisy loss
   const w = Math.max(3, Math.round(values.length / 40)), out = [];
@@ -250,7 +251,14 @@ export default {
       setRun({ state: "previewing", message: `Making a preview with the LoRA at step ${paused.step}` });
       draw();
       let out;
-      try { out = app.runner && app.runner.preview ? await app.runner.preview({ lora: paused.preview, strength: previewStrength() }) : { error: "Previews need the app's Generate." }; } catch (err) { out = { error: err.message }; }
+      try {
+        // The trainer reports its pause while ComfyUI is still closing the training run: a busy answer means wait and ask again, never skip this step's preview.
+        for (let tries = 0; ; tries += 1) {
+          out = app.runner && app.runner.preview ? await app.runner.preview({ lora: paused.preview, strength: previewStrength() }) : { error: "Previews need the app's Generate." };
+          if (!out.busy || ui.stopAfterPreview || tries >= BUSY_TRIES) break;
+          await new Promise((r) => setTimeout(r, BUSY_WAIT));
+        }
+      } catch (err) { out = { error: err.message }; }
       if (out.image) {
         const im = out.image;
         ui.previews.push({ id: `p${ui.previews.length + 1}`, step: paused.step, src: { kind: "output", type: im.type || "output", subfolder: im.subfolder || "", filename: im.filename }, media_kind: VIDEO.test(im.filename) ? "video" : "image" });

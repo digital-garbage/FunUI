@@ -192,8 +192,8 @@ export default {
     /** One run for the Training window: the pipeline as it is, its LoRA loader pointed at `lora`, the picked scene (else the first one) and the project's own settings.
      *  Nothing is put on the timeline; resolves to {image} or {error}. */
     app.runner.preview = async ({ lora, strength = 1 }) => {
-      if (await upscaling()) return { error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
-      if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { error: "A run is already going: the preview waits for it." };       // after the wait: a Generate may have started meanwhile
+      if (await upscaling()) return { busy: true, error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
+      if (busy || held || g.state().phase === QUEUED || g.state().phase === RUNNING) return { busy: true, error: "A run is already going: the preview waits for it." };       // after the wait: a Generate may have started meanwhile
       if (!p.project) return { error: "Open a project first: the preview uses its settings." };
       const frozen = structuredClone(app.pipeline.slots() || []);
       const slot = frozen.find((s) => s.node === "FunUILoraLoader" && !s.bypassed) || frozen.find((s) => s.node === "FunUILoraLoader");
@@ -211,7 +211,7 @@ export default {
         await Promise.all((app.beforeRun || []).map((f) => f().catch(() => {})));
         const { inputs, unwired, left } = await buildInputs({ project: snap, scene: root, slots: frozen, expand, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
         if (unwired) tell(unwiredText(unwired, left));
-        if (await upscaling()) return { error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
+        if (await upscaling()) return { busy: true, error: "An upscale model is running. It shares ComfyUI's model memory, so the preview waits for it." };
         const done = g.waitForTerminal();
         const queued = await g.generate({ sceneId: root.id, projectId: snap.id, inputs, slots: frozen });
         if (!queued) { done.cancel(); return { error: (g.run.state.error && g.run.state.error.message) || "The preview could not be queued. Is ComfyUI running?" }; }

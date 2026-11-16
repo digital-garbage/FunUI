@@ -332,6 +332,29 @@ test("a preview step pauses the run, the pipeline makes a preview with the LoRA 
   off();
 });
 
+test("a preview asked while ComfyUI is still closing the training run is retried, not skipped", async () => {
+  const f = fake();
+  let asks = 0;
+  f.app.runner = { preview: async () => { asks += 1; return asks < 3 ? { busy: true, error: "A run is already going: the preview waits for it." } : { image: { filename: "pv.png", subfolder: "", type: "output" } }; } };
+  let queued = 0;
+  f.api.queueGraph = async () => { queued += 1; return "pid"; };
+  const pause = { reason: "preview", step: 150, preview: "p.safetensors", checkpoint: true };
+  f.api.trainRun = async () => (queued === 0 ? { run: "", state: "idle", loss: [], loss_from: 0 } : queued === 1 ? { run: "r1", started: 1, state: "paused", step: 150, total: 600, loss: [], loss_from: 0, paused: pause }
+    : { run: "r1", started: 2, state: "training", step: 160, total: 600, loss: [], loss_from: 0 });
+  const { button, off } = await open(f);
+  button.click();
+  await wait(60);
+  click("Skip to training").click();
+  await wait(20);
+  click("Start training").click();
+  tab("Results").click();
+  await wait(5500);
+  assert.equal(asks, 3, "asked again until the run was closed");
+  assert.equal(queued, 2, "training carried on afterwards");
+  assert.ok(text().includes("Step 150"), "the preview is kept with its own step");
+  off();
+});
+
 test("a pause that the window never saw training towards is still shown at the step the server is at", async () => {
   const f = fake();
   f.app.runner = { preview: async () => ({ image: { filename: "pv.png", subfolder: "", type: "output" } }) };
