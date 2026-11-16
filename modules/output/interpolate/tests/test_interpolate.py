@@ -1,3 +1,4 @@
+import re
 import pytest
 
 from modules.output.interpolate import framegen
@@ -103,8 +104,10 @@ def test_the_job_writes_a_doubled_file_beside_the_original(comfy, monkeypatch):
         return torch.stack(out)
     monkeypatch.setattr(nodes.framegen, "make", lambda o: between)
     got = nodes.interpolate({"filename": "a.mp4", "subfolder": "", "type": "output"}, {})["media"]
-    assert got == {"filename": "a_x2.mp4", "subfolder": "funui_interpolated", "type": "temp"}, "with the renders, in the folder ComfyUI empties when it starts"
-    assert upscale.probe(str(comfy.temp / "funui_interpolated" / "a_x2.mp4")) == (64, 48, "20/1", True)
+    name = got["filename"]
+    assert re.fullmatch(r"a_x2_[0-9a-f]{8}\.mp4", name), "a name of its own: a deleted file's name is never given to the next one"
+    assert got == {"filename": name, "subfolder": "funui_interpolated", "type": "temp"}, "with the renders, in the folder ComfyUI empties when it starts"
+    assert upscale.probe(str(comfy.temp / "funui_interpolated" / name)) == (64, 48, "20/1", True)
     assert not (comfy.output / "funui_interpolated").exists()
     with pytest.raises(nodes.InterpolateError, match="not in the output folder"):
         nodes.interpolate({"filename": "../x.mp4"}, {})

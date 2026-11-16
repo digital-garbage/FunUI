@@ -55,3 +55,45 @@ test("an answer that arrives after another project was opened changes nothing", 
   assert.equal(n, 0);
   assert.deepEqual(Object.keys(p.project.scene_renders), ["z"]);
 });
+
+import feature from "./gone.js";
+
+test("a file deleted while its project is open is forgotten: after a delete in the files window, when ComfyUI comes back, and before a run", async () => {
+  const said = [];
+  {
+    const onDisk = new Set(["a2.mp4", "a1.mp4", "b1.mp4"]);
+    const heard = new Set(), subs = new Set();
+    const app = { project: holder(project()), beforeRun: [], on: (fn) => { heard.add(fn); return () => heard.delete(fn); },
+      api: { rendersGone: async (media) => ({ known: true, gone: media.map((m, i) => (onDisk.has(m.filename) ? -1 : i)).filter((i) => i >= 0) }) },
+      generate: { subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); } } };
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    const off = feature.setup({ app, warn: (text) => said.push(text) });
+    await settle();
+    assert.deepEqual(Object.keys(app.project.project.scene_renders), ["a", "b"]);          // everything is there: nothing forgotten, nothing said
+    assert.equal(said.length, 0);
+
+    onDisk.delete("a1.mp4");                                                                // deleted in the Generated & Output Files window
+    heard.forEach((fn) => fn("files.deleted"));
+    await settle();
+    assert.deepEqual(app.project.project.scene_variants.a.map((t) => t.media.filename), ["a2.mp4"]);
+    assert.equal(said.length, 1);
+
+    onDisk.delete("a2.mp4");                                                                // ComfyUI restarted under an open page
+    subs.forEach((fn) => fn({ connection: "live" }));                                       // a first connection is not a comeback
+    await settle();
+    assert.deepEqual(Object.keys(app.project.project.scene_renders), ["a", "b"]);
+    subs.forEach((fn) => fn({ connection: "lost" }));
+    subs.forEach((fn) => fn({ connection: "live" }));
+    await settle();
+    assert.deepEqual(Object.keys(app.project.project.scene_renders), ["b"]);
+
+    onDisk.delete("b1.mp4");                                                                // deleted by hand: the next run asks first
+    assert.equal(app.beforeRun.length, 1);
+    await app.beforeRun[0]();
+    assert.deepEqual(app.project.project.scene_renders, {});
+    assert.equal(said.length, 3);
+
+    off();
+    assert.deepEqual([heard.size, subs.size, app.beforeRun.length], [0, 0, 0]);
+  }
+});

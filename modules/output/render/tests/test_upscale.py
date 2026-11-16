@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from modules.output.render.tests.clips import comfy, make_clip, needs_ffmpeg  # noqa: F401
@@ -40,9 +42,15 @@ def test_interrupt_stops_and_leaves_no_file(comfy):
     assert not os.path.exists(dst)
 
 
-def test_free_name_never_overwrites(tmp_path):
-    (tmp_path / "a_m.mp4").write_bytes(b"x")
-    assert upscale.free_name(str(tmp_path), "a.mp4", "sub/m.safetensors") == "a_m_1.mp4"
+def test_a_name_is_never_handed_out_twice_even_after_its_file_was_deleted(tmp_path):
+    # the page and the browser know a video by its name: a deleted file's name given to the next one would show the deleted video
+    first = upscale.free_name(str(tmp_path), "a.mp4", "sub/m.safetensors")
+    (tmp_path / first).write_bytes(b"x")
+    second = upscale.free_name(str(tmp_path), "a.mp4", "sub/m.safetensors")
+    (tmp_path / first).unlink()
+    third = upscale.free_name(str(tmp_path), "a.mp4", "sub/m.safetensors")
+    assert len({first, second, third}) == 3
+    assert all(n.startswith("a_m_") and n.endswith(".mp4") for n in (first, second, third))
 
 
 from modules.output.render import rtx  # noqa: E402
@@ -96,8 +104,10 @@ def test_run_writes_the_upscaled_file_beside_the_original_without_a_comfy_prompt
     monkeypatch.setitem(sys.modules, "folder_paths", types.SimpleNamespace(get_output_directory=lambda: str(comfy.output), get_temp_directory=lambda: str(comfy.temp)))
     monkeypatch.setattr(rtx, "make", lambda o: (lambda x: x.repeat_interleave(2, 1).repeat_interleave(2, 2)))
     got = upscale.run({"filename": "a.mp4", "subfolder": "", "type": "output"}, rtx.NAME, {"quality": "HIGH"})
-    assert got == {"media": {"filename": "a_rtx_high.mp4", "subfolder": "funui_upscaled", "type": "temp"}}, "with the renders, in the folder ComfyUI empties when it starts"
-    assert upscale.probe(str(comfy.temp / "funui_upscaled" / "a_rtx_high.mp4"))[:2] == (128, 96)
+    name = got["media"]["filename"]
+    assert re.fullmatch(r"a_rtx_high_[0-9a-f]{8}\.mp4", name), "a name of its own: a deleted file's name is never given to the next one"
+    assert got == {"media": {"filename": name, "subfolder": "funui_upscaled", "type": "temp"}}, "with the renders, in the folder ComfyUI empties when it starts"
+    assert upscale.probe(str(comfy.temp / "funui_upscaled" / name))[:2] == (128, 96)
     assert not (comfy.output / "funui_upscaled").exists()
     with pytest.raises(RuntimeError, match="not in the output folder"):
         upscale.run({"filename": "gone.mp4"}, rtx.NAME)

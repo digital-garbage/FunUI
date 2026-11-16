@@ -10,7 +10,7 @@ const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)
 const when = (t) => new Date((Number(t) || 0) * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 const id = (f) => `${f.subfolder}/${f.filename}`;
 
-export function mount({ dom, setFooter, close }) {
+export function mount({ dom, setFooter, close, onDeleted = () => {} }) {
   let where = "temp", files = [], payload = {}, looking = null, selecting = false, grid = null;
   const picked = new Set();
   const body = composer.region.stack({ gap: "md", fill: true, label: "Files" });
@@ -34,6 +34,7 @@ export function mount({ dom, setFooter, close }) {
     try { await erase(f); } catch (err) { footer(); return composer.toast.warn({ text: `Could not delete it: ${err.message}` }); }
     viewer.close();
     composer.toast.good({ text: `Deleted ${f.filename}.` });
+    onDeleted();                                // the open project may have been showing it
     load();
   }
 
@@ -67,6 +68,7 @@ export function mount({ dom, setFooter, close }) {
     picked.clear();
     selecting = false;
     (why ? composer.toast.warn : composer.toast.good)({ text: why ? `Deleted ${gone} of ${list.length}. ${why}` : `Deleted ${gone} files.` });
+    if (gone) onDeleted();
     load();
   }
 

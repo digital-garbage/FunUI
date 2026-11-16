@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import uuid
 
 CHUNK = 8                # frames per call, at most
 CHUNK_PIXELS = 2_000_000   # ...and at most this many input pixels per call: a big upscale of 1080p is gigabytes per frame
@@ -190,10 +191,12 @@ def inherit_last_frame(old_file: str, new_file: str) -> None:
 
 
 def free_name(out_dir, filename, model):
+    """A name for a file made from `filename` (upscaled, interpolated) that no file has had before. A number alone would be
+    handed out again once the earlier file is deleted, and the page and the browser know a video by its name: they would
+    show the deleted one. The random part makes the name this file's alone."""
     stem = os.path.splitext(os.path.basename(filename))[0]
     tag = os.path.splitext(os.path.basename(model))[0]
-    n, name = 0, f"{stem}_{tag}.mp4"
+    name = f"{stem}_{tag}_{uuid.uuid4().hex[:8]}.mp4"
     while os.path.exists(os.path.join(out_dir, name)):
-        n += 1
-        name = f"{stem}_{tag}_{n}.mp4"
+        name = f"{stem}_{tag}_{uuid.uuid4().hex[:8]}.mp4"
     return name
