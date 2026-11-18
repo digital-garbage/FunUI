@@ -114,6 +114,8 @@ def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+            if isinstance(data, list):                  # FunUI's own shortcuts.json is a plain list of shortcuts
+                data = {"shortcuts": data}
             if not isinstance(data, dict):
                 raise ValueError("not a lorebook or shortcuts file")
         except (OSError, ValueError) as exc:

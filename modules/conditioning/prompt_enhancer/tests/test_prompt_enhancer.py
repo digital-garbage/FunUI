@@ -404,3 +404,15 @@ def test_build_parts_finds_prefix_and_postfix_in_the_expanded_prompt():
     assert parts == {"head": "Cinematic.", "tail": "No text."} and full.startswith("Cinematic.") and full.endswith("No text.")
     assert prompt_build.build_parts("hi", anchor="", postfix="") == {"head": "", "tail": ""}
     assert prompt_build.build_parts("hi", anchor="A.", postfix="P.", postfix_enabled=False) == {"head": "A.", "tail": ""}
+
+
+def test_the_apps_own_shortcuts_file_is_a_valid_reference_file(tmp_path):
+    shortcuts.save({"name": "Rain city", "triggers": ["rc"], "replacements": ["heavy neon rain on asphalt"]})
+    saved = config.SHORTCUTS_FILE
+    assert isinstance(json.loads(saved.read_text()), list)          # the shape the app itself writes
+    said = []
+    groups = en().sources([], [str(saved)], say=said.append)
+    assert said == [] and len(groups) == 1 and "Rain city" in groups[0][0]["block"]
+    scalar = tmp_path / "x.json"
+    scalar.write_text("3")
+    assert en().sources([], [str(scalar)], say=said.append) == [] and "not a lorebook" in said[0]
