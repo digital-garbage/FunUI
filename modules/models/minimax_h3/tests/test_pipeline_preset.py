@@ -227,3 +227,14 @@ def test_a_pipeline_saved_with_the_enhancer_reading_the_aspect_picture_is_freed_
     # a link to anything that is not the aspect picture is somebody's own wiring and stays
     mine = [dict(s, inputs=dict(s["inputs"], image=["vae", 0])) if s["id"] == "enhance" else s for s in slots]
     assert next(s for s in upgrade(mine) if s["id"] == "enhance")["inputs"]["image"] == ["vae", 0]
+
+
+def test_a_pipeline_saved_before_prompt_markup_read_the_settings_is_linked_to_them():
+    """Without the link, Alternating prompts never reached Prompt Markup: an [A|B] was read as having no options."""
+    from modules.models.minimax_h3.pipeline import h3_reference_to_video, h3_fast_simple_r2v, upgrade
+    for preset in (h3_reference_to_video(), h3_fast_simple_r2v()):
+        old = [dict(s, inputs={k: v for k, v in s["inputs"].items() if not (s["id"] == "markup" and k == "settings")}) for s in preset]
+        assert "settings" not in next(s for s in old if s["id"] == "markup")["inputs"]
+        fixed = upgrade(old)
+        assert next(s for s in fixed if s["id"] == "markup")["inputs"]["settings"] == ["settings", 0]
+        assert upgrade(fixed) == fixed and upgrade(preset) == preset

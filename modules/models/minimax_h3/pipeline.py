@@ -257,11 +257,21 @@ def _free_enhancer_picture(slots):
     return [dict(x, inputs={k: v for k, v in x["inputs"].items() if k != "image"}) if cut(x) else x for x in slots]
 
 
+def _link_markup_settings(slots):
+    """A pipeline saved before Prompt Markup read the settings: it is linked to them, so Alternating prompts' choices
+    (how the main prompt reads an [A|B], reading A and B separately) reach it."""
+    hub = next((x["id"] for x in slots if x.get("node") == "FunUIModifierSettings"), None)
+    lacks = lambda x: x.get("node") == "FunUIPromptMarkup" and "settings" not in (x.get("inputs") or {})
+    if hub is None or not any(lacks(x) for x in slots):
+        return slots
+    return [dict(x, inputs={**x["inputs"], "settings": [hub, 0]}) if lacks(x) else x for x in slots]
+
+
 def upgrade(slots, _outputs=None):
     """A pipeline saved while the size came from ImageTransformKJ (total_pixels, the pixel count of the project's width x height)
     gets FunUIAspectSize in its place: the same size (`basis` is "area" in it), and the project's Short side / Long side choice
     can reach it. The project's saved width and height keep working (the new roles say what they were called)."""
-    slots = _free_enhancer_picture(slots)
+    slots = _link_markup_settings(_free_enhancer_picture(slots))
     old = next((x for x in slots if x.get("id") == "image_transform" and x.get("node") == "ImageTransformKJ"), None)
     if not old or (old.get("inputs") or {}).get("keep_proportion") != "total_pixels":
         return slots
