@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- Experimental: a still-picture VAE (H3-Image) can be picked as the decode-only VAE for H3 video. Each latent frame is decoded as a picture and the pictures are blended to the clip length; motion detail is lost. Untested on a real model.
 - **DynaShift** (Settings > sampling, experimental): bends the noise levels of the chosen scheduler with a shift that moves from a start value to an end value across the run, Two stages included. Made for turbo and few-step runs; full effect up to 8 steps, fading out on longer runs. No extra model calls.
 - **Two stages can use another sampler and scheduler for the full-size stage** (Settings > Engine > Sampling). "Same as the first stage" is the default and changes nothing. A different scheduler spaces the last steps its own way and joins the first stage at the hand-over.
 - **The previous DynaShift is now called EchoShift** (it steers away from clips you disliked). Its settings and banked ratings are kept.

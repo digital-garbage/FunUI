@@ -185,3 +185,61 @@ def test_an_x2_vae_is_tiled_even_when_tiles_are_off(patched):
     vae = _Vae(48)
     _provider_decode(vae, 0)
     assert vae.first_stage_model.during[:2] == (True, 256) and vae.plain_calls == 0
+
+
+class _StillVae:
+    not_video = True
+    upscale_ratio = (lambda a: max(1, (a - 2) // 5 * 17 + 5), 16, 16)
+
+    def __init__(self, dtypes=None):
+        self.calls, self.dtypes = [], dtypes
+
+    def decode(self, latent):
+        if latent.shape[2] != 1:
+            raise ValueError("one latent frame at a time")
+        self.calls.append(latent.shape[2])
+        dt = self.dtypes[len(self.calls) - 1] if self.dtypes else torch.float32
+        return torch.full((1, 1, 4, 4, 3), float(latent[0, 0, 0, 0, 0]), dtype=dt)
+
+
+def _ramp(n=7, dtype=torch.float32):
+    v = torch.zeros(1, 2, n, 1, 1, dtype=dtype)
+    v[0, :, :, 0, 0] = torch.arange(n, dtype=dtype)
+    return v
+
+
+def test_still_vae_decodes_each_latent_frame_and_blends_up_to_the_clip_length():
+    vae = _StillVae()
+    out = _mod().decode_stills(vae, _ramp())
+    assert vae.calls == [1] * 7
+    assert out.shape == (22, 4, 4, 3)
+    v = out[:, 0, 0, 0]
+    assert v[0] == 0 and v[-1] == 6
+    assert (v[1:] >= v[:-1]).all()
+
+
+def test_is_image_vae_tells_a_still_vae_from_a_video_vae():
+    assert not _mod().is_image_vae(_Vae())
+    assert _mod().is_image_vae(_StillVae())
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_still_decode_keeps_one_dtype_and_device(dtype):
+    out = _mod().decode_stills(_StillVae([dtype] * 7), _ramp(7, dtype))
+    assert out.dtype == dtype and out.device.type == "cpu" and out.shape[0] == 22
+
+
+def test_still_decode_with_mixed_picture_dtypes_does_not_mix():
+    dts = [torch.float16, torch.float32, torch.bfloat16] + [torch.float32] * 4
+    out = _mod().decode_stills(_StillVae(dts), _ramp())
+    assert out.dtype == torch.float16 and out.shape[0] == 22
+
+
+def test_video_images_routes_a_still_vae_to_decode_stills(patched):
+    from modules.models import minimax_h3 as h3
+    vae = _StillVae()
+    out = h3._video_images(vae, _ramp(), 0)
+    assert vae.calls == [1] * 7 and out.shape[0] == 22
+    v = _Vae()
+    h3._video_images(v, torch.zeros(1, 4, 2, 8, 8), 0)
+    assert v.plain_calls == 1

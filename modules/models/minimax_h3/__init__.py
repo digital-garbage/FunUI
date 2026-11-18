@@ -202,6 +202,10 @@ def _video_images(vae, video_latent, tile_size):
     (its output is packed), so it always goes that way -- and has no stock path to fall
     back to, so a failure there is raised, naming the VAE. For a stock VAE, tiles are
     asked for by `tile_size` and, if the tiled decode fails, said once and decoded plain."""
+    if _decode.is_image_vae(vae):
+        log.once("h3_decode_stills", log.ALERT, "FunUI H3 decode",
+                 "this is a still-picture VAE: each latent frame is decoded as its own picture and the clip is blended up to its length. Experimental, motion detail is lost")
+        return _decode.decode_stills(vae, video_latent)
     x2 = _decode.x2_ratio(vae)
     if x2 > 1:
         try:

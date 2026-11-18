@@ -82,3 +82,41 @@ def decode_fast(vae, video, tile_px):
     if up > 1:
         out = unpack(out, up)
     return out.movedim(1, -1)
+
+
+def is_image_vae(vae) -> bool:
+    """True for a still-picture VAE (H3-Image): it reads one latent frame at a time."""
+    return bool(getattr(vae, "not_video", False))
+
+
+def frames_for(vae, latents) -> int:
+    """How many video frames `latents` latent frames stand for: the VAE's own count, else 4 per latent."""
+    try:
+        return max(int(vae.upscale_ratio[0](latents)), latents)
+    except Exception:                                       # noqa: BLE001
+        return latents * 4
+
+
+def stretch(frames, count):
+    """[T, H, W, C] -> [count, H, W, C]: each output frame blends its two nearest decoded neighbours."""
+    t = frames.shape[0]
+    if count <= t or t < 2:
+        return frames
+    dev = frames.device
+    pos = torch.linspace(0, t - 1, count, device=dev)
+    lo = pos.floor().long().clamp(max=t - 2)
+    w = (pos - lo).view(-1, 1, 1, 1).to(frames.dtype)
+    return frames[lo] * (1 - w) + frames[lo + 1] * w
+
+
+def decode_stills(vae, video):
+    """Decode a video latent with a still-picture VAE: every latent frame becomes one picture, then the pictures are blended in time up to the clip's frame count. Returns IMAGES (T, H, W, C). Experimental."""
+    clips = []
+    for b in range(video.shape[0]):
+        pics = [vae.decode(video[b:b + 1, :, i:i + 1]) for i in range(video.shape[2])]
+        pics = [p.reshape(-1, *p.shape[-3:]) for p in pics]
+        ref = pics[0]
+        pics = torch.cat([p.to(device=ref.device, dtype=ref.dtype) for p in pics], dim=0)
+        clips.append(stretch(pics, frames_for(vae, video.shape[2])))
+    dev, dt = clips[0].device, clips[0].dtype
+    return torch.cat([c.to(device=dev, dtype=dt) for c in clips], dim=0)
