@@ -190,6 +190,45 @@ def inherit_last_frame(old_file: str, new_file: str) -> None:
         pass
 
 
+def raw_name(video_file: str) -> str:
+    return "funui_raw_" + os.path.splitext(os.path.basename(video_file))[0] + ".json"
+
+
+def inherit_raw(old: dict, new_file: str) -> None:
+    """A file made from `old` ({filename, subfolder, type}: upscaled, interpolated) remembers which file holds the frames exactly as the
+    sampler made them, taken before any upscale or interpolation, so a following shot can continue from those. The note is kept
+    under the new file's name in ComfyUI's temp folder. Nothing to note, or no temp folder: nothing happens."""
+    try:
+        folder = comfy_dir("temp")
+        if folder:
+            with open(os.path.join(folder, raw_name(new_file)), "w", encoding="utf-8") as fh:
+                json.dump(raw_of(old), fh)
+    except OSError:
+        pass
+
+
+def was_changed(media: dict) -> bool:
+    """True when `media` was made from another file (upscaled, interpolated): a note says where the original frames were."""
+    folder = comfy_dir("temp")
+    return bool(folder and os.path.isfile(os.path.join(folder, raw_name(media.get("filename") or ""))))
+
+
+def raw_of(media: dict) -> dict:
+    """-> {filename, subfolder, type} of the file holding the frames as generated (before upscale and interpolation) for the render
+    `media`: the render itself when it was never changed, or when the original is gone."""
+    here = {"filename": media.get("filename"), "subfolder": media.get("subfolder") or "", "type": media.get("type") or "output"}
+    try:
+        folder = comfy_dir("temp")
+        with open(os.path.join(folder or "", raw_name(here["filename"] or "")), encoding="utf-8") as fh:
+            note = json.load(fh)
+        path = comfy_path(note.get("filename"), note.get("subfolder") or "", note.get("type") or "output", comfy_dir)
+        if path and os.path.isfile(path):
+            return {"filename": note["filename"], "subfolder": note.get("subfolder") or "", "type": note.get("type") or "output"}
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+    return here
+
+
 def free_name(out_dir, filename, model):
     """A name for a file made from `filename` (upscaled, interpolated) that no file has had before. A number alone would be
     handed out again once the earlier file is deleted, and the page and the browser know a video by its name: they would

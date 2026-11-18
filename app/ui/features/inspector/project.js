@@ -80,12 +80,19 @@ const homedSettings = (ps) => !ps || !ps.activeModules ? [] : ps.activeModules()
 /** The values behind those rows, so the panel redraws when one changes. */
 export const homed = (app) => { const ps = app.pipeline, v = ps && ps.currentValues ? ps.currentValues() : {}; return homedSettings(ps).map(([m, name]) => (v[m.id] || {})[name]); };
 
+/** A setting that moves with another one (seconds and frames): the other one's new value, counted at the rate clips are generated at; null when it does not follow. */
+export function linked(spec, v, fps) {
+  const s = spec.sync, rate = Number(fps) > 0 ? Number(fps) : 25, n = Number(v);
+  if (!s || !Number.isFinite(n)) return null;
+  return s.per_second ? Math.max(1, Math.round(n * rate)) : Math.max(0.1, Math.round((n / rate) * 100) / 100);
+}
+
 /** Continuity's choices, in a card of their own (only while that module acts on the pipeline). */
 function frameCarry(app) {
   const ps = app.pipeline;
   if (!ps || !ps.activeModules) return [];
   const values = ps.currentValues();
-  const rows = homedSettings(ps).filter(([m, , spec]) => whenSatisfied(values, m.id, spec.when)).map(([m, name, spec]) => settingRow(m.id, name, spec, values, (id, n, v) => ps.setModuleValue(id, n, v)));
+  const rows = homedSettings(ps).filter(([m, , spec]) => whenSatisfied(values, m.id, spec.when)).map(([m, name, spec]) => settingRow(m.id, name, spec, values, (id, n, v) => { ps.setModuleValue(id, n, v); const other = linked(spec, v, (app.project?.project || {}).frame_rate); if (other != null) ps.setModuleValue(id, spec.sync.with, other); }));
   return rows.length ? [c.label.section({ text: "Scenes" }), card(...rows)] : [];
 }
 

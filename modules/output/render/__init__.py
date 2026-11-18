@@ -82,6 +82,28 @@ def routes(table, base, web):
         except (files.ClipError, ValueError, OSError) as exc:
             return bad(str(exc), 502)
 
+    @table.post(base + "/projects/{pid}/tail")
+    async def _tail(req):
+        proj = project_of(req)
+        body = await body_of(req)
+        scene_id = body.get("scene_id")
+        if not isinstance(scene_id, str) or not scene_id:
+            return bad("Send {scene_id}.")
+        frames = body.get("frames")
+        if isinstance(frames, bool) or not isinstance(frames, (int, float)) or not 1 <= frames:
+            return bad("`frames` is how many pictures to carry (1 or more).")
+        video, audio = bool(body.get("video")), bool(body.get("audio"))
+        if not (video or audio):
+            return bad("Ask for `video`, `audio` or both.")
+        render = body.get("render") if isinstance(body.get("render"), dict) and isinstance((body["render"].get("media") or None), dict) else None
+        window = serving.query_window({"dur": body.get("dur"), "src_in": body.get("src_in")})
+        try:
+            return web.json_response(await asyncio.to_thread(serving.tail, proj, scene_id, render, window, bool(body.get("reverse")), int(frames), video, audio))
+        except KeyError as exc:
+            return bad(f"No render for this scene ({exc}).", 404)
+        except (files.ClipError, ValueError, OSError) as exc:
+            return bad(str(exc), 502)
+
     @table.post(base + "/projects/{pid}/carry-log")
     async def _carry_log(req):
         """The Log's record that a carried last frame went into a reference slot (the page knows the slot; the node does not)."""

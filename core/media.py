@@ -168,20 +168,23 @@ def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
 
 
 def save_scratch(orig_name: str, data: bytes, folder) -> dict:
-    """A picture the app made for one run (a carried last frame): written into `folder` (ComfyUI's temp folder), answerable by id
-    like any media but never listed in the bin. It goes when the folder is cleared; entries whose file is gone are dropped here."""
+    """A picture, video or sound the app made for one run (a carried last frame, the end of the clip before): written into `folder`
+    (ComfyUI's temp folder), answerable by id like any media but never listed in the bin. It goes when the folder is cleared;
+    entries whose file is gone are dropped here."""
     if not data:
         raise ValueError("that file is empty")
     ext = Path(orig_name or "").suffix.lower()
-    if ext not in _IMAGE_EXT:
-        raise ValueError(f"{ext or 'that file type'} is not a picture")
+    if ext not in _IMAGE_EXT | _VIDEO_EXT | _AUDIO_EXT:
+        raise ValueError(f"{ext or 'that file type'} is not a picture, video or sound")
     mid = uuid.uuid4().hex[:12]
     target = Path(folder) / (mid + ext)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
     # `filename` is the absolute path: MEDIA_DIR / <absolute> is that path, so path_for, delete and the thumbnails need no second case.
-    entry = {"id": mid, "name": (Path(orig_name or "").name or target.name)[:MAX_NAME], "filename": str(target), "kind": "image",
+    entry = {"id": mid, "name": (Path(orig_name or "").name or target.name)[:MAX_NAME], "filename": str(target), "kind": _kind(ext),
              "size": len(data), "added": time.time(), "scratch": True}
+    if entry["kind"] == "video":
+        entry["sound"] = _has_sound(target)
     with _LOCK:
         items = [it for it in _load_index() if not (it.get("scratch") and not Path(it.get("filename", "")).is_file())]
         items.append(entry)

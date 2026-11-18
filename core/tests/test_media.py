@@ -380,3 +380,15 @@ def test_a_working_picture_whose_file_was_cleared_is_forgotten_with_its_thumbnai
     assert [m["id"] for m in media.listing()] == [kept["id"]]
     assert media.get(gone["id"]) is None and not thumb.exists(), "nothing is left that could be answered later"
     assert media.forget_cleared_scratch() == 0
+
+
+def test_a_working_video_and_sound_are_kept_like_a_working_picture(store, tmp_path):
+    temp = tmp_path / "temp"
+    tone = tmp_path / "t.wav"
+    tone.write_bytes(b"RIFF")
+    sound = media.save_scratch("tail.wav", b"RIFF....", temp)
+    clip = media.save_scratch("tail.mp4", b"not a video", temp)
+    assert (sound["kind"], clip["kind"], clip["sound"]) == ("audio", "video", False)
+    assert media.path_for(sound["id"]) and media.listing() == []
+    with pytest.raises(ValueError):
+        media.save_scratch("x.exe", b"MZ", temp)

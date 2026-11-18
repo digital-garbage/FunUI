@@ -66,7 +66,8 @@ def run(media, model, rtx_options="{}", interrupted=lambda: None) -> dict:
     name = free_name(out_dir, media["filename"], tag)
     frames = upscale_file(src, os.path.join(out_dir, name), fn, interrupted)
     from ..._core import log, video_pipe
-    video_pipe.inherit_last_frame(media["filename"], name)       # a following shot continues from the sampler's own picture
+    video_pipe.inherit_last_frame(media["filename"], name)
+    video_pipe.inherit_raw(media, name)       # a following shot continues from the sampler's own picture
     log.info("FunUI Upscale", f"{media['filename']} with {tag}: {frames} frames -> {SUBFOLDER}/{name}")
     return {"media": {"filename": name, "subfolder": SUBFOLDER, "type": "temp"}}
 

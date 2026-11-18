@@ -314,6 +314,84 @@ def last_frame(project, scene_id: str, render: dict | None = None, window: dict 
     return {"media_id": entry["id"], "brightness": brightness, "dark": brightness < DARK_MEAN and peak < DARK_PEAK}
 
 
+MAX_TAIL_FRAMES = 1000
+
+
+def native_fps(path: str, fallback: float) -> float:
+    """The frame rate the file was generated at (a/b as ffprobe spells it), or `fallback` when it cannot be read."""
+    text = files.frame_rate(path) or ""
+    try:
+        top, _, bottom = text.partition("/")
+        rate = float(top) / float(bottom or 1)
+    except (ValueError, ZeroDivisionError):
+        return fallback
+    return rate if rate > 0 else fallback
+
+
+def tail(project, scene_id: str, render: dict | None = None, window: dict | None = None, reverse: bool = False,
+         frames: int = 49, video: bool = True, audio: bool = False) -> dict:
+    """The end of a scene's render as a working file for the next shot: {video_id, sound, audio_id, frames, fps, raw, notes}.
+
+    The last `frames` pictures are cut from the file holding them as generated (before any upscale or interpolation, when that file
+    is still there), counted at that file's own frame rate, never the interpolated one. `video`: the pictures with their sound.
+    `audio`: their sound alone. A reversed clip ends on the render's first pictures, so those are taken and played backwards."""
+    from ..._core import media
+    clip = scene_clip(project, scene_id, render, window)
+    here = {"filename": clip["filename"], "subfolder": clip["subfolder"], "type": clip["type"]}
+    original = video_pipe.raw_of(here)
+    src = files.comfy_path(original["filename"], original["subfolder"], original["type"])
+    notes = []
+    raw = bool(src and os.path.isfile(src)) and (original != here or not video_pipe.was_changed(here))
+    if not raw:
+        src = files.clip_path(clip)
+        if video_pipe.was_changed(here):
+            notes.append("The file as generated is gone, so the end of the finished (upscaled or interpolated) video was used.")
+    if files.is_picture(src):
+        raise files.ClipError("The clip before it is a picture, so there is no video to take the end of.")
+    fps = native_fps(src, float(clip["fps"] or 25.0)) if raw else float(clip["fps"] or 25.0)      # a finished file may hold more frames per second than were generated
+    frames = max(1, min(int(frames), MAX_TAIL_FRAMES))
+    have = files.duration(src) or 0.0
+    begin = max(0.0, float(clip["in"]))
+    end = min(begin + float(clip["dur"] or 0), have) if have else begin + float(clip["dur"] or 0)
+    if end - begin < 1.0 / fps:
+        raise files.ClipError("The clip before it has no pictures in its window (is the window past the end of the render?).")
+    span = min(frames / fps, end - begin)
+    start = begin if reverse else end - span
+    count = max(1, round(span * fps))
+    has_sound = files.has_audio(src)
+    out = {"video_id": None, "audio_id": None, "sound": False, "frames": count, "fps": fps, "raw": raw, "notes": notes}
+    if audio and not has_sound:
+        notes.append("The clip before it has no sound to carry.")
+    stem = projects.safe_part(scene_id)[:12]
+    base = ["-y", "-ss", f"{start:.4f}", "-t", f"{span:.4f}", "-i", src]
+    if video:
+        dst = files.temp_file(f"funui_tail_{stem}_{int(time.time() * 1000)}.mp4")
+        cmd = [files.ffmpeg(), *base, "-frames:v", str(count), "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", "-r", f"{fps:.4f}"]
+        cmd += (["-vf", "reverse", "-af", "areverse"] if reverse else []) + (["-c:a", "aac", "-b:a", "192k"] if has_sound else ["-an"]) + ["-movflags", "+faststart", dst]
+        _carry_file(media, files, cmd, dst, f"tail_{stem}.mp4", out, "video_id")
+        out["sound"] = has_sound
+    if audio and has_sound:
+        dst = files.temp_file(f"funui_tail_{stem}_{int(time.time() * 1000)}.wav")
+        cmd = [files.ffmpeg(), *base, "-vn"] + (["-af", "areverse"] if reverse else []) + ["-c:a", "pcm_s16le", dst]
+        _carry_file(media, files, cmd, dst, f"tail_{stem}.wav", out, "audio_id")
+    log.info("Continuity", f"took the last {count} frame(s) ({span:.2f} s at {fps:g} fps) of scene {stem} from {'the file as generated' if raw else 'the render'}"
+             + (", with sound" if out["video_id"] and has_sound else "") + (", sound alone" if out["audio_id"] else ""))
+    return out
+
+
+def _carry_file(media, files, cmd, dst, name, out, key):
+    try:
+        files.run(cmd)
+        with open(dst, "rb") as fh:
+            data = fh.read()
+        out[key] = media.save_scratch(name, data, os.path.dirname(dst))["id"]
+    finally:
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+
+
 async def segment(request, project) -> "web.StreamResponse":
     q = request.query
     scene_id = request.match_info["scene_id"]
