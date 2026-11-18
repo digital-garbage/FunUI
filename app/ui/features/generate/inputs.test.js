@@ -384,3 +384,14 @@ test("the enhancer in own-text mode is told where the global prefix and postfix 
   assert.deepEqual(lost.inputs.e, { use_image: false, enabled: false });
   assert.ok(lost.notes.some((n) => /enhancer was skipped/.test(n)));
 });
+
+test("own-text mode in a multi-scene run: each scene's run gets its own prefix and postfix, nothing carries over", async () => {
+  const s = [{ id: "p", node: "Prompt", roles: [{ at: "generation.prompt", input: "text" }] }, { id: "e", node: "FunUIEnhancePrompt", inputs: { scope: "own" } }];
+  const project = { anchor: "Grain.", postfix: "No text.", postfix_enabled: true };
+  const expand = async (b) => { const feature = b.anchor.split(" ").pop(); return { text: `${b.anchor} ${b.text} ${b.postfix}`, parts: { head: b.anchor, tail: `${b.postfix}` }, feature }; };
+  const runs = [];
+  for (const [text, prefix] of [["scene one", ["Cam A."]], ["scene two", ["Cam B."]], ["scene three", []]]) runs.push(await buildInputs({ project, scene: { text }, slots: s, expand, prefix }));
+  assert.deepEqual(runs.map((r) => r.inputs.e.head), ["Cam A. Grain.", "Cam B. Grain.", "Grain."]);
+  assert.deepEqual(runs.map((r) => r.inputs.p.text), ["Cam A. Grain. scene one No text.", "Cam B. Grain. scene two No text.", "Grain. scene three No text."]);
+  assert.ok(runs.every((r) => r.inputs.e.tail === "No text."));
+});

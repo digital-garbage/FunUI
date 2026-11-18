@@ -416,3 +416,24 @@ def test_the_apps_own_shortcuts_file_is_a_valid_reference_file(tmp_path):
     scalar = tmp_path / "x.json"
     scalar.write_text("3")
     assert en().sources([], [str(scalar)], say=said.append) == [] and "not a lorebook" in said[0]
+
+
+def test_each_scene_of_a_project_is_enhanced_with_its_own_prefix_split_and_nothing_leaks(node):
+    """Made-up scenes through the real expander and the node, one run each, as a multi-scene Generate does."""
+    from core import prompt_build
+    project = dict(anchor="Film grain.", postfix="No subtitles.", variables=[{"name": "hero", "text": "a fox"}], seed=1)
+    scenes = ["$hero runs [left|right] along a river", "the camera rises over $hero", "an empty field"]
+    answers = ["A fox sprints {M1} along a river.", "The camera climbs over the fox.", "A wide empty field at dawn."]
+    outs = []
+    for text, answer in zip(scenes, answers):
+        full = prompt_build.build(text, **project)
+        parts = prompt_build.build_parts(text, **project)
+        clip = FakeClip(answer)
+        out = node.FunUIEnhancePrompt.execute(clip, full, enabled=True, seed=3, scope="own", **parts).args[0]
+        sent = clip.seen["text"]
+        assert "Film grain." not in sent and "No subtitles." not in sent
+        assert out.startswith("Film grain. ") and out.endswith(" No subtitles.") and out.count("Film grain.") == 1
+        outs.append(out)
+    assert "⟦left¦right⟧" in outs[0]                                        # the alternation came back as the expander wrote it
+    assert "river" not in outs[1] + outs[2] and "fox sprints" not in outs[1] + outs[2]
+    assert [o.count("No subtitles.") for o in outs] == [1, 1, 1]
