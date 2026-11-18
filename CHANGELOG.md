@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Variables are now tabs, one per variable.** The value box has a fixed height and scrolls when the text is long, and each tab remembers where your cursor and scroll were, so coming back to a tab puts you right where you left off.
 - **The scene name above the timeline is now a menu.** Click "Scene 1" next to Takes and Upscale to see every scene in the project and jump to any of them, the same as clicking its clip on the timeline.
 - **Continuity can carry the end of the previous scene, not only its last picture** (Project settings, experimental). Tick "Pass the end of the previous scene as a video reference" to pass its last frames with their own sound, "Pass the sound of the previous scene's end as a sound reference" to pass the sound alone, or both. The carry-over length is set in seconds or in frames; changing one updates the other at the frame rate the clips are generated at. The frames are taken as generated, before any upscale or interpolation (if that file is gone, the finished video is used and the Log says so). Off by default.
 - Experimental: a still-picture VAE (H3-Image) can be picked as the decode-only VAE for H3 video. Each latent frame is decoded as a picture and each picture is held to fill the clip length, so frames stay sharp but motion is steppy. Untested on a real model.

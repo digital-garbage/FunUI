@@ -61,20 +61,36 @@ export function templatesBar(app, own) {
   return bar;
 }
 
-/** `$name` → text, filled in at generation. Rows commit on leaving the field; empty names are dropped on save. */
+/** `$name` → text, filled in at generation. One tab per variable; its value box is a fixed height that scrolls, and each tab keeps its own caret and scroll while you visit others. Rows commit on leaving the field; empty names are dropped on save. */
 export function variablesPanel(app, own) {
   const p = app.project, page = c.region.stack({ gap: "xs" });
-  let shown = "";
+  let shown = "", active = 0, pid = null;
+  const view = {};                                   // tab index -> { s, e, top } of its value box
   const rows = () => (p.project && p.project.variables) || [];
+  const box = () => page.node.querySelector("textarea");
+  const remember = () => { const t = box(); if (t) view[active] = { s: t.selectionStart, e: t.selectionEnd, top: t.scrollTop }; };
   const write = (list) => p.setField("variables", list.map((v) => ({ name: String(v.name || "").replace(/^\$+/, "").trim(), value: String(v.value || "") })).filter((v) => v.name || v.value));
-  const draw = () => { shown = JSON.stringify([p.project && p.project.id, rows()]); page.set([
-    ...rows().map((v, i) => c.toolbar.default({
-      items: [c.input.sm({ label: "Name", value: v.name, placeholder: "name", onCommit: (x) => { const l = clone(rows()); l[i].name = x; write(l); } }),
-        c.textarea.md({ fold: true, label: "Value", value: v.value, placeholder: "text", onCommit: (x) => { const l = clone(rows()); l[i].value = x; write(l); } })],
-      trailing: [c.button.sm({ label: "✕", tone: "ghost", title: "Remove", onClick: () => { write(rows().filter((_, k) => k !== i)); draw(); } })] })),
-    c.button.sm({ label: "+ Add variable", tone: "ghost", disabled: !p.project, onClick: () => { write([...rows(), { name: "name", value: "" }]); draw(); } }),
-    c.hint.default({ text: "Write $name in a prompt; it becomes the variable's text when you generate." }),
-  ]); };
+  const draw = (focus) => {
+    if (pid !== (p.project && p.project.id)) { pid = p.project && p.project.id; active = 0; for (const k in view) delete view[k]; }
+    shown = JSON.stringify([pid, rows()]);
+    active = Math.max(0, Math.min(active, rows().length - 1));
+    const v = rows()[active];
+    page.set([
+      ...(v ? [c.tabs.underline({ label: "Variables", tabs: rows().map((r, i) => ({ value: String(i), label: r.name || "(unnamed)" })), value: String(active), onChange: (x) => { remember(); active = Number(x); draw(true); } }),
+        c.toolbar.default({
+          items: [c.input.sm({ label: "Name", value: v.name, placeholder: "name", onCommit: (x) => { const l = clone(rows()); l[active].name = x; write(l); } }),
+            c.textarea.md({ label: "Value", rows: 6, value: v.value, placeholder: "text", onCommit: (x) => { const l = clone(rows()); l[active].value = x; write(l); } })],
+          trailing: [c.button.sm({ label: "✕", tone: "ghost", title: "Remove", onClick: () => { const l = rows().filter((_, k) => k !== active); delete view[active]; write(l); draw(); } })] })] : []),
+      c.button.sm({ label: "+ Add variable", tone: "ghost", disabled: !p.project, onClick: () => { remember(); write([...rows(), { name: "name", value: "" }]); active = rows().length - 1; draw(); } }),
+      c.hint.default({ text: "Write $name in a prompt; it becomes the variable's text when you generate." }),
+    ]);
+    const t = box(), st = view[active];
+    if (t) {
+      if (st) { t.setSelectionRange(st.s, st.e); t.scrollTop = st.top; }
+      if (focus) t.focus({ preventScroll: true });
+      t.addEventListener("scroll", remember); t.addEventListener("blur", remember); t.addEventListener("select", remember);
+    }
+  };
   draw();
   own(app.on(() => { const typing = app.dom.typingIn(page.node); if (!typing && shown !== JSON.stringify([p.project && p.project.id, rows()])) draw(); }));
   return page;
