@@ -34,6 +34,7 @@
 .cx-window .cx-textarea { max-block-size: min(28dvh, var(--window-field-max-h)); }
 .cx-autogrow { resize: none; overflow: hidden; }
 .cx-fold { min-height: var(--ctl-h-md); height: var(--ctl-h-md); padding: var(--sp-2) var(--ctl-pad-x-sm); font-size: var(--fs-5); }
+.cx-fold:focus { overflow-y: auto; max-block-size: min(28dvh, var(--window-field-max-h, 28dvh)); }      /* long text scrolls inside the box instead of growing or clipping */
 .cx-fold:not(:focus) { padding-block: 0; line-height: calc(var(--ctl-h-md) - var(--bw-2)); }      /* folded: the first line centred, the rest fully out of sight */
 
 .cx-search { appearance: none; }

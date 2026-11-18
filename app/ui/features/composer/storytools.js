@@ -61,36 +61,35 @@ export function templatesBar(app, own) {
   return bar;
 }
 
-/** `$name` → text, filled in at generation. One tab per variable; its value box is a fixed height that scrolls, and each tab keeps its own caret and scroll while you visit others. Rows commit on leaving the field; empty names are dropped on save. */
+/** `$name` → text, filled in at generation. Rows commit on leaving the field; empty names are dropped on save. */
+const varView = new Map();   // "project:row" -> { s, e, top, focus }: each value box's caret and scroll, kept across redraws and tab switches
 export function variablesPanel(app, own) {
   const p = app.project, page = c.region.stack({ gap: "xs" });
-  let shown = "", active = 0, pid = null;
-  const view = {};                                   // tab index -> { s, e, top } of its value box
-  const rows = () => (p.project && p.project.variables) || [];
-  const box = () => page.node.querySelector("textarea");
-  const remember = () => { const t = box(); if (t) view[active] = { s: t.selectionStart, e: t.selectionEnd, top: t.scrollTop }; };
-  const write = (list) => p.setField("variables", list.map((v) => ({ name: String(v.name || "").replace(/^\$+/, "").trim(), value: String(v.value || "") })).filter((v) => v.name || v.value));
-  const draw = (focus) => {
-    if (pid !== (p.project && p.project.id)) { pid = p.project && p.project.id; active = 0; for (const k in view) delete view[k]; }
-    shown = JSON.stringify([pid, rows()]);
-    active = Math.max(0, Math.min(active, rows().length - 1));
-    const v = rows()[active];
-    page.set([
-      ...(v ? [c.tabs.underline({ label: "Variables", tabs: rows().map((r, i) => ({ value: String(i), label: r.name || "(unnamed)" })), value: String(active), onChange: (x) => { remember(); active = Number(x); draw(true); } }),
-        c.toolbar.default({
-          items: [c.input.sm({ label: "Name", value: v.name, placeholder: "name", onCommit: (x) => { const l = clone(rows()); l[active].name = x; write(l); } }),
-            c.textarea.md({ label: "Value", rows: 6, value: v.value, placeholder: "text", onCommit: (x) => { const l = clone(rows()); l[active].value = x; write(l); } })],
-          trailing: [c.button.sm({ label: "✕", tone: "ghost", title: "Remove", onClick: () => { const l = rows().filter((_, k) => k !== active); delete view[active]; write(l); draw(); } })] })] : []),
-      c.button.sm({ label: "+ Add variable", tone: "ghost", disabled: !p.project, onClick: () => { remember(); write([...rows(), { name: "name", value: "" }]); active = rows().length - 1; draw(); } }),
-      c.hint.default({ text: "Write $name in a prompt; it becomes the variable's text when you generate." }),
-    ]);
-    const t = box(), st = view[active];
-    if (t) {
-      if (st) { t.setSelectionRange(st.s, st.e); t.scrollTop = st.top; }
-      if (focus) t.focus({ preventScroll: true });
-      t.addEventListener("scroll", remember); t.addEventListener("blur", remember); t.addEventListener("select", remember);
-    }
+  let shown = "";
+  const keyOf = (i) => `${p.project && p.project.id}:${i}`;
+  const track = (t, i) => {
+    const save = () => t.isConnected && varView.set(keyOf(i), { s: t.selectionStart, e: t.selectionEnd, top: t.scrollTop, focus: app.dom.focusOn(t) });
+    for (const ev of ["keyup", "click", "select", "scroll", "input"]) t.addEventListener(ev, save);
+    t.addEventListener("focus", save);
+    t.addEventListener("blur", () => queueMicrotask(() => { if (!t.isConnected) return; const v = varView.get(keyOf(i)); if (v) v.focus = false; }));   // a box taken off the page is not "left"
   };
+  const restore = () => page.node.querySelectorAll("textarea").forEach((t, i) => {
+    track(t, i);
+    const v = varView.get(keyOf(i));
+    if (!v) return;
+    t.setSelectionRange(v.s, v.e); t.scrollTop = v.top;
+    if (v.focus) queueMicrotask(() => { if (t.isConnected) { t.focus({ preventScroll: true }); t.setSelectionRange(v.s, v.e); t.scrollTop = v.top; } });   // after the panel is on the page
+  });
+  const rows = () => (p.project && p.project.variables) || [];
+  const write = (list) => p.setField("variables", list.map((v) => ({ name: String(v.name || "").replace(/^\$+/, "").trim(), value: String(v.value || "") })).filter((v) => v.name || v.value));
+  const draw = () => { shown = JSON.stringify([p.project && p.project.id, rows()]); page.set([
+    ...rows().map((v, i) => c.toolbar.default({
+      items: [c.input.sm({ label: "Name", value: v.name, placeholder: "name", onCommit: (x) => { const l = clone(rows()); l[i].name = x; write(l); } }),
+        c.textarea.md({ fold: true, label: "Value", value: v.value, placeholder: "text", onCommit: (x) => { const l = clone(rows()); l[i].value = x; write(l); } })],
+      trailing: [c.button.sm({ label: "✕", tone: "ghost", title: "Remove", onClick: () => { write(rows().filter((_, k) => k !== i)); draw(); } })] })),
+    c.button.sm({ label: "+ Add variable", tone: "ghost", disabled: !p.project, onClick: () => { write([...rows(), { name: "name", value: "" }]); draw(); } }),
+    c.hint.default({ text: "Write $name in a prompt; it becomes the variable's text when you generate." }),
+  ]); restore(); };
   draw();
   own(app.on(() => { const typing = app.dom.typingIn(page.node); if (!typing && shown !== JSON.stringify([p.project && p.project.id, rows()])) draw(); }));
   return page;
