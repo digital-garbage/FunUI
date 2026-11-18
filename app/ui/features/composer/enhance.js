@@ -13,6 +13,7 @@ export function enhance(app, own) {
   own(() => { alive = false; });
   const slot = () => (ps.slots() || []).find((s) => s.node === NODE) || null;
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
+  const continuityOn = () => { const k = (ps.currentValues && ps.currentValues() || {}).continuity; return Boolean(k) && k.carry !== false; };      // hidden while Continuity is not there or not carrying the frame
   const field = (label, control, hint) => c.field.default({ label, control, hint });
   const num = (label, v, lo, hi, step, name, hint) => field(label, c.number.md({ label, value: v, min: lo, max: hi, step, onChange: (x) => set(name, x) }), hint);
 
@@ -46,6 +47,7 @@ export function enhance(app, own) {
         field("Style", c.select.md({ label: "Style", value: style, options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot. Instructions typed below override it."),
         field("Instructions", c.textarea.md({ label: "Instructions", rows: 6, value: val("instructions", ""), placeholder: defaults ? (defaults.styles || {})[style] || defaults.instructions : "(built-in instructions)", onCommit: (x) => set("instructions", x) }), "Empty uses the built-in instructions of the Style above."),
         num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be."),
+        ...(continuityOn() ? [c.toggle.default({ label: "Pass the last frame of previous scene as enhancer input", hint: "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference.", checked: val("last_frame", false), onChange: (x) => set("last_frame", x) })] : []),
         c.toggle.default({ label: "Use the picture", hint: "Sends the scene's picture to the model along with the prompt.", checked: val("use_image", true), onChange: (x) => set("use_image", x) }),
         c.toggle.default({ label: "Thinking", hint: "Let a thinking model reason first. Its reasoning eats the token budget.", checked: val("thinking", false), onChange: (x) => set("thinking", x) }),
         c.toggle.default({ label: "Greedy (always the likeliest word)", hint: "The same rewrite every time; the dials below are not used.", checked: greedy, onChange: (x) => set("greedy", x) }),

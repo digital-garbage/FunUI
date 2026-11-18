@@ -395,3 +395,25 @@ test("own-text mode in a multi-scene run: each scene's run gets its own prefix a
   assert.deepEqual(runs.map((r) => r.inputs.p.text), ["Cam A. Grain. scene one No text.", "Cam B. Grain. scene two No text.", "Grain. scene three No text."]);
   assert.ok(runs.every((r) => r.inputs.e.tail === "No text."));
 });
+
+test("the enhancer's picture: the first reference by default, the previous scene's carried last frame when its toggle is on, the first reference with a note when none is carried", async () => {
+  const { learn } = await import("../../shell/bin.js");
+  learn([{ id: "binpic", name: "b.png", kind: "image" }]);
+  const wired = (n) => ({ id: `r${n}`, node: "Loader", roles: [{ at: `assets.reference_${n}`, input: "media_id", wireTo: { slot: "m", input: `img${n}` } }] });
+  const slots = (last_frame) => [{ id: "m", node: "Model" }, wired(1), wired(2), { id: "e", node: "FunUIEnhancePrompt", inputs: { use_image: true, ...(last_frame === undefined ? {} : { last_frame }) } }];
+  const run = (last_frame, carried, scene = { text: "x", references: ["binpic"] }) => buildInputs({ project: {}, scene, slots: slots(last_frame), expand: async ({ text }) => ({ text }), hooks: carried ? [async () => ({ references: ["frame9"] })] : [] });
+  const seen = (r) => r.inputs[r.inputs.e.image[0]].media_id;
+  const said = (r) => r.notes.some((n) => /last frame.*first reference/.test(n));
+  assert.equal(seen(await run(undefined, true)), "binpic");                       // toggle never set: unchanged
+  assert.equal(seen(await run(false, true)), "binpic");                           // continuity carries, toggle off: the bin's reference
+  assert.equal(seen(await run(true, false)), "binpic");                           // toggle on, nothing carried (continuity off): the bin's reference
+  const both = await run(true, true);
+  assert.equal(seen(both), "frame9");                                              // both on: the carried frame
+  assert.equal(said(both), false);
+  assert.equal(said(await run(false, false)), false);                              // toggle off: never a note
+  const first = await run(true, false);                                            // first scene: fall back, and say so
+  assert.ok(said(first));
+  const alone = await run(true, false, { text: "x" });                             // no reference at all: no picture
+  assert.equal(alone.inputs.e.use_image, false);
+  learn([]);
+});

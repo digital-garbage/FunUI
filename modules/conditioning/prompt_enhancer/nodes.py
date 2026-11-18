@@ -109,6 +109,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                tooltip="default: the built-in instructions. dynamic: adds a concrete action, a change over time and secondary motion to every shot. Typed Instructions override both."),
                 io.Combo.Input("scope", options=list(SCOPES), default="whole", optional=True,
                                tooltip="whole: the model rewrites the whole prompt. own: only the text between the global prefix and postfix is rewritten; they are kept as written."),
+                io.Boolean.Input("last_frame", default=False, optional=True,
+                                 tooltip="Shows the model the previous scene's last frame instead of the first reference. Only works while Continuity carries that frame."),
                 io.String.Input("head", default="", optional=True,
                                 tooltip="The global prefix as it stands at the start of the prompt (set by the app). Only used with scope own."),
                 io.String.Input("tail", default="", optional=True,
@@ -128,7 +130,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,

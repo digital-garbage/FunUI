@@ -233,7 +233,7 @@ def test_style_matrix_typed_instructions_win_then_style_then_default(style, type
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-4:] == ["style", "scope", "head", "tail"]
+    assert [i.id for i in schema.inputs][-5:] == ["style", "scope", "last_frame", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

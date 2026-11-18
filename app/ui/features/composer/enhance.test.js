@@ -78,3 +78,22 @@ test("Style picks the built-in instructions shown as the placeholder, and choosi
   const area = [...page.node.querySelectorAll("textarea")].find((t) => t.placeholder === "DEFAULT TEXT");
   assert.ok(area, "the default style shows the default instructions");
 });
+
+test("the last-frame toggle shows only while Continuity is loaded and carrying the frame, and saves the choice", async () => {
+  const saved = [];
+  const mk = (continuity) => ({ slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], currentValues: () => (continuity === undefined ? {} : { continuity }),
+    ensureLoaded: async () => {}, save: async (b) => { saved.push(b); }, subscribe: () => () => {} });
+  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}) };
+  const shows = async (continuity) => {
+    const page = enhance({ dom: createDom(), pipeline: mk(continuity), api }, () => {});
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 0));
+    return page;
+  };
+  const label = /Pass the last frame of previous scene as enhancer input/;
+  assert.doesNotMatch((await shows(undefined)).node.textContent, label);        // module not loaded
+  assert.doesNotMatch((await shows({ carry: false })).node.textContent, label);  // not carrying the frame
+  const on = await shows({ carry: true });
+  assert.match(on.node.textContent, label);
+  assert.ok(saved.length === 0);
+});

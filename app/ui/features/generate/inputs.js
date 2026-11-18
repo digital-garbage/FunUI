@@ -105,9 +105,15 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   for (const [id, fields] of Object.entries(overrides)) raw[id] = { ...raw[id], ...fields };
   // The prompt enhancer is shown the first picture reference (the picture an image-start model starts from); the aspect source only gives the shape.
   // With no picture reference there is nothing to show, whatever picture the pipeline was saved wiring to it.
-  const shown = firstByNumber((id) => kinds.get(id) === "image" && !leave.has(id));
-  const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
+  // Optionally it is shown the previous scene's last frame (Continuity) instead, when one was carried into this run.
+  const lastFrame = carried.find((id) => kinds.get(id) === "image" && !noRoom.includes(id));
+  let noLastFrame = false;
+  const first = firstByNumber((id) => kinds.get(id) === "image" && !leave.has(id));
   for (const e of (slots || []).filter((s) => s.node === "FunUIEnhancePrompt")) {
+    const wantsLast = ((raw[e.id] || {}).last_frame ?? (e.inputs || {}).last_frame) === true;
+    if (wantsLast && !lastFrame) noLastFrame = true;
+    const shown = wantsLast && lastFrame ? lastFrame : first;
+    const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
     if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
   }
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
@@ -155,6 +161,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
   const placed = [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
+  if (noLastFrame) notes.push("The prompt enhancer is set to see the previous scene's last frame, but none is carried into this shot (the first scene, or Continuity is off): it was shown the first reference instead.");
   if (enhancerSkipped) notes.push("The prompt enhancer was skipped: the global prefix/postfix could not be told apart from your text here (a shortcut reaches across them).");
   if (!textOnly) notes.push(...noVideo);
   else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
