@@ -12,3 +12,26 @@ test("the not-taught reason blames a missing key only when the run captured noth
   assert.match(notTaught(nothing, ps("portraits")), /captured nothing/);
   assert.equal(notTaught({ recorded: ["vel"], why: null }, ps("")), "");
 });
+
+test("the scene picker lists every scene and picking one selects it like the timeline does", async () => {
+  const { setupDom, teardownDom } = await import("../../composer/tests/_dom.js");
+  setupDom();
+  try {
+    const { default: rating, sceneItems } = await import("./index.js");
+    const project = { scenes: [{ id: "a", text: "first" }, { id: "b", text: "" }], scene_renders: { a: { media: { filename: "a.mp4" } } } };
+    assert.deepEqual(sceneItems(project).map((i) => i.label), ["Scene 1", "Scene 2"]);
+    assert.deepEqual(sceneItems(null), []);
+    const picked = [];
+    const app = { project: { project, selected: null }, selection: { focus: "a", pick: (id) => { picked.push(id); } }, api: {}, pipeline: {}, on: () => () => {} };
+    const host = document.createElement("div");
+    document.body.append(host);
+    rating.setup({ host, app });
+    const button = host.querySelector("button");
+    assert.match(button.textContent, /Scene 1/);
+    button.click();
+    const entries = [...document.querySelectorAll(".cx-menu-item")];
+    assert.equal(entries.length, 2);
+    entries[1].click();
+    assert.deepEqual(picked, ["b"]);
+  } finally { teardownDom(); }
+});

@@ -14,6 +14,9 @@ export function notTaught(r, ps) {
   return keyless ? "Taste not taught: this run captured nothing, and no Taste key is set. Ratings teach only under a key: name one in Settings ▸ Engine ▸ System ▸ Taste key." : `Taste not taught: ${r.why}.`;
 }
 
+/** The project's scenes as menu entries, numbered as the timeline numbers them. */
+export const sceneItems = (open) => (open ? open.scenes : []).map((s, i) => ({ id: s.id, label: `Scene ${i + 1}`, hint: (s.text || "").slice(0, 24) }));
+
 export default {
   id: "rating",
   mount: "timeline.actions",
@@ -43,15 +46,19 @@ export default {
       } catch { /* no taste module here: the rating stays a label */ }
     };
     const draw = () => {
-      const t = target();
+      const t = target(), open = p.project, focus = open ? open.scenes.findIndex((s) => s.id === sel.focus) : -1;
       if (!t) return put();
+      const picker = c.button.sm({ label: `Scene ${focus + 1} ▾`, tone: "ghost", title: "Pick another scene: the same as picking its clip on the timeline", onClick: () => {
+        const items = sceneItems(p.project);
+        c.menu.dropdown({ anchor: picker, items, onPick: (id) => sel.pick(id) });
+      } });
       const now = nameOf(t.root.rating);
       const button = c.button.sm({ label: now ? `★ ${now}` : "Rate scene…", tone: now ? "neutral" : "ghost", title: "Rate this scene's render: features that learn from ratings use it on the next generation",
         onClick: async () => {
           const pick = await c.modal.choice({ title: "How did it turn out?", items: [...CHOICES.map((o) => ({ id: o.value, label: o.label, hint: o.hint })), { id: FORGET, label: "Forget my rating", hint: "Clears it: nothing is learned from this clip." }] }).result;
           if (pick) rate(pick);
         } });
-      put(c.text.sm({ text: `Scene ${t.no}` }).node, button.node);
+      put(picker.node, button.node);
     };
     draw();
     return app.on(draw);
