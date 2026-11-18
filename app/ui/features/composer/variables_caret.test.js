@@ -28,3 +28,15 @@ test("a rebuilt variables list (list redraw or tab switch) puts each box's caret
   assert.deepEqual([b2.selectionStart, b2.selectionEnd], [2, 2]);
   assert.equal(window.document.activeElement, b2, "the box you were in has the caret again");
 });
+
+test("switching to another browser tab and back keeps the caret of the box", async () => {
+  const panel = make();
+  await Promise.resolve();                                // the earlier test's saved focus lands first
+  const [a] = panel.node.querySelectorAll("textarea");
+  a.focus(); a.value = "x\n".repeat(60); a.setSelectionRange(20, 24); a.scrollTop = 30;
+  a.dispatchEvent(new window.Event("blur"));              // the window lost focus; the box is still the active element
+  await Promise.resolve();
+  a.dispatchEvent(new window.Event("focus"));
+  assert.equal(window.document.activeElement, a);
+  assert.deepEqual([a.selectionStart, a.selectionEnd], [20, 24]);
+});

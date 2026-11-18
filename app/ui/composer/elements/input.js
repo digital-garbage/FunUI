@@ -164,7 +164,7 @@ define("textarea", "md", ({ value = "", rows = 4, autoGrow = false, fold = false
   if (fold) {
     node.addEventListener("focus", grow);
     node.addEventListener("input", grow);
-    node.addEventListener("blur", () => { node.style.height = ""; node.scrollTop = 0; });
+    node.addEventListener("blur", () => { if (node.ownerDocument.activeElement === node) return; node.style.height = ""; node.scrollTop = 0; });   // switching to another browser tab or window blurs without leaving the box: keep its height and scroll
   }
   wire(node, { onInput, onCommit });
 

@@ -71,7 +71,7 @@ export function variablesPanel(app, own) {
     const save = () => t.isConnected && varView.set(keyOf(i), { s: t.selectionStart, e: t.selectionEnd, top: t.scrollTop, focus: app.dom.focusOn(t) });
     for (const ev of ["keyup", "click", "select", "scroll", "input"]) t.addEventListener(ev, save);
     t.addEventListener("focus", save);
-    t.addEventListener("blur", () => queueMicrotask(() => { if (!t.isConnected) return; const v = varView.get(keyOf(i)); if (v) v.focus = false; }));   // a box taken off the page is not "left"
+    t.addEventListener("blur", () => queueMicrotask(() => { if (!t.isConnected || t.ownerDocument.activeElement === t) return; const v = varView.get(keyOf(i)); if (v) v.focus = false; }));   // a box taken off the page is not "left"
   };
   const restore = () => page.node.querySelectorAll("textarea").forEach((t, i) => {
     track(t, i);
