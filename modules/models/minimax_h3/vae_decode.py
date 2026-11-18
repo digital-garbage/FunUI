@@ -98,19 +98,15 @@ def frames_for(vae, latents) -> int:
 
 
 def stretch(frames, count):
-    """[T, H, W, C] -> [count, H, W, C]: each output frame blends its two nearest decoded neighbours."""
+    """[T, H, W, C] -> [count, H, W, C]: each output frame repeats its nearest decoded picture (no blending, so every frame stays sharp)."""
     t = frames.shape[0]
     if count <= t or t < 2:
         return frames
-    dev = frames.device
-    pos = torch.linspace(0, t - 1, count, device=dev)
-    lo = pos.floor().long().clamp(max=t - 2)
-    w = (pos - lo).view(-1, 1, 1, 1).to(frames.dtype)
-    return frames[lo] * (1 - w) + frames[lo + 1] * w
+    return frames[torch.linspace(0, t - 1, count, device=frames.device).round().long()]
 
 
 def decode_stills(vae, video):
-    """Decode a video latent with a still-picture VAE: every latent frame becomes one picture, then the pictures are blended in time up to the clip's frame count. Returns IMAGES (T, H, W, C). Experimental."""
+    """Decode a video latent with a still-picture VAE: every latent frame becomes one picture, then each picture is held for its share of the clip's frame count. Returns IMAGES (T, H, W, C). Experimental."""
     clips = []
     for b in range(video.shape[0]):
         pics = [vae.decode(video[b:b + 1, :, i:i + 1]) for i in range(video.shape[2])]

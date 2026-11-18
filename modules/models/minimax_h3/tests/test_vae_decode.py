@@ -216,6 +216,7 @@ def test_still_vae_decodes_each_latent_frame_and_blends_up_to_the_clip_length():
     v = out[:, 0, 0, 0]
     assert v[0] == 0 and v[-1] == 6
     assert (v[1:] >= v[:-1]).all()
+    assert set(v.tolist()) == set(range(7))               # only real pictures, no blends
 
 
 def test_is_image_vae_tells_a_still_vae_from_a_video_vae():
