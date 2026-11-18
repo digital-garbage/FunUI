@@ -137,18 +137,25 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
 
   for (const id of noRoom) { unwired += 1; left.push({ id, at: "assets.reference", what: "a carried picture", why: `no reference number is left after the pinned ones (the highest, ${MAX_REFERENCES}, is taken)` }); }
   const prompt = rolesAt(slots, "generation.prompt")[0];
-  let failedExpand = false;
+  let failedExpand = false, enhancerSkipped = false;
   if (prompt) {
     const text = scene.text || "";
-    const body = await expand({ text, anchor: [...prefix, project.anchor].filter((x) => x && String(x).trim()).join(" "), postfix: project.postfix, postfix_enabled: project.postfix_enabled, variables: project.variables })
+    // The enhancer's "only my own text" mode needs to know where the global prefix and postfix sit in the finished prompt.
+    const own = (slots || []).filter((s) => s.node === "FunUIEnhancePrompt" && ((raw[s.id] || {}).scope ?? (s.inputs || {}).scope) === "own");
+    const body = await expand({ text, anchor: [...prefix, project.anchor].filter((x) => x && String(x).trim()).join(" "), postfix: project.postfix, postfix_enabled: project.postfix_enabled, variables: project.variables, ...(own.length ? { parts: true } : {}) })
       .catch(() => null);         // a failing prompt-craft feature must not block the run: send what was typed
     put(prompt.slot, prompt.role.input, body && typeof body.text === "string" ? body.text : text);
     if (!(body && typeof body.text === "string")) failedExpand = true;
+    for (const e of own) {
+      if (body && body.parts) { put(e, "head", body.parts.head); put(e, "tail", body.parts.tail); }
+      else if (body && typeof body.text === "string") { put(e, "enabled", false); enhancerSkipped = true; }      // cannot tell the prefix from the text: better no rewrite than a rewrite of the prefix
+    }
   }
   // Features that add inputs of their own (a Chat comment for the enhancer, say) say so through a hook: { inputs: {slot: {name: value}}, notes: [text] }.
   const noVideo = takesVideo && videoOnly && !startId ? ["This pipeline works from a video: pick one as the start, or add it under References."] : [];
   const placed = [];
   const notes = failedExpand ? ["The prompt could not be expanded (shortcuts, $variables, anchor, postfix): the text was sent as typed."] : [];
+  if (enhancerSkipped) notes.push("The prompt enhancer was skipped: the global prefix/postfix could not be told apart from your text here (a shortcut reaches across them).");
   if (!textOnly) notes.push(...noVideo);
   else notes.push("Nothing to feed the model, so this shot is made from the prompt alone (text to video).");
   notes.push(...hookNotes);

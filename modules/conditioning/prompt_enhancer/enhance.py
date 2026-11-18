@@ -46,6 +46,8 @@ Output: one paragraph of plain prose. No preamble, no headings, no markdown, no 
 
 #: what the Style choice selects; "default" must stay SYSTEM_PROMPT so an old workflow rewrites as before
 STYLES = {"default": SYSTEM_PROMPT, "dynamic": DYNAMIC_PROMPT}
+MARKS_RULE = ("Tokens like {M1}, {M2} stand for fixed markup. Copy every one into your answer exactly as written, "
+              "once each, next to the words it belongs to. Never explain them or change them.")
 
 CHAT_SYSTEM = """REVISION: this time the user is giving feedback on your earlier rewrite.
 The message has labelled parts: ORIGINAL PROMPT (what the user wrote), YOUR LATEST REWRITE (your last answer, if shown) and USER FEEDBACK (their comments, oldest first).

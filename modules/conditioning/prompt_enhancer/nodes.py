@@ -16,6 +16,26 @@ RUNS = collections.deque(maxlen=20)
 
 
 _MARKUP = re.compile(r"\([^()]*:\s*[\d.]+\)|\[[^\]]*\|[^\]]*\]|⟦[^⟧]*⟧")
+_MASK = re.compile(r"\{M(\d+)\}")
+SCOPES = ("whole", "own")       # whole: the model rewrites everything it is given; own: only the text between the prefix and the postfix
+
+
+def mask_markup(text):
+    """-> (text, marks): each (word:1.5) / [a|b] span becomes {M1}, {M2}... so the model cannot rewrite it."""
+    marks = []
+
+    def take(m):
+        marks.append(m.group(0))
+        return "{M%d}" % len(marks)
+    return _MARKUP.sub(take, str(text or "")), marks
+
+
+def unmask_markup(text, marks):
+    """-> text with every mark put back, or None when the model lost or doubled one."""
+    seen = [int(n) for n in _MASK.findall(text)]
+    if sorted(seen) != list(range(1, len(marks) + 1)):
+        return None
+    return _MASK.sub(lambda m: marks[int(m.group(1)) - 1], text)
 
 
 _LOADED = {}      # one entry: the last separate encoder, so a second Generate does not load a 9 GB file again
@@ -87,6 +107,12 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="Your comments on earlier rewrites (Composer > Chat)."),
                 io.Combo.Input("style", options=list(en.STYLES), default="default", optional=True,
                                tooltip="default: the built-in instructions. dynamic: adds a concrete action, a change over time and secondary motion to every shot. Typed Instructions override both."),
+                io.Combo.Input("scope", options=list(SCOPES), default="whole", optional=True,
+                               tooltip="whole: the model rewrites the whole prompt. own: only the text between the global prefix and postfix is rewritten; they are kept as written."),
+                io.String.Input("head", default="", optional=True,
+                                tooltip="The global prefix as it stands at the start of the prompt (set by the app). Only used with scope own."),
+                io.String.Input("tail", default="", optional=True,
+                                tooltip="The global postfix as it stands at the end of the prompt (set by the app). Only used with scope own."),
             ],
             outputs=[io.String.Output(display_name="enhanced"),
                      io.String.Output(display_name="status")],
@@ -102,16 +128,23 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
-        if _MARKUP.search(text or ""):
-            log.once("prompt_enhancer:markup", log.ALERT, "FunUI Prompt enhancer",
-                     "the prompt has (word:1.5) / [a|b] markup, which the model will "
-                     "read as plain text: with the enhancer on, markup does not survive a rewrite")
+        text = str(text or "")
+        pre = post = ""
+        body = text
+        if scope == "own":              # only what sits between the global prefix and postfix goes to the model
+            pre, post = str(head or "").strip(), str(tail or "").strip()
+            if (pre and not text.startswith(pre)) or (post and not text.endswith(post)) or len(pre) + len(post) > len(text):
+                log.warning("FunUI Prompt enhancer", "the global prefix/postfix could not be found in the prompt; the original prompt is used")
+                RUNS.append({"prompt_id": _prompt_id(), "status": "the prefix/postfix could not be found in the prompt; prompt unchanged",
+                             "before": text, "after": text, "thinking": "", "sent": "", "ok": False})
+                return io.NodeOutput(text, "prefix/postfix not found")
+            body = text[len(pre):len(text) - len(post)].strip()
         if encoder_file:
             try:
                 clip = _own_encoder(encoder_file, encoder_family)
@@ -129,15 +162,30 @@ class FunUIEnhancePrompt(io.ComfyNode):
             log.warning("FunUI Prompt enhancer", "the Chat comments are not readable; ignored")
         if not isinstance(rounds, list):
             rounds = []
+        masked, marks = mask_markup(body)
+        system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
+        if marks:
+            system += "\n\n" + en.MARKS_RULE
         out, status, info = en.enhance(
-            clip, text, system=instructions,
-            reference_text=en.reference(text, groups, reference_intro), chat=en.chat_block(rounds), style=style,
+            clip, masked, system=system,
+            reference_text=en.reference(body, groups, reference_intro), chat=en.chat_block(rounds), style=style,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
             do_sample=not greedy)
+        if info["ok"]:
+            back = unmask_markup(out, marks)
+            if back is None:
+                info.update(ok=False, after=text)
+                status = "the model changed the weights / [a|b] marks in the prompt; prompt unchanged"
+            else:
+                final = " ".join(x for x in (pre, back, post) if x)
+                info.update(before=text, after=final)
+                out = final
         if not info["ok"]:
             # The prompt went through UNCHANGED and the person must know why.
+            out = text
+            info["before"] = info["after"] = text
             log.warning("FunUI Prompt enhancer", f"{status}; the original prompt is used")
         RUNS.append({"prompt_id": _prompt_id(), "status": status, **info})
         return io.NodeOutput(out, status)

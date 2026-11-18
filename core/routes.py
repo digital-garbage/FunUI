@@ -1284,7 +1284,14 @@ def register(routes, prefix=None):
             seed=seed if isinstance(seed, int) and not isinstance(seed, bool) else 0,
             commit=body.get("commit") is True,
         )
-        return web.json_response({"text": expanded})
+        out = {"text": expanded}
+        if body.get("parts") is True:              # the enhancer's "only my own text" mode: where the anchor and postfix sit
+            out["parts"] = await asyncio.to_thread(
+                prompt_build.build_parts, body.get("text") or "", anchor=body.get("anchor") or "",
+                postfix=body.get("postfix") or "", postfix_enabled=body.get("postfix_enabled") is not False,
+                variables=variables if isinstance(variables, list) else None,
+                seed=seed if isinstance(seed, int) and not isinstance(seed, bool) else 0)
+        return web.json_response(out)
 
     @routes.get(P + "/api/log/fun")
     async def _log(req):

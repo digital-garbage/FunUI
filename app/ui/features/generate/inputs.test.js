@@ -368,3 +368,19 @@ test("a ComfyUI saver's file name is this run's alone; FunUI Save Video names it
   assert.equal(one.vid, undefined);
   assert.equal(one.x, undefined);
 });
+
+test("the enhancer in own-text mode is told where the global prefix and postfix sit; in whole mode nothing extra is asked or sent", async () => {
+  const mk = (scope) => [{ id: "p", node: "Prompt", roles: [{ at: "generation.prompt", input: "text" }] }, { id: "e", node: "FunUIEnhancePrompt", inputs: { scope } }];
+  const asked = [];
+  const expand = async (b) => { asked.push(b); return { text: "Pre. a fox. Post.", parts: b.parts ? { head: "Pre.", tail: "Post." } : undefined }; };
+  const own = await buildInputs({ project: { anchor: "Pre.", postfix: "Post.", postfix_enabled: true }, scene: { text: "a fox." }, slots: mk("own"), expand });
+  assert.equal(asked[0].parts, true);
+  assert.deepEqual(own.inputs.e, { use_image: false, head: "Pre.", tail: "Post." });
+  assert.equal(own.inputs.p.text, "Pre. a fox. Post.");
+  const whole = await buildInputs({ project: {}, scene: { text: "a fox." }, slots: mk("whole"), expand });
+  assert.equal(asked[1].parts, undefined);
+  assert.deepEqual(whole.inputs.e, { use_image: false });
+  const lost = await buildInputs({ project: {}, scene: { text: "a fox." }, slots: mk("own"), expand: async () => ({ text: "x", parts: null }) });
+  assert.deepEqual(lost.inputs.e, { use_image: false, enabled: false });
+  assert.ok(lost.notes.some((n) => /enhancer was skipped/.test(n)));
+});

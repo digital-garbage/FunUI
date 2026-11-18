@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The prompt enhancer can rewrite only your own text** (Composer > Enhance > Rewrites). "Only my own text" sends the model what sits between the global prefix and postfix and puts the prefix and postfix back exactly as written; "The whole prompt" (default) rewrites everything. In both, `(word:1.5)` weights and `[a|b]` alternatives are kept as written; if the model changes them, the prompt runs unchanged and the Log says so.
 - **Long variable values scroll inside their box** instead of growing or being cut off, and each box remembers where your cursor and scroll were when you move between variables or leave and come back to the Variables list.
 - **The scene name above the timeline is now a menu.** Click "Scene 1" next to Takes and Upscale to see every scene in the project and jump to any of them, the same as clicking its clip on the timeline.
 - **Continuity can carry the end of the previous scene, not only its last picture** (Project settings, experimental). Tick "Pass the end of the previous scene as a video reference" to pass its last frames with their own sound, "Pass the sound of the previous scene's end as a sound reference" to pass the sound alone, or both. The carry-over length is set in seconds or in frames; changing one updates the other at the frame rate the clips are generated at. The frames are taken as generated, before any upscale or interpolation (if that file is gone, the finished video is used and the Log says so). Off by default.

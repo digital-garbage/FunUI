@@ -233,7 +233,7 @@ def test_style_matrix_typed_instructions_win_then_style_then_default(style, type
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-1] == "style"
+    assert [i.id for i in schema.inputs][-4:] == ["style", "scope", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]
@@ -337,3 +337,70 @@ def test_a_gone_encoder_file_is_text_the_graph_does_not_refuse(comfyui):
     for name in ("encoder_file", "encoder_family"):
         inp = next(i for i in schema.inputs if i.id == name)
         assert inp.get_io_type() == "STRING"            # a list would refuse a vanished file even with Enhance off
+
+
+# --- only the text between the global prefix and postfix; markup kept ------------
+
+def _run(node, answer, text, **kw):
+    clip = FakeClip(answer)
+    out = node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, **kw)
+    return out.args, clip
+
+
+def test_own_scope_sends_only_the_middle_and_puts_prefix_and_postfix_back_as_written(node):
+    text = "Cinematic, 35mm. a fox runs. No text on screen."
+    (out, _), clip = _run(node, "A red fox sprints through snow.", text, scope="own", head="Cinematic, 35mm.", tail="No text on screen.")
+    assert out == "Cinematic, 35mm. A red fox sprints through snow. No text on screen."
+    sent = clip.seen["text"]
+    assert sent.endswith("a fox runs.") and "Cinematic" not in sent and "No text" not in sent
+    assert node.RUNS[-1]["before"] == text and node.RUNS[-1]["after"] == out
+
+
+def test_whole_scope_is_the_default_and_rewrites_everything(node):
+    (out, _), clip = _run(node, "Rewritten all of it.", "Pre. a fox. Post.", head="Pre.", tail="Post.")
+    assert out == "Rewritten all of it." and "Pre." in clip.seen["text"]
+
+
+def test_own_scope_with_no_prefix_or_postfix_is_just_the_text(node):
+    (out, _), _ = _run(node, "A red fox.", "a fox", scope="own")
+    assert out == "A red fox."
+
+
+def test_own_scope_that_cannot_find_its_parts_leaves_the_prompt_alone(node):
+    clip = FakeClip("never used")
+    out = node.FunUIEnhancePrompt.execute(clip, "a fox runs.", enabled=True, scope="own", head="Pre.", tail="")
+    assert out.args[0] == "a fox runs." and clip.seen == {} and node.RUNS[-1]["ok"] is False
+
+
+def test_a_failed_rewrite_in_own_scope_returns_the_whole_original(node):
+    (out, _), _ = _run(node, "", "Pre. a fox. Post.", scope="own", head="Pre.", tail="Post.")
+    assert out == "Pre. a fox. Post."
+
+
+@pytest.mark.parametrize("scope", ["whole", "own"])
+def test_markup_spans_never_reach_the_model_and_come_back_intact(node, scope):
+    text = "Pre. a (fox:1.5) and [cat|dog] run, then ⟦a¦b⟧. Post."
+    kw = {"scope": "own", "head": "Pre.", "tail": "Post."} if scope == "own" else {}
+    (out, _), clip = _run(node, "A {M1} and {M2} sprint, then {M3}.", text, **kw)
+    sent = clip.seen["text"]
+    assert "(fox:1.5)" not in sent and "[cat|dog]" not in sent and "⟦" not in sent and "{M1}" in sent
+    assert "A (fox:1.5) and [cat|dog] sprint, then ⟦a¦b⟧." in out
+    assert out.startswith("Pre.") or scope == "whole"
+    assert out.endswith("Post.") or scope == "whole"
+
+
+def test_a_rewrite_that_loses_or_doubles_a_mark_keeps_the_prompt(node):
+    text = "a [cat|dog] runs"
+    for answer in ("A cat runs.", "A {M1} {M1} runs.", "A {M2} runs."):
+        (out, status), _ = _run(node, answer, text)
+        assert out == text and "marks" in status and node.RUNS[-1]["ok"] is False
+
+
+def test_build_parts_finds_prefix_and_postfix_in_the_expanded_prompt():
+    from core import prompt_build
+    kw = dict(anchor="Cinematic.", postfix="No text.", variables=[{"name": "who", "text": "a fox"}], seed=1)
+    full = prompt_build.build("$who runs [x|y]", **kw)
+    parts = prompt_build.build_parts("$who runs [x|y]", **kw)
+    assert parts == {"head": "Cinematic.", "tail": "No text."} and full.startswith("Cinematic.") and full.endswith("No text.")
+    assert prompt_build.build_parts("hi", anchor="", postfix="") == {"head": "", "tail": ""}
+    assert prompt_build.build_parts("hi", anchor="A.", postfix="P.", postfix_enabled=False) == {"head": "A.", "tail": ""}

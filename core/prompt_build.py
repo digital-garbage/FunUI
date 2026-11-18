@@ -43,3 +43,25 @@ def build(scene_text: str, *, anchor: str = "", postfix: str = "",
     combined = _TYPED_ALTERNATIVES.sub(_protect, combined)
     expanded = shortcuts_mod.expand(combined, shortcuts=shortcuts, seed=seed, commit=commit)
     return shortcuts_mod.resolve_variables(expanded, variables)
+
+
+_HEAD_MARK, _TAIL_MARK = "", ""
+
+
+def build_parts(scene_text: str, **kw) -> dict | None:
+    """-> {"head", "tail"}: the expanded anchor and postfix exactly as they sit in build()'s result, so a caller can
+    work on the text between them and put them back untouched. None when they cannot be told apart (a shortcut
+    that reaches across the boundary, a random pick that falls differently): the caller then treats the prompt as one piece."""
+    full = build(scene_text, **kw)
+    marked = build(str(scene_text or ""), **{**kw, "anchor": (kw.get("anchor") or "").strip() + _HEAD_MARK,
+                                             "postfix": _TAIL_MARK + (kw.get("postfix") or "").strip()})
+    head, sep, rest = marked.partition(_HEAD_MARK)
+    if not sep:
+        return None
+    mid, _, tail = rest.partition(_TAIL_MARK)
+    head, tail = head.strip(), tail.strip()
+    if " ".join(" ".join(p for p in (head, mid.strip(), tail) if p).split()) != " ".join(full.split()):
+        return None
+    if (head and not full.startswith(head)) or (tail and not full.endswith(tail)) or len(head) + len(tail) > len(full):
+        return None
+    return {"head": head, "tail": tail}
