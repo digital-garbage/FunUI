@@ -11,10 +11,14 @@ def _has_h3_image():
     return hasattr(n, "MiniMaxH3ImageConditioning")
 
 
+#: the tests that build ComfyUI's H3-Image model or node (the other tests in this folder need neither)
+NEEDS = {"test_features.py", "test_lora.py", "test_h3_image.py::test_the_preset_builds_a_real_graph_and_is_offered"}
+
+
 def pytest_collection_modifyitems(config, items):
     if _has_h3_image():
         return
     skip = pytest.mark.skip(reason="this ComfyUI has no MiniMax H3-Image model or node")
     for item in items:
-        if "minimax_h3_image" in str(item.fspath) and item.name.startswith("test_") and item.fspath.basename in ("test_features.py", "test_h3_image.py", "test_lora.py"):
+        if "minimax_h3_image" in str(item.fspath) and (item.fspath.basename in NEEDS or f"{item.fspath.basename}::{item.name}" in NEEDS):
             item.add_marker(skip)
