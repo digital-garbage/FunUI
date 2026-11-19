@@ -71,6 +71,11 @@ COMPACT_TOKENS = 400         # longest summary the model may write
 COMPACT_AT = 0.8             # compact once a request would fill this share of the context window
 DEFAULT_WINDOW = 8192        # when the model does not say and nothing is set
 CONVO_KEEP = 200             # turns a compacting conversation holds in memory
+CONVO_NATIVE_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
+The earlier turns are above; the last message is the new request.
+- Rewrite only the new request, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
+- Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
+Output only the rewritten prompt, nothing else."""
 CONVO_TURNS = 8              # how many earlier turns a conversation sends
 CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
 CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK", "EARLIER IN THIS CONVERSATION", "NEW REQUEST:")
@@ -365,7 +370,29 @@ def _accepted(fn, swallows=False):
     return names
 
 
-def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_length=400,
+def _is_gemma4(tokenizer) -> bool:
+    return any(c.__name__ == "Gemma4_Tokenizer" for c in type(tokenizer).__mro__)
+
+
+def native_turns(clip) -> bool:
+    """True when this encoder takes a conversation as real role-tagged turns (Gemma 4: a text that opens with its turn marker is used as written)."""
+    outer = getattr(clip, "tokenizer", None)
+    stock = getattr(getattr(outer, "tokenize_with_weights", None), "__qualname__", "").startswith("SD1Tokenizer.")
+    inner = (getattr(outer, getattr(outer, "clip", None) or "", None) if stock else None) or outer
+    return inner is not None and _is_gemma4(inner)
+
+
+def gemma4_text(system, rounds, user, *, thinking=False, picture=False, primed=False) -> str:
+    """Gemma 4's own conversation format: a system turn, every earlier request and answer as user and model turns, then the new request."""
+    think = "<|think|>\n" if thinking else ""
+    sys_turn = f"<|turn>system\n{think}{system}<turn|>\n" if (thinking or str(system).strip()) else ""
+    past = "".join(f"<|turn>user\n{q}<turn|>\n<|turn>model\n{a}<turn|>\n" for q, a in rounds)
+    media = "\n\n<|image><|image|><image|>\n\n" if picture else ""
+    opened = "<|channel>thought\n<channel|>" if primed and not thinking else ""
+    return f"{sys_turn}{past}<|turn>user\n{user}{media}<turn|>\n<|turn>model\n{opened}"
+
+
+def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=False, max_length=400,
              temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
              presence_penalty=0.0, do_sample=True):
     """(raw text, status). Through a CLIP that exposes ComfyUI's generate/decode pair.
@@ -379,17 +406,22 @@ def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_l
     started = time.time()
     notes = []
     try:
-        merged = f"{system}\n\n{user}" if str(system).strip() else str(user)
         outer = getattr(clip, "tokenizer", None)
         # The stock SD1Tokenizer forwards its kwargs to the per-encoder tokenizer, which then
         # decides; a model that overrides it (MiniMax H3) is the one that decides.
         stock = getattr(getattr(outer, "tokenize_with_weights", None), "__qualname__", "").startswith("SD1Tokenizer.")
         inner = (getattr(outer, getattr(outer, "clip", None) or "", None) if stock else None) or outer
         takes = _accepted(getattr(inner, "tokenize_with_weights", None), swallows=True)
+        merged = f"{system}\n\n{user}" if str(system).strip() else str(user)
+        real = bool(rounds) and native_turns(clip) and (takes is None or "skip_template" in takes)
+        if real:
+            merged = gemma4_text(system, rounds, user, thinking=thinking, picture=image is not None and (takes is None or "image" in takes),
+                                 primed=bool(getattr(inner, "prime_empty_thought", False)))
+            notes.append("the conversation went in as real turns")
         # Only what this encoder's tokenizer really takes: the others swallow unknown kwargs
         # silently, so a picture or chat template would be dropped while the status said "generated".
         tk = {"min_length": 1}                       # Gemma pads to 1024 otherwise
-        for name, value in (("skip_template", False), ("thinking", bool(thinking))):
+        for name, value in (("skip_template", real), ("thinking", bool(thinking))):
             if takes is None or name in takes:
                 tk[name] = value
         if image is not None:
@@ -422,7 +454,7 @@ def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_l
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -438,15 +470,23 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     note = str(note or "").strip()
     if note:                                            # one closing line, after everything else in the request
         user += "\n\n" + note
-    if history:
+    rounds = ()
+    if convo and (history or convo.get("summary")) and native_turns(clip):
+        # real turns: the earlier requests and answers go in as turns of their own, the summary into the system turn
+        rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
+                       if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip())
+        system += "\n\n" + CONVO_NATIVE_SYSTEM
+        if str(convo.get("summary") or "").strip():
+            system += "\n\nSUMMARY OF THE CONVERSATION SO FAR:\n" + str(convo["summary"]).strip()
+    elif history:
         system += "\n\n" + CONVO_SYSTEM
         user = str(history) + user
-    if chat or history:
-        info["sent"] = f"SYSTEM:\n{system}\n\nMESSAGE:\n{user}"
-    raw, status = generate(clip, system, user, **sampling)
+    if chat or history or rounds:
+        info["sent"] = f"SYSTEM:\n{system}\n\n" + (f"EARLIER TURNS (as real turns): {len(rounds)}\n\n" if rounds else "") + f"MESSAGE:\n{user}"
+    raw, status = generate(clip, system, user, rounds=rounds, **sampling)
     info["thinking"] = extract_thinking(raw)
     cleaned = clean(raw)
-    if chat or history:
+    if chat or history or rounds:
         cleaned = cut_chat_echo(cleaned)
     out, overran = trim_runaway(cleaned, max_length=sampling.get("max_length"))
     if overran == "repeat":

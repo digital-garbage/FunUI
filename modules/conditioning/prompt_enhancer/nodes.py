@@ -211,7 +211,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             clip, masked, system=system,
             reference_text=reference_text, chat=en.chat_block(rounds), style=style,
             note=rating_line if pass_rating else "",
-            history=history,
+            history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,

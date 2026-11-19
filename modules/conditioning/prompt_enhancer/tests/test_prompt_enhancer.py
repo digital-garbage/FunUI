@@ -276,6 +276,30 @@ def test_a_run_reports_the_model_s_own_words_apart_from_the_global_prefix_and_po
     assert list(node.CONVOS["x:0"]["turns"]) == [{"request": "a fox\nRated: Liked", "reply": "A fox runs."}]
 
 
+class Gemma4_Tokenizer:      # the name ComfyUI's Gemma 4 tokenizers derive from
+    prime_empty_thought = True
+
+    def tokenize_with_weights(self, text, return_word_ids=False, image=None, skip_template=True, thinking=False, **kw):
+        return text
+
+
+def test_gemma4_gets_the_conversation_as_real_turns_and_other_encoders_a_flat_block(node):
+    node.CONVOS.clear()
+    def run(clip, text):
+        node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="g:0")
+        return clip.seen["text"]
+    gemma = FakeClip("A fox runs."); gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
+    first = run(gemma, "fox")
+    assert not first.startswith("<|turn>") and gemma.seen["skip_template"] is False        # nothing earlier yet: the encoder's own template
+    second = run(gemma, "owl")
+    assert second.startswith("<|turn>system\n") and second.endswith("<|turn>user\nowl<turn|>\n<|turn>model\n<|channel>thought\n<channel|>")
+    assert "<|turn>user\nfox<turn|>\n<|turn>model\nA fox runs.<turn|>\n<|turn>user\nowl<turn|>" in second and "EARLIER IN THIS CONVERSATION" not in second
+    assert gemma.seen["skip_template"] is True
+    plain = FakeClip("A fox runs.")
+    flat = run(plain, "bat")
+    assert "EARLIER IN THIS CONVERSATION" in flat and "<|turn>" not in flat           # no turn format known: the flat block
+
+
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():
     class Cfg: max_position_embeddings = 32768
     class Inner: config = Cfg()
