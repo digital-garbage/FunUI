@@ -247,12 +247,37 @@ def test_send_everything_into_chat_keeps_earlier_turns_per_conversation(node):
     assert "User: fox\nYou: Answer for fox." in second and "NEW REQUEST:" in second and en().CONVO_SYSTEM in second
     assert "EARLIER IN THIS CONVERSATION" not in run("bat", "p:1")           # Reset: a new conversation
     assert "EARLIER IN THIS CONVERSATION" not in run("cat", "p:0", on=False)  # off: a one-time request
-    assert [t["request"] for t in node.CONVOS["p:0"]] == ["fox", "owl"]
+    assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["fox", "owl"]
+
+
+def test_a_conversation_near_the_context_window_is_summarised_and_the_summary_replaces_the_turns(node):
+    node.CONVOS.clear()
+    def run(text, **kw):
+        clip = FakeClip("A fox runs.")
+        node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="c:0", **kw)
+        return clip.seen["text"]
+    run("fox", context_tokens=4000)
+    run("owl", context_tokens=4000)
+    assert "SUMMARY OF THE CONVERSATION SO FAR" not in run("bat", context_tokens=4000)      # plenty of room: every turn is sent
+    sent = run("cat", context_tokens=80)                                                    # a window this small is full: compact first
+    state = node.CONVOS["c:0"]
+    assert state["summary"] == "A fox runs." and [t["request"] for t in state["turns"]] == ["cat"]
+    assert "SUMMARY OF THE CONVERSATION SO FAR:\nA fox runs." in sent and "User: fox" not in sent
+    off = run("dog", context_tokens=80, compact=False)                                      # compacting off: the last turns, no summary
+    assert "User: cat" in off
+
+
+def test_the_model_s_own_context_size_is_read_when_it_reports_one():
+    class Cfg: max_position_embeddings = 32768
+    class Inner: config = Cfg()
+    class Stage: transformer = Inner()
+    class Clip: cond_stage_model = Stage()
+    assert en().context_window(Clip()) == 32768 and en().context_window(object()) == 0
 
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-10:] == ["style", "scope", "last_frame", "to_chat", "conversation", "pass_rating", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-12:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

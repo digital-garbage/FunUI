@@ -118,6 +118,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Sends every request as part of one running conversation (earlier requests and answers come along) instead of a one-time request."),
                 io.String.Input("conversation", default="", optional=True,
                                 tooltip="Which conversation the requests belong to (set by the app). Only used with Send everything into chat."),
+                io.Boolean.Input("compact", default=True, optional=True,
+                                 tooltip="When a request nearly fills the context window, the conversation so far is summarised and the summary is sent instead of every turn."),
+                io.Int.Input("context_tokens", default=0, min=0, max=1048576, optional=True,
+                             tooltip="The model's context window in tokens, for compacting. 0 uses what the model reports, or 8192 when it does not say."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
                 io.String.Input("rating_prefix", default="", optional=True,
@@ -143,7 +147,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_prefix="", rating_line="", to_chat=False, conversation="", head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -178,15 +182,33 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if not isinstance(rounds, list):
             rounds = []
         key = str(conversation or "").strip() if to_chat else ""
+        reference_text = en.reference(body, groups, reference_intro)
         masked, marks = mask_markup(body)
         system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
         if marks:
             system += "\n\n" + en.MARKS_RULE
+        history, compacted = "", ""
+        state = CONVOS.get(key) if key else None
+        if state:
+            keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
+            if compact and state["turns"]:
+                window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
+                size = lambda: (len(system) + len(en.convo_block(state["turns"], state["summary"], keep)) + len(masked) + len(reference_text)    # noqa: E731
+                                + len(rating_line if pass_rating else "")) // en.CHARS_PER_TOKEN + int(max_length)
+                if size() > en.COMPACT_AT * window:
+                    summary = en.compact(clip, state["summary"], list(state["turns"]))
+                    if summary:
+                        state["summary"] = summary
+                        state["turns"].clear()
+                        compacted = "; the earlier conversation was summarised to fit the context window"
+                    else:
+                        compacted = "; the conversation is near the context window and could not be summarised"
+            history = en.convo_block(state["turns"], state["summary"], keep)
         out, status, info = en.enhance(
             clip, masked, system=system,
-            reference_text=en.reference(body, groups, reference_intro), chat=en.chat_block(rounds), style=style,
+            reference_text=reference_text, chat=en.chat_block(rounds), style=style,
             note=rating_line if pass_rating else "",
-            history=en.convo_block(CONVOS.get(key, ())) if key else "",
+            history=history,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
@@ -206,10 +228,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
             info["before"] = info["after"] = text
             log.warning("FunUI Prompt enhancer", f"{status}; the original prompt is used")
         if key and info["ok"]:
-            turns = CONVOS.setdefault(key, collections.deque(maxlen=en.CONVO_TURNS))
+            turns = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP)})["turns"]
             CONVOS.move_to_end(key)
             turns.append({"request": "\n".join(x for x in (body, rating_line if pass_rating else "") if x), "reply": out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
-        RUNS.append({"prompt_id": _prompt_id(), "status": status, "conversation": key, **info})
+        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, **info})
         return io.NodeOutput(out, status)

@@ -64,6 +64,13 @@ The message shows EARLIER IN THIS CONVERSATION (each earlier request and your an
 - Rewrite only the NEW REQUEST, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
+COMPACT_SYSTEM = """SUMMARY: you are compressing a conversation between a user and a video-prompt writer so it can continue in less space.
+Write one compact summary that keeps: the characters, setting, style, tone and visual details established so far, every instruction the user gave that still applies, and what the latest shots showed.
+Drop greetings, repetition and anything superseded. Output only the summary, plain text, under 250 words."""
+COMPACT_TOKENS = 400         # longest summary the model may write
+COMPACT_AT = 0.8             # compact once a request would fill this share of the context window
+DEFAULT_WINDOW = 8192        # when the model does not say and nothing is set
+CONVO_KEEP = 200             # turns a compacting conversation holds in memory
 CONVO_TURNS = 8              # how many earlier turns a conversation sends
 CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
 CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK", "EARLIER IN THIS CONVERSATION", "NEW REQUEST:")
@@ -214,13 +221,42 @@ def chat_block(chat, scene=None) -> str:
     return "\n\n" + "\n\n".join(parts)
 
 
-def convo_block(turns) -> str:
-    """The earlier turns of a conversation as the first part of the message (oldest first, newest CONVO_TURNS only)."""
-    rows = [t for t in (turns or []) if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip()][-CONVO_TURNS:]
-    if not rows:
+def convo_block(turns, summary="", keep=CONVO_TURNS) -> str:
+    """The earlier turns of a conversation as the first part of the message (oldest first, newest `keep` only), after the
+    summary of the turns that were compacted."""
+    rows = [t for t in (turns or []) if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip()][-keep:]
+    summary = str(summary or "").strip()
+    if not rows and not summary:
         return ""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
-    return "EARLIER IN THIS CONVERSATION (oldest first):\n" + "\n".join(f"User: {cut(t['request'])}\nYou: {cut(t['reply'])}" for t in rows) + "\n\nNEW REQUEST:\n"
+    head = f"SUMMARY OF THE CONVERSATION SO FAR:\n{summary}\n\n" if summary else ""
+    body = ("EARLIER IN THIS CONVERSATION (oldest first):\n" + "\n".join(f"User: {cut(t['request'])}\nYou: {cut(t['reply'])}" for t in rows) + "\n\n") if rows else ""
+    return head + body + "NEW REQUEST:\n"
+
+
+def context_window(clip) -> int:
+    """What the loaded text model says its context size is (tokens), or 0 when it does not say."""
+    seen, stack = set(), [getattr(clip, "cond_stage_model", None)]
+    while stack:
+        node = stack.pop()
+        if node is None or id(node) in seen:
+            continue
+        seen.add(id(node))
+        n = getattr(getattr(node, "config", None), "max_position_embeddings", None)
+        if isinstance(n, int) and n > 0:
+            return n
+        for name in ("transformer", "model", "clip", "llama_model", "gemma3_12b", "qwen3_8b"):
+            stack.append(getattr(node, name, None))
+        stack.extend(v for v in getattr(node, "__dict__", {}).values() if hasattr(v, "config") or hasattr(v, "transformer"))
+    return 0
+
+
+def compact(clip, summary, turns, **sampling):
+    """-> new summary text of the old summary plus these turns, or "" when the model could not write one."""
+    cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
+    text = (f"EARLIER SUMMARY:\n{summary}\n\n" if summary else "") + "TURNS:\n" + "\n".join(f"User: {cut(t['request'])}\nYou: {cut(t['reply'])}" for t in turns)
+    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, "max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "image": None})
+    return clean(raw)
 
 
 def cut_chat_echo(text) -> str:
