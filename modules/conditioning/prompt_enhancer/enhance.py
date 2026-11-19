@@ -59,7 +59,14 @@ Output only the revised prompt, nothing else."""
 REFERENCE_INTRO = ("Reference entries. Use an entry only where the prompt "
                    "calls for it, in your own words; ignore the rest.")
 
-CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK")
+CONVO_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
+The message shows EARLIER IN THIS CONVERSATION (each earlier request and your answer, oldest first) and then the NEW REQUEST.
+- Rewrite only the NEW REQUEST, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
+- Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
+Output only the rewritten prompt, nothing else."""
+CONVO_TURNS = 8              # how many earlier turns a conversation sends
+CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
+CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK", "EARLIER IN THIS CONVERSATION", "NEW REQUEST:")
 CHARS_PER_TOKEN = 4          # turns the user's TOKEN limit into a character bound
 REPEAT_LIMIT = 3             # how often a sentence may repeat before it is a stuck model
 
@@ -205,6 +212,15 @@ def chat_block(chat, scene=None) -> str:
         parts.append("YOUR LATEST REWRITE:\n" + latest)
     parts.append("USER FEEDBACK (oldest first):\n" + "\n".join("- " + str(r["comment"]).strip() for r in rounds))
     return "\n\n" + "\n\n".join(parts)
+
+
+def convo_block(turns) -> str:
+    """The earlier turns of a conversation as the first part of the message (oldest first, newest CONVO_TURNS only)."""
+    rows = [t for t in (turns or []) if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip()][-CONVO_TURNS:]
+    if not rows:
+        return ""
+    cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
+    return "EARLIER IN THIS CONVERSATION (oldest first):\n" + "\n".join(f"User: {cut(t['request'])}\nYou: {cut(t['reply'])}" for t in rows) + "\n\nNEW REQUEST:\n"
 
 
 def cut_chat_echo(text) -> str:
@@ -370,7 +386,7 @@ def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_l
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -386,12 +402,15 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     note = str(note or "").strip()
     if note:                                            # one closing line, after everything else in the request
         user += "\n\n" + note
-    if chat:
+    if history:
+        system += "\n\n" + CONVO_SYSTEM
+        user = str(history) + user
+    if chat or history:
         info["sent"] = f"SYSTEM:\n{system}\n\nMESSAGE:\n{user}"
     raw, status = generate(clip, system, user, **sampling)
     info["thinking"] = extract_thinking(raw)
     cleaned = clean(raw)
-    if chat:
+    if chat or history:
         cleaned = cut_chat_echo(cleaned)
     out, overran = trim_runaway(cleaned, max_length=sampling.get("max_length"))
     if overran == "repeat":

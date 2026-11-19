@@ -425,3 +425,10 @@ test("Pass the rating names the nearest earlier rated scene, and only when switc
   assert.equal((await go(true, scenes[0])).inputs.e.rating_line, "");
   assert.equal((await go(false, scenes[2])).inputs.e.rating_line, undefined);
 });
+
+test("Send everything into chat names the project's conversation, and Reset starts a new one", async () => {
+  const go = (on, epoch) => buildInputs({ project: { id: "p1", scenes: [], editor_settings: { enhance_chat_epoch: epoch } }, scene: { id: "s", text: "x" }, slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { to_chat: on } }], expand: async ({ text }) => ({ text }) });
+  assert.equal((await go(true, 2)).inputs.e.conversation, "p1:2");
+  assert.equal((await go(true, undefined)).inputs.e.conversation, "p1:0");
+  assert.equal((await go(false, 2)).inputs.e.conversation, undefined);
+});

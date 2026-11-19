@@ -238,9 +238,21 @@ def test_the_rating_line_closes_the_request_only_when_asked_for(node):
         assert clip.seen["text"].rstrip().endswith("RATED liked") is want
 
 
+def test_send_everything_into_chat_keeps_earlier_turns_per_conversation(node):
+    node.CONVOS.clear()
+    run = lambda text, conv, on=True: (lambda c: (node.FunUIEnhancePrompt.execute(c, text, enabled=True, seed=3, to_chat=on, conversation=conv), c.seen["text"])[1])(FakeClip("Answer for " + text + "."))   # noqa: E731
+    first = run("fox", "p:0")
+    assert "EARLIER IN THIS CONVERSATION" not in first
+    second = run("owl", "p:0")
+    assert "User: fox\nYou: Answer for fox." in second and "NEW REQUEST:" in second and en().CONVO_SYSTEM in second
+    assert "EARLIER IN THIS CONVERSATION" not in run("bat", "p:1")           # Reset: a new conversation
+    assert "EARLIER IN THIS CONVERSATION" not in run("cat", "p:0", on=False)  # off: a one-time request
+    assert [t["request"] for t in node.CONVOS["p:0"]] == ["fox", "owl"]
+
+
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-7:] == ["style", "scope", "last_frame", "pass_rating", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-9:] == ["style", "scope", "last_frame", "to_chat", "conversation", "pass_rating", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

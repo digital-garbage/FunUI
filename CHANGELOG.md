@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The prompt enhancer can keep one running conversation** (Composer > Enhance > "Send everything into chat"). With it ticked, each request goes to the model together with the earlier requests of the project and the answers it gave (the last 8 turns), instead of as a one-time request, so the model keeps the characters and style it has already written. "Reset" in the Chat tab starts a new conversation. The conversation is kept in memory only and is gone when ComfyUI restarts. Off by default.
 - **The prompt enhancer can pass the rating of the previous scene** (Composer > Enhance > "Pass the rating"). With it ticked, one closing line telling the model how the last rated scene before this one was rated is added to the end of the request, or "This prompt was not rated." when its rating was forgotten. Nothing is added when no earlier scene is rated. Off by default.
 - **The prompt enhancer can look at the previous scene's last frame** (Composer > Enhance > "Pass the last frame of previous scene as enhancer input", shown while Continuity is on). With it ticked, the model is shown that picture instead of the first reference. The first scene, or a shot with no carried frame, uses the first reference and the Log says so. Off by default.
 - **The prompt enhancer accepts the app's own shortcuts file as a reference file** (Composer > Enhance > Lorebook / shortcut files). It was refused with "not a lorebook or shortcuts file".

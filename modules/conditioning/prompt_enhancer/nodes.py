@@ -13,6 +13,9 @@ from . import enhance as en
 #: The last runs' rewrites, newest last: what the Composer's readout shows. In
 #: memory on purpose -- it is the last run's answer, not state to keep.
 RUNS = collections.deque(maxlen=20)
+#: "Send everything into chat": the earlier turns {request, reply} of each conversation, in memory only (a restart starts them over).
+CONVOS = collections.OrderedDict()
+MAX_CONVOS = 20
 
 
 _MARKUP = re.compile(r"\([^()]*:\s*[\d.]+\)|\[[^\]]*\|[^\]]*\]|⟦[^⟧]*⟧")
@@ -111,6 +114,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                tooltip="whole: the model rewrites the whole prompt. own: only the text between the global prefix and postfix is rewritten; they are kept as written."),
                 io.Boolean.Input("last_frame", default=False, optional=True,
                                  tooltip="Shows the model the previous scene's last frame instead of the first reference. Only works while Continuity carries that frame."),
+                io.Boolean.Input("to_chat", default=False, optional=True,
+                                 tooltip="Sends every request as part of one running conversation (earlier requests and answers come along) instead of a one-time request."),
+                io.String.Input("conversation", default="", optional=True,
+                                tooltip="Which conversation the requests belong to (set by the app). Only used with Send everything into chat."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
                 io.String.Input("rating_line", default="", optional=True,
@@ -134,7 +141,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_line="", head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_line="", to_chat=False, conversation="", head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -168,6 +175,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             log.warning("FunUI Prompt enhancer", "the Chat comments are not readable; ignored")
         if not isinstance(rounds, list):
             rounds = []
+        key = str(conversation or "").strip() if to_chat else ""
         masked, marks = mask_markup(body)
         system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
         if marks:
@@ -176,6 +184,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             clip, masked, system=system,
             reference_text=en.reference(body, groups, reference_intro), chat=en.chat_block(rounds), style=style,
             note=rating_line if pass_rating else "",
+            history=en.convo_block(CONVOS.get(key, ())) if key else "",
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
@@ -194,5 +203,11 @@ class FunUIEnhancePrompt(io.ComfyNode):
             out = text
             info["before"] = info["after"] = text
             log.warning("FunUI Prompt enhancer", f"{status}; the original prompt is used")
-        RUNS.append({"prompt_id": _prompt_id(), "status": status, **info})
+        if key and info["ok"]:
+            turns = CONVOS.setdefault(key, collections.deque(maxlen=en.CONVO_TURNS))
+            CONVOS.move_to_end(key)
+            turns.append({"request": "\n".join(x for x in (body, rating_line if pass_rating else "") if x), "reply": out})
+            while len(CONVOS) > MAX_CONVOS:
+                CONVOS.popitem(last=False)
+        RUNS.append({"prompt_id": _prompt_id(), "status": status, "conversation": key, **info})
         return io.NodeOutput(out, status)

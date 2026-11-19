@@ -116,6 +116,8 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const shown = wantsLast && lastFrame ? lastFrame : first;
     const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
     if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
+    // "Send everything into chat": the conversation is the project's, and Reset in the Chat tab starts a new one.
+    if (((raw[e.id] || {}).to_chat ?? (e.inputs || {}).to_chat) === true) put(e, "conversation", `${project.id || ""}:${(project.editor_settings || {}).enhance_chat_epoch || 0}`);
     // "Pass the rating": the nearest earlier scene that was rated (or had its rating forgotten) tells the model how it was received.
     if (((raw[e.id] || {}).pass_rating ?? (e.inputs || {}).pass_rating) === true) {
       const all = project.scenes || [], at = all.findIndex((s) => s.id === scene.id);
