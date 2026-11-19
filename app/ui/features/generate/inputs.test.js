@@ -420,7 +420,7 @@ test("the enhancer's picture: the first reference by default, the previous scene
 
 test("Pass the rating names the nearest earlier rated scene, and only when switched on", async () => {
   const scenes = [{ id: "a", text: "a", rating: "liked" }, { id: "b", text: "b" }, { id: "c", text: "c" }];
-  const go = (on, scene) => buildInputs({ project: { scenes }, scene, slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: on } }], expand: async ({ text }) => ({ text }) });
+  const go = (on, scene) => buildInputs({ project: { scenes }, scene, slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: on, to_chat: true } }], expand: async ({ text }) => ({ text }) });
   assert.match((await go(true, scenes[2])).inputs.e.rating_line, /liked/);
   assert.equal((await go(true, scenes[0])).inputs.e.rating_line, "");
   assert.equal((await go(false, scenes[2])).inputs.e.rating_line, undefined);
@@ -435,9 +435,16 @@ test("Send everything into chat names the project's conversation, and Reset star
 
 test("the rating line takes a custom opening and the one-time comment, and says when the comment was used", async () => {
   const scenes = [{ id: "a", text: "a", rating: "10" }, { id: "b", text: "b" }];
-  const go = (inputs, comment) => buildInputs({ project: { scenes, editor_settings: comment ? { rating_comment: comment } : {} }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, ...inputs } }], expand: async ({ text }) => ({ text }) });
+  const go = (inputs, comment) => buildInputs({ project: { scenes, editor_settings: comment ? { rating_comment: comment } : {} }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: true, ...inputs } }], expand: async ({ text }) => ({ text }) });
   const mine = await go({ rating_prefix: "Viewer verdict:" }, " too fast ");
   assert.equal(mine.inputs.e.rating_line, "Viewer verdict: Liked\ntoo fast");
   assert.equal(mine.ratingCommentUsed, true);
   assert.equal((await go({}, "")).ratingCommentUsed, false);
+});
+
+test("Pass the rating sends nothing while Send everything into chat is off", async () => {
+  const scenes = [{ id: "a", text: "a", rating: "10" }, { id: "b", text: "b" }];
+  const r = await buildInputs({ project: { scenes, editor_settings: { rating_comment: "slow" } }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: false } }], expand: async ({ text }) => ({ text }) });
+  assert.equal(r.inputs.e.rating_line, undefined);
+  assert.equal(r.ratingCommentUsed, false);          // the comment stays for a run that sends it
 });
