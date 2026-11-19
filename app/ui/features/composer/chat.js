@@ -13,17 +13,30 @@ export function chatHook({ project, scene, slots }) {
   return { inputs: mine.length ? { [slot.id]: { chat: JSON.stringify(mine) } } : {}, notes: left ? [`${left} Chat comment(s) are about a different prompt and were left out of this run.`] : [] };
 }
 
+/** The prompt a comment is about: the picked scene's own text, as typed. */
+function typedOf(app) {
+  const open = app.project.project, sc = open && (open.scenes.find((s) => s.id === app.selection.focus) || open.scenes.find(isGenerative));
+  const root = sc && isGenerative(sc) ? unitRoot(open, genUnitId(sc)) : null;
+  return root ? (root.text || "").trim() : undefined;
+}
+const firstOf = (r) => Object.values(r.rewrites || {})[0];
+
+/** Save one comment on the last rewrite (`last`: the enhancer's latest run, or null). Shared by the Chat tab and the Comment button. */
+export function addComment(app, text, last) {
+  const p = app.project, comment = String(text || "").trim(), now = Array.isArray(p.pref("enhance_chat", [])) ? p.pref("enhance_chat", []) : [];
+  if (!comment) return false;
+  const ok = last && last.ok, prev = now.length ? firstOf(now[now.length - 1]) : null, here = typedOf(app);
+  const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
+  p.setPref("enhance_chat", [...now, { rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
+  return true;
+}
+
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
   let last = null, all = [], alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
-  const typed = () => {                                   // the prompt a comment is about: the picked scene's own text, as typed
-    const open = p.project, sc = open && (open.scenes.find((s) => s.id === app.selection.focus) || open.scenes.find(isGenerative));
-    const root = sc && isGenerative(sc) ? unitRoot(open, genUnitId(sc)) : null;
-    return root ? (root.text || "").trim() : undefined;
-  };
-  const first = (r) => Object.values(r.rewrites || {})[0];
+  const first = firstOf;
   function draw(force) {
     if (!alive) return;
     const here = ((app.pipeline && app.pipeline.slots()) || []).some((s) => s.node === NODE);
@@ -46,15 +59,7 @@ export function chat(app, own) {
     }
     bubbles = bubbles.filter(Boolean);
     const box = c.textarea.md({ label: "Comment", rows: 2, value: draft, placeholder: "e.g. warmer light, no rain", onInput: (v) => { draft = v; } });
-    const send = () => {
-      const comment = draft.trim(), now = rounds();
-      if (!comment) return;
-      const prev = now.length ? first(now[now.length - 1]) : null, here = typed();
-      const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
-      draft = "";
-      p.setPref("enhance_chat", [...now, { rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
-      draw(true);
-    };
+    const send = () => { if (addComment(app, draft, last)) { draft = ""; draw(true); } };
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Comment on the last rewrite. The next Generate rewrites again with every comment still applying. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
       c.region.stack({ gap: "sm", children: bubbles }), box,
       c.toolbar.default({ items: [c.button.sm({ label: "Send", tone: "primary", onClick: send })], trailing: [c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);

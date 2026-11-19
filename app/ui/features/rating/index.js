@@ -2,6 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
+import { addComment } from "../composer/chat.js";
 import { CHOICES, FORGET, nameOf, tasteOf } from "./choices.js";
 
 /** What to say when a rating taught nothing, or "" when it did. The run captured nothing, a learner is on and no key is
@@ -58,14 +59,15 @@ export default {
           const pick = await c.modal.choice({ title: "How did it turn out?", items: [...CHOICES.map((o) => ({ id: o.value, label: o.label, hint: o.hint })), { id: FORGET, label: "Forget my rating", hint: "Clears it: nothing is learned from this clip." }] }).result;
           if (pick) rate(pick);
         } });
-      const note = String(p.pref("rating_comment", "") || "");
-      const comment = c.button.sm({ label: note ? "✎ Comment" : "Comment…", tone: note ? "neutral" : "ghost", title: note ? `Sent with the next generation's rating line, then cleared: ${note}` : "Write a note that goes after the rating in the next generation's enhancer request (needs Pass the rating in Composer > Enhance); it is cleared after that run",
+      const comment = c.button.sm({ label: "Comment…", tone: "ghost", title: "Comment on the enhancer's last rewrite: the same as a comment in the Chat tab",
         onClick: async () => {
-          const text = await c.modal.prompt({ title: "Comment on the rating", label: "Sent once, with the next generation", value: note, placeholder: "e.g. the motion was too fast", confirmLabel: "Save" }).result;
-          if (text !== null && text !== undefined) { p.setPref("rating_comment", text.trim()); draw(); }
+          const text = await c.modal.prompt({ title: "Comment on the last rewrite", label: "The next Generate rewrites again with this applied", placeholder: "e.g. warmer light, no rain", confirmLabel: "Send" }).result;
+          if (!text || !text.trim()) return;
+          const last = await Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => (r.runs || []).slice(-1)[0] || null, () => null);
+          addComment(app, text, last);
         } });
-      const slot = (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt"), inp = (slot && slot.inputs) || {};
-      put(picker.node, button.node, ...(inp.to_chat && inp.pass_rating && inp.rating_comment ? [comment.node] : []));      // only while the enhancer sends the rating and the comment is switched on
+      const slot = (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt");
+      put(picker.node, button.node, ...(slot && (slot.inputs || {}).comment_button ? [comment.node] : []));      // only while the enhancer has it switched on
     };
     draw();
     return app.on(draw);
