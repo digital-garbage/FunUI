@@ -42,7 +42,7 @@ ComfyUI  nodes + sampler    executes the prompt
 2. `GET /fun/api/modules` sends the browser the validated declarations, ordered by stage and relations, with the model's traits applied.
 3. **Settings > Engine** (and the Sampler window) draw one row per setting. Nothing is hand-built per module.
 4. An edit is saved with the project. The values travel as one JSON object, `{module_id: {key: value}}`, in the `settings` input of the node a module named as its `settings_sink` (today `FunUI Modifier Settings`).
-5. At run time `FunUI Modifier Settings` checks every value against its declaration and `FunUI Load Modifiers` calls each enabled module's `install(patcher, values, key)` in order.
+5. At run time `FunUI Modifier Settings` checks every value against its declaration (a saved choice that is no longer an option takes the setting's default and the Log says so; it never stops the run) and `FunUI Load Modifiers` calls each enabled module's `install(patcher, values, key)` in order.
 
 The screen is the truth: Generate reads the live UI state, and a module never reads the UI.
 

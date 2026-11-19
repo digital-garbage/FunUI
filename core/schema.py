@@ -289,6 +289,14 @@ def check_values(spec, values: Any, keep_bad: bool = False) -> Tuple[Dict[str, A
             continue
         if problem and not _applies(declared, {**spec.defaults(), **values}):
             continue                    # a setting that is hidden by another one's choice cannot act, so it cannot stop the run: its default stands
+        if problem and declared["type"] == "enum" and not keep_bad:
+            # A saved choice that is no longer among the options (the option was removed or renamed) never stops a run:
+            # the setting uses its default, and the Log says which value was replaced. Other wrong values (a typed
+            # number out of range, the wrong kind of value) are still refused: those were asked for, not left behind.
+            from . import log
+            log.once(f"gone_option:{spec.id}.{key}:{value!r}", log.WARNING, "FunUI settings",
+                     f"{spec.id}: {declared.get('label', key)} {value!r} is no longer an option; its default ({spec.defaults().get(key)!r}) is used")
+            continue
         if problem:
             problems.append(problem)
             if not keep_bad:

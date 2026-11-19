@@ -45,9 +45,19 @@ def test_slots_become_the_prompt_comfyui_queues():
     assert prompt["model"]["inputs"]["name"] == "a.safetensors"
 
 
+def test_an_input_the_node_does_not_have_never_stops_the_run():
+    """Any node, any name: a setting saved by another version is left out of what is queued, the rest runs."""
+    slots = pipeline()
+    for slot in slots:
+        slot["inputs"].update(nonsense=1, gone_link=["model", 0])
+    prompt, problems = graph.build(slots, SCHEMAS)
+    assert problems == []
+    assert all("nonsense" not in n["inputs"] and "gone_link" not in n["inputs"] for n in prompt.values())
+    assert prompt["lora"]["inputs"] == {"model": ["model", 0], "strength": 1.0}
+
+
 @pytest.mark.parametrize("break_it,expected", [
     (lambda s: s[0].update(node="NoSuchNode"), "no node called"),
-    (lambda s: s[1]["inputs"].update(nonsense=1), "has no input"),
     (lambda s: s[1]["inputs"].update(model=["ghost", 0]), "not in the pipeline"),
     (lambda s: s[1]["inputs"].update(model=["model", 7]), "reads output 7"),
     (lambda s: s[3]["inputs"].update(model=["latent", 0]), "wants MODEL but"),

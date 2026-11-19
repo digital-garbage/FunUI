@@ -427,7 +427,9 @@ def build(slots: Sequence[dict], schemas: Optional[Schemas] = None,
         inputs, refused_here = {}, set()
         for name, value in (slot.get("inputs") or {}).items():
             if name not in declared:
-                problems.append(f"{slot_id}: {class_type} has no input {name!r}")
+                # An option a saved pipeline still holds but the node no longer has never stops a run: it is left out.
+                log.once(f"unknown_input:{class_type}.{name}", log.WARNING, "FunUI pipeline",
+                         f"{class_type} has no input {name!r} (a setting saved by another version?); it is ignored")
                 continue
             if is_link(value):
                 source, index = value

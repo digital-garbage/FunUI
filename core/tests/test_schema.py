@@ -342,7 +342,7 @@ def test_a_hidden_setting_with_a_bad_value_does_not_stop_the_run():
     clean, problems = schema.check_values(spec, {"method": "plain", "file": "other.safetensors"})
     assert problems == [] and clean["file"] == "a.pth"
     clean, problems = schema.check_values(spec, {"method": "file", "file": "other.safetensors"})
-    assert problems and "m.file must be one of" in problems[0]
+    assert problems == [] and clean["file"] == "a.pth"            # a choice that is no longer an option: the default, said in the Log
 
 
 def test_a_removed_enum_option_is_mapped_forward_when_saved_settings_are_read():
@@ -351,7 +351,7 @@ def test_a_removed_enum_option_is_mapped_forward_when_saved_settings_are_read():
     s = {"m": {"type": "enum", "default": "a", "options": [{"value": "a", "label": "A"}, {"value": "b", "label": "B"}], "renamed_options": {"gone": "b"}}}
     spec = SimpleNamespace(id="x", settings=s, defaults=lambda: {"m": "a"})
     assert schema.check_values(spec, {"m": "gone"}) == ({"m": "b"}, [])
-    assert schema.check_values(spec, {"m": "other"})[1]            # an unknown value is still a problem
+    assert schema.check_values(spec, {"m": "other"}) == ({"m": "a"}, [])      # a value that is no longer an option never stops a run: the default
     with pytest.raises(schema.SchemaError):
         schema.validate_setting("m", {**s["m"], "renamed_options": {"a": "b"}}, s)     # a live option cannot be "removed"
     with pytest.raises(schema.SchemaError):
@@ -376,4 +376,4 @@ def test_a_file_choice_that_is_gone_from_its_list_is_kept_and_said_not_refused()
     spec = SimpleNamespace(id="x", settings=s, defaults=lambda: {"f": "", "g": ""})
     clean, problems = schema.check_values(spec, {"f": "removed.png"})
     assert problems == [] and clean["f"] == "removed.png"
-    assert schema.check_values(spec, {"g": "removed.png"})[1]          # only a setting that declares it is spared
+    assert schema.check_values(spec, {"g": "removed.png"}) == ({"f": "", "g": ""}, [])      # others fall back to their default

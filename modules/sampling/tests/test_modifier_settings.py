@@ -78,7 +78,6 @@ def test_a_module_that_is_not_installed_is_skipped_and_said(registry):
     ('{"alg": {"strength": -1.0}}', "below its minimum"),
     ('{"alg": {"steps": 1.5}}', "int"),
     ('{"alg": {"enabled": "yes"}}', "bool"),
-    ('{"alg": {"mode": "swing"}}', "must be one of"),
 ])
 def test_a_wrong_value_is_refused_not_coerced(registry, payload, expected):
     with pytest.raises(RuntimeError, match=expected):
@@ -182,3 +181,8 @@ def test_a_switched_off_modules_bad_value_does_not_refuse_the_run(registry):
     assert "alg" not in out
     with pytest.raises(RuntimeError, match="strength"):
         _run('{"alg": {"strength": 99}}')
+
+
+def test_a_saved_choice_that_is_no_longer_an_option_never_stops_the_run(registry):
+    """An option that was removed (or never existed) falls back to the setting's default; the run goes on."""
+    assert "swing" not in str(_run('{"alg": {"mode": "swing"}}'))
