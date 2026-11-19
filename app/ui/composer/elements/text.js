@@ -44,6 +44,15 @@ define("brand", "default", ({ name = "FunUI" } = {}) =>
     ] }),
      destroy() { this.node.remove(); } }));
 
+/** One message of a conversation: `you` sits to the right, `model` to the left. `who` is the small name above it. */
+for (const side of ["you", "model"]) {
+  define("bubble", side, ({ text, who } = {}) =>
+    handle(el("div", { cls: ["cx-bubble", `cx-bubble-${side}`], attrs: { role: "group", "aria-label": who || (side === "you" ? "You" : "Model") }, children: [
+      who ? el("span", { cls: "cx-bubble-who", text: who }) : null,
+      el("div", { cls: "cx-bubble-body", text }),
+    ].filter(Boolean) })));
+}
+
 define("code", "inline", ({ text } = {}) =>
   handle(el("code", { cls: "cx-code", text })));
 

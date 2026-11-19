@@ -26,7 +26,7 @@ save.destroy();
 
 | File | Groups |
 |---|---|
-| `text.js` | `brand`, `code`, `header`, `hint` (`low: true` hides it first when the row runs short), `label`, `text` |
+| `text.js` | `brand`, `bubble`, `code`, `header`, `hint` (`low: true` hides it first when the row runs short), `label`, `text` |
 | `button.js` | `button`, `buttonGroup`, `iconButton` |
 | `input.js` | `filterList`, `input`, `number`, `search`, `stepper`, `textarea` |
 | `choice.js` | `checkbox`, `checkboxRow`, `checklist`, `color`, `radioGroup`, `segmented`, `select`, `toggle` |
@@ -58,6 +58,7 @@ Variants are listed after the group. Props shown are the ones every use needs; t
 | `hint` | `default` | `text` |
 | `label` | `field`, `section` | `text`, `for` |
 | `code` | `inline`, `block` | `text`, `label` (block) |
+| `bubble` | `you`, `model` | One chat message: `you` sits to the right, `model` to the left. `text` (wraps, keeps line breaks), `who` (small name above it). Has `setText`. Put them in a `region.stack`. |
 | `brand` | `default` | `name` |
 
 ### Actions

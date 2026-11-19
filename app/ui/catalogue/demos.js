@@ -366,6 +366,8 @@ export const DEMOS = {
     { name: "loss", faint: true, values: [0.9, 0.55, 0.7, 0.4, 0.5, 0.3, 0.35, 0.22, 0.3, 0.18, 0.2, 0.15] },
     { name: "smoothed", tone: "good", values: [0.9, 0.72, 0.68, 0.58, 0.52, 0.44, 0.38, 0.33, 0.3, 0.26, 0.23, 0.2] },
   ], empty: "No training yet" },
+  "bubble.you": { text: "A fox runs through the snow.", who: "You" },
+  "bubble.model": { text: "A red fox sprints through fresh snow, breath steaming, snow kicking up behind its paws.", who: "Model" },
   "tags.editor": { value: ["rooftop", "dusk", "city lights"], suggestions: ["rooftop", "rain", "dusk", "dawn", "neon sign"], placeholder: "Add a tag", label: "Tags" },
   "captioned.cell": { title: "street_01.png", caption: "rooftop, dusk, city lights", badge: "Liked", tone: "good", onChange: () => {}, onSelect: () => {}, onOpen: () => {} },
   "captioned.side": { title: "street_02.mp4", kind: "video", caption: "rain, neon sign", badge: "Clip", onChange: () => {}, onOpen: () => {} },

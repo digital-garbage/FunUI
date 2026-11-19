@@ -48,3 +48,16 @@
 
 .cx-center { text-align: center; }
 .cx-modal-centered .cx-modal-head { justify-content: center; text-align: center; }
+
+/* Chat bubbles: the message wraps (long words too) and keeps its line breaks; a stack gives them their gaps. */
+.cx-bubble { display: flex; flex-direction: column; gap: var(--sp-2); max-inline-size: 85%; min-inline-size: 0; }
+.cx-bubble-you { align-self: flex-end; align-items: flex-end; }
+.cx-bubble-model { align-self: flex-start; align-items: flex-start; }
+.cx-bubble-who { font-size: var(--fs-7); line-height: var(--lh-7); color: var(--faint); padding: 0 var(--sp-5); }
+.cx-bubble-body {
+  padding: var(--sp-4) var(--sp-6); border: var(--bw) solid var(--line); border-radius: var(--r-5);
+  font-size: var(--fs-4); line-height: var(--lh-4); color: var(--text);
+  white-space: pre-wrap; overflow-wrap: anywhere; min-inline-size: 0; user-select: text;
+}
+.cx-bubble-you .cx-bubble-body { background: var(--accent-soft); border-color: var(--accent); border-end-end-radius: var(--r-2); }
+.cx-bubble-model .cx-bubble-body { background: var(--elev-2); border-end-start-radius: var(--r-2); }
