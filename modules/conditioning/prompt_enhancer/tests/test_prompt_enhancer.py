@@ -231,9 +231,16 @@ def test_style_matrix_typed_instructions_win_then_style_then_default(style, type
     assert (e.CHAT_SYSTEM in sent) is with_chat and ("REF" in sent) is with_reference and "a fox" in sent
 
 
+def test_the_rating_line_closes_the_request_only_when_asked_for(node):
+    for on, want in ((True, True), (False, False)):
+        clip = FakeClip("A fox sprints.")
+        node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, pass_rating=on, rating_line="RATED liked")
+        assert clip.seen["text"].rstrip().endswith("RATED liked") is want
+
+
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-5:] == ["style", "scope", "last_frame", "head", "tail"]
+    assert [i.id for i in schema.inputs][-7:] == ["style", "scope", "last_frame", "pass_rating", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

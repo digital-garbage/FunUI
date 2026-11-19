@@ -417,3 +417,11 @@ test("the enhancer's picture: the first reference by default, the previous scene
   assert.equal(alone.inputs.e.use_image, false);
   learn([]);
 });
+
+test("Pass the rating names the nearest earlier rated scene, and only when switched on", async () => {
+  const scenes = [{ id: "a", text: "a", rating: "liked" }, { id: "b", text: "b" }, { id: "c", text: "c" }];
+  const go = (on, scene) => buildInputs({ project: { scenes }, scene, slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: on } }], expand: async ({ text }) => ({ text }) });
+  assert.match((await go(true, scenes[2])).inputs.e.rating_line, /liked/);
+  assert.equal((await go(true, scenes[0])).inputs.e.rating_line, "");
+  assert.equal((await go(false, scenes[2])).inputs.e.rating_line, undefined);
+});

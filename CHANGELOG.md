@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The prompt enhancer can pass the rating of the previous scene** (Composer > Enhance > "Pass the rating"). With it ticked, one closing line telling the model how the last rated scene before this one was rated (liked or disliked) is added to the end of the request. Nothing is added when no earlier scene is rated. Off by default.
 - **The prompt enhancer can look at the previous scene's last frame** (Composer > Enhance > "Pass the last frame of previous scene as enhancer input", shown while Continuity is on). With it ticked, the model is shown that picture instead of the first reference. The first scene, or a shot with no carried frame, uses the first reference and the Log says so. Off by default.
 - **The prompt enhancer accepts the app's own shortcuts file as a reference file** (Composer > Enhance > Lorebook / shortcut files). It was refused with "not a lorebook or shortcuts file".
 - **The prompt enhancer can rewrite only your own text** (Composer > Enhance > Rewrites). "Only my own text" sends the model what sits between the global prefix and postfix and puts the prefix and postfix back exactly as written; "The whole prompt" (default) rewrites everything. In both, `(word:1.5)` weights and `[a|b]` alternatives are kept as written; if the model changes them, the prompt runs unchanged and the Log says so.

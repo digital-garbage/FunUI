@@ -370,7 +370,7 @@ def generate(clip, system, user, *, seed=None, image=None, thinking=False, max_l
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -383,6 +383,10 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
         # appended, a model rewrote it as more prompt text and echoed it back.
         system += "\n\n" + CHAT_SYSTEM
         user = "ORIGINAL PROMPT:\n" + user + str(chat)
+    note = str(note or "").strip()
+    if note:                                            # one closing line, after everything else in the request
+        user += "\n\n" + note
+    if chat:
         info["sent"] = f"SYSTEM:\n{system}\n\nMESSAGE:\n{user}"
     raw, status = generate(clip, system, user, **sampling)
     info["thinking"] = extract_thinking(raw)
