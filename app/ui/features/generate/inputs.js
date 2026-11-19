@@ -2,7 +2,7 @@
 // settings, the scene's picked media -- each placed by the ROLE a pipeline slot declares, never by slot id.
 import { MAX_REFERENCES, referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
-import { nameOf } from "../rating/choices.js";
+import { NOT_RATED, RATING_PREFIX, nameOf } from "../rating/choices.js";
 import { DRIVEN } from "../../shell/scenes.js";
 import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
 
@@ -108,7 +108,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // With no picture reference there is nothing to show, whatever picture the pipeline was saved wiring to it.
   // Optionally it is shown the previous scene's last frame (Continuity) instead, when one was carried into this run.
   const lastFrame = carried.find((id) => kinds.get(id) === "image" && !noRoom.includes(id));
-  let noLastFrame = false;
+  let noLastFrame = false, ratingCommentUsed = false;
   const first = firstByNumber((id) => kinds.get(id) === "image" && !leave.has(id));
   for (const e of (slots || []).filter((s) => s.node === "FunUIEnhancePrompt")) {
     const wantsLast = ((raw[e.id] || {}).last_frame ?? (e.inputs || {}).last_frame) === true;
@@ -118,11 +118,13 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
     // "Send everything into chat": the conversation is the project's, and Reset in the Chat tab starts a new one.
     if (((raw[e.id] || {}).to_chat ?? (e.inputs || {}).to_chat) === true) put(e, "conversation", `${project.id || ""}:${(project.editor_settings || {}).enhance_chat_epoch || 0}`);
-    // "Pass the rating": the nearest earlier scene that was rated (or had its rating forgotten) tells the model how it was received.
+    // "Pass the rating": the nearest earlier scene that was rated (or had its rating forgotten) tells the model how it was received,
+    // followed by the one-time comment the person wrote beside the rating.
     if (((raw[e.id] || {}).pass_rating ?? (e.inputs || {}).pass_rating) === true) {
-      const all = project.scenes || [], at = all.findIndex((s) => s.id === scene.id);
-      const rated = all.slice(0, Math.max(at, 0)).reverse().find((s) => s.rating);
-      put(e, "rating_line", rated ? (nameOf(rated.rating) ? `The previous scene was rated: ${nameOf(rated.rating)}.` : "This prompt was not rated.") : "");
+      const all = project.scenes || [], at = all.findIndex((s) => s.id === scene.id), rated = all.slice(0, Math.max(at, 0)).reverse().find((s) => s.rating);
+      const prefix = String((raw[e.id] || {}).rating_prefix ?? (e.inputs || {}).rating_prefix ?? "").trim() || RATING_PREFIX, comment = String((project.editor_settings || {}).rating_comment || "").trim();
+      put(e, "rating_line", [rated ? (nameOf(rated.rating) ? `${prefix} ${nameOf(rated.rating)}` : NOT_RATED) : "", comment].filter(Boolean).join("\n"));
+      if (comment) ratingCommentUsed = true;
     }
   }
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
@@ -189,5 +191,5 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   // Judged on what is SENT (a carried frame counts; a picture t2v blanks, or one this pipeline has no input for, does not).
   const picture = (source && (raw[source.slot.id] || {}).media_id) || Object.keys(overrides).length;
   if (prompt && !String((raw[prompt.slot.id] || {})[prompt.role.input] ?? "").trim() && !picture) notes.push("This shot has no text and no start picture, so the model makes whatever it likes.");
-  return { inputs: raw, unwired: unwired + (ignored && !source ? 1 : 0), unusedPicture: ignored && source ? scene.source_image : null, left, noPrompt: !prompt, notes, placed };
+  return { inputs: raw, unwired: unwired + (ignored && !source ? 1 : 0), unusedPicture: ignored && source ? scene.source_image : null, left, noPrompt: !prompt, notes, placed, ratingCommentUsed };
 }

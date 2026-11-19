@@ -432,3 +432,12 @@ test("Send everything into chat names the project's conversation, and Reset star
   assert.equal((await go(true, undefined)).inputs.e.conversation, "p1:0");
   assert.equal((await go(false, 2)).inputs.e.conversation, undefined);
 });
+
+test("the rating line takes a custom opening and the one-time comment, and says when the comment was used", async () => {
+  const scenes = [{ id: "a", text: "a", rating: "10" }, { id: "b", text: "b" }];
+  const go = (inputs, comment) => buildInputs({ project: { scenes, editor_settings: comment ? { rating_comment: comment } : {} }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, ...inputs } }], expand: async ({ text }) => ({ text }) });
+  const mine = await go({ rating_prefix: "Viewer verdict:" }, " too fast ");
+  assert.equal(mine.inputs.e.rating_line, "Viewer verdict: Liked\ntoo fast");
+  assert.equal(mine.ratingCommentUsed, true);
+  assert.equal((await go({}, "")).ratingCommentUsed, false);
+});

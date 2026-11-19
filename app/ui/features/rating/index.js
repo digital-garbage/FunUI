@@ -58,7 +58,13 @@ export default {
           const pick = await c.modal.choice({ title: "How did it turn out?", items: [...CHOICES.map((o) => ({ id: o.value, label: o.label, hint: o.hint })), { id: FORGET, label: "Forget my rating", hint: "Clears it: nothing is learned from this clip." }] }).result;
           if (pick) rate(pick);
         } });
-      put(picker.node, button.node);
+      const note = String(p.pref("rating_comment", "") || "");
+      const comment = c.button.sm({ label: note ? "✎ Comment" : "Comment…", tone: note ? "neutral" : "ghost", title: note ? `Sent with the next generation's rating line, then cleared: ${note}` : "Write a note that goes after the rating in the next generation's enhancer request (needs Pass the rating in Composer > Enhance); it is cleared after that run",
+        onClick: async () => {
+          const text = await c.modal.prompt({ title: "Comment on the rating", label: "Sent once, with the next generation", value: note, placeholder: "e.g. the motion was too fast", confirmLabel: "Save" }).result;
+          if (text !== null && text !== undefined) { p.setPref("rating_comment", text.trim()); draw(); }
+        } });
+      put(picker.node, button.node, comment.node);
     };
     draw();
     return app.on(draw);

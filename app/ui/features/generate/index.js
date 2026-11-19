@@ -121,7 +121,8 @@ export default {
           if (group.every((s) => s.excluded) || !isGenerative(root)) continue;                  // all left out, or not made by the model
           // The unit is made once at the length of its clips together (each cut adds one shared frame).
           const frames = group.reduce((t, s) => t + effFrames(s, snap), 0) - (group.length - 1);
-          const { inputs, unwired, unusedPicture, left, noPrompt, notes, placed } = await buildInputs({ project: snap, scene: root, slots: frozen, expand: same, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, ...(Number.isInteger(once.seed) ? { seed: () => once.seed } : fixedSeed ? { seed: null } : {}), prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
+          const { inputs, unwired, unusedPicture, left, noPrompt, notes, placed, ratingCommentUsed } = await buildInputs({ project: snap, scene: root, slots: frozen, expand: same, nodeInfo: app.api.wireTargets, frames, hooks: app.inputHooks, ...(Number.isInteger(once.seed) ? { seed: () => once.seed } : fixedSeed ? { seed: null } : {}), prefix: (app.promptPrefix || []).flatMap((f) => { try { return f(root, snap); } catch { return []; } }) });
+          if (ratingCommentUsed) { delete (snap.editor_settings || {}).rating_comment; p.setPref("rating_comment", ""); }      // the comment on a rating goes with one generation
           app.lastRun.typed = (root.text || "").trim();        // what a Chat comment made now would be about
           const seeded = rolesAt(frozen, "generation.seed")[0];
           if (seeded) app.lastRun.seed = (inputs[seeded.slot.id] || {})[seeded.role.input] ?? (seeded.slot.inputs || {})[seeded.role.input];      // shown in ⏱ Sampler, to keep a liked one

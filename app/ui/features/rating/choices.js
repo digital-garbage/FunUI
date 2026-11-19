@@ -1,6 +1,9 @@
 // What a person can say about a render, and what each answer teaches. The saved word is the project's `rating` (v4 files
 // use the same words); what is sent to the taste store is only liked / disliked, plus which way a dislike went.
 export const FORGET = "-Just forget it-";
+/** The words that open the rating line the enhancer is sent (Composer > Enhance > Pass the rating), and what it says for a scene whose rating was forgotten. */
+export const RATING_PREFIX = "This is the user's rating of the video made from the previous prompt:";
+export const NOT_RATED = "This prompt was not rated.";
 export const CHOICES = [
   { value: "10", label: "Liked", hint: "This generation was good." },
   { value: "1", label: "Disliked", hint: "This generation was not." },

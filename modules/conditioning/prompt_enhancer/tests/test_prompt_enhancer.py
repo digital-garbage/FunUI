@@ -252,7 +252,7 @@ def test_send_everything_into_chat_keeps_earlier_turns_per_conversation(node):
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-9:] == ["style", "scope", "last_frame", "to_chat", "conversation", "pass_rating", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-10:] == ["style", "scope", "last_frame", "to_chat", "conversation", "pass_rating", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

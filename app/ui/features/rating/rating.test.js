@@ -22,7 +22,7 @@ test("the scene picker lists every scene and picking one selects it like the tim
     assert.deepEqual(sceneItems(project).map((i) => i.label), ["Scene 1", "Scene 2"]);
     assert.deepEqual(sceneItems(null), []);
     const picked = [];
-    const app = { project: { project, selected: null }, selection: { focus: "a", pick: (id) => { picked.push(id); } }, api: {}, pipeline: {}, on: () => () => {} };
+    const app = { project: { project, selected: null, pref: () => "" , setPref() {} }, selection: { focus: "a", pick: (id) => { picked.push(id); } }, api: {}, pipeline: {}, on: () => () => {} };
     const host = document.createElement("div");
     document.body.append(host);
     rating.setup({ host, app });

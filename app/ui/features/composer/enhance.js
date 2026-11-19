@@ -1,6 +1,7 @@
 // Enhance: a language model rewrites the finished prompt before it is encoded. These are the inputs of the pipeline's
 // enhancer node, edited through the shared pipeline state; off, or on failure, the prompt runs as typed.
 import { composer as c } from "../../composer/composer.js";
+import { RATING_PREFIX } from "../rating/choices.js";
 
 const NODE = "FunUIEnhancePrompt";
 const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wording, lower more predictable."], ["top_p", 0.92, 0, 1, 0.01, "Picks only among the likeliest words whose chances add up to this share."],
@@ -49,7 +50,8 @@ export function enhance(app, own) {
         num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be."),
         ...(continuityOn() ? [c.toggle.default({ label: "Pass the last frame of previous scene as enhancer input", hint: "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference.", checked: val("last_frame", false), onChange: (x) => set("last_frame", x) })] : []),
         c.toggle.default({ label: "Use the picture", hint: "Sends the scene's picture to the model along with the prompt.", checked: val("use_image", true), onChange: (x) => set("use_image", x) }),
-        c.toggle.default({ label: "Pass the rating", hint: "Adds the rating of the last rated scene before this one to the end of the request.", checked: val("pass_rating", false), onChange: (x) => set("pass_rating", x) }),
+        c.toggle.default({ label: "Pass the rating", hint: "Adds the rating of the last rated scene before this one, and the comment you wrote beside the rating, to the end of the request.", checked: val("pass_rating", false), onChange: (x) => set("pass_rating", x) }),
+        ...(val("pass_rating", false) ? [field("Rating line opening", c.textarea.md({ label: "Rating line opening", rows: 2, value: val("rating_prefix", ""), placeholder: RATING_PREFIX, onCommit: (x) => set("rating_prefix", x) }), "The words in front of the rating. Empty uses the built-in line shown.")] : []),
         c.toggle.default({ label: "Send everything into chat", hint: "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", checked: val("to_chat", false), onChange: (x) => set("to_chat", x) }),
         c.toggle.default({ label: "Thinking", hint: "Let a thinking model reason first. Its reasoning eats the token budget.", checked: val("thinking", false), onChange: (x) => set("thinking", x) }),
         c.toggle.default({ label: "Greedy (always the likeliest word)", hint: "The same rewrite every time; the dials below are not used.", checked: greedy, onChange: (x) => set("greedy", x) }),

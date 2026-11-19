@@ -120,6 +120,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="Which conversation the requests belong to (set by the app). Only used with Send everything into chat."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
+                io.String.Input("rating_prefix", default="", optional=True,
+                                tooltip="The words in front of the rating (set in the app). Empty uses the built-in line."),
                 io.String.Input("rating_line", default="", optional=True,
                                 tooltip="The rating line (set by the app). Only used with Pass the rating."),
                 io.String.Input("head", default="", optional=True,
@@ -141,7 +143,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_line="", to_chat=False, conversation="", head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_prefix="", rating_line="", to_chat=False, conversation="", head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
