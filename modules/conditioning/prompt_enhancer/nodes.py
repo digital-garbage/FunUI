@@ -190,23 +190,25 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if marks:
             system += "\n\n" + en.MARKS_RULE
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
-        history, compacted = "", ""
+        history, compacted, context = "", "", None
         state = CONVOS.get(key) if key else None
-        if state:
+        if key:
+            window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-            if compact and state["turns"]:
-                window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
-                size = lambda: (len(system) + len(en.convo_block(state["turns"], state["summary"], keep)) + len(masked) + len(reference_text)    # noqa: E731
-                                + len(rating_line if pass_rating else "")) // en.CHARS_PER_TOKEN + int(max_length)
-                if size() > en.COMPACT_AT * window:
-                    summary = en.compact(clip, state["summary"], list(state["turns"]))
-                    if summary:
-                        state["summary"] = summary
-                        state["turns"].clear()
-                        compacted = "; the earlier conversation was summarised to fit the context window"
-                    else:
-                        compacted = "; the conversation is near the context window and could not be summarised"
-            history = en.convo_block(state["turns"], state["summary"], keep)
+            # about how many tokens this request fills (4 characters a token, the answer's room included): what summarising is judged on
+            size = lambda: (len(system) + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep)) + len(masked)    # noqa: E731
+                            + len(reference_text) + len(rating_line if pass_rating else "")) // en.CHARS_PER_TOKEN + int(max_length)
+            if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
+                summary = en.compact(clip, state["summary"], list(state["turns"]))
+                if summary:
+                    state["summary"] = summary
+                    state["turns"].clear()
+                    compacted = "; the earlier conversation was summarised to fit the context window"
+                else:
+                    compacted = "; the conversation is near the context window and could not be summarised"
+            if state:
+                history = en.convo_block(state["turns"], state["summary"], keep)
+            context = {"used": size(), "window": window, "compact": bool(compact)}
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat=en.chat_block(rounds), style=style,
@@ -236,5 +238,5 @@ class FunUIEnhancePrompt(io.ComfyNode):
             turns.append({"request": asked, "reply": info.get("answered") or out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
-        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, **info})
+        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, **info})
         return io.NodeOutput(out, status)

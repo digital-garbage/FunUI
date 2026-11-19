@@ -265,6 +265,8 @@ def test_a_conversation_near_the_context_window_is_summarised_and_the_summary_re
     assert "SUMMARY OF THE CONVERSATION SO FAR:\nA fox runs." in sent and "User: fox" not in sent
     off = run("dog", context_tokens=80, compact=False)                                      # compacting off: the last turns, no summary
     assert "User: cat" in off
+    ctx = node.RUNS[-1]["context"]
+    assert ctx["window"] == 80 and ctx["used"] > 0 and ctx["compact"] is False       # shown in the Chat tab: how full the context window is
 
 
 def test_a_run_reports_the_model_s_own_words_apart_from_the_global_prefix_and_postfix(node):

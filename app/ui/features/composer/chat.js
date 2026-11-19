@@ -4,6 +4,7 @@ import { composer as c } from "../../composer/composer.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 
 const NODE = "FunUIEnhancePrompt";
+const COMPACT_AT = 0.8;        // the share of the context window at which the conversation is summarised (the node uses the same)
 
 /** Generate hook: the comments about THIS typed prompt go to the enhancer slot; the others are said to be left out. */
 export function chatHook({ project, scene, slots }) {
@@ -58,6 +59,8 @@ export function chat(app, own) {
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
     bubbles = bubbles.filter(Boolean);
+    const cx = convo.length && convo[convo.length - 1].context;
+    if (cx) bubbles.push(c.hint.default({ text: `Context: about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
     const box = c.textarea.md({ label: "Comment", rows: 2, value: draft, placeholder: "e.g. warmer light, no rain", onInput: (v) => { draft = v; } });
     const send = () => { if (addComment(app, draft, last)) { draft = ""; draw(true); } };
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Comment on the last rewrite. The next Generate rewrites again with every comment still applying. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
