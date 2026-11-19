@@ -514,3 +514,11 @@ def test_each_scene_of_a_project_is_enhanced_with_its_own_prefix_split_and_nothi
     assert "⟦left¦right⟧" in outs[0]                                        # the alternation came back as the expander wrote it
     assert "river" not in outs[1] + outs[2] and "fox sprints" not in outs[1] + outs[2]
     assert [o.count("No subtitles.") for o in outs] == [1, 1, 1]
+
+
+def test_a_pipeline_saved_with_a_retired_input_runs_without_it():
+    import importlib
+    mod = importlib.import_module(en().__package__)
+    slots = [{"id": "e", "node": "FunUIEnhancePrompt", "inputs": {"enabled": True, "rating_comment": True}}, {"id": "x", "node": "Other", "inputs": {"rating_comment": 1}}]
+    out = mod.upgrade(slots)
+    assert out[0]["inputs"] == {"enabled": True} and out[1] is slots[1] and slots[0]["inputs"]["rating_comment"] is True

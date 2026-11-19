@@ -52,4 +52,14 @@ def routes(table, base, web):
             return web.json_response({"files": [], "families": [], "why": f"the CLIP loader module is not available: {exc}"})
 
 
-PROVIDES = {"routes": routes}
+#: Inputs the node once had; a pipeline saved with one still holding it would be refused ("has no input").
+RETIRED_INPUTS = ("rating_comment",)
+
+
+def upgrade(slots, _outputs=None):
+    """A pipeline saved with an input this node no longer has runs without it."""
+    return [{**s, "inputs": {k: v for k, v in (s.get("inputs") or {}).items() if k not in RETIRED_INPUTS}}
+            if s.get("node") == "FunUIEnhancePrompt" and any(k in RETIRED_INPUTS for k in (s.get("inputs") or {})) else s for s in slots]
+
+
+PROVIDES = {"routes": routes, "upgrade_slots": upgrade}
