@@ -267,6 +267,15 @@ def test_a_conversation_near_the_context_window_is_summarised_and_the_summary_re
     assert "User: cat" in off
 
 
+def test_a_run_reports_the_model_s_own_words_apart_from_the_global_prefix_and_postfix(node):
+    node.RUNS.clear()
+    node.CONVOS.clear()
+    node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "PRE a fox POST", enabled=True, seed=3, scope="own", head="PRE", tail="POST", to_chat=True, conversation="x:0")
+    run = node.RUNS[-1]
+    assert run["after"] == "PRE A fox runs. POST" and run["asked"] == "a fox" and run["answered"] == "A fox runs."
+    assert list(node.CONVOS["x:0"]["turns"]) == [{"request": "a fox", "reply": "A fox runs."}]
+
+
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():
     class Cfg: max_position_embeddings = 32768
     class Inner: config = Cfg()

@@ -222,7 +222,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 status = "the model changed the weights / [a|b] marks in the prompt; prompt unchanged"
             else:
                 final = " ".join(x for x in (pre, back, post) if x)
-                info.update(before=text, after=final)
+                info.update(before=text, after=final, asked=body, answered=back)      # asked/answered: what the model was given and said, without the global prefix and postfix
                 out = final
         if not info["ok"]:
             # The prompt went through UNCHANGED and the person must know why.
@@ -232,7 +232,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if key and info["ok"]:
             turns = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP)})["turns"]
             CONVOS.move_to_end(key)
-            turns.append({"request": "\n".join(x for x in (body, rating_line if pass_rating else "") if x), "reply": out})
+            turns.append({"request": "\n".join(x for x in (body, rating_line if pass_rating else "") if x), "reply": info.get("answered") or out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
         RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, **info})

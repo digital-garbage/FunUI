@@ -27,7 +27,7 @@ export function chat(app, own) {
   function draw(force) {
     if (!alive) return;
     const here = ((app.pipeline && app.pipeline.slots()) || []).some((s) => s.node === NODE);
-    const list = rounds(), ok = last && last.ok, next = JSON.stringify([p.project && p.project.id, list, last && last.after, here, all.length, p.pref("enhance_chat_epoch", 0)]);
+    const list = rounds(), ok = last && last.ok, next = JSON.stringify([p.project && p.project.id, list, last && (last.answered ?? last.after), here, all.length, p.pref("enhance_chat_epoch", 0)]);
     if (!force && (next === key || app.dom.typingIn(page.node, "TEXTAREA"))) return;       // not under the caret
     key = next;
     if (!p.project) return page.set([c.hint.default({ text: "Open a project first." })]);
@@ -38,10 +38,10 @@ export function chat(app, own) {
     let bubbles;
     if (convo.length) {                      // "Send everything into chat": the whole conversation, each comment under the rewrite it was about
       const asked = new Set(convo.map((r) => r.prompt_id));
-      bubbles = [...convo.flatMap((r) => [you(r.before), model(r.after), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
+      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), model(r.answered ?? r.after), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
     } else {
       bubbles = [...list.flatMap((r) => [first(r) ? model(first(r)) : null, you(r.comment)]),
-        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.before || "").slice(0, 80)}` }), model(last.after)] : []),
+        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), model(last.answered ?? last.after)] : []),
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
     bubbles = bubbles.filter(Boolean);
@@ -50,9 +50,9 @@ export function chat(app, own) {
       const comment = draft.trim(), now = rounds();
       if (!comment) return;
       const prev = now.length ? first(now[now.length - 1]) : null, here = typed();
-      const fresh = ok && last.after !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
+      const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
       draft = "";
-      p.setPref("enhance_chat", [...now, { rewrites: fresh ? { whole: last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
+      p.setPref("enhance_chat", [...now, { rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
       draw(true);
     };
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Comment on the last rewrite. The next Generate rewrites again with every comment still applying. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
