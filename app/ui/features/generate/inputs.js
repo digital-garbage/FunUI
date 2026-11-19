@@ -123,7 +123,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const on = (name) => ((raw[e.id] || {})[name] ?? (e.inputs || {})[name]) === true;
     if (on("pass_rating") && on("to_chat")) {          // the rating belongs to the conversation: without it nothing is sent
       const all = project.scenes || [], at = all.findIndex((s) => s.id === scene.id), rated = all.slice(0, Math.max(at, 0)).reverse().find((s) => s.rating);
-      const prefix = String((raw[e.id] || {}).rating_prefix ?? (e.inputs || {}).rating_prefix ?? "").trim() || RATING_PREFIX, comment = String((project.editor_settings || {}).rating_comment || "").trim();
+      const prefix = String((raw[e.id] || {}).rating_prefix ?? (e.inputs || {}).rating_prefix ?? "").trim() || RATING_PREFIX, comment = on("rating_comment") ? String((project.editor_settings || {}).rating_comment || "").trim() : "";
       put(e, "rating_line", [rated ? (nameOf(rated.rating) ? `${prefix} ${nameOf(rated.rating)}` : NOT_RATED) : "", comment].filter(Boolean).join("\n"));
       if (comment) ratingCommentUsed = true;
     }

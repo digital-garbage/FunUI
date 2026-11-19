@@ -124,6 +124,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                              tooltip="The model's context window in tokens, for compacting. 0 uses what the model reports, or 8192 when it does not say."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
+                io.Boolean.Input("rating_comment", default=False, optional=True,
+                                 tooltip="Offers a Comment button next to a scene's rating; its note goes after the rating line for the next generation only (set in the app)."),
                 io.String.Input("rating_prefix", default="", optional=True,
                                 tooltip="The words in front of the rating (set in the app). Empty uses the built-in line."),
                 io.String.Input("rating_line", default="", optional=True,
@@ -147,7 +149,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, rating_comment=False, rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,

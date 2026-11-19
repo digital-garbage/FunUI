@@ -277,7 +277,7 @@ def test_the_model_s_own_context_size_is_read_when_it_reports_one():
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-12:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-13:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "rating_comment", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

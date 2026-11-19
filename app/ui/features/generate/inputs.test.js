@@ -435,7 +435,7 @@ test("Send everything into chat names the project's conversation, and Reset star
 
 test("the rating line takes a custom opening and the one-time comment, and says when the comment was used", async () => {
   const scenes = [{ id: "a", text: "a", rating: "10" }, { id: "b", text: "b" }];
-  const go = (inputs, comment) => buildInputs({ project: { scenes, editor_settings: comment ? { rating_comment: comment } : {} }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: true, ...inputs } }], expand: async ({ text }) => ({ text }) });
+  const go = (inputs, comment) => buildInputs({ project: { scenes, editor_settings: comment ? { rating_comment: comment } : {} }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: true, rating_comment: true, ...inputs } }], expand: async ({ text }) => ({ text }) });
   const mine = await go({ rating_prefix: "Viewer verdict:" }, " too fast ");
   assert.equal(mine.inputs.e.rating_line, "Viewer verdict: Liked\ntoo fast");
   assert.equal(mine.ratingCommentUsed, true);
@@ -447,4 +447,11 @@ test("Pass the rating sends nothing while Send everything into chat is off", asy
   const r = await buildInputs({ project: { scenes, editor_settings: { rating_comment: "slow" } }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: false } }], expand: async ({ text }) => ({ text }) });
   assert.equal(r.inputs.e.rating_line, undefined);
   assert.equal(r.ratingCommentUsed, false);          // the comment stays for a run that sends it
+});
+
+test("the rating comment is sent only while its toggle is on", async () => {
+  const scenes = [{ id: "a", text: "a", rating: "10" }, { id: "b", text: "b" }];
+  const r = await buildInputs({ project: { scenes, editor_settings: { rating_comment: "slow" } }, scene: scenes[1], slots: [{ id: "e", node: "FunUIEnhancePrompt", inputs: { pass_rating: true, to_chat: true } }], expand: async ({ text }) => ({ text }) });
+  assert.doesNotMatch(r.inputs.e.rating_line, /slow/);
+  assert.equal(r.ratingCommentUsed, false);
 });

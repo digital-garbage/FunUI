@@ -64,7 +64,8 @@ export default {
           const text = await c.modal.prompt({ title: "Comment on the rating", label: "Sent once, with the next generation", value: note, placeholder: "e.g. the motion was too fast", confirmLabel: "Save" }).result;
           if (text !== null && text !== undefined) { p.setPref("rating_comment", text.trim()); draw(); }
         } });
-      put(picker.node, button.node, comment.node);
+      const slot = (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt"), inp = (slot && slot.inputs) || {};
+      put(picker.node, button.node, ...(inp.to_chat && inp.pass_rating && inp.rating_comment ? [comment.node] : []));      // only while the enhancer sends the rating and the comment is switched on
     };
     draw();
     return app.on(draw);
