@@ -2,6 +2,7 @@
 // settings, the scene's picked media -- each placed by the ROLE a pipeline slot declares, never by slot id.
 import { MAX_REFERENCES, referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
+import { nameOf } from "../rating/choices.js";
 import { DRIVEN } from "../../shell/scenes.js";
 import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
 
@@ -115,11 +116,11 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const shown = wantsLast && lastFrame ? lastFrame : first;
     const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
     if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
-    // "Pass the rating": the nearest earlier scene that carries a rating tells the model how it was received.
+    // "Pass the rating": the nearest earlier scene that was rated (or had its rating forgotten) tells the model how it was received.
     if (((raw[e.id] || {}).pass_rating ?? (e.inputs || {}).pass_rating) === true) {
       const all = project.scenes || [], at = all.findIndex((s) => s.id === scene.id);
       const rated = all.slice(0, Math.max(at, 0)).reverse().find((s) => s.rating);
-      put(e, "rating_line", rated ? `The previous scene you rewrote for was rated by the user: ${rated.rating}.` : "");
+      put(e, "rating_line", rated ? (nameOf(rated.rating) ? `The previous scene was rated: ${nameOf(rated.rating)}.` : "This prompt was not rated.") : "");
     }
   }
   // A reference video is got ready as the project (or the scene) says; with nothing switched on it loads as before.
