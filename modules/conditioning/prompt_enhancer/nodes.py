@@ -192,12 +192,21 @@ class FunUIEnhancePrompt(io.ComfyNode):
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
         history, compacted, context = "", "", None
         state = CONVOS.get(key) if key else None
+        # In a conversation every comment is part of it, in order: the ones it has not seen yet go in with this request (and so into
+        # its turn), and the next request does not repeat them. Outside one, the comments are the Chat tab's labelled block.
+        fresh = []
+        if key:
+            seen = state["seen"] if state else set()
+            fresh = [(f"{i}:{r.get('id') or r['comment']}", str(r["comment"]).strip()) for i, r in enumerate(rounds)
+                     if isinstance(r, dict) and str(r.get("comment") or "").strip() and f"{i}:{r.get('id') or r['comment']}" not in seen]
+        feedback = ("Feedback on your earlier rewrite, apply it:\n" + "\n".join("- " + c for _, c in fresh)) if fresh else ""
+        note_text = "\n".join(x for x in (feedback, rating_line if pass_rating else "") if x)
         if key:
             window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
             # about how many tokens this request fills (4 characters a token, the answer's room included): what summarising is judged on
             size = lambda: (len(system) + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep)) + len(masked)    # noqa: E731
-                            + len(reference_text) + len(rating_line if pass_rating else "")) // en.CHARS_PER_TOKEN + int(max_length)
+                            + len(reference_text) + len(note_text)) // en.CHARS_PER_TOKEN + int(max_length)
             if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
                 summary = en.compact(clip, state["summary"], list(state["turns"]))
                 if summary:
@@ -211,8 +220,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
             context = {"used": size(), "window": window, "compact": bool(compact)}
         out, status, info = en.enhance(
             clip, masked, system=system,
-            reference_text=reference_text, chat=en.chat_block(rounds), style=style,
-            note=rating_line if pass_rating else "",
+            reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
+            note=note_text,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
@@ -233,9 +242,11 @@ class FunUIEnhancePrompt(io.ComfyNode):
             info["before"] = info["after"] = text
             log.warning("FunUI Prompt enhancer", f"{status}; the original prompt is used")
         if key and info["ok"]:
-            turns = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP)})["turns"]
+            kept = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
+            turns = kept["turns"]
+            kept["seen"].update(k for k, _ in fresh)
             CONVOS.move_to_end(key)
-            turns.append({"request": asked, "reply": info.get("answered") or out})
+            turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
         RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, **info})

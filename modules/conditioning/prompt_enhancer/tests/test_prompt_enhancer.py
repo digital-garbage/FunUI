@@ -250,6 +250,21 @@ def test_send_everything_into_chat_keeps_earlier_turns_per_conversation(node):
     assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["fox", "owl"]
 
 
+def test_in_a_conversation_every_comment_goes_in_once_and_stays_in_the_history(node):
+    node.CONVOS.clear()
+    import json
+    def run(text, comments):
+        clip = FakeClip("A fox runs.")
+        node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="k:0", chat=json.dumps(comments))
+        return clip.seen["text"]
+    run("fox", [])
+    second = run("owl", [{"id": "a", "comment": "warmer", "original": "something else"}])
+    assert "Feedback on your earlier rewrite, apply it:\n- warmer" in second and "USER FEEDBACK" not in second
+    third = run("bat", [{"id": "a", "comment": "warmer", "original": "something else"}, {"id": "b", "comment": "slower"}])
+    assert third.count("- warmer") == 1 and "User: owl\nFeedback on your earlier rewrite, apply it:\n- warmer" in third      # kept in its turn, not repeated
+    assert third.rstrip().endswith("- slower") and "User: fox" in third
+
+
 def test_a_conversation_near_the_context_window_is_summarised_and_the_summary_replaces_the_turns(node):
     node.CONVOS.clear()
     def run(text, **kw):

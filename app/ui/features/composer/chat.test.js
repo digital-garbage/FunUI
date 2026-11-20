@@ -39,5 +39,14 @@ test("the Comment button's comment is saved like one from the Chat tab, tied to 
   const app = { project: { project: { scenes: [{ id: "s", text: "a fox" }] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { typed: "a fox" }, selection: { focus: "s" } };
   assert.equal(addComment(app, "   ", null), false);
   assert.equal(addComment(app, " warmer ", { ok: true, prompt_id: "r1", answered: "A fox runs.", after: "PRE A fox runs." }), true);
+  assert.equal(typeof prefs.enhance_chat[0].id, "string");          // each comment has its own id, so a conversation sends it once
+  delete prefs.enhance_chat[0].id;
   assert.deepEqual(prefs.enhance_chat, [{ rewrites: { whole: "A fox runs." }, comment: "warmer", run: "r1", original: "a fox" }]);
+});
+
+test("in a conversation every comment goes to the enhancer, whatever prompt it was made on", () => {
+  const withChat = [{ ...slots[0], inputs: { to_chat: true } }, slots[1]];
+  const r = chatHook({ project, scene: { text: "a cat" }, slots: withChat });
+  assert.deepEqual(JSON.parse(r.inputs.e.chat).map((x) => x.comment), ["warmer", "old", "any"]);
+  assert.equal(r.notes.length, 0);
 });

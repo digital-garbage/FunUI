@@ -10,7 +10,8 @@ const COMPACT_AT = 0.8;        // the share of the context window at which the c
 export function chatHook({ project, scene, slots }) {
   const chat = (project.editor_settings || {}).enhance_chat, slot = (slots || []).find((s) => s.node === NODE);
   if (!slot || !Array.isArray(chat)) return null;
-  const typed = (scene.text || "").trim(), mine = chat.filter((r) => r && (r.original === undefined || r.original === typed)), left = chat.length - mine.length;
+  // In a conversation every comment belongs to it, whatever prompt it was made on; otherwise only the ones about this prompt apply.
+  const typed = (scene.text || "").trim(), mine = chat.filter((r) => r && ((slot.inputs || {}).to_chat === true || r.original === undefined || r.original === typed)), left = chat.length - mine.length;
   return { inputs: mine.length ? { [slot.id]: { chat: JSON.stringify(mine) } } : {}, notes: left ? [`${left} Chat comment(s) are about a different prompt and were left out of this run.`] : [] };
 }
 
@@ -28,7 +29,7 @@ export function addComment(app, text, last) {
   if (!comment) return false;
   const ok = last && last.ok, prev = now.length ? firstOf(now[now.length - 1]) : null, here = typedOf(app);
   const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
-  p.setPref("enhance_chat", [...now, { rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
+  p.setPref("enhance_chat", [...now, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
   return true;
 }
 
