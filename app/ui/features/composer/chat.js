@@ -24,18 +24,18 @@ function typedOf(app) {
 const firstOf = (r) => Object.values(r.rewrites || {})[0];
 
 /** Save one comment on the last rewrite (`last`: the enhancer's latest run, or null). Shared by the Chat tab and the Comment button. */
-export function addComment(app, text, last) {
+export function addComment(app, text, last, tail = last) {
   const p = app.project, comment = String(text || "").trim(), now = Array.isArray(p.pref("enhance_chat", [])) ? p.pref("enhance_chat", []) : [];
   if (!comment) return false;
   const ok = last && last.ok, prev = now.length ? firstOf(now[now.length - 1]) : null, here = typedOf(app);
   const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
-  p.setPref("enhance_chat", [...now, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(last && last.prompt_id ? { run: last.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
+  p.setPref("enhance_chat", [...now, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(tail && tail.prompt_id ? { run: tail.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
   return true;
 }
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let last = null, all = [], alive = true, key = "", draft = "", runs = app.lastRun.n;
+  let last = null, all = [], replying = false, alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
@@ -62,13 +62,27 @@ export function chat(app, own) {
     bubbles = bubbles.filter(Boolean);
     const cx = convo.length && convo[convo.length - 1].context;
     if (cx) bubbles.push(c.hint.default({ text: `Context: about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
-    const box = c.textarea.md({ label: "Comment", rows: 2, value: draft, placeholder: "e.g. warmer light, no rain", onInput: (v) => { draft = v; } });
-    const send = () => { if (addComment(app, draft, last)) { draft = ""; draw(true); } };
-    page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Comment on the last rewrite. The next Generate rewrites again with every comment still applying. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
+    const box = c.textarea.md({ label: "Message", rows: 2, value: draft, placeholder: "Ask something, or leave a comment: warmer light, no rain", onInput: (v) => { draft = v; } });
+    // A comment waits and goes with the next prompt; a message gets an answer now (needs a conversation and an encoder of its own).
+    const slot = ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inp = (slot && slot.inputs) || {};
+    const tail = convo.length ? convo[convo.length - 1] : last;
+    const comment = () => { if (addComment(app, draft, last, tail)) { draft = ""; draw(true); } };
+    const canChat = inp.to_chat === true && Boolean(inp.encoder_file);
+    const say = async () => {
+      const message = draft.trim();
+      if (!message || replying) return;
+      replying = true; draft = ""; draw(true);
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "encoder_file", "encoder_family"];
+      try {
+        await app.api.enhancerChat({ conversation: ck, message, ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) });
+      } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }
+      replying = false; look(); draw(true);
+    };
+    page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Send gets an answer now. Comment is kept and goes with the next prompt as part of one message. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
       c.region.stack({ gap: "sm", children: bubbles }), box,
-      c.toolbar.default({ items: [c.button.sm({ label: "Send", tone: "primary", onClick: send })], trailing: [c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
+      c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
   }
-  const look = () => app.api.enhancerRuns().then((r) => { all = r.runs || []; last = all.slice(-1)[0] || null; draw(); }).catch(() => {});
+  const look = () => app.api.enhancerRuns().then((r) => { all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); }).catch(() => {});
   own(app.on((what) => { if (what === "open" || app.lastRun.n !== runs) { runs = app.lastRun.n; look(); } else draw(); }));
   if (app.pipeline && app.pipeline.subscribe) own(app.pipeline.subscribe(() => draw()));      // a pipeline that gains or loses the enhancer
   draw(true);

@@ -317,6 +317,24 @@ def test_gemma4_gets_the_conversation_as_real_turns_and_other_encoders_a_flat_bl
     assert "EARLIER IN THIS CONVERSATION" in flat and "<|turn>" not in flat           # no turn format known: the flat block
 
 
+def test_a_live_chat_reply_uses_its_own_prompt_joins_the_conversation_and_is_shown_as_a_chat_entry(node, monkeypatch):
+    node.CONVOS.clear()
+    node.RUNS.clear()
+    clip = FakeClip("Sure, warmer light it is.")
+    monkeypatch.setattr(node, "_own_encoder", lambda f, fam: clip)
+    out = node.chat_reply("c:0", "make it warmer?", encoder_file="g.safetensors")
+    assert out == {"ok": True, "reply": "Sure, warmer light it is.", "status": out["status"]}
+    assert en().CHAT_REPLY_SYSTEM in clip.seen["text"] and en().SYSTEM_PROMPT not in clip.seen["text"] and clip.seen["text"].endswith("make it warmer?")
+    run = node.RUNS[-1]
+    assert run["kind"] == "chat" and run["asked"] == "make it warmer?" and run["answered"] == out["reply"] and run["conversation"] == "c:0"
+    # the next rewrite in that conversation carries the exchange
+    rewrite = FakeClip("A fox runs.")
+    node.FunUIEnhancePrompt.execute(rewrite, "a fox", enabled=True, seed=3, to_chat=True, conversation="c:0")
+    assert "User: make it warmer?\nYou: Sure, warmer light it is." in rewrite.seen["text"]
+    # no encoder picked / no conversation: said, nothing runs
+    assert not node.chat_reply("c:0", "hi", encoder_file="")["ok"] and not node.chat_reply("", "hi", encoder_file="g")["ok"]
+
+
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():
     class Cfg: max_position_embeddings = 32768
     class Inner: config = Cfg()
@@ -343,6 +361,8 @@ def test_the_defaults_route_lists_the_styles():
     class T:
         def get(self, path):
             return lambda fn: table.setdefault(path, fn)
+
+        post = get
 
     class W:
         @staticmethod
@@ -395,12 +415,14 @@ def test_the_readout_routes_are_provided_and_answer():
         def get(self, path):
             return lambda fn: table.setdefault(path, fn)
 
+        post = get
+
     class W:
         @staticmethod
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/encoders"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/encoders"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():

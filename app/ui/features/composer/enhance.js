@@ -76,7 +76,7 @@ export function enhance(app, own) {
   const typing = () => app.dom.typingIn(page.node);
   own(ps.subscribe(() => { if (!typing()) draw(); }));
   app.api.enhancerDefaults().then((d) => { defaults = d; draw(); }).catch(() => {});
-  const fetchRuns = () => app.api.enhancerRuns().then((r) => { last = (r.runs || []).slice(-1)[0] || null; if (!typing()) draw(); }).catch(() => {});
+  const fetchRuns = () => app.api.enhancerRuns().then((r) => { last = (r.runs || []).filter((x) => x.kind !== "chat").slice(-1)[0] || null; if (!typing()) draw(); }).catch(() => {});
   fetchRuns();
   // a run that ends while this tab is open shows its prompt here without reopening it
   let phase = null;

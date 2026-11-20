@@ -76,6 +76,9 @@ The earlier turns are above; the last message is the new request.
 - Rewrite only the new request, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
+CHAT_REPLY_SYSTEM = """CHAT: you are helping a person write prompts for a text-to-video model, in a live conversation about the prompts you rewrite for them.
+Answer the message directly and briefly (one to four sentences, plain text). You may suggest wording, but never output a full rewritten prompt unless asked: rewrites happen later, when the person generates, and any comments they leave are applied then.
+Stay consistent with the earlier turns. Do not use markdown or headings."""
 CONVO_TURNS = 8              # how many earlier turns a conversation sends
 CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
 CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK", "EARLIER IN THIS CONVERSATION", "NEW REQUEST:")
@@ -505,3 +508,23 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
                           + "...); prompt unchanged. This text encoder may not be a chat model"), info
     info.update(after=out, ok=True)
     return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
+
+
+def converse(clip, message, *, convo=None, **sampling):
+    """-> (reply, status): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
+    `convo`: {"summary", "turns", "keep"} as in enhance()."""
+    message = str(message or "").strip()
+    if not message:
+        return "", "the message is empty"
+    system, rounds, user = CHAT_REPLY_SYSTEM, (), message
+    convo = convo or {}
+    if native_turns(clip) and (convo.get("turns") or convo.get("summary")):
+        rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
+                       if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip())
+        if str(convo.get("summary") or "").strip():
+            system += "\n\nSUMMARY OF THE CONVERSATION SO FAR:\n" + str(convo["summary"]).strip()
+    else:
+        user = convo_block(convo.get("turns"), convo.get("summary"), int(convo.get("keep") or CONVO_TURNS)) + message
+    raw, status = generate(clip, system, user, rounds=rounds, **{**sampling, "image": None})
+    text, _ = trim_runaway(cut_chat_echo(clean(raw)), max_length=sampling.get("max_length"))
+    return (text, status) if text else ("", status if "failed" in status or "unavailable" in status else "the model returned nothing")

@@ -53,6 +53,51 @@ def _own_encoder(file, family):
     return _LOADED["clip"]
 
 
+def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
+    """-> (about how many tokens the next request fills, the context window, a status note).
+    The conversation is summarised first when the request would fill COMPACT_AT of the window (4 characters a token, the answer's room included)."""
+    window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
+    keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
+    size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + int(max_length)    # noqa: E731
+    note = ""
+    if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
+        summary = en.compact(clip, state["summary"], list(state["turns"]))
+        if summary:
+            state["summary"] = summary
+            state["turns"].clear()
+            note = "; the earlier conversation was summarised to fit the context window"
+        else:
+            note = "; the conversation is near the context window and could not be summarised"
+    return size(), window, note
+
+
+def chat_reply(conversation, message, *, encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+    """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
+    key = str(conversation or "").strip()
+    if not key:
+        return {"ok": False, "reply": "", "status": "no conversation"}
+    if not encoder_file:
+        return {"ok": False, "reply": "", "status": "pick an Encoder in Composer > Enhance: the model's own encoder cannot chat"}
+    try:
+        clip = _own_encoder(encoder_file, encoder_family)
+    except Exception as e:                                          # noqa: BLE001
+        return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
+    state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
+    CONVOS.move_to_end(key)
+    used, window, note = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
+    keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
+    reply, status = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep},
+                                max_length=max_length, thinking=thinking, **sampling)
+    ok = bool(reply)
+    if ok:
+        state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
+    RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
+                 "asked": str(message).strip(), "answered": reply, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
+    while len(CONVOS) > MAX_CONVOS:
+        CONVOS.popitem(last=False)
+    return {"ok": ok, "reply": reply, "status": status + note}
+
+
 def _prompt_id():
     try:
         from server import PromptServer
@@ -202,22 +247,12 @@ class FunUIEnhancePrompt(io.ComfyNode):
         feedback = ("Feedback on your earlier rewrite, apply it:\n" + "\n".join("- " + c for _, c in fresh)) if fresh else ""
         note_text = "\n".join(x for x in (feedback, rating_line if pass_rating else "") if x)
         if key:
-            window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-            # about how many tokens this request fills (4 characters a token, the answer's room included): what summarising is judged on
-            size = lambda: (len(system) + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep)) + len(masked)    # noqa: E731
-                            + len(reference_text) + len(note_text)) // en.CHARS_PER_TOKEN + int(max_length)
-            if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
-                summary = en.compact(clip, state["summary"], list(state["turns"]))
-                if summary:
-                    state["summary"] = summary
-                    state["turns"].clear()
-                    compacted = "; the earlier conversation was summarised to fit the context window"
-                else:
-                    compacted = "; the conversation is near the context window and could not be summarised"
+            fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
+            used, window, compacted = fit(clip, state, fixed, max_length, compact, context_tokens)
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
-            context = {"used": size(), "window": window, "compact": bool(compact)}
+            context = {"used": used, "window": window, "compact": bool(compact)}
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,

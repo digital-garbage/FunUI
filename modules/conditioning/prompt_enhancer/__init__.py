@@ -42,6 +42,37 @@ def routes(table, base, web):
         runs = [r for r in RUNS if not want or r["prompt_id"] == want]
         return web.json_response({"runs": runs})
 
+    @table.post(base + "/chat")
+    async def _chat(req):
+        """A live answer in a conversation (the Chat tab): the encoder picked in Enhance answers under its own chat prompt."""
+        import asyncio
+        from . import nodes
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not str(body.get("message") or "").strip() or not str(body.get("conversation") or "").strip():
+            return web.json_response({"ok": False, "reply": "", "status": "a conversation and a message are needed"}, status=400)
+        try:
+            from server import PromptServer
+            if PromptServer.instance.prompt_queue.get_tasks_remaining() > 0:
+                return web.json_response({"ok": False, "reply": "", "status": "a generation is running: the encoder shares its memory, so the reply waits for it"}, status=409)
+        except Exception:                                           # noqa: BLE001 -- not inside ComfyUI: nothing to wait for
+            pass
+        keys = ("temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty")
+        sampling = {k: body[k] for k in keys if isinstance(body.get(k), (int, float)) and not isinstance(body.get(k), bool)}
+        sampling["do_sample"] = body.get("greedy") is not True
+        if isinstance(body.get("seed"), int) and not isinstance(body.get("seed"), bool):
+            sampling["seed"] = body["seed"]
+
+        def work():
+            return nodes.chat_reply(body["conversation"], body["message"], encoder_file=str(body.get("encoder_file") or ""),
+                                    encoder_family=str(body.get("encoder_family") or "stable_diffusion"), compact=body.get("compact") is not False,
+                                    context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400),
+                                    thinking=body.get("thinking") is True, **sampling)
+        result = await asyncio.get_running_loop().run_in_executor(None, work)
+        return web.json_response(result, status=200 if result["ok"] else 422)
+
     @table.get(base + "/encoders")
     async def _encoders(_req):
         """Encoder files and families the Enhance panel can offer (read fresh: files come and go)."""
