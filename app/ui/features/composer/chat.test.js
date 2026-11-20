@@ -68,6 +68,10 @@ test("Send asks the model now (a conversation and an encoder of its own are need
     await new Promise((r) => setTimeout(r, 0));
     assert.deepEqual(asked.map((a) => [a.conversation, a.message, a.encoder_file, a.temperature]), [["p:0", "make it warmer?", "g.safetensors", 0.5]]);
     assert.equal(prefs.enhance_chat, undefined);                                    // a message is not a comment
+    const before = asked.length;
+    button(page, "Refresh").click();                                                // reloads the runs; asks the model nothing
+    await new Promise((r) => setTimeout(r, 0));
+    assert.equal(asked.length, before);
     box.value = "slower"; box.dispatchEvent(new window.Event("input", { bubbles: true }));
     button(page, "Comment").click();
     assert.equal(prefs.enhance_chat.length, 1);
