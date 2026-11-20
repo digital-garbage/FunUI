@@ -94,7 +94,7 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
     RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
-                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
+                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "summary": state["summary"] if did else "", "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
@@ -288,5 +288,5 @@ class FunUIEnhancePrompt(io.ComfyNode):
             turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
-        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, **info})
+        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, "summary": state["summary"] if (did and state) else "", **info})
         return io.NodeOutput(out, status)

@@ -361,7 +361,7 @@ def test_summarising_works_to_a_practical_window_even_when_the_model_reports_a_h
     node.FunUIEnhancePrompt.execute(clip, "fox", enabled=True, seed=3, to_chat=True, conversation="w:0")
     assert node.RUNS[-1]["context"]["window"] == 32768 and node.RUNS[-1]["compacted"] is False       # the model's 131072 is a ceiling, not the budget
     node.FunUIEnhancePrompt.execute(clip, "owl", enabled=True, seed=3, to_chat=True, conversation="w:0", context_tokens=120)
-    assert node.RUNS[-1]["compacted"] is True and "summarised" in node.RUNS[-1]["status"]             # said in the status and flagged for the app
+    assert node.RUNS[-1]["compacted"] is True and "summarised" in node.RUNS[-1]["status"] and node.RUNS[-1]["summary"] == "A fox runs."      # the summary itself is shown in the Chat tab             # said in the status and flagged for the app
 
 
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():
