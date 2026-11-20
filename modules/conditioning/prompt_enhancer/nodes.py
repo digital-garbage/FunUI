@@ -71,7 +71,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
     return size(), window, note
 
 
-def chat_reply(conversation, message, *, encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     if not key:
@@ -86,16 +86,16 @@ def chat_reply(conversation, message, *, encoder_file, encoder_family="stable_di
     CONVOS.move_to_end(key)
     used, window, note = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep},
-                                max_length=max_length, thinking=thinking, **sampling)
+    reply, status, add, drop = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes,
+                                           max_length=max_length, thinking=thinking, **sampling)
     ok = bool(reply)
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
     RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
-                 "asked": str(message).strip(), "answered": reply, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
+                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
-    return {"ok": ok, "reply": reply, "status": status + note}
+    return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop}
 
 
 def _prompt_id():
@@ -171,6 +171,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
                 io.Boolean.Input("comment_button", default=False, optional=True,
                                  tooltip="Shows a Comment button next to a scene's rating: a comment on the last rewrite, the same as one in the Chat tab (used by the app)."),
+                io.String.Input("notes", multiline=True, default="", optional=True,
+                                tooltip="Standing notes that apply to every rewrite, one per line (kept by the app: edited in the Chat tab)."),
                 io.String.Input("rating_prefix", default="", optional=True,
                                 tooltip="The words in front of the rating (set in the app). Empty uses the built-in line."),
                 io.String.Input("rating_line", default="", optional=True,
@@ -194,7 +196,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -256,7 +258,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
-            note=note_text,
+            note=note_text, notes=notes,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,

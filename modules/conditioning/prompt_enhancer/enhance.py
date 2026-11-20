@@ -78,7 +78,9 @@ The earlier turns are above; the last message is the new request.
 Output only the rewritten prompt, nothing else."""
 CHAT_REPLY_SYSTEM = """CHAT: you are helping a person write prompts for a text-to-video model, in a live conversation about the prompts you rewrite for them.
 Answer the message directly and briefly (one to four sentences, plain text). You may suggest wording, but never output a full rewritten prompt unless asked: rewrites happen later, when the person generates, and any comments they leave are applied then.
-Stay consistent with the earlier turns. Do not use markdown or headings."""
+Stay consistent with the earlier turns. Do not use markdown or headings.
+NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
+NOTES_CHARS = 2000           # longest notes text sent
 CONVO_TURNS = 8              # how many earlier turns a conversation sends
 CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
 CHAT_LABELS = ("ORIGINAL PROMPT:", "YOUR LATEST REWRITE:", "USER FEEDBACK", "EARLIER IN THIS CONVERSATION", "NEW REQUEST:")
@@ -457,13 +459,14 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
     if not original:
         return text, "skipped: the prompt is empty", info
     system = str(system or "").strip() or STYLES.get(style, SYSTEM_PROMPT)       # typed instructions win over the style
+    system += notes_system(notes)
     user = original + str(reference_text or "")
     if chat:
         # Labelled parts plus a revision rule in the SYSTEM turn: with the conversation merely
@@ -510,13 +513,13 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
 
 
-def converse(clip, message, *, convo=None, **sampling):
+def converse(clip, message, *, convo=None, notes="", **sampling):
     """-> (reply, status): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
     `convo`: {"summary", "turns", "keep"} as in enhance()."""
     message = str(message or "").strip()
     if not message:
-        return "", "the message is empty"
-    system, rounds, user = CHAT_REPLY_SYSTEM, (), message
+        return "", "the message is empty", [], []
+    system, rounds, user = CHAT_REPLY_SYSTEM + notes_system(notes, numbered=True), (), message
     convo = convo or {}
     if native_turns(clip) and (convo.get("turns") or convo.get("summary")):
         rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
@@ -526,5 +529,39 @@ def converse(clip, message, *, convo=None, **sampling):
     else:
         user = convo_block(convo.get("turns"), convo.get("summary"), int(convo.get("keep") or CONVO_TURNS)) + message
     raw, status = generate(clip, system, user, rounds=rounds, **{**sampling, "image": None})
-    text, _ = trim_runaway(cut_chat_echo(clean(raw)), max_length=sampling.get("max_length"))
-    return (text, status) if text else ("", status if "failed" in status or "unavailable" in status else "the model returned nothing")
+    body, add, drop = parse_notes(raw)
+    text, _ = trim_runaway(cut_chat_echo(clean(body)), max_length=sampling.get("max_length"))
+    if not text:
+        return "", (status if "failed" in status or "unavailable" in status else "the model returned nothing"), [], []
+    return text, status, add, drop
+
+
+def notes_lines(notes) -> list:
+    """The standing notes as a list of lines (blank lines dropped, the whole kept under NOTES_CHARS)."""
+    out, used = [], 0
+    for line in str(notes or "").splitlines():
+        line = line.strip()
+        if line and used + len(line) <= NOTES_CHARS:
+            out.append(line)
+            used += len(line)
+    return out
+
+
+def notes_system(notes, numbered=False) -> str:
+    """The notes as the part of the instructions that always applies ("" without any)."""
+    lines = notes_lines(notes)
+    if not lines:
+        return ""
+    body = "\n".join(f"{i}. {x}" if numbered else f"- {x}" for i, x in enumerate(lines, 1))
+    return "\n\nSTANDING NOTES from the user (they always apply):\n" + body
+
+
+_NOTE_OP = re.compile(r"(?im)^[ \t]*(REMEMBER|FORGET)[ \t]*:[ \t]*(.+?)[ \t]*$")
+
+
+def parse_notes(text):
+    """-> (the answer without its REMEMBER/FORGET lines, [notes to add], [numbers or texts to drop])."""
+    add, drop = [], []
+    for kind, value in _NOTE_OP.findall(str(text or "")):
+        (add if kind.upper() == "REMEMBER" else drop).append(value.strip().strip('"'))
+    return _NOTE_OP.sub("", str(text or "")).strip(), add, drop

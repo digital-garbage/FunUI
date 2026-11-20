@@ -323,7 +323,7 @@ def test_a_live_chat_reply_uses_its_own_prompt_joins_the_conversation_and_is_sho
     clip = FakeClip("Sure, warmer light it is.")
     monkeypatch.setattr(node, "_own_encoder", lambda f, fam: clip)
     out = node.chat_reply("c:0", "make it warmer?", encoder_file="g.safetensors")
-    assert out == {"ok": True, "reply": "Sure, warmer light it is.", "status": out["status"]}
+    assert out == {"ok": True, "reply": "Sure, warmer light it is.", "status": out["status"], "remember": [], "forget": []}
     assert en().CHAT_REPLY_SYSTEM in clip.seen["text"] and en().SYSTEM_PROMPT not in clip.seen["text"] and clip.seen["text"].endswith("make it warmer?")
     run = node.RUNS[-1]
     assert run["kind"] == "chat" and run["asked"] == "make it warmer?" and run["answered"] == out["reply"] and run["conversation"] == "c:0"
@@ -333,6 +333,21 @@ def test_a_live_chat_reply_uses_its_own_prompt_joins_the_conversation_and_is_sho
     assert "User: make it warmer?\nYou: Sure, warmer light it is." in rewrite.seen["text"]
     # no encoder picked / no conversation: said, nothing runs
     assert not node.chat_reply("c:0", "hi", encoder_file="")["ok"] and not node.chat_reply("", "hi", encoder_file="g")["ok"]
+
+
+def test_the_model_edits_the_standing_notes_from_the_chat_and_every_rewrite_carries_them(node, monkeypatch):
+    node.CONVOS.clear()
+    clip = FakeClip("Done, warmer from now on.\nREMEMBER: warm light\nFORGET: 1")
+    monkeypatch.setattr(node, "_own_encoder", lambda f, fam: clip)
+    out = node.chat_reply("n:0", "always use warm light", encoder_file="g.safetensors", notes="no rain\n\nwide shots")
+    assert out["reply"] == "Done, warmer from now on." and out["remember"] == ["warm light"] and out["forget"] == ["1"]
+    assert "1. no rain\n2. wide shots" in clip.seen["text"] and "REMEMBER:" in clip.seen["text"]      # numbered, so a note can be dropped by number
+    rewrite = FakeClip("A fox runs.")
+    node.FunUIEnhancePrompt.execute(rewrite, "a fox", enabled=True, seed=3, notes="warm light\nwide shots")
+    assert "STANDING NOTES from the user (they always apply):\n- warm light\n- wide shots" in rewrite.seen["text"]
+    plain = FakeClip("A fox runs.")
+    node.FunUIEnhancePrompt.execute(plain, "a fox", enabled=True, seed=3)
+    assert "STANDING NOTES" not in plain.seen["text"]
 
 
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():
@@ -345,7 +360,7 @@ def test_the_model_s_own_context_size_is_read_when_it_reports_one():
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-13:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "comment_button", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-14:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]

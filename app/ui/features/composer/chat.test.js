@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
 import { createDom } from "../../shell/dom.js";
-import { addComment, chat, chatHook } from "./chat.js";
+import { addComment, applyNotes, chat, chatHook } from "./chat.js";
 
 const slots = [{ id: "e", node: "FunUIEnhancePrompt" }, { id: "x", node: "Other" }];
 const project = { editor_settings: { enhance_chat: [{ comment: "warmer", original: "a cat" }, { comment: "old", original: "a dog" }, { comment: "any" }] } };
@@ -62,7 +62,7 @@ test("Send asks the model now (a conversation and an encoder of its own are need
     const off = await open({ to_chat: true });                                       // no encoder of its own: nothing to answer with
     assert.equal(button(off, "Send").disabled, true);
     const page = await open({ to_chat: true, encoder_file: "g.safetensors", temperature: 0.5 });
-    const box = page.node.querySelector("textarea");
+    const box = [...page.node.querySelectorAll("textarea")].pop();        // the Message box comes after the Notes box
     box.value = "make it warmer?"; box.dispatchEvent(new window.Event("input", { bubbles: true }));
     button(page, "Send").click();
     await new Promise((r) => setTimeout(r, 0));
@@ -73,4 +73,12 @@ test("Send asks the model now (a conversation and an encoder of its own are need
     assert.equal(prefs.enhance_chat.length, 1);
     assert.equal(asked.length, 1);                                                  // and a comment asks nothing
   } finally { teardownDom(); }
+});
+
+test("notes: the model's REMEMBER and FORGET lines edit the list, the notes go to every run, and an empty list sends nothing", () => {
+  assert.equal(applyNotes("no rain\nwide shots", ["warm light", "Wide shots"], ["1"]), "wide shots\nwarm light");   // 1 dropped, a repeat not added twice
+  assert.equal(applyNotes("a\nb", [], ["B", "#1"]), "");                                                         // by text, or by number with a hash
+  const r = chatHook({ project: { editor_settings: { enhance_notes: " warm light " } }, scene: { text: "x" }, slots: [{ id: "e", node: "FunUIEnhancePrompt" }] });
+  assert.deepEqual(r.inputs, { e: { notes: "warm light" } });
+  assert.equal(chatHook({ project: { editor_settings: { enhance_notes: "  " } }, scene: { text: "x" }, slots: [{ id: "e", node: "FunUIEnhancePrompt" }] }), null);
 });

@@ -66,7 +66,7 @@ def routes(table, base, web):
             sampling["seed"] = body["seed"]
 
         def work():
-            return nodes.chat_reply(body["conversation"], body["message"], encoder_file=str(body.get("encoder_file") or ""),
+            return nodes.chat_reply(body["conversation"], body["message"], notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""),
                                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), compact=body.get("compact") is not False,
                                     context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400),
                                     thinking=body.get("thinking") is True, **sampling)
