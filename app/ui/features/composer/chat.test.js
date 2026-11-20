@@ -29,7 +29,7 @@ test("the Chat tab shows the conversation as bubbles: your prompts on the right,
     document.body.append(page.node);
     await new Promise((r) => setTimeout(r, 0));
     const said = [...page.node.querySelectorAll(".cx-bubble")].map((b) => `${b.classList.contains("cx-bubble-you") ? "you" : "model"}:${b.querySelector(".cx-bubble-body").textContent}`);
-    assert.match(page.node.textContent, /Context: about 2,048 of 8,192 tokens \(25%\)\. Summarised at 80%\./);
+    assert.match(page.node.textContent, /Context \(last rewrite\): about 2,048 of 8,192 tokens \(25%\)\. Summarised at 80%\./);
     assert.deepEqual(said, ["you:a fox", "model:A red fox runs.", "you:warmer", "you:an owl", "model:An owl glides."]);       // the older conversation (p:0) is not shown
   } finally { teardownDom(); }
 });

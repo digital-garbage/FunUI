@@ -72,8 +72,8 @@ export function chat(app, own) {
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
     bubbles = bubbles.filter(Boolean);
-    const cx = convo.length && convo[convo.length - 1].context;
-    if (cx) bubbles.push(c.hint.default({ text: `Context: about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
+    const lastEntry = convo.length && convo[convo.length - 1], cx = lastEntry && lastEntry.context, cxFor = lastEntry && lastEntry.kind === "chat" ? "last chat reply" : "last rewrite";
+    if (cx) bubbles.push(c.hint.default({ text: `Context (${cxFor}): about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
     const notesBox = c.collapsible.default({ label: `Notes (${String(p.pref("enhance_notes", "") || "").split("\n").filter((x) => x.trim()).length})`,
       body: c.region.stack({ gap: "xs", children: [c.hint.default({ text: "Standing instructions, one per line. Every rewrite and chat reply starts with them; the model can add and drop lines when you tell it something lasting." }),
         c.textarea.md({ label: "Notes", rows: 4, value: String(p.pref("enhance_notes", "") || ""), placeholder: "e.g. warm light, no rain", onCommit: (v) => { p.setPref("enhance_notes", v.trim()); draw(true); } })] }) });
