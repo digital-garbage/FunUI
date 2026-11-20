@@ -359,7 +359,7 @@ def test_summarising_works_to_a_practical_window_even_when_the_model_reports_a_h
     node.RUNS.clear()
     clip = Big("A fox runs.")
     node.FunUIEnhancePrompt.execute(clip, "fox", enabled=True, seed=3, to_chat=True, conversation="w:0")
-    assert node.RUNS[-1]["context"]["window"] == 8192 and node.RUNS[-1]["compacted"] is False       # the model's 131072 is a ceiling, not the budget
+    assert node.RUNS[-1]["context"]["window"] == 32768 and node.RUNS[-1]["compacted"] is False       # the model's 131072 is a ceiling, not the budget
     node.FunUIEnhancePrompt.execute(clip, "owl", enabled=True, seed=3, to_chat=True, conversation="w:0", context_tokens=120)
     assert node.RUNS[-1]["compacted"] is True and "summarised" in node.RUNS[-1]["status"]             # said in the status and flagged for the app
 

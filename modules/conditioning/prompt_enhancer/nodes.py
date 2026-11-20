@@ -168,7 +168,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.Boolean.Input("compact", default=True, optional=True,
                                  tooltip="When a request nearly fills the context window, the conversation so far is summarised and the summary is sent instead of every turn."),
                 io.Int.Input("context_tokens", default=0, min=0, max=1048576, optional=True,
-                             tooltip="Summarising starts at 80% of this. 0 uses 8192, or the model's own size if smaller."),
+                             tooltip="Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
                 io.Boolean.Input("comment_button", default=False, optional=True,

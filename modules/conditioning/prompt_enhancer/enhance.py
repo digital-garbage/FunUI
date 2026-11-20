@@ -69,7 +69,7 @@ Write one compact summary that keeps: the characters, setting, style, tone and v
 Drop greetings, repetition and anything superseded. Output only the summary, plain text, under 250 words."""
 COMPACT_TOKENS = 400         # longest summary the model may write
 COMPACT_AT = 0.8             # compact once a request would fill this share of the context window
-DEFAULT_WINDOW = 8192        # when the model does not say and nothing is set
+DEFAULT_WINDOW = 32768       # the working window when the model does not say or reports more, and nothing is set
 CONVO_KEEP = 200             # turns a compacting conversation holds in memory
 CONVO_NATIVE_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The earlier turns are above; the last message is the new request.
