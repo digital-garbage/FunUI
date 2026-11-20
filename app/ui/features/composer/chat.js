@@ -65,7 +65,7 @@ export function chat(app, own) {
     let bubbles;
     if (convo.length) {                      // "Send everything into chat": the whole conversation, each comment under the rewrite it was about
       const asked = new Set(convo.map((r) => r.prompt_id));
-      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), model(r.answered ?? r.after), ...noted(r), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
+      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), model(r.answered ?? r.after), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." })] : []), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
     } else {
       bubbles = [...list.flatMap((r) => [first(r) ? model(first(r)) : null, you(r.comment)]),
         ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), model(last.answered ?? last.after)] : []),
@@ -90,6 +90,7 @@ export function chat(app, own) {
       const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "encoder_file", "encoder_family"];
       try {
         const r = await app.api.enhancerChat({ conversation: ck, message, notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) });
+        if (r && r.compacted) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised." });
         if (r && ((r.remember || []).length || (r.forget || []).length)) p.setPref("enhance_notes", applyNotes(p.pref("enhance_notes", ""), r.remember, r.forget));
       } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }
       replying = false; look(); draw(true);

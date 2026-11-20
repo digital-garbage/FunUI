@@ -81,6 +81,17 @@ export default {
     const button = c.button.sm({ label: "◆ Composer", tone: "neutral", onClick: () => (win ? win.close() : open()) });
     host.append(button.node);       // the button toggles it, as v4
     app.inputHooks.push(chatHook);          // last, so a setup that failed above leaves nothing behind
-    return () => { cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
+    // A run that summarised the conversation says so, whether or not the Composer is open.
+    let phase = null, told = new Set();
+    const offRun = app.generate && app.generate.subscribe ? app.generate.subscribe((st) => {
+      const was = phase; phase = st && st.phase;
+      if (was && was !== phase && (phase === "done" || phase === "failed") && app.hasModule && app.hasModule("conditioning_prompt_enhancer"))
+        Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => {
+          const hit = (r.runs || []).filter((x) => x.compacted && !told.has(x.prompt_id));
+          hit.forEach((x) => told.add(x.prompt_id));
+          if (hit.length) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised for the enhancer." });
+        }).catch(() => {});
+    }) : () => {};
+    return () => { offRun(); cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
   },
 };

@@ -323,7 +323,7 @@ def test_a_live_chat_reply_uses_its_own_prompt_joins_the_conversation_and_is_sho
     clip = FakeClip("Sure, warmer light it is.")
     monkeypatch.setattr(node, "_own_encoder", lambda f, fam: clip)
     out = node.chat_reply("c:0", "make it warmer?", encoder_file="g.safetensors")
-    assert out == {"ok": True, "reply": "Sure, warmer light it is.", "status": out["status"], "remember": [], "forget": []}
+    assert out == {"ok": True, "reply": "Sure, warmer light it is.", "status": out["status"], "remember": [], "forget": [], "compacted": False}
     assert en().CHAT_REPLY_SYSTEM in clip.seen["text"] and en().SYSTEM_PROMPT not in clip.seen["text"] and clip.seen["text"].endswith("make it warmer?")
     run = node.RUNS[-1]
     assert run["kind"] == "chat" and run["asked"] == "make it warmer?" and run["answered"] == out["reply"] and run["conversation"] == "c:0"
@@ -348,6 +348,20 @@ def test_the_model_edits_the_standing_notes_from_the_chat_and_every_rewrite_carr
     plain = FakeClip("A fox runs.")
     node.FunUIEnhancePrompt.execute(plain, "a fox", enabled=True, seed=3)
     assert "STANDING NOTES" not in plain.seen["text"]
+
+
+def test_summarising_works_to_a_practical_window_even_when_the_model_reports_a_huge_one(node):
+    class Cfg: max_position_embeddings = 131072
+    class Stage: config = Cfg()
+    class Big(FakeClip):
+        cond_stage_model = Stage()
+    node.CONVOS.clear()
+    node.RUNS.clear()
+    clip = Big("A fox runs.")
+    node.FunUIEnhancePrompt.execute(clip, "fox", enabled=True, seed=3, to_chat=True, conversation="w:0")
+    assert node.RUNS[-1]["context"]["window"] == 8192 and node.RUNS[-1]["compacted"] is False       # the model's 131072 is a ceiling, not the budget
+    node.FunUIEnhancePrompt.execute(clip, "owl", enabled=True, seed=3, to_chat=True, conversation="w:0", context_tokens=120)
+    assert node.RUNS[-1]["compacted"] is True and "summarised" in node.RUNS[-1]["status"]             # said in the status and flagged for the app
 
 
 def test_the_model_s_own_context_size_is_read_when_it_reports_one():

@@ -54,21 +54,23 @@ def _own_encoder(file, family):
 
 
 def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
-    """-> (about how many tokens the next request fills, the context window, a status note).
+    """-> (about how many tokens the next request fills, the context window, a status note, whether it was summarised now).
     The conversation is summarised first when the request would fill COMPACT_AT of the window (4 characters a token, the answer's room included)."""
-    window = int(context_tokens or 0) or en.context_window(clip) or en.DEFAULT_WINDOW
+    # A small local model slows down and loses focus on a very long context, so what it reports is only a ceiling: summarising
+    # works to DEFAULT_WINDOW unless the person sets a size.
+    window = int(context_tokens or 0) or min(en.context_window(clip) or en.DEFAULT_WINDOW, en.DEFAULT_WINDOW)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
     size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + int(max_length)    # noqa: E731
-    note = ""
+    note, did = "", False
     if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
         summary = en.compact(clip, state["summary"], list(state["turns"]))
         if summary:
             state["summary"] = summary
             state["turns"].clear()
-            note = "; the earlier conversation was summarised to fit the context window"
+            note, did = "; the earlier conversation was summarised to fit the context window", True
         else:
             note = "; the conversation is near the context window and could not be summarised"
-    return size(), window, note
+    return size(), window, note, did
 
 
 def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
@@ -84,7 +86,7 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
         return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
-    used, window, note = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
+    used, window, note, did = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
     reply, status, add, drop = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes,
                                            max_length=max_length, thinking=thinking, **sampling)
@@ -92,10 +94,10 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
     RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
-                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
+                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
-    return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop}
+    return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
 
 
 def _prompt_id():
@@ -166,7 +168,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.Boolean.Input("compact", default=True, optional=True,
                                  tooltip="When a request nearly fills the context window, the conversation so far is summarised and the summary is sent instead of every turn."),
                 io.Int.Input("context_tokens", default=0, min=0, max=1048576, optional=True,
-                             tooltip="The model's context window in tokens, for compacting. 0 uses what the model reports, or 8192 when it does not say."),
+                             tooltip="Summarising starts at 80% of this. 0 uses 8192, or the model's own size if smaller."),
                 io.Boolean.Input("pass_rating", default=False, optional=True,
                                  tooltip="Adds one line with the rating of the last rated scene before this one to the end of the request."),
                 io.Boolean.Input("comment_button", default=False, optional=True,
@@ -237,7 +239,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if marks:
             system += "\n\n" + en.MARKS_RULE
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
-        history, compacted, context = "", "", None
+        history, compacted, context, did = "", "", None, False
         state = CONVOS.get(key) if key else None
         # In a conversation every comment is part of it, in order: the ones it has not seen yet go in with this request (and so into
         # its turn), and the next request does not repeat them. Outside one, the comments are the Chat tab's labelled block.
@@ -251,7 +253,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if key:
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
             fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
-            used, window, compacted = fit(clip, state, fixed, max_length, compact, context_tokens)
+            used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens)
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}
@@ -286,5 +288,5 @@ class FunUIEnhancePrompt(io.ComfyNode):
             turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
-        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, **info})
+        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, **info})
         return io.NodeOutput(out, status)

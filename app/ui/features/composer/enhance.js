@@ -53,7 +53,7 @@ export function enhance(app, own) {
         c.toggle.default({ label: "Send everything into chat", hint: "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", checked: val("to_chat", false), onChange: (x) => set("to_chat", x) }),
         ...(val("to_chat", false) ? [
           c.toggle.default({ label: "Summarise long conversations", hint: "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", checked: val("compact", true), onChange: (x) => set("compact", x) }),
-          ...(val("compact", true) ? [num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "The model's context size. 0 uses what the model reports, or 8192 when it does not say.")] : [])] : []),
+          ...(val("compact", true) ? [num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 8192, or the model's own size if smaller.")] : [])] : []),
         c.toggle.default({ label: "Comment button", hint: "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", checked: val("comment_button", false), onChange: (x) => set("comment_button", x) }),
         ...(val("to_chat", false) ? [
           c.toggle.default({ label: "Pass the rating", hint: "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", checked: val("pass_rating", false), onChange: (x) => set("pass_rating", x) }),
