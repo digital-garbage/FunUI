@@ -44,12 +44,21 @@ export function addComment(app, text, last, tail = last) {
   return true;
 }
 
+/** The nearest ancestor that scrolls (the Composer window's body). */
+function scrollParent(node) {
+  for (let n = node.parentElement; n; n = n.parentElement) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
+  return null;
+}
+
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let last = null, all = [], replying = false, alive = true, key = "", draft = "", runs = app.lastRun.n;
+  let last = null, all = [], replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
+  // The conversation opens at its end (newest message and the message box); "Top ^" goes back to the start.
+  const scrollTo = (end) => { const sp = scrollParent(page.node); if (sp) sp.scrollTop = end ? sp.scrollHeight : 0; };
+  const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   function draw(force) {
     if (!alive) return;
     const here = ((app.pipeline && app.pipeline.slots()) || []).some((s) => s.node === NODE);
@@ -93,13 +102,13 @@ export function chat(app, own) {
         if (r && r.compacted) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised." });
         if (r && ((r.remember || []).length || (r.forget || []).length)) p.setPref("enhance_notes", applyNotes(p.pref("enhance_notes", ""), r.remember, r.forget));
       } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }
-      replying = false; look(); draw(true);
+      replying = false; stick = true; look(); draw(true);
     };
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Send gets an answer now. Comment is kept and goes with the next prompt as part of one message. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
       c.region.stack({ gap: "sm", children: bubbles }), notesBox, box,
-      c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => look().then(() => draw(true)) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
+      c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
   }
-  const look = () => app.api.enhancerRuns().then((r) => { all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); }).catch(() => {});
+  const look = () => app.api.enhancerRuns().then((r) => { all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
   own(app.on((what) => { if (what === "open" || app.lastRun.n !== runs) { runs = app.lastRun.n; look(); } else draw(); }));
   if (app.pipeline && app.pipeline.subscribe) own(app.pipeline.subscribe(() => draw()));      // a pipeline that gains or loses the enhancer
   draw(true);

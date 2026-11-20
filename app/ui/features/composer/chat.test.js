@@ -86,3 +86,24 @@ test("notes: the model's REMEMBER and FORGET lines edit the list, the notes go t
   assert.deepEqual(r.inputs, { e: { notes: "warm light" } });
   assert.equal(chatHook({ project: { editor_settings: { enhance_notes: "  " } }, scene: { text: "x" }, slots: [{ id: "e", node: "FunUIEnhancePrompt" }] }), null);
 });
+
+test("the Chat tab opens at the bottom of its scrolling window, and Top ^ goes back to the start", async () => {
+  setupDom();
+  try {
+    const frame = document.createElement("div");
+    frame.style.overflowY = "auto";
+    let top = 40;
+    Object.defineProperty(frame, "scrollHeight", { value: 900 });
+    Object.defineProperty(frame, "scrollTop", { get: () => top, set: (v) => { top = v; } });
+    document.body.append(frame);
+    const prefs = {};
+    const app = { project: { project: { id: "p", scenes: [] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { n: 0 }, selection: {}, dom: createDom(),
+      pipeline: { slots: () => [{ node: "FunUIEnhancePrompt", inputs: {} }], subscribe: () => () => {} }, api: { enhancerRuns: async () => ({ runs: [] }) }, on: () => () => {} };
+    const page = chat(app, () => {});
+    frame.append(page.node);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(top, 900);                                                         // opened at the end
+    [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Top ^").click();
+    assert.equal(top, 0);
+  } finally { teardownDom(); }
+});
