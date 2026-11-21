@@ -172,6 +172,28 @@ def routes(table, base, web):
         except Exception as exc:                                    # noqa: BLE001 -- said in the panel
             return web.json_response({"files": [], "why": f"could not read {repo}: {exc}"})
 
+    @table.get(base + "/engine/models")
+    async def _engine_models(_req):
+        """The models the engine downloaded, with their sizes."""
+        import asyncio
+        from . import engine as eng
+        return web.json_response({"models": await asyncio.get_running_loop().run_in_executor(None, eng.ENGINE.downloads)})
+
+    @table.post(base + "/engine/delete")
+    async def _engine_delete(req):
+        """Remove one downloaded model: {"name": folder name from /engine/models}."""
+        import asyncio
+        from . import engine as eng
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        try:
+            await asyncio.get_running_loop().run_in_executor(None, eng.ENGINE.delete, str((body or {}).get("name") or "") if isinstance(body, dict) else "")
+        except (ValueError, OSError) as exc:
+            return web.json_response({"ok": False, "status": str(exc)}, status=400)
+        return web.json_response({"ok": True})
+
     @table.post(base + "/engine/unload")
     async def _engine_unload(_req):
         from . import engine as eng

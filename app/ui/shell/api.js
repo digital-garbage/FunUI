@@ -105,6 +105,8 @@ export const api = {
   enhancerEngine: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine"),
   enhancerEngineLoad: (source) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/load", { source }),
   enhancerEngineFiles: (repo) => call("GET", `/api/m/conditioning_prompt_enhancer/engine/files?repo=${encodeURIComponent(repo)}`),
+  enhancerEngineModels: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine/models"),
+  enhancerEngineDelete: (name) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/delete", { name }),
   enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),
   /** The chat answer as it forms: `onEvent` hears {kind: status | thinking | answer | call} pieces; resolves the final result. */
   enhancerChatStream: (body, onEvent) => streamEvents("/api/m/conditioning_prompt_enhancer/chat_stream", body, onEvent),

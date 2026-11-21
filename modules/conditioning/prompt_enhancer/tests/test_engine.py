@@ -388,3 +388,20 @@ def test_the_output_layer_is_found_whether_tied_or_stored_of_its_own(tmp_path, t
     ids = torch.tensor([[1, 5, 9, 12]])
     with torch.inference_mode():
         assert torch.allclose(model(ids).logits.float(), reference(ids).logits.float(), atol=0.05, rtol=0.05)
+
+
+def test_downloaded_models_are_listed_and_can_be_deleted_even_the_loaded_one(tiny, tmp_path, monkeypatch):
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    (tmp_path / "a__big").mkdir()
+    (tmp_path / "a__big" / "w.safetensors").write_bytes(b"x" * 100)
+    (tmp_path / "b__small").mkdir()
+    (tmp_path / "b__small" / "c.json").write_text("{}")
+    tiny.loaded_dir = str(tmp_path / "a__big")
+    assert [(m["name"], m["loaded"]) for m in tiny.downloads()] == [("a__big", True), ("b__small", False)]        # biggest first
+    for bad in ("", "..", "../x", "a__big/w.safetensors", "nope"):
+        with pytest.raises(ValueError):
+            tiny.delete(bad)
+    tiny.delete("a__big")
+    assert not (tmp_path / "a__big").exists() and tiny.model is None and tiny.phase == "idle"          # the loaded one was unloaded first
+    tiny.delete("b__small")
+    assert tiny.downloads() == []

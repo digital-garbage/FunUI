@@ -10,7 +10,7 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" };
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [];
   own(() => { alive = false; clearTimeout(poll); });
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
   const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: `Ready: ${engine.message || ""}`,
@@ -19,6 +19,12 @@ export function enhance(app, own) {
   // The weight files of the typed Hugging Face repo, so one of them can be picked (an fp8 file without the bf16 ones).
   const repoOf = (v) => { const m = /^([\w.-]+\/[\w.-]+)(?:::([^@]+))?(?:@(.+))?$/.exec(String(v || "").trim()); return m ? { repo: m[1], file: m[2] || "", base: m[3] || "" } : null; };
   const listRepo = (v) => { const r = repoOf(v); if (!r || r.repo === repoFiles.repo) return; repoFiles = { repo: r.repo, files: [], why: "Looking…" }; app.api.enhancerEngineFiles(r.repo).then((x) => { if (repoFiles.repo === r.repo) { repoFiles = { repo: r.repo, files: x.files || [], why: x.why || "" }; if (alive && !app.dom.typingIn(page.node)) draw(); } }).catch(() => {}); };
+  const refreshDownloads = () => Promise.resolve().then(() => app.api.enhancerEngineModels()).then((r) => { downloads = r.models || []; if (alive && !app.dom.typingIn(page.node)) draw(); }).catch(() => {});
+  const forget = async (m) => {
+    if (!(await c.modal.dialogue({ title: "Delete downloaded model", message: `Delete ${m.name.replace("__", "/")} (${gb(m.size)}) from disk? It downloads again the next time it is used.${m.loaded ? " It is loaded now and will be unloaded." : ""}`, tone: "danger", confirmLabel: "Delete" }).result)) return;
+    try { await app.api.enhancerEngineDelete(m.name); } catch (e) { c.toast.warn({ text: `Could not delete: ${e.message}` }); }
+    refreshEngine(); refreshDownloads();
+  };
   const setMany = async (inputs) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: inputs } }); draw(); } };
   const slot = () => (ps.slots() || []).find((s) => s.node === NODE) || null;
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
@@ -75,6 +81,7 @@ export function enhance(app, own) {
       c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),
       c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", "")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
         c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),
+      ...(downloads.length ? [c.collapsible.default({ label: `Downloaded models (${downloads.length})`, body: c.region.stack({ gap: "xs", children: downloads.map((m) => c.toolbar.default({ items: [c.text.sm({ text: `${m.name.replace("__", "/")}: ${gb(m.size)}${m.loaded ? " (loaded)" : ""}` })], trailing: [c.button.sm({ label: "Delete", tone: "ghost", title: "Remove this model's downloaded files from disk", onClick: () => forget(m) })] })) }) })] : []),
       field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
       c.label.section({ text: "Picture" }),
       toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
@@ -110,6 +117,7 @@ export function enhance(app, own) {
   draw();
   refreshEngine();
   ps.ensureLoaded().then(draw);
+  refreshDownloads();
   app.api.enhancerEncoders().then((r) => { encoders = { files: r.files || [], families: r.families || [] }; draw(); }).catch(() => {});
   // Another project's pipeline, or an edit made elsewhere: redraw, but never under a field being typed in.
   const typing = () => app.dom.typingIn(page.node);

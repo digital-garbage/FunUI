@@ -251,6 +251,7 @@ class Engine:
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
         self._dir = ""                         # the folder a download goes into
+        self.loaded_dir = ""                   # the download folder the loaded model came from ("" for a folder given by hand)
         self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
         self.done_bytes = self.total_bytes = 0
@@ -359,6 +360,7 @@ class Engine:
                             failure = exc
                     else:
                         raise failure
+                self.loaded_dir = "" if os.path.isdir(source) else self._dir
                 self.device = "cuda" if cuda else "cpu"
                 self.phase, self.message = "ready", f"{source} on {self.device}"
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
@@ -385,6 +387,29 @@ class Engine:
         self._worker = threading.Thread(target=work, daemon=True, name="funui-engine-load")
         self._worker.start()
         return True
+
+    def downloads(self):
+        """The models this engine downloaded: [{"name": folder name, "size", "loaded"}], biggest first."""
+        root = models_dir()
+        out = []
+        for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+            path = os.path.join(root, name)
+            if os.path.isdir(path):
+                out.append({"name": name, "size": _folder_size(path), "loaded": bool(self.model is not None and self.loaded_dir == path)})
+        return sorted(out, key=lambda m: -m["size"])
+
+    def delete(self, name):
+        """Remove one downloaded model from disk (it is unloaded first when it is the one in use). Only a folder directly under the models directory can go."""
+        import shutil
+        if not name or name != os.path.basename(name) or name in (".", ".."):
+            raise ValueError("not a downloaded model")
+        path = os.path.join(models_dir(), name)
+        if not os.path.isdir(path):
+            raise ValueError(f"'{name}' is not a downloaded model")
+        if self.model is not None and self.loaded_dir == path:
+            self.unload()
+        with self.lock:
+            shutil.rmtree(path)
 
     def unload(self):
         with self.lock:
