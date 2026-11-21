@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
 import { createDom } from "../../shell/dom.js";
-import { addComment, applyNotes, chat, chatHook, learnClock } from "./chat.js";
+import { addComment, applyNotes, chat, chatHook, learnClock, lengthText, unitLength } from "./chat.js";
 
 const slots = [{ id: "e", node: "FunUIEnhancePrompt" }, { id: "x", node: "Other" }];
 const project = { editor_settings: { enhance_chat: [{ comment: "warmer", original: "a cat" }, { comment: "old", original: "a dog" }, { comment: "any" }] } };
@@ -174,4 +174,17 @@ test("a model picked from ComfyUI's list, or an older project's saved encoder, r
   assert.equal(engineOf({ encoder_file: "x.safetensors" }), "comfy:x.safetensors");
   assert.equal(engineOf({}), "");
   assert.equal(engineOf({ engine_model: "a/b", encoder_file: "x.safetensors", use_comfy: true }), "");      // ComfyUI's own text generation: the engine stays out
+});
+
+
+test("the clip's length goes to the enhancer for the VIDEO_LENGTH macro, from the unit's frames and rate", () => {
+  assert.equal(lengthText(121, 24), "5.04 seconds (121 frames at 24 fps)");
+  assert.equal(lengthText(300, 25), "12.0 seconds (300 frames at 25 fps)");
+  assert.equal(lengthText(0, 24), "");
+  assert.equal(lengthText(97, 0), "");
+  const r = chatHook({ project: { frame_rate: 25 }, scene: {}, slots, frames: 125 });
+  assert.deepEqual(r.inputs, { e: { video_length: "5.00 seconds (125 frames at 25 fps)" } });          // no comments or notes needed
+  assert.equal(chatHook({ project: {}, scene: {}, slots: [slots[1]], frames: 125 }), null);
+  const open = { frame_rate: 25, num_frames_per_scene: 100, scenes: [{ id: "a" }, { id: "b" }] };
+  assert.match(unitLength(open, open.scenes[0]), /seconds \(\d+ frames at 25 fps\)/);
 });

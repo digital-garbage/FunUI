@@ -1,22 +1,38 @@
 // Chat: comment on the enhancer's last rewrite. The next Generate rewrites again with every comment still applying; Reset starts over.
 // The comments are the project's own (editor_settings.enhance_chat); a generate hook hands them to the enhancer node for the prompt they were about.
 import { composer as c } from "../../composer/composer.js";
-import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
+import { effFps, effFrames, genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 import { RATING_PREFIX } from "../rating/choices.js";
 import { askEdit, RULE_LABELS } from "./editrequest.js";
 
 const NODE = "FunUIEnhancePrompt";
 const COMPACT_AT = 0.8;        // the share of the context window at which the conversation is summarised (the node uses the same)
 
-/** Generate hook: the comments about THIS typed prompt go to the enhancer slot; the others are said to be left out. */
-export function chatHook({ project, scene, slots }) {
+/** How long a clip of `frames` frames plays, for the VIDEO_LENGTH macro: "5.04 seconds (121 frames at 24 fps)". "" when either is unknown. */
+export function lengthText(frames, fps) {
+  if (!(frames > 0) || !(fps > 0)) return "";
+  const seconds = frames / fps;
+  return `${seconds.toFixed(seconds < 10 ? 2 : 1)} seconds (${frames} frames at ${Number(fps.toFixed(2))} fps)`;
+}
+
+/** The length of the clip a scene is made in: its clips together, each cut sharing one frame. */
+export function unitLength(project, scene) {
+  if (!project || !scene) return "";
+  const group = project.scenes.filter((s) => genUnitId(s) === genUnitId(scene));
+  const root = unitRoot(project, genUnitId(scene)) || scene;
+  return lengthText(group.reduce((t, s) => t + effFrames(s, project), 0) - Math.max(0, group.length - 1), effFps(root, project));
+}
+
+/** Generate hook: the comments about THIS typed prompt go to the enhancer slot; the others are said to be left out. The clip's length goes with them. */
+export function chatHook({ project, scene, slots, frames }) {
   const settings = project.editor_settings || {}, chat = settings.enhance_chat, slot = (slots || []).find((s) => s.node === NODE);
   const notes = typeof settings.enhance_notes === "string" ? settings.enhance_notes.trim() : "";
-  if (!slot || (!Array.isArray(chat) && !notes)) return null;
+  const length = lengthText(frames, effFps(scene, project));
+  if (!slot || (!Array.isArray(chat) && !notes && !length)) return null;
   // In a conversation every comment belongs to it, whatever prompt it was made on; otherwise only the ones about this prompt apply.
   const typed = (scene.text || "").trim(), all = Array.isArray(chat) ? chat : [];
   const mine = all.filter((r) => r && ((slot.inputs || {}).to_chat === true || r.original === undefined || r.original === typed)), left = all.length - mine.length;
-  return { inputs: mine.length || notes ? { [slot.id]: { ...(mine.length ? { chat: JSON.stringify(mine) } : {}), ...(notes ? { notes } : {}) } } : {}, notes: left ? [`${left} Chat comment(s) are about a different prompt and were left out of this run.`] : [] };
+  return { inputs: mine.length || notes || length ? { [slot.id]: { ...(mine.length ? { chat: JSON.stringify(mine) } : {}), ...(notes ? { notes } : {}), ...(length ? { video_length: length } : {}) } } : {}, notes: left ? [`${left} Chat comment(s) are about a different prompt and were left out of this run.`] : [] };
 }
 
 /** The notes after the model's REMEMBER / FORGET lines: numbers (or exact texts) are dropped from the list as it was, then new ones are added once. */
@@ -139,7 +155,7 @@ export function chat(app, own) {
       replying = true; draft = ""; draw(true);
       const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "use_comfy", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
-        const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
+        const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), video_length: unitLength(p.project, (p.project.scenes || []).find((s) => s.id === app.selection.focus && isGenerative(s)) || (p.project.scenes || []).find(isGenerative)), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
         if (eng && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to
         let r;
         if (eng) {          // the engine writes it in front of you, piece by piece

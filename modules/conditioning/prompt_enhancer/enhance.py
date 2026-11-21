@@ -650,6 +650,7 @@ MACROS = {
     "CHAT_MESSAGE_HISTORY": "Every earlier message of yours in the Chat tab except the last one.",
     "LAST_CHAT_REPLY": "The model's last answer in the Chat tab.",
     "CHAT_REPLY_HISTORY": "Every earlier chat answer of the model except the last one.",
+    "VIDEO_LENGTH": "The estimated length of the clip being made, with its frames and rate (empty when the app did not say).",
     "RATING": "The rating line passed with this request (empty unless Pass the rating is on).",
     "LAST_RATING": "The rating line of the last earlier request that had one.",
     "RATINGS_HISTORY": "Every earlier rating line except the last one.",
@@ -659,7 +660,7 @@ MACROS = {
 }      # what a [[NAME]] may be written for in any system prompt, and means
 
 
-def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating="", chat_message="", prefix="", postfix="", rules="") -> dict:
+def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating="", chat_message="", prefix="", postfix="", rules="", length="") -> dict:
     """-> {macro name: its text} from what the conversation holds (`turns` before this request; `chat_message`: the message being answered, if any)."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     turns = [t for t in turns if isinstance(t, dict)]
@@ -676,7 +677,7 @@ def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating=
     older = lambda xs: "\n".join(f"- {x}" for x in xs[:-1]) if len(xs) > 1 else none      # noqa: E731
     lines = [x for x in notes_lines(notes)]
     return {"PREVIOUS_MODEL_OUTPUT": last(outputs), "MODEL_OUTPUTS_HISTORY": older(outputs), "CURRENT_PROMPT": cut(prompt) or none,
-            "RULES_SHEET": str(rules or "").strip() or none, "PROMPT_PREFIX": str(prefix or "").strip() or "(none)", "PROMPT_POSTFIX": str(postfix or "").strip() or "(none)", "PREVIOUS_PROMPT": last(prompts), "PROMPTS_HISTORY": older(prompts), "LAST_USER_COMMENT": last(remarks), "COMMENTS_HISTORY": older(remarks),
+            "RULES_SHEET": str(rules or "").strip() or none, "VIDEO_LENGTH": str(length or "").strip() or "(not known)", "PROMPT_PREFIX": str(prefix or "").strip() or "(none)", "PROMPT_POSTFIX": str(postfix or "").strip() or "(none)", "PREVIOUS_PROMPT": last(prompts), "PROMPTS_HISTORY": older(prompts), "LAST_USER_COMMENT": last(remarks), "COMMENTS_HISTORY": older(remarks),
             "LAST_CHAT_MESSAGE": last(said), "CHAT_MESSAGE_HISTORY": older(said), "LAST_CHAT_REPLY": last(replies), "CHAT_REPLY_HISTORY": older(replies),
             "RATING": str(rating or "").strip() or none, "LAST_RATING": last(rated), "RATINGS_HISTORY": older(rated), "NOTES": "\n".join(f"{i}. {x}" for i, x in enumerate(lines, 1)) or none,
             "CONVERSATION_SUMMARY": str(summary or "").strip() or none,

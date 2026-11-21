@@ -33,7 +33,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const outs = [], hookNotes = [], carried = [];
   for (const hook of hooks) {
     let out;
-    try { out = (await hook({ project, scene, slots })) || {}; } catch (err) { hookNotes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
+    try { out = (await hook({ project, scene, slots, frames })) || {}; } catch (err) { hookNotes.push(`An add-on's input could not be added to this run: ${err.message}`); continue; }
     outs.push(out);
     for (const id of out.references || []) if (id && !plan.ids.includes(id)) { plan.ids = [...plan.ids, id]; if (!kinds.has(id)) kinds.set(id, "image"); carried.push(id); }
   }

@@ -374,7 +374,7 @@ def test_the_model_s_own_context_size_is_read_when_it_reports_one():
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-15:] == ["style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-16:-1] == ["style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]
@@ -834,3 +834,11 @@ def test_the_same_words_inside_a_sentence_are_not_a_repeated_label():
     said = "Sure. As we discussed earlier in this conversation, the fox runs. The user feedback says warmer light, so I made it warmer. The original prompt: a fox, stays."
     assert e.cut_chat_echo(said) == said
     assert e.cut_chat_echo("The fox runs.\n**USER FEEDBACK** (oldest first):\n- warmer") == "The fox runs."
+
+
+def test_the_video_length_macro_says_the_clips_length_or_that_it_is_not_known():
+    e = en()
+    assert "VIDEO_LENGTH" in e.MACROS
+    assert e.macro_values(length="5.00 seconds (125 frames at 25 fps)")["VIDEO_LENGTH"] == "5.00 seconds (125 frames at 25 fps)"
+    assert e.macro_values()["VIDEO_LENGTH"] == "(not known)"
+    assert e.expand_macros("It runs [[VIDEO_LENGTH]].", e.macro_values(length="4 seconds")) == "It runs 4 seconds."

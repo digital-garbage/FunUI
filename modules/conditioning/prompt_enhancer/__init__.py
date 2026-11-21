@@ -60,7 +60,7 @@ def routes(table, base, web):
         if isinstance(body.get("seed"), int) and not isinstance(body.get("seed"), bool):
             sampling["seed"] = body["seed"]
         rules = {k: str(v) for k, v in (body.get("rules") or {}).items() if isinstance(v, str)} if isinstance(body.get("rules"), dict) else {}
-        return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body), use_comfy=body.get("use_comfy") is True,
+        return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), video_length=str(body.get("video_length") or "")[:200], encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body), use_comfy=body.get("use_comfy") is True,
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
                     context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=body.get("thinking") is True, **sampling)
