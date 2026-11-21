@@ -91,8 +91,8 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
     wanted = set(model.state_dict())
     with safe_open(str(weights_file), "pt") as f:
         found = {k for k in f.keys() if not k.endswith(SKIP_SUFFIXES)}
-        names = _rename(wanted - {"lm_head.weight"}, found)
-        missing = sorted(wanted - {"lm_head.weight"} - set(names))
+        names = _rename(wanted, found)
+        missing = sorted(wanted - {"lm_head.weight"} - set(names))          # an output layer the file lacks is the input table, shared
         if len(missing) > len(wanted) // 20:
             raise ValueError(f"{len(missing)} of the model's {len(wanted)} tensors are not in {weights_file}, for example {missing[:3]}")
         for want, have in names.items():
@@ -113,8 +113,11 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
             else:
                 owner._buffers[attr] = tensor.to(dtype) if tensor.is_floating_point() else tensor
         embed = model.get_input_embeddings()
-        if isinstance(embed, FP8Embedding) and "lm_head.weight" in wanted:         # the output layer shares the table; keep one widened copy of it
-            model.lm_head = FP8Linear(embed.weight, embed.scale, keep=True)
+        if "lm_head.weight" in wanted and "lm_head.weight" not in names:           # no output layer of its own in the file: it shares the input table
+            if isinstance(embed, FP8Embedding):                                     # keep one widened copy of the fp8 table
+                model.lm_head = FP8Linear(embed.weight, embed.scale, keep=True)
+            else:
+                model.lm_head.weight = embed.weight
     for name, p in list(model.named_parameters()) + list(model.named_buffers()):
         if p.device.type == "meta":
             raise ValueError(f"{name} was not filled from {weights_file}")

@@ -46,22 +46,20 @@ test("Chat on a pipeline with no enhancer says so instead of taking comments tha
   assert.ok(page.node.querySelector("textarea"));
 });
 
-test("the Encoder pick lists the encoder files, and its family is greyed out until a file is picked", async () => {
-  let inputs = { enabled: true }, saved;
+test("one model picker lists ComfyUI's files and saves the pick as the engine model, replacing an older encoder choice", async () => {
+  let inputs = { enabled: true, encoder_file: "old.safetensors" }, saved;
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs }], ensureLoaded: async () => {}, save: async (b) => { saved = b; inputs = { ...inputs, ...b.inputs.e }; }, subscribe: () => () => {} };
-  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: ["gemma4.safetensors"], families: ["stable_diffusion", "ltxv"] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: ["gemma4.safetensors", "old.safetensors"], families: [] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }), enhancerEngineFiles: async () => ({ files: [] }) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(page.node.textContent, /Encoder/);
-  assert.match(page.node.textContent, /gemma4\.safetensors/);
-  assert.equal(page.node.querySelector('select[aria-label="Encoder family"]').disabled, true);
-  inputs = { enabled: true, encoder_file: "gemma4.safetensors" };
-  const ps2 = { ...ps, slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs }] };
-  const again = enhance({ dom: createDom(), pipeline: ps2, api }, () => {});
-  document.body.append(again.node);
+  assert.equal(page.node.querySelector('select[aria-label="Encoder"]'), null);                         // no second picker for the same thing
+  assert.equal(page.node.querySelector('select[aria-label="Encoder family"]'), null);
+  const pick = page.node.querySelector('select[aria-label="From ComfyUI\'s list"]');
+  assert.equal(pick.value, "old.safetensors");                                                          // an older project's saved encoder shows as picked
+  pick.value = "gemma4.safetensors"; pick.dispatchEvent(new window.Event("change", { bubbles: true }));
   await new Promise((r) => setTimeout(r, 0));
-  assert.equal(again.node.querySelector('select[aria-label="Encoder family"]').disabled, false);
+  assert.deepEqual(saved.inputs.e, { engine_model: "comfy:gemma4.safetensors", encoder_file: "" });
 });
 
 test("Style picks the built-in instructions shown as the placeholder, and choosing Dynamic saves it", async () => {
@@ -109,7 +107,7 @@ test("settings that hang on another switch follow it and are greyed out while it
     return find;
   };
   const off = await grey({ enabled: false });
-  assert.equal(off("Encoder"), true); assert.equal(off("Send everything into chat"), true);
+  assert.equal(off("From ComfyUI's list"), true); assert.equal(off("Send everything into chat"), true);
   const noChat = await grey({ enabled: true });
   assert.equal(noChat("Send everything into chat"), false);
   assert.equal(noChat("Summarise long conversations"), true); assert.equal(noChat("Pass the rating"), true); assert.equal(noChat("Context window (tokens)"), true);
@@ -118,6 +116,6 @@ test("settings that hang on another switch follow it and are greyed out while it
   assert.equal(chat("Summarise long conversations"), false); assert.equal(chat("Pass the rating"), false);
   assert.equal(chat("Context window (tokens)"), true);       // summarising is off
   assert.equal(chat("Conversation, Gemma 4"), false); assert.equal(chat("Comments"), true); assert.equal(chat("Rating line opening"), true);
-  assert.equal(chat("Chat answers"), true);                  // no encoder of its own picked
+  assert.equal(chat("Chat answers"), true);                  // no model picked
   assert.equal(chat("temperature"), true);                   // greedy: the dials are not used
 });

@@ -28,8 +28,8 @@ export function applyNotes(text, add = [], drop = []) {
   return kept.join("\n");
 }
 
-/** The engine model a chat runs on: the one set, or, with self-editing on, the encoder picked from ComfyUI's list (the engine runs the same file). */
-export const engineOf = (inp) => String(inp.engine_model || "").trim() || (inp.self_edit === true && inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
+/** The engine model a chat runs on: the one set, or the file picked from ComfyUI's list (an older project's saved encoder runs the same way). */
+export const engineOf = (inp) => String(inp.engine_model || "").trim() || (inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
 
 /** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
 export async function rulesOf(app, inp) {

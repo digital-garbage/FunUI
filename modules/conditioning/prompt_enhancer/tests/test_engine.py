@@ -350,3 +350,41 @@ def test_a_comfy_encoder_file_and_one_file_of_a_repo_are_found_by_name(tmp_path,
     assert eng.guess_base("gemma-4-E4B-heretic-fp8.safetensors") == "a/gemma-4-E4B-heretic"        # quantization words in the file name do not count, a loosely similar repo is not taken
     with pytest.raises(ValueError, match="name the base model"):
         eng.guess_base("qwen_3_4b_fp8_scaled.safetensors")
+
+
+def _tiny_fp8(tmp_path, tie, fp8_embed, own_head):
+    import torch
+    from safetensors.torch import save_file
+    from transformers import Gemma4ForCausalLM, Gemma4TextConfig
+    torch.manual_seed(3)
+    cfg = Gemma4TextConfig(vocab_size=64, hidden_size=32, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, head_dim=16, global_head_dim=16,
+                           intermediate_size=64, hidden_size_per_layer_input=8, layer_types=["sliding_attention", "full_attention"], sliding_window=16,
+                           max_position_embeddings=256, num_kv_shared_layers=0, pad_token_id=0, bos_token_id=1, eos_token_id=2, tie_word_embeddings=tie)
+    cfg.save_pretrained(tmp_path)
+    reference = Gemma4ForCausalLM(cfg).eval().to(torch.bfloat16)
+    tensors = {}
+    for name, value in reference.state_dict().items():
+        embed = name == "model.embed_tokens.weight"
+        if name == "lm_head.weight" and not own_head:
+            continue
+        if value.ndim == 2 and ("mlp" in name or (embed and fp8_embed) or (name == "lm_head.weight" and fp8_embed)):
+            scale = value.abs().max().float() / 400
+            packed = (value.float() / scale).to(torch.float8_e4m3fn)
+            tensors[name], tensors[name[:-6] + "weight_scale"] = packed, scale.reshape(())
+            tensors[name[:-6] + "comfy_quant"] = torch.tensor(list(b"{}"), dtype=torch.uint8)
+            value.copy_((packed.float() * scale).to(torch.bfloat16))
+        else:
+            tensors[name] = value
+    save_file(tensors, str(tmp_path / "w.safetensors"))
+    return reference
+
+
+@pytest.mark.parametrize("tie,fp8_embed,own_head", [(True, False, False), (False, False, True), (False, True, True), (True, True, False)])
+def test_the_output_layer_is_found_whether_tied_or_stored_of_its_own(tmp_path, tie, fp8_embed, own_head):
+    import torch
+    from modules.conditioning.prompt_enhancer import fp8
+    reference = _tiny_fp8(tmp_path, tie, fp8_embed, own_head)
+    model = fp8.build(tmp_path, tmp_path / "w.safetensors")
+    ids = torch.tensor([[1, 5, 9, 12]])
+    with torch.inference_mode():
+        assert torch.allclose(model(ids).logits.float(), reference(ids).logits.float(), atol=0.05, rtol=0.05)

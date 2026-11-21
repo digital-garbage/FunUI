@@ -80,24 +80,28 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     editing = False
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
+    engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")
     if engine_model:
         try:
             ENGINE.load(engine_model)
         except Exception as e:                                      # noqa: BLE001
-            return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
-        clip = EngineClip(ENGINE, on_event)
-        if self_edit and rules and on_event:                         # the model may read and propose changes to its own rules, each one asked of the person
-            from . import engine as eng
-            template = getattr(ENGINE.tok, "chat_template", "") or ""
-            if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:        # the template must render tools and the model must have a call format
-                from . import rules as rl
-                clip.tools, clip.handler = rl.tools(), rl.Editor(rules, on_event)
-                editing = True
-            else:
-                on_event({"kind": "status", "text": "this model has no tool calls, so it cannot edit its own rules"})
-    elif not encoder_file:
-        return {"ok": False, "reply": "", "status": "pick an Encoder in Composer > Enhance: the model's own encoder cannot chat"}
-    else:
+            if not encoder_file:
+                return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
+            engine_model = ""                                       # an older project's encoder: ComfyUI's own loader reads it
+        else:
+            clip = EngineClip(ENGINE, on_event)
+            if self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
+                from . import engine as eng
+                template = getattr(ENGINE.tok, "chat_template", "") or ""
+                if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:        # the template must render tools and the model must have a call format
+                    from . import rules as rl
+                    clip.tools, clip.handler = rl.tools(), rl.Editor(rules, on_event)
+                    editing = True
+                else:
+                    on_event({"kind": "status", "text": "this model has no tool calls, so it cannot edit its own rules"})
+    if not engine_model:
+        if not encoder_file:
+            return {"ok": False, "reply": "", "status": "pick a model in Composer > Enhance: the pipeline's own encoder cannot chat"}
         try:
             clip = _own_encoder(encoder_file, encoder_family)
         except Exception as e:                                      # noqa: BLE001
@@ -282,16 +286,19 @@ class FunUIEnhancePrompt(io.ComfyNode):
                              "before": text, "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "prefix/postfix not found")
             body = text[len(pre):len(text) - len(post)].strip()
-        if str(engine_model or "").strip():
+        engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")          # a file picked from ComfyUI's list runs on the engine
+        if engine_model:
             try:
-                ENGINE.load(str(engine_model).strip())
+                ENGINE.load(engine_model)
                 clip = EngineClip(ENGINE)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
-                log.warning("FunUI Prompt enhancer", f"could not load the engine model {engine_model}: {e}; the original prompt is used")
-                _log({"prompt_id": _prompt_id(), "status": f"could not load the engine model {engine_model}: {e}", "before": text,
-                      "after": text, "thinking": "", "sent": "", "ok": False})
-                return io.NodeOutput(text, "engine failed")
-        elif encoder_file:
+                if not encoder_file:
+                    log.warning("FunUI Prompt enhancer", f"could not load the engine model {engine_model}: {e}; the original prompt is used")
+                    _log({"prompt_id": _prompt_id(), "status": f"could not load the engine model {engine_model}: {e}", "before": text,
+                          "after": text, "thinking": "", "sent": "", "ok": False})
+                    return io.NodeOutput(text, "engine failed")
+                engine_model = ""                                   # an older project's encoder: ComfyUI's own loader reads it
+        if not engine_model and encoder_file:
             try:
                 clip = _own_encoder(encoder_file, encoder_family)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through

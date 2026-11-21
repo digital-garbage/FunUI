@@ -79,12 +79,12 @@ test("in a conversation every comment goes to the enhancer, whatever prompt it w
   assert.equal(r.notes.length, 0);
 });
 
-test("Send asks the model now (a conversation and an encoder of its own are needed); Comment only keeps the note for the next prompt", async () => {
+test("Send asks the model now (a conversation and a model of its own are needed); Comment only keeps the note for the next prompt", async () => {
   setupDom();
   try {
     const prefs = {}, asked = [];
     const mk = (inputs) => ({ project: { project: { id: "p", scenes: [] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { n: 0 }, selection: {}, dom: createDom(),
-      pipeline: { slots: () => [{ node: "FunUIEnhancePrompt", inputs }], subscribe: () => () => {} }, api: { enhancerRuns: async () => ({ runs: [] }), enhancerChat: async (b) => { asked.push(b); return { ok: true }; } }, on: () => () => {} });
+      pipeline: { slots: () => [{ node: "FunUIEnhancePrompt", inputs }], subscribe: () => () => {} }, api: { enhancerRuns: async () => ({ runs: [] }), enhancerChat: async (b) => { asked.push(b); return { ok: true }; }, enhancerChatStream: async (b) => { asked.push(b); return { ok: true }; } }, on: () => () => {} });
     const open = async (inputs) => { const page = chat(mk(inputs), () => {}); document.body.append(page.node); await new Promise((r) => setTimeout(r, 0)); return page; };
     const button = (page, label) => [...page.node.querySelectorAll("button")].find((b) => b.textContent === label);
     const off = await open({ to_chat: true });                                       // no encoder of its own: nothing to answer with
@@ -94,7 +94,7 @@ test("Send asks the model now (a conversation and an encoder of its own are need
     box.value = "make it warmer?"; box.dispatchEvent(new window.Event("input", { bubbles: true }));
     button(page, "Send").click();
     await new Promise((r) => setTimeout(r, 0));
-    assert.deepEqual(asked.map((a) => [a.conversation, a.message, a.encoder_file, a.temperature]), [["p:0", "make it warmer?", "g.safetensors", 0.5]]);
+    assert.deepEqual(asked.map((a) => [a.conversation, a.message, a.engine_model, a.temperature]), [["p:0", "make it warmer?", "comfy:g.safetensors", 0.5]]);
     assert.equal(prefs.enhance_chat, undefined);                                    // a message is not a comment
     const before = asked.length;
     button(page, "Refresh").click();                                                // reloads the runs; asks the model nothing
@@ -167,10 +167,10 @@ test("a proposed change to a system prompt opens a diff and waits for Allow or D
   } finally { teardownDom(); }
 });
 
-test("self-editing runs a picked ComfyUI encoder on the engine, and nothing else changes", async () => {
+test("a model picked from ComfyUI's list, or an older project's saved encoder, runs on the engine", async () => {
   const { engineOf } = await import("./chat.js");
   assert.equal(engineOf({ engine_model: " a/b ", encoder_file: "x.safetensors", self_edit: true }), "a/b");
   assert.equal(engineOf({ encoder_file: "x.safetensors", self_edit: true }), "comfy:x.safetensors");
-  assert.equal(engineOf({ encoder_file: "x.safetensors" }), "");
+  assert.equal(engineOf({ encoder_file: "x.safetensors" }), "comfy:x.safetensors");
   assert.equal(engineOf({}), "");
 });

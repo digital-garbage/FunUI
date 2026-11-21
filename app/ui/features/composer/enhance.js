@@ -19,6 +19,7 @@ export function enhance(app, own) {
   // The weight files of the typed Hugging Face repo, so one of them can be picked (an fp8 file without the bf16 ones).
   const repoOf = (v) => { const m = /^([\w.-]+\/[\w.-]+)(?:::([^@]+))?(?:@(.+))?$/.exec(String(v || "").trim()); return m ? { repo: m[1], file: m[2] || "", base: m[3] || "" } : null; };
   const listRepo = (v) => { const r = repoOf(v); if (!r || r.repo === repoFiles.repo) return; repoFiles = { repo: r.repo, files: [], why: "Looking…" }; app.api.enhancerEngineFiles(r.repo).then((x) => { if (repoFiles.repo === r.repo) { repoFiles = { repo: r.repo, files: x.files || [], why: x.why || "" }; if (alive && !app.dom.typingIn(page.node)) draw(); } }).catch(() => {}); };
+  const setMany = async (inputs) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: inputs } }); draw(); } };
   const slot = () => (ps.slots() || []).find((s) => s.node === NODE) || null;
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
   const continuityOn = () => { const k = (ps.currentValues && ps.currentValues() || {}).continuity; return Boolean(k) && k.carry !== false; };      // hidden while Continuity is not there or not carrying the frame
@@ -47,12 +48,6 @@ export function enhance(app, own) {
     ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer.", 5, null, "talk"],
     ["compact_prompt", "Conversation notes", "The model that shortens a long conversation.", 6, null, "sum"]];
   const styleNow = () => { const x = (slot() && slot().inputs) || {}; return x.style || "default"; };
-  const choices = (name) => (name === "encoder_file" ? encoders.files : encoders.families);
-  const pick = (name, label, first, hint, dflt = "", disabled = false) => {
-    const cur = (slot().inputs || {})[name] || dflt, list = choices(name);
-    const opts = [...(first ? [{ value: "", label: first }] : []), ...[...list, ...(cur && !list.includes(cur) ? [cur] : [])].map((v) => ({ value: v, label: String(v) }))];
-    return field(label, c.select.md({ label, value: cur, options: opts, disabled, onChange: (v) => set(name, v) }), hint);
-  };
   function draw() {
     if (!alive) return;
     const sl = slot();
@@ -61,8 +56,8 @@ export function enhance(app, own) {
     const on = val("enabled", false), greedy = val("greedy", false);
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
-    const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && (engineSet || encoder) && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
+    const engineSet = Boolean(String(val("engine_model", "")).trim() || val("encoder_file", "")), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
+    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && engineSet, edit: chat && engineSet && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
@@ -71,17 +66,15 @@ export function enhance(app, own) {
       toggle("Enhance prompt", "", "enabled", false, false),
       c.label.section({ text: "Model" }),
       field("Engine model", c.input.sm({ label: "Engine model", value: val("engine_model", ""), placeholder: "owner/name on Hugging Face, or a folder", disabled: off(), onCommit: (x) => { set("engine_model", x.trim()); refreshEngine(); } }),
-        "Runs the model on FunUI's own engine, which can use any model that transformers supports and shows the chat as it is written. The first use downloads it. Empty uses the encoder below."),
-      field("From ComfyUI's list", c.select.md({ label: "From ComfyUI's list", value: String(val("engine_model", "")).startsWith("comfy:") ? String(val("engine_model", "")).slice(6).split("@")[0] : "", disabled: off(), options: [{ value: "", label: "None" }, ...encoders.files.map((f) => ({ value: f, label: f }))], onChange: (x) => { set("engine_model", x ? `comfy:${x}` : "").then(refreshEngine); } }),
+        "Runs the model on FunUI's own engine, which can use any model that transformers supports and shows the chat as it is written. The first use downloads it."),
+      field("From ComfyUI's list", c.select.md({ label: "From ComfyUI's list", value: String(val("engine_model", "")).startsWith("comfy:") ? String(val("engine_model", "")).slice(6).split("@")[0] : (String(val("engine_model", "")).trim() ? "" : String(val("encoder_file", ""))), disabled: off(), options: [{ value: "", label: "None" }, ...encoders.files.map((f) => ({ value: f, label: f }))], onChange: (x) => { setMany({ engine_model: x ? `comfy:${x}` : "", encoder_file: "" }).then(refreshEngine); } }),
         "Uses a text encoder file from ComfyUI's models list as the engine model. Its config and tokenizer are downloaded from Hugging Face once; add @owner/name to the model above if the right one is not found."),
       ...(() => { const r = repoOf(val("engine_model", "")); if (!r) return []; listRepo(val("engine_model", "")); const sel = repoFiles.repo === r.repo ? repoFiles.files : [];
         return sel.length > 1 || r.file ? [field("File in the repo", c.select.md({ label: "File in the repo", value: r.file, disabled: off(), options: [{ value: "", label: "The whole repo" }, ...sel.map((f) => ({ value: f.name, label: `${f.name} (${gb(f.size)})` }))], onChange: (x) => { set("engine_model", x ? `${r.repo}::${x}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); } }),
           "Downloads only that one weights file (for example an fp8 one), not every copy in the repo.")] : []; })(),
-      c.hint.default({ text: engineSet ? engineLine() : "No engine model set: the encoder below writes the rewrites." }),
+      c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),
       c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", "")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
         c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),
-      pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite when no engine model is set. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here.", "", off(!engineSet)),
-      pick("encoder_family", "Encoder family", "", "Which family the encoder file is for.", "stable_diffusion", off(encoder, !engineSet)),
       field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
       c.label.section({ text: "Picture" }),
       toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
@@ -91,7 +84,7 @@ export function enhance(app, own) {
       toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
       num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
       toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
-      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models); a picked encoder then runs on the engine.", "self_edit", false, off(chat, engineSet || encoder)),
+      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models).", "self_edit", false, off(chat, engineSet)),
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),
