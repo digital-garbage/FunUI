@@ -451,3 +451,44 @@ def test_a_tokenizer_carried_in_the_weights_file_is_written_out_when_the_folder_
     assert (tmp_path / "base" / "tokenizer.json").read_bytes() == data
     save_file({"x": torch.zeros(1)}, str(tmp_path / "n.safetensors"))
     assert not eng.write_embedded_tokenizer(tmp_path / "n.safetensors", tmp_path / "base2")
+
+
+class _FakeGGUF:
+    """What llama.cpp's backend offers the engine: a chat template, the end markers and the text as it forms."""
+    gguf, funui_precision, bos, eos = True, "llama.cpp", "<bos>", "<eos>"
+    chat_template = "<|channel>thought<channel|>"
+
+    def render(self, messages, tools=None, thinking=False):
+        return "".join(f"[{m['role']}]{m['content']}" for m in messages) + "[assistant]"
+
+    def text_stream(self, text, *, stats=None, cancel=None, **k):
+        for piece in ("<|channel>thought\n", "plan it", "<channel|>", "A fox ", "runs.", "<eos>"):
+            yield piece
+        stats.update(tokens=6, steps=6, prompt=len(text))
+
+
+def test_a_gguf_model_streams_thinking_and_answer_through_the_same_events():
+    from .. import engine as eng
+    e = eng.Engine()
+    e.model = e.tok = _FakeGGUF()
+    e.source, e.phase = "x.gguf", "ready"
+    events = list(e.stream([{"role": "user", "content": "hi"}], thinking=True))
+    assert "".join(x["text"] for x in events if x["kind"] == "thinking").strip() == "plan it"
+    assert "".join(x["text"] for x in events if x["kind"] == "answer") == "A fox runs."
+    assert events[-1]["kind"] == "end" and events[-1]["tokens"] == 6
+
+
+def test_a_repo_of_gguf_files_asks_for_a_pick_and_several_files_can_be_named(monkeypatch):
+    import types
+    from .. import engine as eng
+    sib = lambda n: types.SimpleNamespace(rfilename=n, size=10)       # noqa: E731
+    info = types.SimpleNamespace(siblings=[sib("m-00001-of-00002.gguf"), sib("m-00002-of-00002.gguf"), sib("README.md")], tags=[])
+    import huggingface_hub
+    monkeypatch.setattr(huggingface_hub.HfApi, "model_info", lambda self, repo, files_metadata=False: info)
+    got = []
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda repo, f, local_dir=None: got.append(f) or f)
+    e = eng.Engine()
+    with __import__("pytest").raises(ValueError, match="pick one"):
+        e._fetch("a/m")
+    folder, weights = e._fetch("a/m::m-00001-of-00002.gguf|m-00002-of-00002.gguf")
+    assert got == ["m-00001-of-00002.gguf", "m-00002-of-00002.gguf"] and weights.endswith("m-00001-of-00002.gguf")

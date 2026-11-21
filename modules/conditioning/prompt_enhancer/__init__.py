@@ -188,7 +188,7 @@ def routes(table, base, web):
         def look():
             from huggingface_hub import HfApi
             info = HfApi().model_info(repo, files_metadata=True)
-            return [{"name": s.rfilename, "size": s.size or 0} for s in info.siblings if s.rfilename.endswith(".safetensors") and not s.rfilename.endswith(".index.json")]
+            return [{"name": s.rfilename, "size": s.size or 0} for s in info.siblings if s.rfilename.endswith((".safetensors", ".gguf"))]
         try:
             return web.json_response({"files": await asyncio.get_running_loop().run_in_executor(None, look), "why": ""})
         except Exception as exc:                                    # noqa: BLE001 -- said in the panel

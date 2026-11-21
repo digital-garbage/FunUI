@@ -168,3 +168,20 @@ test("a rewrite running inside a generation shows up as it is written, and goes 
   assert.doesNotMatch(page.node.textContent, /Writing now/);
   stop();
 });
+
+test("files of a repo are checkboxes, and every checked one goes into the model name", async () => {
+  const saved = [];
+  let value = "o/m";
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: value } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async (x) => { saved.push(x); }, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
+    enhancerEngineFiles: async () => ({ files: [{ name: "a-1.gguf", size: 2 ** 30 }, { name: "a-2.gguf", size: 2 ** 30 }] }) };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(page.node.textContent, /a-1\.gguf \(1\.0 GB\)/);
+  const boxes = [...page.node.querySelectorAll("input[type=checkbox]")].filter((b) => /a-\d\.gguf/.test(b.closest("label")?.textContent || b.parentElement.textContent));
+  assert.equal(boxes.length, 2);
+  boxes[1].click();
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(saved.slice(-1), [{ inputs: { e: { engine_model: "o/m::a-2.gguf" } } }]);
+});

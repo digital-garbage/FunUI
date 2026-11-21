@@ -310,6 +310,9 @@ class Engine:
           model, found by the file's name, or from `@owner/base` when you name one."""
         if os.path.isdir(source):
             return source, ""
+        if os.path.isfile(source) and source.lower().endswith(".gguf"):
+            self._dir = ""
+            return os.path.dirname(source), source
         from huggingface_hub import HfApi, hf_hub_download, snapshot_download
         if source.startswith("comfy:"):
             name, _, base = source[6:].partition("@")
@@ -328,16 +331,23 @@ class Engine:
         if not match:
             raise ValueError(f"'{source}' is neither a folder, a Hugging Face id like owner/name, nor comfy:<file in the text encoders list>")
         repo, wanted, base = match.groups()
+        extra = [f.strip() for f in (wanted or "").split("|")[1:] if f.strip()]          # more files of the same repo (the other parts of a split model)
+        wanted = (wanted or "").split("|")[0].strip()
         target = local_dir(repo) + (("__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(wanted)[0])) if wanted else "")
         self._dir = target
         if os.path.exists(os.path.join(target, ".complete")):
             return self._cached(target)
         info = HfApi().model_info(repo, files_metadata=True)
         files = {s.rfilename: s.size or 0 for s in info.siblings}
+        ggufs = sorted(f for f in files if f.lower().endswith(".gguf"))
+        if not wanted and ggufs and "config.json" not in files:
+            raise ValueError(f"{repo} holds GGUF files; pick one with {repo}::{ggufs[0]} (more than one file: {repo}::first.gguf|second.gguf). Files: {', '.join(ggufs[:6])}")
         single = wanted or ("" if "config.json" in files else next((f for f in files if f.endswith(".safetensors")), ""))
-        if single and single not in files:
-            raise ValueError(f"{repo} has no file {single}")
-        self.total_bytes = sum(size for name, size in files.items() if name.endswith((".safetensors", ".json")) and (not single or name == single))
+        for f in [single, *extra]:
+            if f and f not in files:
+                raise ValueError(f"{repo} has no file {f}")
+        pull = [f for f in [single, *extra] if f]
+        self.total_bytes = sum(size for name, size in files.items() if (name in pull) or (not single and name.endswith((".safetensors", ".json"))) or (single and name.endswith(".json") and name not in pull and not single.lower().endswith(".gguf")))
         self.phase, self.message = "downloading", f"downloading {repo}"
         _say(f"engine: downloading {repo}" + (f" ({self.total_bytes / 2 ** 30:.1f} GB)" if self.total_bytes else ""))
         os.makedirs(target, exist_ok=True)
@@ -345,6 +355,13 @@ class Engine:
             snapshot_download(repo, local_dir=target, allow_patterns=REPO_FILES)
             open(os.path.join(target, ".complete"), "w").close()
             return target, ""
+        if single.lower().endswith(".gguf"):                         # llama.cpp reads everything from the file itself
+            for f in pull:
+                self.message = f"downloading {f}"
+                hf_hub_download(repo, f, local_dir=target)
+            with open(os.path.join(target, ".complete"), "w") as out:
+                out.write(single)
+            return os.path.join(target, "base"), os.path.join(target, single)
         if not base:
             base = repo if "config.json" in files else (next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:quantized:")), "")
                                                        or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:") and t.count(":") == 1), ""))
@@ -392,26 +409,31 @@ class Engine:
                 import torch
                 from transformers import AutoTokenizer
                 cuda = torch.cuda.is_available()
-                try:
-                    self.tok = AutoTokenizer.from_pretrained(folder)
-                except Exception as exc:                            # noqa: BLE001 -- a base without a tokenizer file of the fast kind: the weights file may carry one
-                    if not (weights and write_embedded_tokenizer(weights, folder)):
-                        raise ValueError(f"{exc} (the model has no tokenizer.json; sentencepiece must be installed to read its older tokenizer file)") from exc
-                    self.tok = AutoTokenizer.from_pretrained(folder)
-                if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
-                    from . import fp8
-                    def step(done, total):
-                        self.message = f"loading the weights: {100 * done // max(total, 1)}%"
-                    self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu", progress=step, precision=precision)
+                if weights and weights.lower().endswith(".gguf"):    # llama.cpp runs it, quantized as it is
+                    from . import gguf
+                    self.model = self.tok = gguf.load(weights, cuda=cuda, say=lambda t: setattr(self, "message", t) or _say(t))
+                    self.weights = False
                 else:
-                    for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
-                        try:
-                            self.model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
-                            break
-                        except (ValueError, KeyError, AttributeError) as exc:
-                            failure = exc
+                    try:
+                        self.tok = AutoTokenizer.from_pretrained(folder)
+                    except Exception as exc:                            # noqa: BLE001 -- a base without a tokenizer file of the fast kind: the weights file may carry one
+                        if not (weights and write_embedded_tokenizer(weights, folder)):
+                            raise ValueError(f"{exc} (the model has no tokenizer.json; sentencepiece must be installed to read its older tokenizer file)") from exc
+                        self.tok = AutoTokenizer.from_pretrained(folder)
+                    if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
+                        from . import fp8
+                        def step(done, total):
+                            self.message = f"loading the weights: {100 * done // max(total, 1)}%"
+                        self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu", progress=step, precision=precision)
                     else:
-                        raise failure
+                        for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
+                            try:
+                                self.model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
+                                break
+                            except (ValueError, KeyError, AttributeError) as exc:
+                                failure = exc
+                        else:
+                            raise failure
                 self.loaded_dir = "" if os.path.isdir(source) else self._dir
                 self.device = "cuda" if cuda else "cpu"
                 how = getattr(self.model, "funui_precision", "")
@@ -506,6 +528,10 @@ class Engine:
         import torch
         from transformers import LogitsProcessor, LogitsProcessorList, StoppingCriteria, StoppingCriteriaList, TextIteratorStreamer
         tok, model = self.tok, self.model
+        if getattr(model, "gguf", False):
+            yield from self._stream_gguf(messages, thinking=thinking, tools=tools, max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p, top_k=top_k,
+                                         min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy)
+            return
         kwargs = {"tools": tools} if tools else {}
         try:
             text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=bool(thinking), **kwargs)
@@ -596,6 +622,39 @@ class Engine:
         took = max(time.time() - started, 1e-6)
         _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s" + (f", {stats['cached']} prompt tokens reused)" if stats["cached"] else ")"))
         yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
+
+    def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy):
+        """The same events as `_stream`, from a GGUF model run by llama.cpp (which reuses the unchanged start of the prompt by itself)."""
+        model = self.model
+        text = model.render(messages, tools=tools, thinking=thinking)
+        dialect = dialect_for({}, model.chat_template)
+        ends = ["<turn|>", "<|turn>", "<|im_end|>", "<end_of_turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else ["<|im_end|>", "<end_of_turn>", "<|eot_id|>"]
+        drops = [model.bos, model.eos, *ends]
+        opened = bool(dialect.think_open) and not dialect.label and text.rstrip().endswith(dialect.think_open)
+        self.activity = {"stage": "reading the prompt", "tokens": 0, "prompt": 0, "started": time.time()}
+        yield {"kind": "status", "text": "reading the prompt"}
+        stats, calls, started = {"tokens": 0, "cached": 0, "steps": 0, "prompt": 0}, [], time.time()
+        cancel = self.cancel = threading.Event()
+        me = self
+
+        def chunks():
+            for piece in model.text_stream(text, max_new_tokens=int(max_new_tokens), temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
+                                           repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy,
+                                           stops=ends, cancel=cancel, stats=stats):
+                me.activity.update(stage="writing", tokens=stats["steps"], prompt=stats["prompt"])
+                yield piece
+        split = Splitter(dialect, drops, opened)
+        try:
+            yield from self._pieces(chunks(), split, calls, dialect)
+        finally:
+            self.activity = {}
+            cancel.set()
+        for kind, part in split.feed("", final=True):
+            if kind in ("thinking", "answer"):
+                yield {"kind": kind, "text": part}
+        took = max(time.time() - started, 1e-6)
+        _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s, llama.cpp)")
+        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": 0}
 
     @staticmethod
     def _pieces(streamer, split, calls, dialect):
