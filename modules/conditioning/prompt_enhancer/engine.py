@@ -207,6 +207,41 @@ def _folder_size(path):
     return total
 
 
+def comfy_file(name):
+    """The path of a file in ComfyUI's text encoders list (or a path as given)."""
+    if os.path.isfile(name):
+        return name
+    try:
+        import folder_paths
+        path = folder_paths.get_full_path("text_encoders", name) or folder_paths.get_full_path("clip", name)
+    except Exception:                                               # noqa: BLE001 -- not inside ComfyUI
+        path = None
+    if not path:
+        raise ValueError(f"'{name}' is not in ComfyUI's text encoders list")
+    return path
+
+
+_QUANT_WORDS = re.compile(r"[-_.](fp8|fp16|bf16|fp32|scaled|e4m3fn|e5m2|nvfp4|mxfp8|int8|int4|comfy|split|ggml)(?=[-_.]|$)", re.IGNORECASE)
+
+
+def guess_base(filename):
+    """The Hugging Face model a ComfyUI text encoder file was made from, found by its name: -> "owner/name" of a repo that has a config.json."""
+    from huggingface_hub import HfApi
+    stem = os.path.splitext(os.path.basename(filename))[0]
+    core = _QUANT_WORDS.sub("", stem).strip("-_. ")
+    api = HfApi()
+    bad = re.compile(r"gguf|mlx|awq|gptq|comfy|fp8|nvfp4|int[48]|exl|onnx", re.IGNORECASE)
+    found = [m.id for m in api.list_models(search=core, limit=25) if not bad.search(m.id.split("/")[-1])]
+    found = [mid for mid in found if mid.split("/")[-1].lower() == core.lower()]        # only a repo named exactly like the file: a loose match would be somebody's finetune
+    for mid in found:
+        try:
+            if any(f.rfilename == "config.json" for f in api.model_info(mid).siblings):
+                return mid
+        except Exception:                                           # noqa: BLE001 -- the next one
+            continue
+    raise ValueError(f"no Hugging Face model named '{core}' was found for its config: name the base model, as comfy:{os.path.basename(filename)}@owner/name")
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
@@ -215,6 +250,7 @@ class Engine:
         self.turn = threading.Lock()           # one generation at a time
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
+        self._dir = ""                         # the folder a download goes into
         self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
         self.done_bytes = self.total_bytes = 0
@@ -226,41 +262,63 @@ class Engine:
     # -- loading ------------------------------------------------------------
     def status(self):
         shown = self.wanted if self.phase in ("loading", "downloading") and self.wanted else self.source
-        size = _folder_size(local_dir(shown)) if self.phase == "downloading" and shown else self.done_bytes
+        size = _folder_size(self._dir or local_dir(shown)) if self.phase == "downloading" and shown else self.done_bytes
         return {"phase": self.phase, "message": self.message, "source": shown, "device": self.device,
                 "downloaded": size, "total": self.total_bytes}
 
+    BASE_FILES = ["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # a base model's config and tokenizer, never its weights
+
     def _fetch(self, source):
-        """-> (folder, weights file or ""): the given folder, or the Hugging Face repo downloaded (once) into the models directory.
-        A repo that has no config.json but a ComfyUI-style single weights file (one fp8 file) comes with its base model's config instead:
-        `owner/name` finds the file and the base by itself, `owner/name::folder/file.safetensors@owner/base` names them."""
+        """-> (folder, weights file or ""): where the model is, downloading what is missing once into the models directory.
+        * a folder: used as it is;
+        * `owner/name`: a Hugging Face repo (all of it, bar copies in other formats);
+        * `owner/name::path/file.safetensors`: only that one file of the repo (an fp8 file without the bf16 ones). A repo with no config.json of its own
+          takes the config and tokenizer of its base model (read from the repo's tags), or of `@owner/base` when you name one;
+        * `comfy:file.safetensors`: a file from ComfyUI's text encoders list. Its config and tokenizer come from the matching Hugging Face
+          model, found by the file's name, or from `@owner/base` when you name one."""
         if os.path.isdir(source):
             return source, ""
+        from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+        if source.startswith("comfy:"):
+            name, _, base = source[6:].partition("@")
+            path = comfy_file(name)
+            target = os.path.join(models_dir(), "comfy__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(os.path.basename(path))[0]))
+            self._dir = target
+            if os.path.exists(os.path.join(target, ".complete")):
+                return os.path.join(target, "base"), path
+            base = base.strip() or guess_base(os.path.basename(path))
+            self.phase, self.message = "downloading", f"downloading the config and tokenizer of {base}"
+            os.makedirs(target, exist_ok=True)
+            snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
+            open(os.path.join(target, ".complete"), "w").close()
+            return os.path.join(target, "base"), path
         match = re.fullmatch(r"([\w.\-]+/[\w.\-]+)(?:::([^@]+))?(?:@([\w.\-]+/[\w.\-]+))?", source)
         if not match:
-            raise ValueError(f"'{source}' is neither a folder nor a Hugging Face id like owner/name")
+            raise ValueError(f"'{source}' is neither a folder, a Hugging Face id like owner/name, nor comfy:<file in the text encoders list>")
         repo, wanted, base = match.groups()
-        target = local_dir(repo)
+        target = local_dir(repo) + (("__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(wanted)[0])) if wanted else "")
+        self._dir = target
         if os.path.exists(os.path.join(target, ".complete")):
             return self._cached(target)
-        from huggingface_hub import HfApi, hf_hub_download, snapshot_download
         info = HfApi().model_info(repo, files_metadata=True)
         files = {s.rfilename: s.size or 0 for s in info.siblings}
         single = wanted or ("" if "config.json" in files else next((f for f in files if f.endswith(".safetensors")), ""))
-        if single not in files and single:
+        if single and single not in files:
             raise ValueError(f"{repo} has no file {single}")
         self.total_bytes = sum(size for name, size in files.items() if name.endswith((".safetensors", ".json")) and (not single or name == single))
         self.phase, self.message = "downloading", f"downloading {repo}"
+        os.makedirs(target, exist_ok=True)
         if not single:
             snapshot_download(repo, local_dir=target, allow_patterns=REPO_FILES)
             open(os.path.join(target, ".complete"), "w").close()
             return target, ""
-        base = base or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:quantized:")), "") or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:") and t.count(":") == 1), "")
         if not base:
-            raise ValueError(f"{repo} holds only a weights file, and no base model is named for its config: write {repo}::{single}@owner/base-model")
-        os.makedirs(target, exist_ok=True)
+            base = repo if "config.json" in files else (next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:quantized:")), "")
+                                                       or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:") and t.count(":") == 1), ""))
+        if not base:
+            raise ValueError(f"{repo} holds only a weights file and names no base model for its config: write {repo}::{single}@owner/base-model")
         hf_hub_download(repo, single, local_dir=target)
-        snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"], ignore_patterns=["*.safetensors.index.json"])
+        snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
         with open(os.path.join(target, ".complete"), "w") as f:
             f.write(single)
         return self._cached(target)

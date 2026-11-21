@@ -328,3 +328,25 @@ def test_a_model_with_biases_loads_from_an_fp8_file_in_any_order(tmp_path):
     ids = torch.tensor([[1, 5, 9, 12]])
     with torch.inference_mode():
         assert torch.allclose(model(ids).logits.float(), reference(ids).logits.float(), atol=0.05, rtol=0.05)
+
+
+def test_a_comfy_encoder_file_and_one_file_of_a_repo_are_found_by_name(tmp_path, monkeypatch):
+    from types import SimpleNamespace as NS
+    import huggingface_hub
+    f = tmp_path / "gemma-4-E4B-heretic-fp8.safetensors"
+    f.write_bytes(b"x")
+    assert eng.comfy_file(str(f)) == str(f)
+    with pytest.raises(ValueError, match="not in ComfyUI's text encoders list"):
+        eng.comfy_file("nothing-like-this.safetensors")
+    repos = {"a/gemma-4-E4B-heretic": ["config.json", "model.safetensors"], "b/gemma-4-E4B-heretic-GGUF": ["x.gguf"], "c/Other-Gemma-4-E4B-heretic": ["config.json"]}
+
+    class Api:
+        def list_models(self, search, limit):
+            return [NS(id=i) for i in repos]
+
+        def model_info(self, mid):
+            return NS(siblings=[NS(rfilename=n) for n in repos[mid]])
+    monkeypatch.setattr(huggingface_hub, "HfApi", Api)
+    assert eng.guess_base("gemma-4-E4B-heretic-fp8.safetensors") == "a/gemma-4-E4B-heretic"        # quantization words in the file name do not count, a loosely similar repo is not taken
+    with pytest.raises(ValueError, match="name the base model"):
+        eng.guess_base("qwen_3_4b_fp8_scaled.safetensors")

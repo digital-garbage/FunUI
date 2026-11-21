@@ -451,7 +451,7 @@ def test_the_readout_routes_are_provided_and_answer():
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/encoders", "/m/edit_decision"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/engine/files", "/m/encoders", "/m/edit_decision"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():

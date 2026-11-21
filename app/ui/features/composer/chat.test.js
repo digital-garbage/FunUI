@@ -166,3 +166,11 @@ test("a proposed change to a system prompt opens a diff and waits for Allow or D
     }
   } finally { teardownDom(); }
 });
+
+test("self-editing runs a picked ComfyUI encoder on the engine, and nothing else changes", async () => {
+  const { engineOf } = await import("./chat.js");
+  assert.equal(engineOf({ engine_model: " a/b ", encoder_file: "x.safetensors", self_edit: true }), "a/b");
+  assert.equal(engineOf({ encoder_file: "x.safetensors", self_edit: true }), "comfy:x.safetensors");
+  assert.equal(engineOf({ encoder_file: "x.safetensors" }), "");
+  assert.equal(engineOf({}), "");
+});

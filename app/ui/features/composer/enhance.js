@@ -10,12 +10,15 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] };
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" };
   own(() => { alive = false; clearTimeout(poll); });
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
   const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: `Ready: ${engine.message || ""}`,
     downloading: `Downloading: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
   const refreshEngine = () => app.api.enhancerEngine().then((r) => { engine = r; if (alive && !app.dom.typingIn(page.node)) draw(); clearTimeout(poll); if (alive && (r.phase === "downloading" || r.phase === "loading")) poll = setTimeout(refreshEngine, 1500); }).catch(() => {});
+  // The weight files of the typed Hugging Face repo, so one of them can be picked (an fp8 file without the bf16 ones).
+  const repoOf = (v) => { const m = /^([\w.-]+\/[\w.-]+)(?:::([^@]+))?(?:@(.+))?$/.exec(String(v || "").trim()); return m ? { repo: m[1], file: m[2] || "", base: m[3] || "" } : null; };
+  const listRepo = (v) => { const r = repoOf(v); if (!r || r.repo === repoFiles.repo) return; repoFiles = { repo: r.repo, files: [], why: "Looking…" }; app.api.enhancerEngineFiles(r.repo).then((x) => { if (repoFiles.repo === r.repo) { repoFiles = { repo: r.repo, files: x.files || [], why: x.why || "" }; if (alive && !app.dom.typingIn(page.node)) draw(); } }).catch(() => {}); };
   const slot = () => (ps.slots() || []).find((s) => s.node === NODE) || null;
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
   const continuityOn = () => { const k = (ps.currentValues && ps.currentValues() || {}).continuity; return Boolean(k) && k.carry !== false; };      // hidden while Continuity is not there or not carrying the frame
@@ -59,7 +62,7 @@ export function enhance(app, own) {
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
     const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && engineSet && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
+    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && (engineSet || encoder) && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
@@ -69,6 +72,11 @@ export function enhance(app, own) {
       c.label.section({ text: "Model" }),
       field("Engine model", c.input.sm({ label: "Engine model", value: val("engine_model", ""), placeholder: "owner/name on Hugging Face, or a folder", disabled: off(), onCommit: (x) => { set("engine_model", x.trim()); refreshEngine(); } }),
         "Runs the model on FunUI's own engine, which can use any model that transformers supports and shows the chat as it is written. The first use downloads it. Empty uses the encoder below."),
+      field("From ComfyUI's list", c.select.md({ label: "From ComfyUI's list", value: String(val("engine_model", "")).startsWith("comfy:") ? String(val("engine_model", "")).slice(6).split("@")[0] : "", disabled: off(), options: [{ value: "", label: "None" }, ...encoders.files.map((f) => ({ value: f, label: f }))], onChange: (x) => { set("engine_model", x ? `comfy:${x}` : "").then(refreshEngine); } }),
+        "Uses a text encoder file from ComfyUI's models list as the engine model. Its config and tokenizer are downloaded from Hugging Face once; add @owner/name to the model above if the right one is not found."),
+      ...(() => { const r = repoOf(val("engine_model", "")); if (!r) return []; listRepo(val("engine_model", "")); const sel = repoFiles.repo === r.repo ? repoFiles.files : [];
+        return sel.length > 1 || r.file ? [field("File in the repo", c.select.md({ label: "File in the repo", value: r.file, disabled: off(), options: [{ value: "", label: "The whole repo" }, ...sel.map((f) => ({ value: f.name, label: `${f.name} (${gb(f.size)})` }))], onChange: (x) => { set("engine_model", x ? `${r.repo}::${x}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); } }),
+          "Downloads only that one weights file (for example an fp8 one), not every copy in the repo.")] : []; })(),
       c.hint.default({ text: engineSet ? engineLine() : "No engine model set: the encoder below writes the rewrites." }),
       c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", "")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
         c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),
@@ -83,7 +91,7 @@ export function enhance(app, own) {
       toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
       num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
       toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
-      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown as a before/after and applies only if you allow it. Needs an Engine model that supports tool calls.", "self_edit", false, off(chat, engineSet)),
+      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models); a picked encoder then runs on the engine.", "self_edit", false, off(chat, engineSet || encoder)),
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),

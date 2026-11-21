@@ -28,6 +28,9 @@ export function applyNotes(text, add = [], drop = []) {
   return kept.join("\n");
 }
 
+/** The engine model a chat runs on: the one set, or, with self-editing on, the encoder picked from ComfyUI's list (the engine runs the same file). */
+export const engineOf = (inp) => String(inp.engine_model || "").trim() || (inp.self_edit === true && inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
+
 /** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
 export async function rulesOf(app, inp) {
   const d = (await app.api.enhancerDefaults().catch(() => null)) || {}, style = inp.style || "default";
@@ -113,7 +116,7 @@ export function chat(app, own) {
     const slot = ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inp = (slot && slot.inputs) || {};
     const tail = convo.length ? convo[convo.length - 1] : last;
     const comment = () => { if (addComment(app, draft, last, tail)) { draft = ""; draw(true); } };
-    const canChat = inp.to_chat === true && Boolean(inp.encoder_file || inp.engine_model);
+    const eng = engineOf(inp), canChat = inp.to_chat === true && Boolean(inp.encoder_file || eng);
     // The model proposes a change to one of its own rules: the person decides, an allowed text is saved into the project.
     const proposal = async (ev, sl) => {
       const yes = await askEdit(ev);
@@ -126,10 +129,10 @@ export function chat(app, own) {
       replying = true; draft = ""; draw(true);
       const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "self_edit", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
-        const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) };
-        if (inp.engine_model && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to
+        const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
+        if (eng && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to
         let r;
-        if (inp.engine_model) {          // the engine writes it in front of you, piece by piece
+        if (eng) {          // the engine writes it in front of you, piece by piece
           live = { message, thinking: "", answer: "", status: "" };
           let queued = false;
           const show = () => { if (queued) return; queued = true; later(() => { queued = false; if (live) draw(true); }); };

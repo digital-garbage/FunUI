@@ -154,6 +154,24 @@ def routes(table, base, web):
         started = eng.ENGINE.load_async(source)
         return web.json_response({"ok": True, "started": started, **eng.ENGINE.status()})
 
+    @table.get(base + "/engine/files")
+    async def _engine_files(req):
+        """The weight files of a Hugging Face repo with their sizes, so one of them can be picked: ?repo=owner/name."""
+        import asyncio
+        import re
+        repo = req.rel_url.query.get("repo", "").strip()
+        if not re.fullmatch(r"[\w.\-]+/[\w.\-]+", repo):
+            return web.json_response({"files": [], "why": "write the repo as owner/name"})
+
+        def look():
+            from huggingface_hub import HfApi
+            info = HfApi().model_info(repo, files_metadata=True)
+            return [{"name": s.rfilename, "size": s.size or 0} for s in info.siblings if s.rfilename.endswith(".safetensors") and not s.rfilename.endswith(".index.json")]
+        try:
+            return web.json_response({"files": await asyncio.get_running_loop().run_in_executor(None, look), "why": ""})
+        except Exception as exc:                                    # noqa: BLE001 -- said in the panel
+            return web.json_response({"files": [], "why": f"could not read {repo}: {exc}"})
+
     @table.post(base + "/engine/unload")
     async def _engine_unload(_req):
         from . import engine as eng
