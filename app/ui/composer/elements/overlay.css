@@ -151,6 +151,9 @@
 .cx-window-body { flex: 1; overflow: auto; padding: var(--sp-5); }
 /* A body whose content is one stack meant to fill it hands that stack its height, so a box inside can take what is left. */
 .cx-window-body:has(> .cx-stack-fill) { display: flex; flex-direction: column; }
+/* The end space sits on the stack, not on the scroller: a scrolling flex column drops its own bottom padding in some browsers, which glued the last line to the window's edge. */
+.cx-window-body:has(> .cx-stack-fill) { padding-block-end: 0; }
+.cx-window-body > .cx-stack-fill { padding-block-end: var(--sp-5); }
 .cx-rolled .cx-window-body, .cx-rolled .cx-window-grip { display: none; }
 .cx-window-grip {
   position: absolute; right: 0; bottom: 0; width: var(--sp-7); height: var(--sp-7);

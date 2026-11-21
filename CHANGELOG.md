@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Composer window keeps a margin at the bottom.** When its content was long enough to scroll, the last line sat flush against the window's edge in some browsers.
 - **The Chat tab keeps every message across restarts**, and the model keeps its memory of the conversation too. The history used to live in memory only and hold just the last 20 runs, so older messages vanished and a restart emptied the tab. It is now saved in `enhancer_history.json` next to the pack (up to 1000 runs) and read again at start.
 - **New macro `[[ASPECT_RATIO]]`** for every system prompt in Composer > Enhance: the clip's target aspect ratio, such as "16:9 landscape (1920 x 1080)", read from the scene's aspect ratio source picture (else the project's size). Pictures and videos in the media bin now remember their size for it. It says "(not known)" when the app did not send it.
 - **New macro `[[VIDEO_LENGTH]]`** for every system prompt in Composer > Enhance: the estimated length of the clip being made, such as "5.04 seconds (121 frames at 24 fps)", taken from the scene's frames and frame rate (clips joined into one count together). In the Chat tab it is the length of the selected scene's clip. It says "(not known)" when the app did not send it.
