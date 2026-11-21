@@ -185,3 +185,7 @@ def test_run_action_is_checked_against_the_offered_actions():
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(3, on_event, wait=2, actions=acts)({"name": "run_action", "args": {"action": "generate-selected", "scenes": [2, 3], "reason": "r"}}).startswith("Allowed")
     assert seen[0]["summary"] == "Run: Generate selected on scenes 2, 3"
+
+
+def test_rules_keep_shot_detail_out_of_the_global_prompt():
+    assert "must not contain detailed descriptions of each shot" in helper.HELPER_RULE
