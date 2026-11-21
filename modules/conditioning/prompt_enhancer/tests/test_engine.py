@@ -456,9 +456,9 @@ def test_a_tokenizer_carried_in_the_weights_file_is_written_out_when_the_folder_
 class _FakeGGUF:
     """What llama.cpp's backend offers the engine: a chat template, the end markers and the text as it forms."""
     gguf, funui_precision, bos, eos = True, "llama.cpp", "<bos>", "<eos>"
-    chat_template = "<|channel>thought<channel|>"
+    chat_template, projector = "<|channel>thought<channel|>", ""
 
-    def render(self, messages, tools=None, thinking=False):
+    def render(self, messages, tools=None, thinking=False, picture=False):
         return "".join(f"[{m['role']}]{m['content']}" for m in messages) + "[assistant]"
 
     def text_stream(self, text, *, stats=None, cancel=None, **k):
