@@ -110,3 +110,15 @@ def test_pipeline_inputs_are_looked_up_checked_and_changed_under_one_question():
     assert seen[0]["args"]["changes"][0]["value"] == 5 and "20 -> 5" in seen[0]["summary"]
     assert live({"name": "apply_preset", "args": {"preset": "fast", "reason": "r"}}).startswith("Allowed")
     assert "H3 fast" in seen[1]["summary"]
+
+
+def test_helper_reads_the_chat_conversation_and_notes():
+    from .. import nodes
+    from collections import deque
+    nodes.CONVOS["p:0"] = {"summary": "talked about dogs", "turns": deque([{"request": "make it warmer", "reply": "ok, warmer light"}]), "seen": set()}
+    try:
+        text = nodes._chat_memory({"chat": "p:0"}, "no rain")
+    finally:
+        nodes.CONVOS.pop("p:0", None)
+    assert "no rain" in text and "talked about dogs" in text and "make it warmer" in text
+    assert nodes._chat_memory({"chat": "none"}, "") == ""

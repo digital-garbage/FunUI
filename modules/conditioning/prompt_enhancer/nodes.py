@@ -132,7 +132,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)")) if helper else ""
+    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) if helper else ""
     reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
@@ -152,6 +152,16 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
+
+
+def _chat_memory(helper, notes) -> str:
+    """What the helper may read of the Chat tab: its standing notes, the summary of the earlier conversation and the latest turns (it never writes there)."""
+    chat = CONVOS.get(str((helper or {}).get("chat") or ""))
+    parts = [("\n\nNOTES (the user's standing instructions):\n" + str(notes).strip()) if str(notes or "").strip() else ""]
+    if chat:
+        turns = "\n".join(f"User: {t['request']}\nModel: {t['reply']}" for t in list(chat["turns"])[-6:])
+        parts.append("\n\nTHE CHAT TAB CONVERSATION (read only, for what the user said before):\n" + ((("Summary: " + chat["summary"] + "\n") if chat["summary"] else "") + turns)[-6000:])
+    return "".join(parts)
 
 
 _LAST_CHAT_ID = [max([int(r.get("chat_id") or 0) for r in RUNS] or [0])]       # after a restart the numbers go on above the saved ones
