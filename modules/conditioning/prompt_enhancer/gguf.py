@@ -80,41 +80,52 @@ def _pip(args, say, what):
     return proc.wait() == 0, last
 
 
+def _marker() -> str:
+    from . import engine
+    return os.path.join(engine.models_dir(), ".llama_installed")
+
+
 def ensure_llama(say=lambda text: None):
-    """-> the llama_cpp module, installing it first when it is missing and mending a graphics-card build that cannot find CUDA.
-    Raises with the reason when that fails."""
+    """-> the llama_cpp module. What it needs is installed here, once (llama-cpp-python, and for a graphics card the CUDA 12 runtime packages);
+    when the fresh install does not load in this running process, the error asks for a restart, and the next load tries again.
+    Only a build that still fails after that restart is swapped for the processor one. Raises with the reason when nothing works."""
     import importlib
     import importlib.util
-    problem = ""
+    problem, index, card = "", *wheel_index()
     if importlib.util.find_spec("llama_cpp") is not None:
         try:
             return _import()
         except (ImportError, RuntimeError, OSError) as exc:        # installed, but its libraries do not load
             problem = str(exc)
-    index, card = wheel_index()
-    if not problem:
-        say(f"installing llama-cpp-python ({'for the graphics card' if card else 'processor build'}), once")
+    fresh = not problem
+    restarted = os.path.exists(_marker())
+    if fresh:
+        say("GGUF models need llama-cpp-python, which is not installed yet: installing it now (a restart of ComfyUI may be needed afterwards)")
         for url in [index] + ([WHEELS + "cpu"] if card else []):
             done, last = _pip(["llama-cpp-python", "--only-binary=:all:", "--extra-index-url", url], say, "installing llama-cpp-python")
             if done:
-                importlib.invalidate_caches()
-                try:
-                    return _import()
-                except (ImportError, RuntimeError, OSError) as exc:
-                    problem = str(exc)
-                    break
+                break
             problem = last or "pip failed"
-    if "libcud" in problem or "libcublas" in problem:              # the CUDA 12 runtime is missing: fetch it as packages, once
-        say("llama.cpp needs the CUDA 12 runtime: installing it")
+        else:
+            raise RuntimeError(f"llama-cpp-python could not be installed ({problem[:300]}). Install it by hand: pip install llama-cpp-python --extra-index-url {index}")
+    if card and ("libcud" in problem or "libcublas" in problem or fresh):
+        say("the graphics-card build needs the CUDA 12 runtime: installing it")
         _pip(["nvidia-cuda-runtime-cu12", "nvidia-cublas-cu12"], say, "installing the CUDA runtime")
-        importlib.invalidate_caches()
+    importlib.invalidate_caches()
+    try:
+        return _import()
+    except (ImportError, RuntimeError, OSError) as exc:
+        problem = str(exc)
+    if not restarted:                                               # a running process often cannot load what it just installed: ask for a restart first
         try:
-            return _import()
-        except (ImportError, RuntimeError, OSError) as exc:
-            problem = str(exc)
-    if card:                                                        # last resort: the processor build, slower but it runs
+            os.makedirs(os.path.dirname(_marker()), exist_ok=True)
+            open(_marker(), "w").close()
+        except OSError:
+            pass
+        raise RuntimeError("llama.cpp was installed but this running ComfyUI cannot load it yet. Restart ComfyUI, then load the model again.")
+    if card:                                                        # still failing after a restart: the processor build, slower but it runs
         say("the graphics-card build of llama.cpp does not load here: installing the processor build instead")
-        done, last = _pip(["llama-cpp-python", "--force-reinstall", "--no-deps", "--only-binary=:all:", "--extra-index-url", WHEELS + "cpu"], say, "installing llama-cpp-python")
+        _pip(["llama-cpp-python", "--force-reinstall", "--no-deps", "--only-binary=:all:", "--extra-index-url", WHEELS + "cpu"], say, "installing llama-cpp-python")
         importlib.invalidate_caches()
         for name in [m for m in sys.modules if m.startswith("llama_cpp")]:
             del sys.modules[name]

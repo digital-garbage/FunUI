@@ -520,18 +520,24 @@ def test_a_picture_is_turned_into_png_and_the_status_says_when_it_could_not_be_s
     assert "picture was not sent" in status
 
 
-def test_a_graphics_card_build_that_misses_cuda_gets_the_runtime_then_the_processor_build(monkeypatch):
+def test_a_fresh_llama_install_that_does_not_load_asks_for_a_restart_and_then_falls_back_to_the_processor_build(monkeypatch, tmp_path):
     import importlib.util
-    from .. import gguf
-    tried, calls = [], []
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
     monkeypatch.setattr(gguf, "wheel_index", lambda: ("https://x/cu124", True))
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())            # llama_cpp is installed...
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)                 # not installed yet
+    state, calls, said = {"loads": 0}, [], []
+
     def importer():
-        tried.append(1)
-        if len(tried) < 3:
+        state["loads"] += 1
+        if state["loads"] < 4:
             raise RuntimeError("Failed to load shared library 'libllama.so': libcudart.so.12: cannot open shared object file")
         return "module"
     monkeypatch.setattr(gguf, "_import", importer)
     monkeypatch.setattr(gguf, "_pip", lambda args, say, what: calls.append(args) or (True, "ok"))
-    assert gguf.ensure_llama() == "module"
-    assert calls[0][0] == "nvidia-cuda-runtime-cu12" and "--force-reinstall" in calls[1]       # the runtime first, then the processor build
+    with __import__("pytest").raises(RuntimeError, match="Restart ComfyUI"):
+        gguf.ensure_llama(said.append)
+    assert calls[0][0] == "llama-cpp-python" and calls[1][0] == "nvidia-cuda-runtime-cu12"        # everything is installed together, once
+    assert any("restart" in x for x in said)                                                       # and the person is told up front
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())            # after the restart: installed, still failing
+    assert gguf.ensure_llama() == "module" and "--force-reinstall" in calls[-1]       # the processor build is the last resort
