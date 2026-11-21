@@ -53,7 +53,7 @@ def _own_encoder(file, family):
     return _LOADED["clip"]
 
 
-def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=None):
+def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=None, macros=None):
     """-> (about how many tokens the next request fills, the context window, a status note, whether it was summarised now).
     The conversation is summarised first when the request would fill COMPACT_AT of the window (4 characters a token, the answer's room included)."""
     # A small local model slows down and loses focus on a very long context, so what it reports is only a ceiling: summarising
@@ -63,7 +63,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + int(max_length)    # noqa: E731
     note, did = "", False
     if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
-        summary = en.compact(clip, state["summary"], list(state["turns"]), prompts=prompts)
+        summary = en.compact(clip, state["summary"], list(state["turns"]), prompts=prompts, macros=macros)
         if summary:
             state["summary"] = summary
             state["turns"].clear()
@@ -73,7 +73,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     if not key:
@@ -86,9 +86,12 @@ def chat_reply(conversation, message, *, notes="", prompts=None, encoder_file, e
         return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
-    used, window, note, did = fit(clip, state, len(en.pick(prompts, "chat_prompt")) + len(en.pick(prompts, "notes_prompt")) + len(str(message)), max_length, compact, context_tokens, prompts)
+    macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message)
+    used, window, note, did = fit(clip, state, len(en.pick(prompts, "chat_prompt")) + len(en.pick(prompts, "notes_prompt")) + len(str(message)), max_length, compact, context_tokens, prompts, macros)
+    if did:
+        macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts,
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros,
                                            max_length=max_length, thinking=thinking, **sampling)
     ok = bool(reply)
     if ok:
@@ -286,19 +289,22 @@ class FunUIEnhancePrompt(io.ComfyNode):
             seen = state["seen"] if state else set()
             fresh = [(f"{i}:{r.get('id') or r['comment']}", str(r["comment"]).strip()) for i, r in enumerate(rounds)
                      if isinstance(r, dict) and str(r.get("comment") or "").strip() and f"{i}:{r.get('id') or r['comment']}" not in seen]
+        macros = en.macro_values(state["turns"] if state else (), state["summary"] if state else "", [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "")
         feedback = ("Feedback on your earlier rewrite, apply it:\n" + "\n".join("- " + c for _, c in fresh)) if fresh else ""
         note_text = "\n".join(x for x in (feedback, rating_line if pass_rating else "") if x)
         if key:
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
             fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
-            used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens, prompts)
+            used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens, prompts, macros)
+            if did:
+                macros = en.macro_values(state["turns"], state["summary"], [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "")
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
-            note=note_text, notes=notes, prompts=prompts,
+            note=note_text, notes=notes, prompts=prompts, macros=macros,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,

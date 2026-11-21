@@ -679,3 +679,30 @@ def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(no
     keep = FakeClip("SCENES: x.")
     en().compact(keep, "", [{"request": "a", "reply": "b"}], prompts={"compact_prompt": "MY NOTE-TAKER"})
     assert "MY NOTE-TAKER" in keep.seen["text"] and en().COMPACT_SYSTEM not in keep.seen["text"]
+
+
+def test_macros_in_a_system_prompt_become_what_the_conversation_holds(node, monkeypatch):
+    node.CONVOS.clear()
+    assert set(en().macro_values()) == set(en().MACROS) and en().expand_macros("[[NOTES]] [[NOPE]]", en().macro_values()) == "(none yet) [[NOPE]]"
+    run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="m:0", **kw)
+    run(FakeClip("A red fox."), "a fox")
+    run(FakeClip("A grey owl."), "an owl")
+    comments = json.dumps([{"comment": "warmer"}, {"comment": "no rain"}])
+    clip = FakeClip("A bat.")
+    run(clip, "a bat", instructions="PREV=[[PREVIOUS_MODEL_OUTPUT]] HIST=[[MODEL_OUTPUTS_HISTORY]] NOW=[[CURRENT_PROMPT]] LASTC=[[LAST_USER_COMMENT]] ALLC=[[COMMENTS_HISTORY]] PP=[[PREVIOUS_PROMPT]] N=[[NOTES]]",
+        chat=comments, notes="warm light")
+    text = clip.seen["text"]
+    assert "PREV=A grey owl. HIST=- A red fox. NOW=a bat LASTC=no rain ALLC=- warmer PP=an owl N=1. warm light" in text
+    # a chat answer sees the message it answers as the last one, and the comments the app sends
+    chat = FakeClip("Sure.")
+    monkeypatch.setattr(node, "_own_encoder", lambda f, fam: chat)
+    node.chat_reply("m:0", "first?", encoder_file="g", comments=["warmer"], prompts={"chat_prompt": "LAST=[[LAST_CHAT_MESSAGE]] OUT=[[PREVIOUS_MODEL_OUTPUT]] C=[[LAST_USER_COMMENT]]"})
+    node.chat_reply("m:0", "second?", encoder_file="g", prompts={"chat_prompt": "LAST=[[LAST_CHAT_MESSAGE]] HIST=[[CHAT_MESSAGE_HISTORY]] R=[[LAST_CHAT_REPLY]]"})
+    assert "LAST=second? HIST=- first? R=Sure." in chat.seen["text"]
+    # ratings passed with earlier requests
+    node.CONVOS.clear()
+    run(FakeClip("A fox runs."), "a", pass_rating=True, rating_line="Rated: Liked")
+    run(FakeClip("An owl glides."), "b", pass_rating=True, rating_line="Rated: Disliked")
+    rate = FakeClip("A bat flies.")
+    run(rate, "c", pass_rating=True, rating_line="Rated: Loved", instructions="NOW=[[RATING]] LAST=[[LAST_RATING]] ALL=[[RATINGS_HISTORY]]")
+    assert "NOW=Rated: Loved LAST=Rated: Disliked ALL=- Rated: Liked" in rate.seen["text"]

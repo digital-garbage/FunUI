@@ -68,7 +68,10 @@ export function enhance(app, own) {
         num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed"),
         c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
         c.collapsible.default({ label: "System prompts", body: c.region.stack({ gap: "xs", children: [
-          c.hint.default({ text: "What the model is told in each situation. Empty uses the built-in text shown in the field. Instructions above covers the rewrite itself." }),
+          c.hint.default({ text: "What the model is told in each situation. Empty uses the built-in text shown in the field. Instructions above covers the rewrite itself. Any of these, and Instructions, can use the macros below: each is replaced by what the conversation holds when the model is asked." }),
+          c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [
+            ...Object.entries((defaults && defaults.macros) || {}).map(([n, d]) => c.hint.default({ text: `[[${n}]]: ${d}` })),
+            c.hint.default({ text: "Nothing to show yet gives \"(none yet)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) }),
           ...PROMPTS.map(([n, label, hint]) => field(label, c.textarea.md({ label, rows: 5, value: val(n, ""), placeholder: defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint))] }) }),
         c.label.section({ text: "Reference" }),
         field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),

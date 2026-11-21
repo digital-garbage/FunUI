@@ -297,7 +297,7 @@ def compact_turn(t, cut) -> str:
     return "\n".join(rows)
 
 
-def compact(clip, summary, turns, prompts=None, **sampling):
+def compact(clip, summary, turns, prompts=None, macros=None, **sampling):
     """-> new notes text of the old notes plus these turns, or "" when the model could not write them."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     text = (f"EARLIER NOTES:\n{summary}\n\n" if summary else "") + "TRANSCRIPT:\n" + "\n\n".join(compact_turn(t, cut) for t in turns) + "\n\n" + COMPACT_ASK
@@ -305,7 +305,7 @@ def compact(clip, summary, turns, prompts=None, **sampling):
     plain = {"max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
     gemma = {"max_length": COMPACT_THINK_TOKENS, "do_sample": True, "thinking": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
              "repetition_penalty": 1.0, "presence_penalty": 0.0, "seed": 0}
-    raw, _ = generate(clip, pick(prompts, "compact_prompt"), text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
+    raw, _ = generate(clip, expand_macros(pick(prompts, "compact_prompt"), macros), text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
     return clean(raw)
 
 
@@ -499,7 +499,7 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", prompts=None, **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", prompts=None, macros=None, **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -527,6 +527,7 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     elif history:
         system += "\n\n" + pick(prompts, "conversation_prompt")
         user = str(history) + user
+    system = expand_macros(system, macros)
     if chat or history or rounds:
         info["sent"] = f"SYSTEM:\n{system}\n\n" + (f"EARLIER TURNS (as real turns): {len(rounds)}\n\n" if rounds else "") + f"MESSAGE:\n{user}"
     raw, status = generate(clip, system, user, rounds=rounds, **sampling)
@@ -553,7 +554,7 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
 
 
-def converse(clip, message, *, convo=None, notes="", prompts=None, **sampling):
+def converse(clip, message, *, convo=None, notes="", prompts=None, macros=None, **sampling):
     """-> (reply, status, notes to add, notes to drop, the model's thinking): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
     `convo`: {"summary", "turns", "keep"} as in enhance()."""
     message = str(message or "").strip()
@@ -568,7 +569,7 @@ def converse(clip, message, *, convo=None, notes="", prompts=None, **sampling):
             system += "\n\nSUMMARY OF THE CONVERSATION SO FAR:\n" + str(convo["summary"]).strip()
     else:
         user = convo_block(convo.get("turns"), convo.get("summary"), int(convo.get("keep") or CONVO_TURNS)) + message
-    raw, status = generate(clip, system, user, rounds=rounds, **{**sampling, "image": None})
+    raw, status = generate(clip, expand_macros(system, macros), user, rounds=rounds, **{**sampling, "image": None})
     body, add, drop = parse_notes(raw)
     text, _ = trim_runaway(cut_chat_echo(clean(body)), max_length=sampling.get("max_length"))
     if not text:
@@ -585,6 +586,56 @@ def notes_lines(notes) -> list:
             out.append(line)
             used += len(line)
     return out
+
+
+MACROS = {
+    "PREVIOUS_MODEL_OUTPUT": "The last rewrite the model wrote.",
+    "MODEL_OUTPUTS_HISTORY": "Every earlier rewrite except the last one.",
+    "CURRENT_PROMPT": "The prompt being rewritten now.",
+    "PREVIOUS_PROMPT": "The prompt of the last rewrite.",
+    "PROMPTS_HISTORY": "The prompts of every earlier rewrite except the last one.",
+    "LAST_USER_COMMENT": "Your last comment.",
+    "COMMENTS_HISTORY": "Every earlier comment except the last one.",
+    "LAST_CHAT_MESSAGE": "Your last message in the Chat tab (in a chat answer: the one being answered).",
+    "CHAT_MESSAGE_HISTORY": "Every earlier message of yours in the Chat tab except the last one.",
+    "LAST_CHAT_REPLY": "The model's last answer in the Chat tab.",
+    "CHAT_REPLY_HISTORY": "Every earlier chat answer of the model except the last one.",
+    "RATING": "The rating line passed with this request (empty unless Pass the rating is on).",
+    "LAST_RATING": "The rating line of the last earlier request that had one.",
+    "RATINGS_HISTORY": "Every earlier rating line except the last one.",
+    "NOTES": "Your standing Notes, one per line.",
+    "CONVERSATION_SUMMARY": "The notes that replaced the turns that were shortened.",
+    "CONVERSATION": "The turns still kept, oldest first: requests, comments, ratings, answers and chat messages.",
+}      # what a [[NAME]] may be written for in any system prompt, and means
+
+
+def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating="", chat_message="") -> dict:
+    """-> {macro name: its text} from what the conversation holds (`turns` before this request; `chat_message`: the message being answered, if any)."""
+    cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
+    turns = [t for t in turns if isinstance(t, dict)]
+    rewrites = [t for t in turns if t.get("kind") != "chat"]
+    chats = [t for t in turns if t.get("kind") == "chat"]
+    said = [cut(t["request"]) for t in chats] + ([cut(chat_message)] if str(chat_message).strip() else [])
+    remarks = [cut(c) for c in comments if str(c).strip()]
+    prompts = [cut(t.get("prompt") if t.get("prompt") is not None else t.get("request", "")) for t in rewrites]
+    outputs = [cut(t.get("reply", "")) for t in rewrites]
+    replies = [cut(t.get("reply", "")) for t in chats]
+    rated = [cut(t["rating"]) for t in rewrites if str(t.get("rating") or "").strip()]
+    none = "(none yet)"
+    last = lambda xs: xs[-1] if xs else none                                               # noqa: E731
+    older = lambda xs: "\n".join(f"- {x}" for x in xs[:-1]) if len(xs) > 1 else none      # noqa: E731
+    lines = [x for x in notes_lines(notes)]
+    return {"PREVIOUS_MODEL_OUTPUT": last(outputs), "MODEL_OUTPUTS_HISTORY": older(outputs), "CURRENT_PROMPT": cut(prompt) or none,
+            "PREVIOUS_PROMPT": last(prompts), "PROMPTS_HISTORY": older(prompts), "LAST_USER_COMMENT": last(remarks), "COMMENTS_HISTORY": older(remarks),
+            "LAST_CHAT_MESSAGE": last(said), "CHAT_MESSAGE_HISTORY": older(said), "LAST_CHAT_REPLY": last(replies), "CHAT_REPLY_HISTORY": older(replies),
+            "RATING": str(rating or "").strip() or none, "LAST_RATING": last(rated), "RATINGS_HISTORY": older(rated), "NOTES": "\n".join(f"{i}. {x}" for i, x in enumerate(lines, 1)) or none,
+            "CONVERSATION_SUMMARY": str(summary or "").strip() or none,
+            "CONVERSATION": "\n\n".join(compact_turn(t, cut) for t in turns) or none}
+
+
+def expand_macros(text, values) -> str:
+    """[[NAME]] -> its text. A name that is not a macro stays as written."""
+    return re.sub(r"\[\[([A-Z_]+)\]\]", lambda m: str((values or {}).get(m.group(1), m.group(0))), str(text or ""))
 
 
 def notes_system(notes, numbered=False) -> str:
