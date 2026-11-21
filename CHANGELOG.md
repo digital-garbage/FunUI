@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Conversation rules say the last message is always the prompt to rewrite**, even when it repeats an earlier request word for word. A thinking model had read such a repeat as "no new prompt" and been unsure what to do.
 - **The model can propose a rule change by writing it, not only by calling the tool.** When it cannot or does not call the edit tool, it writes the new rule at the end of its answer; you get the same before/after window, and the answer shows "Rule change ...: saved". The rules also tell it to propose a change when it notices one (the same correction repeated, a rule that keeps failing), not only when asked.
 - **GGUF: bigger window.** llama.cpp now gets a 32k window (was 16k) and the reply length is cut to what fits after the request, with a clear message when the request itself does not fit. The CUDA libraries of the Python environment are only put in front when llama.cpp cannot load without them.
 - **Composer tabs stay pinned** at the top of the window while a sheet scrolls.

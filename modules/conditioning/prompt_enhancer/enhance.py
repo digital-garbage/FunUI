@@ -78,6 +78,7 @@ REFERENCE_INTRO = ("Reference entries. Use an entry only where the prompt "
 CONVO_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The message shows EARLIER IN THIS CONVERSATION (each earlier request and your answer, oldest first) and then the NEW REQUEST.
 - Rewrite only the NEW REQUEST, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
+- The NEW REQUEST is always the prompt to rewrite, even when it repeats an earlier request word for word (it is another scene): write a fresh rewrite for it, and never say that no new prompt was given.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
 COMPACT_SYSTEM = """You are the note-taker of a conversation between a person and a writer of text-to-video prompts. Your only job: write the notes that replace the transcript, so the writer can carry on from them alone.
@@ -96,6 +97,7 @@ CONVO_KEEP = 200             # turns a compacting conversation holds in memory
 CONVO_NATIVE_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The earlier turns are above; the last message is the new request.
 - Rewrite only the new request, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
+- The last message is always the prompt to rewrite, even when it repeats an earlier request word for word (it is another scene): write a fresh rewrite for it, and never say that no new prompt was given.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
 CHAT_REPLY_SYSTEM = """CHAT: you are helping a person write prompts for a text-to-video model, in a live conversation about the prompts you rewrite for them.
