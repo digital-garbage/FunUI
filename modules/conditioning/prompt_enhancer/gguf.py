@@ -257,18 +257,30 @@ class Backend:
         window = llm.n_ctx()
         if len(tokens) + 8 > window:
             raise ValueError(f"the request is {len(tokens)} tokens but the model's window is {window}; raise the context or shorten the conversation")
-        for token in llm.generate(tokens, top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
-                                  repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty), reset=True):
-            if token in end or (cancel is not None and cancel.is_set()):
+        sampling = dict(top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
+                        repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
+        sent = False
+        for attempt in (0, 1):
+            try:
+                for token in llm.generate(tokens, reset=True, **sampling):
+                    if token in end or (cancel is not None and cancel.is_set()):
+                        break
+                    count += 1
+                    if stats is not None:
+                        stats["steps"] = count
+                    piece = decoder.decode(llm.detokenize([token], special=True))
+                    if piece:
+                        sent = True
+                        yield piece
+                    if count >= max_new_tokens or count + len(tokens) >= window - 1:
+                        break
                 break
-            count += 1
-            if stats is not None:
-                stats["steps"] = count
-            piece = decoder.decode(llm.detokenize([token], special=True))
-            if piece:
-                yield piece
-            if count >= max_new_tokens or count + len(tokens) >= window - 1:
-                break
+            except RuntimeError as exc:                             # llama.cpp ran out of cache slots (reusing the last request's memory): start from empty once
+                if attempt or sent or "llama_decode" not in str(exc):
+                    raise
+                llm.reset()
+                llm._ctx.kv_cache_clear()
+                tokens = self.read_picture(text, picture) if picture else tokens
         tail = decoder.decode(b"", final=True)
         if tail:
             yield tail
@@ -305,7 +317,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False, chat_handler=handler)
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
     say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s")
     backend = Backend(llm, str(path))
     backend.projector, backend.handler = projector, handler

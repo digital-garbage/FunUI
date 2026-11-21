@@ -541,3 +541,33 @@ def test_a_fresh_llama_install_that_does_not_load_asks_for_a_restart_and_then_fa
     assert any("restart" in x for x in said)                                                       # and the person is told up front
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())            # after the restart: installed, still failing
     assert gguf.ensure_llama() == "module" and "--force-reinstall" in calls[-1]       # the processor build is the last resort
+
+
+def test_a_failed_llama_decode_clears_the_memory_and_runs_the_request_again_once():
+    from .. import gguf
+
+    class Llm:
+        n_tokens = 0
+        resets = 0
+        fail = True
+
+        def n_ctx(self): return 4096
+        def token_eos(self): return 2
+        def tokenize(self, raw, add_bos=False, special=True): return [5, 6, 7] if len(raw) > 3 else [9]
+        def detokenize(self, ids, special=False): return b"x"
+        def set_seed(self, s): pass
+        def reset(self): Llm.resets += 1
+
+        class _ctx:
+            @staticmethod
+            def kv_cache_clear(): pass
+
+        def generate(self, tokens, **k):
+            if Llm.fail:
+                Llm.fail = False
+                raise RuntimeError("llama_decode returned 1")
+            yield 11
+            yield 2
+    backend = gguf.Backend(Llm(), "x.gguf")
+    out = "".join(backend.text_stream("hello there", max_new_tokens=5, temperature=0.5, top_p=1, top_k=1, min_p=0, repetition_penalty=1, presence_penalty=0, seed=0, greedy=False))
+    assert out == "x" and Llm.resets == 1

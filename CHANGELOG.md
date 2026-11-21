@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **GGUF: "failed to find a memory slot" fixed.** llama.cpp keeps a full-size cache for the model's sliding-window layers so the unchanged start of a request can be reused, and a request that still fails to decode is run again once from an empty memory.
 - **"Guess ahead" is off by default.** It only helps when a rewrite mostly repeats the prompt and slows creative rewrites down.
 - **llama.cpp installs with visible progress and mends itself.** The engine line shows what pip is doing while llama-cpp-python installs. The first time, it installs llama-cpp-python together with the CUDA 12 runtime packages (for a graphics card), says up front that a restart of ComfyUI may be needed, and asks for that restart if the fresh install does not load in the running process. It loads the CUDA libraries already in your Python environment first. Only if it still fails after the restart does it fall back to the processor build. The Enhance tab now also points to GGUF as the fast choice.
 - **GGUF models can see the picture.** When the model's `mmproj` file sits beside it (check it with the model in the repo list), "Use the picture" sends the scene's picture to the model through it. A model without a projector says in the run status that the picture was not sent.
