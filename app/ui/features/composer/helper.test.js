@@ -95,3 +95,12 @@ test("the postfix switch is changed through the same tool", () => {
   applyAction({ project, setPostfixEnabled: (v) => { project.postfix_enabled = v; } }, { tool: "set_project_text", args: { field: "postfix_enabled", text: false } });
   assert.equal(project.postfix_enabled, false);
 });
+
+test("set_story splits the new text at the cut word and rewrites the scenes in order", async () => {
+  const project = { frame_rate: 24, num_frames_per_scene: 97, scenes: [{ id: "a", text: "one", source: { type: "carry" } }, { id: "b", text: "two", source: { type: "carry" } }] };
+  const p = { project, edit: (fn) => fn(project) };
+  const api = { storySplit: async (text) => ({ scenes: text.split("\nqcut\n") }) };
+  const out = await applyAction(p, { tool: "set_story", args: { text: "uno\nqcut\ndos\nqcut\ntres" } }, null, api);
+  assert.match(out, /3 scenes/);
+  assert.deepEqual(project.scenes.map((s) => s.text), ["uno", "dos", "tres"]);
+});

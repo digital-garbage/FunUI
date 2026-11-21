@@ -154,3 +154,16 @@ def test_prefix_means_the_anchor_and_the_postfix_switch_takes_on_off():
     assert acts({"name": "set_project_text", "args": {"field": "postfix_enabled", "text": "off", "reason": "r"}}).startswith("Allowed")
     assert seen[-1]["args"]["text"] is False and "off" in seen[-1]["summary"]
     assert acts({"name": "set_project_text", "args": {"field": "postfix_enabled", "text": "maybe"}}).startswith("Error")
+
+
+def test_set_story_takes_the_whole_text():
+    acts = helper.Actions(2, lambda ev: None, wait=1)
+    assert acts({"name": "set_story", "args": {"text": "  "}}).startswith("Error")
+    assert acts({"name": "set_story", "args": {"text": 5}}).startswith("Error")
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    assert helper.Actions(2, on_event, wait=2)({"name": "set_story", "args": {"text": "a\nqcut\nb", "reason": "r"}}).startswith("Allowed")
+    assert "Rewrite the Story" in seen[0]["summary"]

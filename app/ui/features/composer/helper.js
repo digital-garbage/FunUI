@@ -3,6 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js";
 import { addScene, split } from "../../shell/edits.js";
+import { applyStory, shownStory } from "./story.js";
 import { engineOf, scrollParent } from "./chat.js";
 import { clampBlocks } from "../settings/field.js";
 
@@ -76,6 +77,14 @@ export function applyAction(project, ev, ps, api) {
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
+  }
+  if (ev.tool === "set_story" && api) {
+    const shown = shownStory(project.project);
+    return Promise.resolve(api.storySplit(String(a.text || ""))).then(({ scenes }) => {
+      let did = false;
+      project.edit((pr) => { did = Boolean(applyStory(pr, scenes, shown)); return did; });
+      return did ? `Story rewritten (${scenes.length} scene${scenes.length === 1 ? "" : "s"})` : "the Story was not changed";
+    }, (e) => `Story not changed: ${(e && e.message) || e}`);
   }
   if (ev.tool === "cut_scene") {
     const at = Number(a.scene) - 1;
