@@ -142,6 +142,25 @@ test("downloaded models are listed with Use and Delete buttons; Use picks the mo
   assert.deepEqual(deleted, ["a__big"]);
 });
 
+test("pressing Download refreshes the downloaded list at once, so a fast download shows up without waiting for a poll", async () => {
+  let listed = 0, started = 0;
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b::q8.gguf" } }], currentValues: () => ({ engine_model: "a/b::q8.gguf" }), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "ready", message: "x" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
+    enhancerEngineFiles: async () => ({ files: [{ name: "q4.gguf", size: 2 ** 30 }, { name: "q8.gguf", size: 2 ** 31 }] }),
+    enhancerEngineModels: async () => { listed += 1; return { models: listed > 1 ? [{ name: "a__b__q8", source: "a/b::q8.gguf", size: 2 ** 31, loaded: false }] : [] }; },
+    enhancerEngineDownload: async () => { started += 1; return { ok: true, started: true }; } };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 0));
+  const before = listed;
+  [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Download").click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(started, 1);
+  assert.ok(listed > before);
+  assert.match(page.node.textContent, /Downloaded models \(1\)/);
+  assert.match(page.node.textContent, /q8\.gguf \(2\.0 GB\), downloaded/);
+});
+
 test("the engine line shows what a running request is doing, so a busy model does not look stale", async () => {
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
   const api = { enhancerEngine: async () => ({ phase: "ready", message: "a/b on cuda", busy: { stage: "writing", tokens: 42, seconds: 3.5 } }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}) };
