@@ -33,31 +33,96 @@ def wheel_index():
     return WHEELS + "cpu", False
 
 
+CUDA_LIBS = ("libcudart.so.12", "libcublas.so.12", "libcublasLt.so.12")
+
+
+def preload_cuda() -> list:
+    """Load the CUDA 12 runtime libraries that sit in the Python environment (torch's and the nvidia-* packages') so the graphics-card build of
+    llama.cpp finds them even when the system's library path does not. -> the files loaded."""
+    import ctypes
+    import glob
+    import site
+    roots = [p for p in (*site.getsitepackages(), site.getusersitepackages(), *sys.path) if p and os.path.isdir(p)]
+    loaded = []
+    for lib in CUDA_LIBS:
+        for root in dict.fromkeys(roots):
+            hits = glob.glob(os.path.join(root, "nvidia", "*", "lib", lib)) + glob.glob(os.path.join(root, "torch", "lib", lib))
+            if hits:
+                try:
+                    ctypes.CDLL(hits[0], mode=ctypes.RTLD_GLOBAL)
+                    loaded.append(hits[0])
+                    break
+                except OSError:
+                    continue
+    if os.name == "nt":                                             # Windows looks in added folders instead
+        for root in roots:
+            for folder in glob.glob(os.path.join(root, "nvidia", "*", "bin")) + [os.path.join(root, "torch", "lib")]:
+                if os.path.isdir(folder):
+                    os.add_dll_directory(folder)
+    return loaded
+
+
+def _import():
+    preload_cuda()
+    import llama_cpp
+    return llama_cpp
+
+
+def _pip(args, say, what):
+    """Run pip with its lines going to `say`, so the install does not look stuck. -> (success, last line)."""
+    proc = subprocess.Popen([sys.executable, "-m", "pip", "install", *args, "--prefer-binary", "--progress-bar", "off"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    last = ""
+    for line in proc.stdout:
+        line = line.strip()
+        if line:
+            last = line
+            say(f"{what}: {line[:110]}")
+    return proc.wait() == 0, last
+
+
 def ensure_llama(say=lambda text: None):
-    """-> the llama_cpp module, installing it first when it is missing. Raises with the reason when that fails."""
-    try:
-        import llama_cpp
-        return llama_cpp
-    except ImportError:
-        pass
+    """-> the llama_cpp module, installing it first when it is missing and mending a graphics-card build that cannot find CUDA.
+    Raises with the reason when that fails."""
+    import importlib
+    import importlib.util
+    problem = ""
+    if importlib.util.find_spec("llama_cpp") is not None:
+        try:
+            return _import()
+        except (ImportError, RuntimeError, OSError) as exc:        # installed, but its libraries do not load
+            problem = str(exc)
     index, card = wheel_index()
-    say(f"installing llama-cpp-python ({'for the graphics card' if card else 'processor build'}), once")
-    attempts = [index] + ([WHEELS + "cpu"] if card else [])
-    failure = ""
-    for url in attempts:
-        done = subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--prefer-binary", "--only-binary=:all:", "--extra-index-url", url],
-                              capture_output=True, text=True)
-        if done.returncode == 0:
-            import importlib
-            importlib.invalidate_caches()
-            try:
-                import llama_cpp
-                return llama_cpp
-            except ImportError as exc:
-                failure = str(exc)
-        else:
-            failure = (done.stderr or done.stdout).strip().splitlines()[-1:] and (done.stderr or done.stdout).strip().splitlines()[-1] or "pip failed"
-    raise RuntimeError(f"llama-cpp-python could not be installed ({failure}). Install it by hand: pip install llama-cpp-python --extra-index-url {index}")
+    if not problem:
+        say(f"installing llama-cpp-python ({'for the graphics card' if card else 'processor build'}), once")
+        for url in [index] + ([WHEELS + "cpu"] if card else []):
+            done, last = _pip(["llama-cpp-python", "--only-binary=:all:", "--extra-index-url", url], say, "installing llama-cpp-python")
+            if done:
+                importlib.invalidate_caches()
+                try:
+                    return _import()
+                except (ImportError, RuntimeError, OSError) as exc:
+                    problem = str(exc)
+                    break
+            problem = last or "pip failed"
+    if "libcud" in problem or "libcublas" in problem:              # the CUDA 12 runtime is missing: fetch it as packages, once
+        say("llama.cpp needs the CUDA 12 runtime: installing it")
+        _pip(["nvidia-cuda-runtime-cu12", "nvidia-cublas-cu12"], say, "installing the CUDA runtime")
+        importlib.invalidate_caches()
+        try:
+            return _import()
+        except (ImportError, RuntimeError, OSError) as exc:
+            problem = str(exc)
+    if card:                                                        # last resort: the processor build, slower but it runs
+        say("the graphics-card build of llama.cpp does not load here: installing the processor build instead")
+        done, last = _pip(["llama-cpp-python", "--force-reinstall", "--no-deps", "--only-binary=:all:", "--extra-index-url", WHEELS + "cpu"], say, "installing llama-cpp-python")
+        importlib.invalidate_caches()
+        for name in [m for m in sys.modules if m.startswith("llama_cpp")]:
+            del sys.modules[name]
+        try:
+            return _import()
+        except (ImportError, RuntimeError, OSError) as exc:
+            problem = str(exc)
+    raise RuntimeError(f"llama-cpp-python could not be loaded ({problem[:300]}). Install it by hand: pip install llama-cpp-python --extra-index-url {index}")
 
 
 class Backend:
@@ -221,6 +286,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
     A projector file beside it is loaded too, so the model can see pictures."""
     llama_cpp = ensure_llama(say)
     started = time.time()
+    say(f"loading {os.path.basename(str(path))} into memory")
     projector, handler = find_projector(path), None
     if projector:
         try:

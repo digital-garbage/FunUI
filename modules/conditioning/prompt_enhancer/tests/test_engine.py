@@ -518,3 +518,20 @@ def test_a_picture_is_turned_into_png_and_the_status_says_when_it_could_not_be_s
     assert e.sees() is False                                                # no projector file: the picture cannot go in
     raw, status = eng.EngineClip(e).run("sys", "hi", image=red)
     assert "picture was not sent" in status
+
+
+def test_a_graphics_card_build_that_misses_cuda_gets_the_runtime_then_the_processor_build(monkeypatch):
+    import importlib.util
+    from .. import gguf
+    tried, calls = [], []
+    monkeypatch.setattr(gguf, "wheel_index", lambda: ("https://x/cu124", True))
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())            # llama_cpp is installed...
+    def importer():
+        tried.append(1)
+        if len(tried) < 3:
+            raise RuntimeError("Failed to load shared library 'libllama.so': libcudart.so.12: cannot open shared object file")
+        return "module"
+    monkeypatch.setattr(gguf, "_import", importer)
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what: calls.append(args) or (True, "ok"))
+    assert gguf.ensure_llama() == "module"
+    assert calls[0][0] == "nvidia-cuda-runtime-cu12" and "--force-reinstall" in calls[1]       # the runtime first, then the processor build

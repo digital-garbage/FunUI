@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **llama.cpp installs with visible progress and mends itself.** The engine line shows what pip is doing while llama-cpp-python installs. If its graphics-card build cannot find the CUDA 12 libraries, the engine loads the ones in your Python environment, installs the CUDA runtime packages if needed, and as a last resort falls back to the processor build. The Enhance tab now also points to GGUF as the fast choice.
 - **GGUF models can see the picture.** When the model's `mmproj` file sits beside it (check it with the model in the repo list), "Use the picture" sends the scene's picture to the model through it. A model without a projector says in the run status that the picture was not sent.
 - **The engine runs .gguf models with llama.cpp.** Name a Hugging Face repo and a file (`owner/name::model-Q4_K_M.gguf`) or a local .gguf path. GGUF models keep their quantized weights, which is much lighter and faster than widening them, and thinking, streaming and the model editing its own rules work as with other models. The llama-cpp-python package is installed automatically the first time a .gguf is loaded (a build for your graphics card when there is one); if that fails, the error gives the command to run by hand.
 - **Several files of one repo can be downloaded together.** In Composer > Enhance, a repo's weight files are listed as checkboxes: check every part of a split model (or one fp8 file) and only those are downloaded. Nothing checked downloads the whole repo.
