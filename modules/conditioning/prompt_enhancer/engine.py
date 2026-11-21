@@ -16,6 +16,7 @@ import time
 
 from ..._core import log
 
+THINK_BUDGET = 3000      # tokens a thinking model may reason in, on top of the length setting for its answer
 REPO_FILES = ["*.json", "*.safetensors", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # no GGUF or other copies of the same weights
 def _say(message):
     """A line in FunUI's log: the engine does not run through ComfyUI, so this is how its loading and writing can be followed there."""
@@ -518,6 +519,8 @@ class Engine:
 
     def stream(self, messages, **options):
         """One request at a time on the model, independent of ComfyUI: a chat sent while a rewrite runs waits its turn, and neither touches the generation's own memory use."""
+        if options.get("thinking"):                      # the reasoning has its own room: the length setting is for what is written after it
+            options["max_new_tokens"] = int(options.get("max_new_tokens") or 400) + THINK_BUDGET
         with self.turn:
             yield from self._stream(messages, **options)
 

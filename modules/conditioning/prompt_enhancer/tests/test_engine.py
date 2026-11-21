@@ -580,3 +580,13 @@ def test_a_rule_change_written_into_the_answer_is_found_and_taken_out():
     assert clean == "Done, shorter answers from now on."
     assert found == [{"field": "chat_prompt", "new_text": "Answer in one sentence.\nNo lists."}]
     assert rl.parse_edits("nothing to change") == ("nothing to change", [])
+
+
+def test_thinking_gets_its_own_token_room_on_top_of_the_answer_s(monkeypatch):
+    from .. import engine as eng
+    e = eng.Engine()
+    seen = []
+    monkeypatch.setattr(e, "_stream", lambda messages, **o: seen.append(o["max_new_tokens"]) or iter(()))
+    list(e.stream([], max_new_tokens=400, thinking=True))
+    list(e.stream([], max_new_tokens=400, thinking=False))
+    assert seen == [400 + eng.THINK_BUDGET, 400]
