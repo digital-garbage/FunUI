@@ -7,6 +7,7 @@ the answer and carries on.
 """
 
 import itertools
+import re
 import threading
 
 FIELDS = {
@@ -42,6 +43,21 @@ def tools() -> list:
             {"type": "function", "function": {"name": "edit_prompt", "description": "Propose a new text for one of your own rules. The user sees the change and may refuse it.",
                                               "parameters": {"type": "object", "properties": {"field": field, "new_text": {"type": "string", "description": "The whole new text of the rule."},
                                                                                               "reason": {"type": "string", "description": "Why, in one sentence."}}, "required": ["field", "new_text", "reason"]}}}]
+
+
+_EDIT_BLOCK = re.compile(r"EDIT_RULE[ \t]*:?[ \t]*([A-Za-z_]+)[ \t]*[,:]?[ \t]*\n?(.*?)\n?[ ,\t]*END_EDIT_RULE", re.S)
+
+
+def parse_edits(text):
+    """The rule changes a model wrote in its answer instead of calling the tool: `EDIT_RULE: name`, the whole new text, `END_EDIT_RULE`.
+    -> (the answer without those blocks, [{"field", "new_text"}])."""
+    found = []
+
+    def take(m):
+        found.append({"field": m.group(1).strip(), "new_text": m.group(2).strip()})
+        return ""
+    clean = _EDIT_BLOCK.sub(take, str(text or ""))
+    return re.sub(r"\n{3,}", "\n\n", clean).strip(), found
 
 
 def decide(proposal, allow) -> bool:

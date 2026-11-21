@@ -4,6 +4,9 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The model can propose a rule change by writing it, not only by calling the tool.** When it cannot or does not call the edit tool, it writes the new rule at the end of its answer; you get the same before/after window, and the answer shows "Rule change ...: saved". The rules also tell it to propose a change when it notices one (the same correction repeated, a rule that keeps failing), not only when asked.
+- **GGUF: bigger window.** llama.cpp now gets a 32k window (was 16k) and the reply length is cut to what fits after the request, with a clear message when the request itself does not fit. The CUDA libraries of the Python environment are only put in front when llama.cpp cannot load without them.
+- **Composer tabs stay pinned** at the top of the window while a sheet scrolls.
 - **GGUF: "failed to find a memory slot" fixed.** llama.cpp keeps a full-size cache for the model's sliding-window layers so the unchanged start of a request can be reused, and a request that still fails to decode is run again once from an empty memory.
 - **"Guess ahead" is off by default.** It only helps when a rewrite mostly repeats the prompt and slows creative rewrites down.
 - **llama.cpp installs with visible progress and mends itself.** The engine line shows what pip is doing while llama-cpp-python installs. The first time, it installs llama-cpp-python together with the CUDA 12 runtime packages (for a graphics card), says up front that a restart of ComfyUI may be needed, and asks for that restart if the fresh install does not load in the running process. It loads the CUDA libraries already in your Python environment first. Only if it still fails after the restart does it fall back to the processor build. The Enhance tab now also points to GGUF as the fast choice.

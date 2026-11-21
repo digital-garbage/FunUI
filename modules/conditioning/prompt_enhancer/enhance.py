@@ -51,9 +51,14 @@ FIXED_RULE = ("The prompt you rewrite is only the middle of a longer one. Fixed 
               "and write what you add so it reads well between the two.")
 SELF_EDIT_RULE = ("A request to change how you answer or rewrite is a change to your own rules: call edit_prompt for it and do not write REMEMBER (REMEMBER is only for what the person wants in every prompt). "
                   "You can read and change your own rules, the system prompts that tell you how to work. They are:\n[[RULES_SHEET]]\n"
-                  "Use read_prompt to see one in full. Use edit_prompt only when the user asks you to change how you behave, or a rule clearly keeps failing: "
+                  "Use read_prompt to see one in full. Use edit_prompt when the user asks you to change how you behave, and also when you notice a rule that should change (the user repeats the same correction, a rule keeps failing, a preference is clearly for every prompt and not just this one): "
                   "send the whole new text of that rule and one sentence why. The user sees the change and may refuse it; after a refusal, do not propose the same change again. "
-                  "Say in your answer what you changed or proposed.")
+                  "Say in your answer what you changed or proposed. If you cannot call tools, or would otherwise only describe the change in words, write it at the very end of your answer "
+                  "as a block instead, for example:\nEDIT_RULE: chat_prompt\n<the whole new text>\nEND_EDIT_RULE")
+EDIT_TEXT_RULE = ("You can change your own rules, the system prompts that tell you how to work. They are:\n[[RULES_SHEET]]\n"
+                  "A request to change how you answer or rewrite is a change to your own rules, not a note: do not write REMEMBER for it. Propose a change when the user asks, and also when you notice a rule that should change (the same correction again, a rule that keeps failing, a preference that is for every prompt). To change a rule, write at the very end of your answer "
+                  "a block of exactly three parts, for example:\nEDIT_RULE: chat_prompt\n<the whole new text of that rule>\nEND_EDIT_RULE\n The user sees the change and may refuse it; after a refusal, "
+                  "do not propose the same change again. Say in your answer what you proposed.")
 REFINE_RULE = ("You are checking your own rewrite of a prompt against the rules you were given. First write one short paragraph on what is weak or missing in the rewrite "
                "(details the original asked for that got lost, parts that ignore a rule, wording that is vague or repeats). Then write FINAL: and, on the next lines, only the improved rewrite, "
                "following the same rules. If the rewrite is already right, repeat it after FINAL: unchanged.")

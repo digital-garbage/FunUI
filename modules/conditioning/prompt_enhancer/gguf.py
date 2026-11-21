@@ -63,9 +63,16 @@ def preload_cuda() -> list:
 
 
 def _import():
-    preload_cuda()
-    import llama_cpp
-    return llama_cpp
+    """Import llama_cpp as it is; only when its libraries do not load, put the CUDA libraries of this environment in front and try once more.
+    (Loading them first would make torch use those copies too, which is not ours to change.)"""
+    try:
+        import llama_cpp
+        return llama_cpp
+    except (ImportError, RuntimeError, OSError):
+        if not preload_cuda():
+            raise
+        import llama_cpp
+        return llama_cpp
 
 
 def _pip(args, say, what):
@@ -255,8 +262,9 @@ class Backend:
         count = 0
         # a prompt longer than the window cannot be run: say so instead of crashing inside llama.cpp
         window = llm.n_ctx()
-        if len(tokens) + 8 > window:
-            raise ValueError(f"the request is {len(tokens)} tokens but the model's window is {window}; raise the context or shorten the conversation")
+        if len(tokens) + 64 > window:
+            raise ValueError(f"the request is {len(tokens)} tokens but the model's window is {window}; shorten the conversation (Summarise long conversations) or the prompts")
+        max_new_tokens = min(int(max_new_tokens), window - len(tokens) - 8)           # what is left of the window after the request
         sampling = dict(top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
                         repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
         sent = False
@@ -277,6 +285,8 @@ class Backend:
                 break
             except RuntimeError as exc:                             # llama.cpp ran out of cache slots (reusing the last request's memory): start from empty once
                 if attempt or sent or "llama_decode" not in str(exc):
+                    if "llama_decode" in str(exc):
+                        raise RuntimeError(f"{exc} (a request of {len(tokens)} tokens, the model's window is {window}; the memory is cleared and it still does not fit: raise the context window or shorten the conversation)") from exc
                     raise
                 llm.reset()
                 llm._ctx.kv_cache_clear()
@@ -317,7 +327,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
     say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s")
     backend = Backend(llm, str(path))
     backend.projector, backend.handler = projector, handler

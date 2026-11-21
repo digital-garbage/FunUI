@@ -77,7 +77,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
 def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
-    editing = False
+    editing, editor = False, None
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
     engine_model = "" if use_comfy else (str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else ""))
@@ -92,14 +92,14 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
         else:
             clip = EngineClip(ENGINE, on_event, live="chat", cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 0))
             if self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
-                from . import engine as eng
+                from . import engine as eng, rules as rl
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
+                editor = rl.Editor(rules, on_event)
+                editing = True
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:        # the template must render tools and the model must have a call format
-                    from . import rules as rl
-                    clip.tools, clip.handler = rl.tools(), rl.Editor(rules, on_event)
-                    editing = True
+                    clip.tools, clip.handler = rl.tools(), editor
                 else:
-                    on_event({"kind": "status", "text": "this model has no tool calls, so it cannot edit its own rules"})
+                    on_event({"kind": "status", "text": "this model has no tool calls: it proposes a rule change in its answer instead"})
     if not engine_model:
         if not encoder_file:
             return {"ok": False, "reply": "", "status": "pick a model in Composer > Enhance: the pipeline's own encoder cannot chat"}
@@ -115,8 +115,17 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=en.pick(prompts, "edit_prompt") if editing else "",
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=(en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
+    if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
+        from . import rules as rl
+        reply, written = rl.parse_edits(reply)
+        outcome = []
+        for call in written:
+            verdict = editor({"name": "edit_prompt", "args": {**call, "reason": "proposed in the answer"}})
+            outcome.append(f"{call['field']}: {'saved' if verdict.startswith('Allowed') else 'not changed'}")
+        if outcome:
+            reply = (reply + "\n\n" if reply else "") + "Rule change " + "; ".join(outcome) + "."
     ok = bool(reply)
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})

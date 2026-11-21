@@ -283,7 +283,7 @@ def test_a_model_without_tool_calls_is_told_it_cannot_edit_its_rules_and_still_c
     nodes.CONVOS.clear()
     heard = []
     out = nodes.chat_reply("e:9", "a b c", engine_model="tiny", max_length=8, do_sample=False, on_event=heard.append, self_edit=True, rules={"chat_prompt": "Be chatty."})
-    assert "ok" in out and any(e["kind"] == "status" and "cannot edit its own rules" in e["text"] for e in heard)
+    assert "ok" in out and any(e["kind"] == "status" and "proposes a rule change in its answer" in e["text"] for e in heard)
 
 
 def test_choosing_another_engine_model_really_loads_it(tiny, monkeypatch):
@@ -571,3 +571,12 @@ def test_a_failed_llama_decode_clears_the_memory_and_runs_the_request_again_once
     backend = gguf.Backend(Llm(), "x.gguf")
     out = "".join(backend.text_stream("hello there", max_new_tokens=5, temperature=0.5, top_p=1, top_k=1, min_p=0, repetition_penalty=1, presence_penalty=0, seed=0, greedy=False))
     assert out == "x" and Llm.resets == 1
+
+
+def test_a_rule_change_written_into_the_answer_is_found_and_taken_out():
+    from .. import rules as rl
+    text = "Done, shorter answers from now on.\n\nEDIT_RULE: chat_prompt\nAnswer in one sentence.\nNo lists.\nEND_EDIT_RULE"
+    clean, found = rl.parse_edits(text)
+    assert clean == "Done, shorter answers from now on."
+    assert found == [{"field": "chat_prompt", "new_text": "Answer in one sentence.\nNo lists."}]
+    assert rl.parse_edits("nothing to change") == ("nothing to change", [])
