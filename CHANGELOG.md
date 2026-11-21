@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The chat and rewrite system prompts now say that earlier turns are history.** The model is told that earlier requests, answers and (for the Helper) tool results are already done: it answers only the newest message and trusts the project as shown now.
 - **The Helper no longer reports a failure when it made a change and then said nothing.** The window now says it is done, instead of "the model returned nothing".
 - **The Helper reads tool calls that small models write sloppily.** Arguments with single or curly quotes, quotes or line breaks inside the text, trailing commas, or code fences are now understood, and Qwen 3.5's `<function=...><parameter=...>` call format works too. Before, such a call ended in a JSON error and nothing changed.
 - **Recurrent and hybrid GGUF models (such as Qwen3.5) no longer fail on follow-up requests.** Their memory cannot drop only the end of a cached prompt, which made llama.cpp stop with "find_slot: non-consecutive token position". These models (found by their architecture, and by whether llama.cpp can shift their memory) now start from empty memory when the new prompt does not simply continue the last one.

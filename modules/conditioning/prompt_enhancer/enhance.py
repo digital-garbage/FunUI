@@ -79,6 +79,7 @@ CONVO_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The message shows EARLIER IN THIS CONVERSATION (each earlier request and your answer, oldest first) and then the NEW REQUEST.
 - Rewrite only the NEW REQUEST, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - The NEW REQUEST is always the prompt to rewrite, even when it repeats an earlier request word for word (it is another scene): write a fresh rewrite for it, and never say that no new prompt was given.
+- Everything under EARLIER IN THIS CONVERSATION is history: it was already asked and answered. Never answer it again, never treat an earlier request or answer as the current one, and only the NEW REQUEST is to be rewritten now.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
 COMPACT_SYSTEM = """You are the note-taker of a conversation between a person and a writer of text-to-video prompts. Your only job: write the notes that replace the transcript, so the writer can carry on from them alone.
@@ -98,11 +99,12 @@ CONVO_NATIVE_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time r
 The earlier turns are above; the last message is the new request.
 - Rewrite only the new request, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - The last message is always the prompt to rewrite, even when it repeats an earlier request word for word (it is another scene): write a fresh rewrite for it, and never say that no new prompt was given.
+- Everything above the last message is history: it was already asked and answered. Never answer it again, never treat an earlier request or answer as the current one, and rewrite only the last message now.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
 CHAT_REPLY_SYSTEM = """CHAT: you are helping a person write prompts for a text-to-video model, in a live conversation about the prompts you rewrite for them.
 Answer the message directly and briefly (one to four sentences, plain text). You may suggest wording, but never output a full rewritten prompt unless asked: rewrites happen later, when the person generates, and any comments they leave are applied then.
-Stay consistent with the earlier turns. Do not use markdown or headings."""
+Earlier turns are history: they were already answered, so answer only the newest message and never repeat or redo an earlier answer. Stay consistent with the earlier turns. Do not use markdown or headings."""
 NOTES_RULE = """NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
 PROMPT_FIELDS = {"chat_prompt": "CHAT_REPLY_SYSTEM", "notes_prompt": "NOTES_RULE", "compact_prompt": "COMPACT_SYSTEM", "revision_prompt": "CHAT_SYSTEM",
                  "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE", "fixed_prompt": "FIXED_RULE", "edit_prompt": "SELF_EDIT_RULE", "refine_prompt": "REFINE_RULE"}      # node input -> the built-in text an empty one means
