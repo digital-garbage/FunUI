@@ -21,7 +21,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
-               "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
+               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
 def tools() -> list:
@@ -96,6 +96,7 @@ class Actions:
 
     def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=()):
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
+        self.calls = 0
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
         self.actions = {str(x["id"]): x for x in actions if isinstance(x, dict) and x.get("id")}
         self.presets = {str(x["id"]): x for x in presets if isinstance(x, dict) and x.get("id")}
@@ -242,6 +243,7 @@ class Actions:
 
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
+        self.calls += 1
         if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:
             return f"Error: there is no tool called '{name}'."
         num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 600        # noqa: E731
@@ -323,3 +325,13 @@ def node_line(x) -> str:
     allowed = f"one of {', '.join(map(str, x.get('choices') or []))}" if kind == "COMBO" else f"{x.get('min')} to {x.get('max')}" if x.get("min") is not None and x.get("max") is not None else str(kind).lower()
     now = x.get("now")
     return f"{x['slot']}.{x['name']} ({x.get('node')}, {x.get('group') or 'no group'}; {allowed}; now {'NOT SET' if now in (None, '') else now})"
+
+
+NUDGE = "You described a change but did not call a tool, so nothing happened. Call the tool now, with the full arguments, and write nothing else."
+_TOOL_WORDS = re.compile(r"\b(" + "|".join(["edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "set_project_text", "set_variable", "remove_variable",
+                                              "save_shortcut", "remove_shortcut", "set_setting", "set_node_inputs", "apply_preset", "run_action"]) + r")\b|\bI (?:will|would|propose|suggest)\b", re.I)
+
+
+def announced(reply) -> bool:
+    """Whether an answer talks about a change (a tool name, or "I will / I propose") instead of making it."""
+    return bool(_TOOL_WORDS.search(str(reply or "")))

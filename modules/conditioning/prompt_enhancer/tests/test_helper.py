@@ -189,3 +189,17 @@ def test_run_action_is_checked_against_the_offered_actions():
 
 def test_rules_keep_shot_detail_out_of_the_global_prompt():
     assert "must not contain detailed descriptions of each shot" in helper.HELPER_RULE
+
+
+def test_announcing_a_change_without_calling_is_noticed():
+    assert helper.announced("I will use the `set_story` tool to consolidate the content. I propose the following text:")
+    assert helper.announced("I propose a shorter prompt.")
+    assert not helper.announced("Done. Scene 2 is longer now.")
+    assert "call the tool" in helper.NUDGE.lower() and "Act, do not announce" in helper.HELPER_RULE
+
+
+def test_calls_are_counted_so_a_missing_call_can_be_seen():
+    acts = helper.Actions(1, lambda ev: None, wait=1)
+    assert acts.calls == 0
+    acts({"name": "find_settings", "args": {"query": "x"}})
+    assert acts.calls == 1

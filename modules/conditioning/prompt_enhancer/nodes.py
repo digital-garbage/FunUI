@@ -133,8 +133,19 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
     hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) if helper else ""
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
+    ask = lambda text: en.converse(clip, text, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
+    reply, status, add, drop, thought = ask(message)
+    if helper and clip.tools and getattr(clip.handler, "calls", 1) == 0 and __import__(__package__ + ".helper", fromlist=["x"]).announced(reply):
+        # the model wrote about a change instead of calling the tool: it is told once to call it (its own answer stays in the conversation for that turn)
+        hp = __import__(__package__ + ".helper", fromlist=["x"])
+        state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
+        try:
+            second = ask(hp.NUDGE)
+        finally:
+            state["turns"].pop()
+        if second[0] or clip.handler.calls:
+            reply, status, add, drop, thought = second[0] or "Done.", second[1], add + second[2], drop + second[3], second[4]
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl
         reply, written = rl.parse_edits(reply)

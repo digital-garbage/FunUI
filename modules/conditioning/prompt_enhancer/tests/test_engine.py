@@ -635,3 +635,25 @@ def test_a_written_rule_change_without_the_closing_line_still_counts():
     assert found == [{"field": "chat_prompt", "new_text": "Answer in one sentence."}]
     clean, found = rl.parse_edits("A\nEDIT_RULE: chat_prompt\nx\nEND_EDIT_RULE\nthen B")
     assert found == [{"field": "chat_prompt", "new_text": "x"}] and clean.startswith("A") and clean.endswith("then B")
+
+
+def test_a_helper_that_only_talks_about_a_change_is_told_once_to_call_the_tool(tiny, comfyui, monkeypatch):
+    import types
+    from modules.conditioning.prompt_enhancer import engine as eng, helper, nodes
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "{{ tools }}", raising=False)
+    monkeypatch.setattr(eng, "dialect_for", lambda *a, **k: types.SimpleNamespace(call_open="<call>"))
+    nodes.CONVOS.clear()
+    asked = []
+
+    def fake(clip, text, **kw):
+        asked.append((text, [t["reply"] for t in kw["convo"]["turns"]]))
+        if len(asked) == 1:
+            return "I will use the `set_story` tool to merge the scenes.", "ok", [], [], ""
+        return "Merged.", "ok", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", fake)
+    out = nodes.chat_reply("h:1", "merge the scenes", engine_model="tiny", max_length=8, do_sample=False, on_event=lambda e: None, helper={"sheet": "x", "scenes": 2})
+    assert [a[0] for a in asked] == ["merge the scenes", helper.NUDGE]
+    assert asked[1][1] == ["I will use the `set_story` tool to merge the scenes."]        # it sees what it wrote
+    assert out["reply"] == "Merged."
+    assert [t["reply"] for t in nodes.CONVOS["h:1"]["turns"]] == ["Merged."]                # the conversation keeps the final answer only
