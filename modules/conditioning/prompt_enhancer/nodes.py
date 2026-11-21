@@ -139,21 +139,25 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     reply, status, add, drop, thought = ask(message)
     if helper and text_mode and actions is not None:
         reply, status, add, drop, thought = __import__(__package__ + ".helper", fromlist=["x"]).run_text_calls(ask, actions, message, state, (reply, status, add, drop, thought))
-    if helper and clip.tools and getattr(clip.handler, "calls", 1) == 0 and __import__(__package__ + ".helper", fromlist=["x"]).announced(reply):
-        # the model wrote about a change instead of calling the tool: it is told once to call it (its own answer stays in the conversation for that turn)
+    if helper and clip.tools and getattr(clip.handler, "calls", 1) == 0:
         hp = __import__(__package__ + ".helper", fromlist=["x"])
-        state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
-        try:
-            second = ask(hp.NUDGE)
-        finally:
-            state["turns"].pop()
-        if second[0] or clip.handler.calls:
-            reply, status, add, drop, thought = second[0] or "Done.", second[1], add + second[2], drop + second[3], second[4]
-        if not clip.handler.calls and hp.announced(reply):
-            # the model has tool calls on paper but does not use them: it is asked again in text mode, writing TOOL blocks that the app runs
-            clip.tools, text_mode, actions = None, True, clip.handler
-            hp_rule += hp.text_rule()
-            reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
+        asked_only = str(message).strip().endswith("?") and not hp.announced(reply)         # a plain question may simply be answered
+        if not asked_only:
+            nudged = hp.announced(reply)
+            if nudged:
+                # the model wrote about a change instead of calling the tool: it is told once to call it (its own answer stays in the conversation for that turn)
+                state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
+                try:
+                    second = ask(hp.NUDGE)
+                finally:
+                    state["turns"].pop()
+                if second[0] or clip.handler.calls:
+                    reply, status, add, drop, thought = second[0] or "Done.", second[1], add + second[2], drop + second[3], second[4]
+            if not clip.handler.calls and (not nudged or hp.announced(reply)):
+                # the model has tool calls on paper but does not use them: it is asked again in text mode, writing TOOL blocks that the app runs
+                clip.tools, text_mode, actions = None, True, clip.handler
+                hp_rule += hp.text_rule()
+                reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl
         reply, written = rl.parse_edits(reply)

@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Recurrent and hybrid GGUF models (such as Qwen3.5) no longer fail on follow-up requests.** Their memory cannot drop only the end of a cached prompt, which made llama.cpp stop with "find_slot: non-consecutive token position". These models now start from empty memory when the new prompt does not simply continue the last one.
+- **The Helper tries again in text mode whenever a model answers without calling a tool**, not only when its answer announces a change. Plain questions ending with a question mark are just answered.
 - **Models split into parts need only one part named.** For the Enhance engine, writing `owner/name::model-00002-of-00004.safetensors` (or a `-of-` GGUF part) now downloads every part, plus the index file and the config for safetensors parts, and loads them as one model. Before, only the named file came down and the model would not load. A missing part is named in the error.
 - **The "Story" is now called "Global prompt" everywhere in the app**: the Composer tab and box, the cut words hint, the tour and the shortcut helpers. It is the same box as before.
 - **A scene can have its own prefix.** In the Properties panel, a scene has an "Own prefix" switch: its text goes in front of that scene's prompt instead of the project's anchor, and an empty one means no prefix for that scene. Generate, the prompt preview and the Build tab all use it. The Helper can set it too.

@@ -724,3 +724,50 @@ def test_a_helper_model_without_tool_calls_works_through_tool_blocks_in_its_answ
     out = nodes.chat_reply("h:2", "make clips 6 seconds", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 1})
     assert out["reply"] == "Clip length is 6 seconds now." and asked[1].startswith("TOOL RESULTS:\nset_clip_length: Allowed")
     assert any(e["kind"] == "action_request" and e["tool"] == "set_clip_length" for e in heard)
+
+
+def test_a_helper_that_answers_without_any_call_is_asked_again_in_text_mode(tiny, comfyui, monkeypatch):
+    import threading
+    from modules.conditioning.prompt_enhancer import nodes, rules
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "tools {{ tools }}", raising=False)
+    from modules.conditioning.prompt_enhancer import engine as eng
+    monkeypatch.setattr(eng, "dialect_for", lambda *a, **k: type("D", (), {"call_open": "<c>"})())
+    nodes.CONVOS.clear()
+    asked = []
+
+    def on_event(ev):
+        if ev["kind"] == "action_request":
+            threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+
+    def fake(clip, text, **kw):
+        asked.append(text)
+        if len(asked) == 1:
+            return "Sure, one scene on the face then.", "ok", [], [], ""          # no call and nothing that reads as an announcement
+        if len(asked) == 2:
+            return 'TOOL: set_clip_length\n{"seconds": 6, "reason": "asked"}\nEND_TOOL', "ok", [], [], ""
+        return "Done, six seconds.", "ok", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", fake)
+    out = nodes.chat_reply("h:3", "make it one scene focused on the face", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 3})
+    assert out["reply"] == "Done, six seconds." and asked[2].startswith("TOOL RESULTS:")
+
+
+def test_a_gguf_model_that_cannot_trim_its_memory_starts_empty_for_a_changed_prompt():
+    from .. import gguf
+    calls = []
+
+    class Llm:
+        n_tokens = 3
+        input_ids = __import__("numpy").array([1, 2, 3])
+        def reset(self): calls.append("reset")                                        # noqa: E704
+        def tokenize(self, *a, **k): return [1, 9, 9]                                  # noqa: E704
+        def token_eos(self): return 0                                                  # noqa: E704
+        def n_ctx(self): return 1000                                                   # noqa: E704
+        def set_seed(self, s): pass                                                    # noqa: E704
+        def generate(self, tokens, reset=True, **k): return iter(())                   # noqa: E704
+        _ctx = type("C", (), {"kv_cache_clear": lambda self: calls.append("clear")})()
+    b = gguf.Backend.__new__(gguf.Backend)
+    b.llm = Llm()
+    b.can_trim = lambda: False
+    list(b.text_stream("x", max_new_tokens=4, temperature=0, top_p=1, top_k=1, min_p=0, repetition_penalty=1, presence_penalty=0, seed=0, greedy=True))
+    assert calls == ["reset", "clear"]

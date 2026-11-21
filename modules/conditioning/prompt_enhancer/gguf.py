@@ -243,6 +243,14 @@ class Backend:
             cpp.mtmd_input_chunks_free(chunks)
             cpp.mtmd_bitmap_free(bitmap)
 
+    def can_trim(self) -> bool:
+        """Whether the model's memory can drop its newest part (a plain transformer can; a recurrent or hybrid one such as Qwen3.5 cannot)."""
+        import llama_cpp
+        try:
+            return bool(llama_cpp.llama_memory_can_shift(llama_cpp.llama_get_memory(self.llm._ctx.ctx)))
+        except Exception:                                           # noqa: BLE001
+            return True
+
     def text_stream(self, text, *, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy,
                     stops=(), cancel=None, stats=None, picture=None):
         """Yield the model's text as it forms (control tokens left in, as the engine's splitter expects). Reuses the start of the last prompt."""
@@ -267,6 +275,11 @@ class Backend:
         max_new_tokens = min(int(max_new_tokens) or window, window - len(tokens) - 8)           # what is left of the window after the request
         sampling = dict(top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
                         repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
+        if not picture and not self.can_trim():
+            cached = llm.input_ids[:llm.n_tokens].tolist() if llm.n_tokens else []
+            if cached != tokens[:len(cached)]:                       # a recurrent or hybrid model cannot drop the end of its memory: it starts from empty instead of reusing a partial prefix
+                llm.reset()
+                llm._ctx.kv_cache_clear()
         sent = False
         for attempt in (0, 1):
             try:
