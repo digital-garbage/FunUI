@@ -10,13 +10,13 @@ import { openHelper } from "./helper.js";
 import { files } from "./files.js";
 import { pickShortcut, templatesBar, variablesPanel } from "./storytools.js";
 
-const TABS = [{ value: "story", label: "Story" }, { value: "shortcuts", label: "Shortcuts" }, { value: "build", label: "Build" }, { value: "cuts", label: "Cuts" }, { value: "enhance", label: "Enhance" }, { value: "chat", label: "Chat" }, { value: "files", label: "Files" }];
+const TABS = [{ value: "story", label: "Global prompt" }, { value: "shortcuts", label: "Shortcuts" }, { value: "build", label: "Build" }, { value: "cuts", label: "Cuts" }, { value: "enhance", label: "Enhance" }, { value: "chat", label: "Chat" }, { value: "files", label: "Files" }];
 
 // The box follows the scenes; typing in it rewrites them (after a short pause, or when focus leaves).
 export const story = (app, own) => {
   const p = app.project;
   let shown = null, marker = "qcut", words = ["qcut"], timer = 0, typedFor = null, asked = 0, inFlight = Promise.resolve();
-  const box = c.textarea.md({ label: "Story", rows: 14, fill: true, value: p.project ? joinStory(p.project, marker) : "", onInput: (v) => { clearTimeout(timer); typedFor = p.project && p.project.id; timer = setTimeout(() => { timer = 0; apply(v); }, 700); }, onCommit: (v) => { clearTimeout(timer); timer = 0; apply(v); } });
+  const box = c.textarea.md({ label: "Global prompt", rows: 14, fill: true, value: p.project ? joinStory(p.project, marker) : "", onInput: (v) => { clearTimeout(timer); typedFor = p.project && p.project.id; timer = setTimeout(() => { timer = 0; apply(v); }, 700); }, onCommit: (v) => { clearTimeout(timer); timer = 0; apply(v); } });
   const area = box.node, warn = c.hint.default({ text: "" });
   // Text typed in one project is never split into another one that was opened (by keyboard, with no blur) before the pause ran out.
   function apply(text) { if (typedFor && p.project && p.project.id !== typedFor) { typedFor = null; sync(); return inFlight; } typedFor = null; return (inFlight = split(text)); }
@@ -28,11 +28,11 @@ export const story = (app, own) => {
       if (mine !== asked || !p.project || p.project.id !== pid) return;     // typed more meanwhile, or another project opened: not for this one
       p.edit((pr) => applyStory(pr, scenes, shown));
       if (p.project) shown = shownStory(p.project);
-    } catch (err) { c.toast.warn({ text: `Could not split the story: ${err.message}` }); }
+    } catch (err) { c.toast.warn({ text: `Could not split the global prompt: ${err.message}` }); }
   }
   app.api.storyMarkers().then((r) => { words = r.markers || words; marker = words[0]; sync(); }).catch(() => {});
   function sync() {
-    warn.setText(p.project && clash(p.project, words) ? `A scene's own text contains a cut word (${words.join(", ")}), so the story shows it as two scenes. Remove the word from that scene.` : "");
+    warn.setText(p.project && clash(p.project, words) ? `A scene's own text contains a cut word (${words.join(", ")}), so the global prompt shows it as two scenes. Remove the word from that scene.` : "");
     if (!p.project || app.dom.focusOn(area) || timer) return;           // never rewrite the box while it is being typed in
     const next = joinStory(p.project, marker);
     if (area.value !== next) box.setValue(next);
@@ -46,7 +46,7 @@ export const story = (app, own) => {
   sync();
   return c.region.stack({ gap: "sm", fill: true, children: [
     templatesBar(app, own),
-    c.toolbar.default({ items: [c.label.section({ text: "Story" })], trailing: [c.button.sm({ label: "+ Add shortcut", tone: "ghost", title: "Insert a shortcut trigger: browse the library", onClick: async () => {
+    c.toolbar.default({ items: [c.label.section({ text: "Global prompt" })], trailing: [c.button.sm({ label: "+ Add shortcut", tone: "ghost", title: "Insert a shortcut trigger: browse the library", onClick: async () => {
       const trigger = await pickShortcut(app);
       if (!trigger) return;
       area.focus(); area.setRangeText(`${area.selectionStart && !/\s$/.test(area.value.slice(0, area.selectionStart)) ? " " : ""}${trigger} `, area.selectionStart, area.selectionEnd, "end");
@@ -93,7 +93,7 @@ export default {
       if (!tail.every((n, i) => host.children[host.children.length - tail.length + i] === n)) host.append(...tail);
     };
     settle();
-    const Watch = globalThis.MutationObserver || (globalThis.window && globalThis.window.MutationObserver), keepLast = Watch ? new Watch(settle) : null;
+    const keepLast = typeof MutationObserver === "function" ? new MutationObserver(settle) : null;
     if (keepLast) keepLast.observe(host, { childList: true });
     showHelper();
     const offHelper = app.on(showHelper);

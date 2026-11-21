@@ -5,6 +5,7 @@ import feature from "./index.js";
 
 test("the row reads Helper first, then the others, then Sampler, then Composer last, even when another feature adds a button later", async () => {
   setupDom();
+  globalThis.MutationObserver = window.MutationObserver;
   try {
     const host = document.createElement("div");
     document.body.append(host);
@@ -18,5 +19,5 @@ test("the row reads Helper first, then the others, then Sampler, then Composer l
     await new Promise((r) => setTimeout(r, 20));
     assert.deepEqual(names(), ["✦ Helper", "Later", "⏱ Sampler", "◆ Composer"]);
     off();
-  } finally { teardownDom(); }
+  } finally { delete globalThis.MutationObserver; teardownDom(); }
 });

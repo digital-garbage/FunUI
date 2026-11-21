@@ -3,7 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { accept, suggestionsAt } from "./match.js";
 
-const BOXES = new Set(["Story", "Prompt", "Anchor", "Postfix"]);          // aria-labels of the prompt fields
+const BOXES = new Set(["Global prompt", "Prompt", "Anchor", "Postfix"]);          // aria-labels of the prompt fields
 
 export default {
   id: "autocomplete",
@@ -42,7 +42,7 @@ export default {
     const offFocus = app.dom.onPage("focusin", onFocus);
 
     app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
-      c.toggle.default({ label: "Prompt autocomplete", hint: "Suggest matching shortcuts while you type in the Story and scene prompts. Shows the trigger and its prompt.",
+      c.toggle.default({ label: "Prompt autocomplete", hint: "Suggest matching shortcuts while you type in the Global prompt and scene prompts. Shows the trigger and its prompt.",
         checked: p.pref("autocomplete", true), onChange: (v) => p.setPref("autocomplete", v) })] }));
     return offFocus;
   },

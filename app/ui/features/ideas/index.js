@@ -4,7 +4,7 @@ import { composer as c } from "../../composer/composer.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 import { analyze, byHabit, presentIn, shuffled } from "../../shell/habits.js";
 
-const BOXES = new Set(["Story", "Prompt"]);
+const BOXES = new Set(["Global prompt", "Prompt"]);
 const first = (sc) => String((sc.triggers || [])[0] || "").trim();
 
 export default {
@@ -68,7 +68,7 @@ export default {
     const offFocus = [app.dom.onPage("focusin", onFocus), app.dom.onPage("focusout", onBlur)];
 
     app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
-      c.toggle.default({ label: "Shortcut ideas", hint: "Shows a 💡 beside the Story and Prompt boxes with shortcut suggestions to insert, based on what you use.",
+      c.toggle.default({ label: "Shortcut ideas", hint: "Shows a 💡 beside the Global prompt and Prompt boxes with shortcut suggestions to insert, based on what you use.",
         checked: on(), onChange: (v) => { p.setPref("suggestions", v); if (!v) closeBulb(); } })] }));
     return () => { closeBulb(); clearTimeout(hold); offFocus.forEach((f) => f()); };
   },

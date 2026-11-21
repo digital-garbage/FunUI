@@ -16,7 +16,7 @@ test("the 💡 sits inside its prompt box's bottom-right corner, and follows the
   const off = hub.setup({ host: document.createElement("div"), app });
   try {
     const box = document.createElement("textarea");
-    box.setAttribute("aria-label", "Story");
+    box.setAttribute("aria-label", "Global prompt");
     document.body.append(box);
     let left = 100;
     box.getBoundingClientRect = () => ({ left, right: left + 300, top: 200, bottom: 300, width: 300, height: 100 });

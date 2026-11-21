@@ -11,7 +11,7 @@ const STEPS = [
   { at: "zone:3", side: "top", title: "Timeline", text: "One clip per scene. Drag the edges to trim, press S to split, Space to play. Lanes below carry separated sound." },
   { at: "button:▶ Generate|Generating…", side: "top", title: "Generate", text: "Makes every scene on the timeline; earlier renders stay as takes. Beside it: Selected, Takes ×N (new seeds) and Rate scene… (teaches FunUI your taste)." },
   { at: "button:⏱ Sampler", side: "top", title: "Sampler", text: "Steps, sampler, scheduler, seed and the common switches, one click from the timeline. While a run goes, the step count shows to its left." },
-  { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole story in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
+  { at: "button:◆ Composer", side: "top", title: "Composer", text: "Write the whole global prompt in one box, cut at the cut word; keep templates, $variables and shortcuts; chat with the prompt enhancer." },
   { at: "button:＋ Add", side: "top", title: "Add and edit", text: "＋ Add opens one menu: a scene, a clip, an effect, a transition or an overlay. Next to it: Split, Remove, Export and more." },
   { at: "button:⧉ Render|Rendering…", side: "top", title: "Render", text: "Joins the whole timeline into one file, with the separated sound mixed in. Export downloads the picked clips." },
   { at: "main", side: "bottom", title: "FAQ", text: "Nothing happens? Check the ComfyUI chip at the top right and the Log. Lost a layout? View ▸ Reset Layout. That is the tour; Help ▸ Start tour runs it again." },

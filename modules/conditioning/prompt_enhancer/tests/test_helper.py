@@ -166,7 +166,7 @@ def test_set_story_takes_the_whole_text():
         seen.append(ev)
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(2, on_event, wait=2)({"name": "set_story", "args": {"text": "a\nqcut\nb", "reason": "r"}}).startswith("Allowed")
-    assert "Rewrite the Story" in seen[0]["summary"]
+    assert "Rewrite the global prompt" in seen[0]["summary"]
 
 
 def test_rules_say_scenes_are_separate_prompts():

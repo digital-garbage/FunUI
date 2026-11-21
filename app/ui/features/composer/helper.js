@@ -181,7 +181,7 @@ export function openHelper(app, origin) {
     follow = pin || !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
     pin = false;
     const t = turns();
-    history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
+    history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...(x.thinking ? [c.bubble.model({ text: x.thinking, who: "Helper (thinking)" })] : []), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model from Composer > Enhance, which must support tool calls." })]);
     send.setLabel ? send.setLabel(busy ? "Working…" : "Ask helper") : null;
     if (send.setDisabled) send.setDisabled(busy);
@@ -191,15 +191,15 @@ export function openHelper(app, origin) {
     const message = draft.trim(), inp = inputs(), eng = engineOf(inp);
     if (!message || busy) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
-    const turn = { you: message, reply: "", status: "", done: [] };
+    const turn = { you: message, thinking: "", reply: "", status: "", done: [] };
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; pin = true; paint();
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the Story: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
-        if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
+        if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
           if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);

@@ -148,7 +148,7 @@ export const DEMOS = {
   "tile.node": { title: "Load checkpoint", sub: "model.safetensors", state: "ready" },
   "tile.add": { title: "＋ Add a node", sub: "to Loaders" },
   "progress.inline": { label: "Generating" },
-  "floating.corner": (c) => ({ anchor: c.textarea.md({ label: "Story", rows: 4 }), label: "💡", title: "Shortcut ideas" }),
+  "floating.corner": (c) => ({ anchor: c.textarea.md({ label: "Global prompt", rows: 4 }), label: "💡", title: "Shortcut ideas" }),
   "viewer.cover": { label: "Close preview" },
   "stage.overlay": { label: "Overlays" },
   "hero.default": { title: "FunUI 5", hint: "“Classy Chopper” · Cutting Room" },

@@ -30,7 +30,7 @@ export function templatesBar(app, own) {
     return true;
   });
   const clear = async () => {
-    if (!(await c.modal.dialogue({ title: "Clear the Story", message: "Empties the anchor and every scene's text, and stops using the current template. Variables and postfix are left alone. Undo restores it.", confirmLabel: "Clear", tone: "danger" }).result)) return;
+    if (!(await c.modal.dialogue({ title: "Clear the global prompt", message: "Empties the anchor and every scene's text, and stops using the current template. Variables and postfix are left alone. Undo restores it.", confirmLabel: "Clear", tone: "danger" }).result)) return;
     p.edit((pr) => { pr.anchor = ""; storyRoots(pr).forEach((s) => { s.text = ""; }); pr.active_prompt_template = ""; return true; });
   };
   const rename = async (active) => {
@@ -53,7 +53,7 @@ export function templatesBar(app, own) {
       items: [c.select.sm({ label: "Templates", disabled: !open, value: known ? active : "",
         options: [{ value: "", label: "Templates…" }, { value: NONE, label: "— None (clear all prompts) —" }, ...tpls().map((t) => ({ value: t.name, label: t.name }))],
         onChange: async (v) => { if (v === NONE) await clear(); else if (v) apply(v); key = ""; draw(); } })],
-      trailing: [c.button.sm({ label: known ? "Update…" : "Save", tone: "ghost", disabled: !open, title: known ? `Overwrite “${active}” or save under a new name` : "Save the Story as a template", onClick: save }),
+      trailing: [c.button.sm({ label: known ? "Update…" : "Save", tone: "ghost", disabled: !open, title: known ? `Overwrite “${active}” or save under a new name` : "Save the global prompt as a template", onClick: save }),
         ...(known ? [c.button.sm({ label: "✎", tone: "ghost", title: `Rename “${active}”`, onClick: () => rename(active) }), c.button.sm({ label: "✕", tone: "ghost", title: `Delete “${active}”`, onClick: () => remove(active) })] : [])] })]);
   };
   draw();
