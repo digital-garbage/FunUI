@@ -50,6 +50,7 @@ FEATURES = {
     "shadow_negative": {},
     "trajectory_guidance": {},
     "velocity_bias": {},
+    "h3_corrector": {"file": "tiny.safetensors"},       # the `fresh` fixture writes a tiny corrector of the tiny model's size
 }
 #: Modifiers that need the LTX audio+video or spatial-latent model: run in test_combinations_ltx.py.
 LTX_ONLY = {"audio_coupling", "context_windows", "identity_bank", "sharpen", "temporal_style"}
@@ -78,6 +79,23 @@ def _save_a_map(tmp_path, monkeypatch, n):
         res[kind] = {"leverage": [[0.5 + g + 0.3 * p for p in range(len(measure.POINTS))] for g in range(len(grid))],
                      "fragility": [[0.1 * (g + 1) for p in range(len(measure.POINTS))] for g in range(len(grid))]}
     measure.save(res)
+
+
+def _save_a_corrector(tmp_path, monkeypatch):
+    """A tiny corrector of the tiny model's size (24 picture channels, 48-wide text), found in models/h3_correctors."""
+    import dataclasses
+    import json
+    import folder_paths
+    from safetensors.torch import save_file
+    from modules.sampling import h3_corrector
+    from modules.sampling.h3_corrector.network import Config, Corrector
+    torch.manual_seed(3)
+    net = Corrector(Config(video_channels=24, text_dim=48, width=32, depth=1, heads=2, head_dim=16, time_embed_dim=8))
+    folder = tmp_path / "h3_correctors"
+    folder.mkdir()
+    save_file({k: v.contiguous() for k, v in net.state_dict().items()}, str(folder / "tiny.safetensors"), metadata={"h3_corrector": json.dumps(dataclasses.asdict(net.config))})
+    monkeypatch.setitem(folder_paths.folder_names_and_paths, h3_corrector.FOLDER, ([str(folder)], {".safetensors"}))
+    h3_corrector._LOADED.clear()
 
 
 def _stage_lora(model, stage):
@@ -155,6 +173,11 @@ def _check(out, label):
     assert torch.isfinite(video).all() and torch.isfinite(audio).all(), label
     assert video.shape == (1, 24, 2, 8, 8) and audio.shape == (1, 32, 2, 3), label
     assert video.dtype == audio.dtype == torch.float32 and video.device.type == "cpu", label       # the input's dtype and device come back
+
+
+@pytest.fixture(autouse=True)
+def _corrector(tmp_path, monkeypatch):
+    _save_a_corrector(tmp_path, monkeypatch)
 
 
 @pytest.fixture

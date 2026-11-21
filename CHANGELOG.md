@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **H3 corrector** (Settings > Engine > Sampling, MiniMax H3, experimental): a small trained network adds a fix to the picture at every step, capped at a share of the prediction. Put a corrector file (for example Sulphur 3's `s3_corrector.safetensors`) in `models/h3_correctors`, switch it on and pick the file; strength and the largest fix are adjustable. Needs no extra ComfyUI nodes. Costs one extra pass per step. Not yet run on a real H3 model here.
 - Enhancer: a rule change the model writes at the end of its answer is now found even when the model forgets the closing line, so the Allow window opens (a model that ignored the closing line used to change nothing and show no window).
 - Enhancer: pressing Download now refreshes the Downloaded models list right away (a quick download used to be missed until the page was reopened), warns when a download or load is already running, and marks files in the repo list that are already downloaded.
 - Pressing Stop while a prompt is being rewritten by the built-in engine now stops the rewrite right away and ends the run, instead of waiting for the model to finish.
