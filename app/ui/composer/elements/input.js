@@ -152,9 +152,9 @@ define("stepper", "md", ({ value = 0, min, max, step = 1, onChange, label } = {}
 });
 
 // `fold`: one line like an input until clicked, then as tall as its text (Enter is a new line); one line again on leaving.
-define("textarea", "md", ({ value = "", rows = 4, autoGrow = false, fold = false, placeholder, onInput, onCommit, label } = {}) => {
+define("textarea", "md", ({ value = "", rows = 4, autoGrow = false, fold = false, fill = false, placeholder, onInput, onCommit, label } = {}) => {
   const node = el("textarea", {
-    cls: ["cx-textarea", "cx-focusable", autoGrow || fold ? "cx-autogrow" : null, fold ? "cx-fold" : null],
+    cls: ["cx-textarea", "cx-focusable", autoGrow || fold ? "cx-autogrow" : null, fold ? "cx-fold" : null, fill ? "cx-textarea-fill" : null],
     attrs: { rows: fold ? 1 : rows, placeholder, "aria-label": label },
   });
   node.value = value;

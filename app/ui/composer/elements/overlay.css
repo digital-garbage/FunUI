@@ -149,6 +149,8 @@
 .cx-window-title { font-size: var(--fs-5); font-weight: var(--fw-semibold); }
 .cx-window-controls { display: flex; gap: var(--sp-1); }
 .cx-window-body { flex: 1; overflow: auto; padding: var(--sp-5); }
+/* A body whose content is one stack meant to fill it hands that stack its height, so a box inside can take what is left. */
+.cx-window-body:has(> .cx-stack-fill) { display: flex; flex-direction: column; }
 .cx-rolled .cx-window-body, .cx-rolled .cx-window-grip { display: none; }
 .cx-window-grip {
   position: absolute; right: 0; bottom: 0; width: var(--sp-7); height: var(--sp-7);

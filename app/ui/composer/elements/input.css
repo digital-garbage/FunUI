@@ -32,6 +32,8 @@
 }
 /* In a window the box shares the room with its tabs, hint and folds: it gives way as the screen gets shorter, so the window does not scroll inside itself. */
 .cx-window .cx-textarea { max-block-size: min(28dvh, var(--window-field-max-h)); }
+/* The one box of a window that is the point of its tab (the Story): it takes whatever height the window has left after the rows around it, down to two controls tall, instead of a size set by the screen. */
+.cx-window .cx-textarea.cx-textarea-fill { flex: 1 1 auto; max-block-size: none; min-block-size: calc(var(--ctl-h-xl) * 2); resize: none; }
 .cx-autogrow { resize: none; overflow: hidden; }
 .cx-fold { min-height: var(--ctl-h-md); height: var(--ctl-h-md); padding: var(--sp-2) var(--ctl-pad-x-sm); font-size: var(--fs-5); }
 .cx-fold:focus { overflow-y: auto; max-block-size: min(28dvh, var(--window-field-max-h, 28dvh)); }      /* long text scrolls inside the box instead of growing or clipping */
