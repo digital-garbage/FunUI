@@ -13,11 +13,11 @@ from . import rules
 MAX_TEXT = 4000
 TEXTS = {"anchor": "the anchor", "postfix": "the postfix", "negative": "the negative prompt", "postfix_enabled": "the postfix switch"}
 ALIASES = {"prefix": "anchor", "main_prompt": "anchor", "negative_prompt": "negative", "postfix_on": "postfix_enabled", "postfix_switch": "postfix_enabled"}
-EXTRA = ("set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
+EXTRA = ("run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
                "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
-               "The Story (the user may call it the global prompt) is every scene prompt in order as one text, with the cut word written between scenes; rewrite it with set_story (the whole new text, scenes separated by the cut word on a line of its own). Every part of the Story between two cut words is a separate prompt: its own scene, made as its own clip at its own time, so it must stand on its own and never needs to be handled together with the others. Change only the scenes the user means, one at a time with edit_scene, and use set_story only when the user asks for the whole Story to be rewritten. Do not merge scenes, move details between them or make them agree with each other unless asked. Cuts: the Story is cut into scenes at the cut words (the first one is written between scenes, change them with set_cut_words); a scene can also be cut in two on the timeline with cut_scene, and the halves stay one generated clip (the project says which scenes belong to one clip). "
+               "The Story (the user may call it the global prompt) is every scene prompt in order as one text, with the cut word written between scenes; rewrite it with set_story (the whole new text, scenes separated by the cut word on a line of its own). Every part of the Story between two cut words is a separate prompt: its own scene, made as its own clip at its own time, so it must stand on its own and never needs to be handled together with the others. Change only the scenes the user means, one at a time with edit_scene, and use set_story only when the user asks for the whole Story to be rewritten. Do not merge scenes, move details between them or make them agree with each other unless asked. You can also run things for the user: the actions of the app (Generate, render, undo and so on) are listed in the project; start one with run_action, naming scenes first when the action works on picked scenes (Generate selected). run_action only starts the action and does not wait for it to finish; never start Generate unless the user asked for it. Cuts: the Story is cut into scenes at the cut words (the first one is written between scenes, change them with set_cut_words); a scene can also be cut in two on the timeline with cut_scene, and the halves stay one generated clip (the project says which scenes belong to one clip). "
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
@@ -40,6 +40,7 @@ def tools() -> list:
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("remove_shortcut", "Delete a shortcut of the library.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
+            fn("run_action", "Start one of the app's actions (listed in the project), such as generating or rendering. Optionally pick scenes first.", {"action": {"type": "string", "description": "The id of the action."}, "scenes": {"type": "array", "items": {"type": "integer"}, "description": "Scene numbers to pick first, for actions that work on the picked scenes."}, "reason": reason}, ["action", "reason"]),
             fn("set_story", "Rewrite the whole Story (all scene prompts in one text, scenes separated by the cut word on its own line). Scenes are matched to the earlier ones by order.", {"text": {"type": "string"}, "reason": reason}, ["text", "reason"]),
             fn("cut_scene", "Cut a scene in two on the timeline. Both halves stay one generated clip.", {"scene": scene, "at_seconds": {"type": "number", "description": "Where to cut, in seconds from the start of the scene. The middle when left out."}, "reason": reason}, ["scene", "reason"]),
             fn("set_cut_words", "Replace the cut words of the Story (a whole word typed in the Story starts a new scene).", {"words": {"type": "array", "items": {"type": "string"}}, "reason": reason}, ["words", "reason"]),
@@ -62,6 +63,9 @@ def describe(name, args) -> str:
         return f"Scene {args.get('scene')}: use the same reference pictures as scene {args.get('from_scene')}"
     if name == "set_setting":
         return f"{args.get('title') or args.get('module')}: {args.get('label') or args.get('setting')}: {args.get('now')} -> {args.get('value')}"
+    if name == "run_action":
+        picked = args.get("scenes") or []
+        return f"Run: {args.get('label') or args.get('action')}" + (f" on scene{'s' if len(picked) > 1 else ''} {', '.join(map(str, picked))}" if picked else "")
     if name == "set_story":
         return "Rewrite the Story (all scenes): " + str(args.get("text")).strip()
     if name == "cut_scene":
@@ -90,9 +94,10 @@ def describe(name, args) -> str:
 class Actions:
     """Answers the model's tool calls for one helper request. `scenes`: how many scenes the project has."""
 
-    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=()):
+    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=()):
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
+        self.actions = {str(x["id"]): x for x in actions if isinstance(x, dict) and x.get("id")}
         self.presets = {str(x["id"]): x for x in presets if isinstance(x, dict) and x.get("id")}
         self.variables = {str(v) for v in variables}
         self.shortcuts = {str(x["name"]): x for x in shortcuts if isinstance(x, dict) and x.get("name")}
@@ -153,6 +158,15 @@ class Actions:
     def extra(self, name, args):
         """-> an error text, or None when the call is valid (args may gain fields the page needs)."""
         text = lambda v, n=MAX_TEXT: isinstance(v, str) and len(v) <= n        # noqa: E731
+        if name == "run_action":
+            spec = self.actions.get(str(args.get("action")))
+            if spec is None:
+                return f"Error: there is no action '{args.get('action')}'. They are: {', '.join(self.actions)}."
+            picked = args.get("scenes")
+            if picked is not None and not (isinstance(picked, list) and all(isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= self.scenes for n in picked)):
+                return f"Error: scenes are numbers from 1 to {self.scenes}."
+            args["label"] = spec.get("label")
+            return None
         if name == "set_story":
             return None if text(args.get("text"), 20000) and args["text"].strip() else "Error: text must be the whole new Story, at most 20000 characters."
         if name == "cut_scene":

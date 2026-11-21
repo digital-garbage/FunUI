@@ -171,3 +171,17 @@ def test_set_story_takes_the_whole_text():
 
 def test_rules_say_scenes_are_separate_prompts():
     assert "separate prompt" in helper.HELPER_RULE and "one at a time" in helper.HELPER_RULE
+
+
+def test_run_action_is_checked_against_the_offered_actions():
+    acts = [{"id": "generate-all", "label": "Generate"}, {"id": "generate-selected", "label": "Generate selected"}]
+    a = helper.Actions(3, lambda ev: None, wait=1, actions=acts)
+    assert a({"name": "run_action", "args": {"action": "format-disk"}}).startswith("Error")
+    assert a({"name": "run_action", "args": {"action": "generate-selected", "scenes": [4]}}).startswith("Error")
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    assert helper.Actions(3, on_event, wait=2, actions=acts)({"name": "run_action", "args": {"action": "generate-selected", "scenes": [2, 3], "reason": "r"}}).startswith("Allowed")
+    assert seen[0]["summary"] == "Run: Generate selected on scenes 2, 3"

@@ -104,3 +104,15 @@ test("set_story splits the new text at the cut word and rewrites the scenes in o
   assert.match(out, /3 scenes/);
   assert.deepEqual(project.scenes.map((s) => s.text), ["uno", "dos", "tres"]);
 });
+
+test("run_action picks the named scenes, starts the app's action without waiting, and refuses one that is not offered", async () => {
+  const picked = [], ran = [];
+  const project = { scenes: [{ id: "a" }, { id: "b" }, { id: "c" }] };
+  const app = { selection: { pick: (id, o) => picked.push([id, Boolean(o.additive)]) }, actions: [{ id: "generate-selected", label: "Generate selected", run: () => { ran.push("go"); } }, { id: "hidden", label: "Hidden", when: () => false, run: () => ran.push("no") }] };
+  const out = applyAction({ project }, { tool: "run_action", args: { action: "generate-selected", scenes: [2, 3] } }, null, null, app);
+  assert.equal(out, "Started: Generate selected");
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(picked, [["b", false], ["c", true]]);
+  assert.deepEqual(ran, ["go"]);
+  assert.equal(applyAction({ project }, { tool: "run_action", args: { action: "hidden" } }, null, null, app), "that action is not available now");
+});

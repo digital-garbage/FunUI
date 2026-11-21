@@ -17,6 +17,10 @@ const refsOf = (s) => `${(s.references || []).length ? `, references: ${s.refere
 
 /** The modules whose settings the helper can reach, one line (the settings themselves come from find_settings). */
 const modulesLine = (ps) => { const seen = new Set(catalogOf(ps).map((x) => x.title)); return seen.size ? `\nModules with settings: ${[...seen].join(", ")}.` : ""; };
+const actionsLine = (app) => {
+  const list = (app.actions || []).filter((x) => !x.when || x.when()), phase = app.generate && app.generate.state ? app.generate.state().phase : "";
+  return (list.length ? `\nActions you can run (run_action): ${list.map((x) => `${x.id} = ${x.label}`).join("; ")}.` : "") + (phase ? `\nGeneration right now: ${phase}.` : "");
+};
 const presetsLine = (list) => (list.length ? `\nPipeline starting points (apply_preset): ${list.map((x) => `${x.id} = ${x.title}`).join("; ")}.` : "");
 
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
@@ -47,7 +51,7 @@ export async function inputsOf(app) {
 }
 
 /** Make an allowed change in the project. -> a short plain line saying what was done (or why not). */
-export function applyAction(project, ev, ps, api) {
+export function applyAction(project, ev, ps, api, app) {
   const a = ev.args || {}, n = (project.project.scenes || []).length;
   const secs = (pr, sc, s) => snapFrames(s * effFps(sc, pr));
   if (ev.tool === "edit_scene") {
@@ -77,6 +81,14 @@ export function applyAction(project, ev, ps, api) {
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
+  }
+  if (ev.tool === "run_action" && app) {
+    const act = (app.actions || []).find((x) => x.id === a.action);
+    if (!act || (act.when && !act.when())) return "that action is not available now";
+    const ids = (a.scenes || []).map((k) => (project.project.scenes[k - 1] || {}).id).filter(Boolean);
+    if (app.selection && ids.length) ids.forEach((id, i) => app.selection.pick(id, { additive: i > 0 }));
+    Promise.resolve().then(() => act.run()).catch((e) => c.toast.warn({ text: `${act.label}: ${(e && e.message) || e}` }));
+    return `Started: ${act.label}`;
   }
   if (ev.tool === "set_story" && api) {
     const shown = shownStory(project.project);
@@ -182,14 +194,14 @@ export function openHelper(app, origin) {
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the Story: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the Story: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
           if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);
-          turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api) : `Refused: ${ev.summary}`);
+          turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api, app) : `Refused: ${ev.summary}`);
           paint();
           await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
         })();
