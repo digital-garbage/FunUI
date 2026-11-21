@@ -49,6 +49,10 @@ STYLES = {"default": SYSTEM_PROMPT, "dynamic": DYNAMIC_PROMPT}
 FIXED_RULE = ("The prompt you rewrite is only the middle of a longer one. Fixed text before it: [[PROMPT_PREFIX]]\nFixed text after it: [[PROMPT_POSTFIX]]\n"
               "That text is added around your answer afterwards and stays exactly as it is. Use it only to understand the whole prompt: never repeat it, "
               "and write what you add so it reads well between the two.")
+SELF_EDIT_RULE = ("You can read and change your own rules, the system prompts that tell you how to work. They are:\n[[RULES_SHEET]]\n"
+                  "Use read_prompt to see one in full. Use edit_prompt only when the user asks you to change how you behave, or a rule clearly keeps failing: "
+                  "send the whole new text of that rule and one sentence why. The user sees the change and may refuse it; after a refusal, do not propose the same change again. "
+                  "Say in your answer what you changed or proposed.")
 MARKS_RULE = ("Tokens like {M1}, {M2} stand for fixed markup. Copy every one into your answer exactly as written, "
               "once each, next to the words it belongs to. Never explain them or change them.")
 
@@ -90,7 +94,7 @@ Answer the message directly and briefly (one to four sentences, plain text). You
 Stay consistent with the earlier turns. Do not use markdown or headings."""
 NOTES_RULE = """NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
 PROMPT_FIELDS = {"chat_prompt": "CHAT_REPLY_SYSTEM", "notes_prompt": "NOTES_RULE", "compact_prompt": "COMPACT_SYSTEM", "revision_prompt": "CHAT_SYSTEM",
-                 "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE", "fixed_prompt": "FIXED_RULE"}      # node input -> the built-in text an empty one means
+                 "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE", "fixed_prompt": "FIXED_RULE", "edit_prompt": "SELF_EDIT_RULE"}      # node input -> the built-in text an empty one means
 
 
 def defaults() -> dict:
@@ -564,13 +568,13 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
 
 
-def converse(clip, message, *, convo=None, notes="", prompts=None, macros=None, **sampling):
+def converse(clip, message, *, convo=None, notes="", prompts=None, macros=None, system_extra="", **sampling):
     """-> (reply, status, notes to add, notes to drop, the model's thinking): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
     `convo`: {"summary", "turns", "keep"} as in enhance()."""
     message = str(message or "").strip()
     if not message:
         return "", "the message is empty", [], [], ""
-    system, rounds, user = pick(prompts, "chat_prompt") + "\n" + pick(prompts, "notes_prompt") + notes_system(notes, numbered=True), (), message
+    system, rounds, user = pick(prompts, "chat_prompt") + "\n" + pick(prompts, "notes_prompt") + notes_system(notes, numbered=True) + (("\n\n" + system_extra) if system_extra else ""), (), message
     convo = convo or {}
     if native_turns(clip) and (convo.get("turns") or convo.get("summary")):
         rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
@@ -602,6 +606,7 @@ MACROS = {
     "PREVIOUS_MODEL_OUTPUT": "The last rewrite the model wrote.",
     "MODEL_OUTPUTS_HISTORY": "Every earlier rewrite except the last one.",
     "CURRENT_PROMPT": "The prompt being rewritten now.",
+    "RULES_SHEET": "Your system prompts, each with its purpose (used by the rule that lets the model edit them).",
     "PROMPT_PREFIX": "The fixed text before it (the global prefix, in Only my own text mode).",
     "PROMPT_POSTFIX": "The fixed text after it (the global postfix, in Only my own text mode).",
     "PREVIOUS_PROMPT": "The prompt of the last rewrite.",
@@ -621,7 +626,7 @@ MACROS = {
 }      # what a [[NAME]] may be written for in any system prompt, and means
 
 
-def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating="", chat_message="", prefix="", postfix="") -> dict:
+def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating="", chat_message="", prefix="", postfix="", rules="") -> dict:
     """-> {macro name: its text} from what the conversation holds (`turns` before this request; `chat_message`: the message being answered, if any)."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     turns = [t for t in turns if isinstance(t, dict)]
@@ -638,7 +643,7 @@ def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating=
     older = lambda xs: "\n".join(f"- {x}" for x in xs[:-1]) if len(xs) > 1 else none      # noqa: E731
     lines = [x for x in notes_lines(notes)]
     return {"PREVIOUS_MODEL_OUTPUT": last(outputs), "MODEL_OUTPUTS_HISTORY": older(outputs), "CURRENT_PROMPT": cut(prompt) or none,
-            "PROMPT_PREFIX": str(prefix or "").strip() or "(none)", "PROMPT_POSTFIX": str(postfix or "").strip() or "(none)", "PREVIOUS_PROMPT": last(prompts), "PROMPTS_HISTORY": older(prompts), "LAST_USER_COMMENT": last(remarks), "COMMENTS_HISTORY": older(remarks),
+            "RULES_SHEET": str(rules or "").strip() or none, "PROMPT_PREFIX": str(prefix or "").strip() or "(none)", "PROMPT_POSTFIX": str(postfix or "").strip() or "(none)", "PREVIOUS_PROMPT": last(prompts), "PROMPTS_HISTORY": older(prompts), "LAST_USER_COMMENT": last(remarks), "COMMENTS_HISTORY": older(remarks),
             "LAST_CHAT_MESSAGE": last(said), "CHAT_MESSAGE_HISTORY": older(said), "LAST_CHAT_REPLY": last(replies), "CHAT_REPLY_HISTORY": older(replies),
             "RATING": str(rating or "").strip() or none, "LAST_RATING": last(rated), "RATINGS_HISTORY": older(rated), "NOTES": "\n".join(f"{i}. {x}" for i, x in enumerate(lines, 1)) or none,
             "CONVERSATION_SUMMARY": str(summary or "").strip() or none,

@@ -33,6 +33,8 @@
 /* Log lines are plain until something needs attention. */
 .cx-code-warn { color: var(--warn); }
 .cx-code-error { color: var(--danger); }
+.cx-code-add { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.cx-code-del { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 
 /* The one place the app names itself. The mark is a wink, set in the display
    face and the accent colour, the same size as the name beside it. */

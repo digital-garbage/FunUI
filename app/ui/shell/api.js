@@ -107,6 +107,8 @@ export const api = {
   enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),
   /** The chat answer as it forms: `onEvent` hears {kind: status | thinking | answer | call} pieces; resolves the final result. */
   enhancerChatStream: (body, onEvent) => streamEvents("/api/m/conditioning_prompt_enhancer/chat_stream", body, onEvent),
+  /** The person's answer to a rule change the model proposed. */
+  enhancerEditDecision: (id, allow) => call("POST", "/api/m/conditioning_prompt_enhancer/edit_decision", { id, allow: !!allow }),
   rateTaste: (promptId, rating, axis) => call("POST", "/api/m/taste/rate", { prompt_id: promptId, rating, axis: axis || null }),
   newTasteGeneration: (promptId) => call("POST", "/api/m/taste/generation", promptId ? { prompt_id: promptId } : {}),
   shotMemory: () => call("GET", "/api/m/conditioning_shot_camera/memory"),

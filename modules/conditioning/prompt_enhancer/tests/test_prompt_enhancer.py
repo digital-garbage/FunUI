@@ -451,7 +451,7 @@ def test_the_readout_routes_are_provided_and_answer():
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/encoders"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/encoders", "/m/edit_decision"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():
@@ -655,7 +655,7 @@ def test_every_run_gets_a_chat_id_that_only_rises(node):
 
 def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(node, monkeypatch):
     node.CONVOS.clear()
-    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt", "fixed_prompt"}
+    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt", "fixed_prompt", "edit_prompt"}
     assert all(en().defaults()[k].strip() for k in en().PROMPT_FIELDS) and en().pick({"chat_prompt": "  "}, "chat_prompt") == en().CHAT_REPLY_SYSTEM
     run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="s:0", **kw)
     # conversation rules, flat and as turns; the markup rule

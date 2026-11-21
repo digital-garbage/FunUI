@@ -56,7 +56,7 @@ for (const side of ["you", "model"]) {
 define("code", "inline", ({ text } = {}) =>
   handle(el("code", { cls: "cx-code", text })));
 
-const LINE_TONES = new Set(["warn", "error"]);
+const LINE_TONES = new Set(["warn", "error", "add", "del"]);       // add / del: the two sides of a diff
 
 define("code", "block", ({ text, label } = {}) => {
   const id = uid("code");
@@ -64,7 +64,7 @@ define("code", "block", ({ text, label } = {}) => {
   return {
     ...handle(pre),
     /** A log: plain lines, with colour only on the ones that ask for a look.
-     *  `tones[i]` is "warn" or "error"; anything else is plain, so an unknown
+     *  `tones[i]` is "warn", "error", "add" or "del"; anything else is plain, so an unknown
      *  tone can never paint a line. */
     setLines(lines, tones = []) {
       pre.replaceChildren(...lines.map((line, i) => {

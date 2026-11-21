@@ -74,9 +74,10 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
+    editing = False
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
     if engine_model:
@@ -85,6 +86,15 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
         except Exception as e:                                      # noqa: BLE001
             return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
         clip = EngineClip(ENGINE, on_event)
+        if self_edit and rules and on_event:                         # the model may read and propose changes to its own rules, each one asked of the person
+            from . import engine as eng
+            template = getattr(ENGINE.tok, "chat_template", "") or ""
+            if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:        # the template must render tools and the model must have a call format
+                from . import rules as rl
+                clip.tools, clip.handler = rl.tools(), rl.Editor(rules, on_event)
+                editing = True
+            else:
+                on_event({"kind": "status", "text": "this model has no tool calls, so it cannot edit its own rules"})
     elif not encoder_file:
         return {"ok": False, "reply": "", "status": "pick an Encoder in Composer > Enhance: the model's own encoder cannot chat"}
     else:
@@ -94,12 +104,13 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
-    macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message)
+    sheet = __import__(__package__ + ".rules", fromlist=["sheet"]).sheet(rules) if editing else ""
+    macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet)
     used, window, note, did = fit(clip, state, len(en.pick(prompts, "chat_prompt")) + len(en.pick(prompts, "notes_prompt")) + len(str(message)), max_length, compact, context_tokens, prompts, macros)
     if did:
-        macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message)      # the shortened turns are in the notes now
+        macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros,
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=en.pick(prompts, "edit_prompt") if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     ok = bool(reply)
     if ok:
@@ -165,6 +176,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
                 io.String.Input("fixed_prompt", multiline=True, default="", optional=True,
                                 tooltip="Tells the model about the fixed text around your own text (Only my own text mode). Empty uses the built-in text."),
+                io.Boolean.Input("self_edit", default=False, optional=True,
+                                 tooltip="Lets the chat model read and propose changes to its own system prompts. Every change is shown to you first and applies only if you allow it."),
+                io.String.Input("edit_prompt", multiline=True, default="", optional=True,
+                                tooltip="Tells the chat model it can read and propose changes to its own rules. Empty uses the built-in text."),
                 io.String.Input("marks_prompt", multiline=True, default="", optional=True,
                                 tooltip="The rule that keeps (word:1.5) and [a|b] markup. Empty uses the built-in text."),
                 io.Int.Input("max_length", default=400, min=32, max=4096, step=8, optional=True,
@@ -244,14 +259,14 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="") -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False) -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
         prompts = {"chat_prompt": chat_prompt, "notes_prompt": notes_prompt, "compact_prompt": compact_prompt, "revision_prompt": revision_prompt,
-                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt}
+                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt, "edit_prompt": edit_prompt}
         text = str(text or "")
         pre = post = ""
         body = text

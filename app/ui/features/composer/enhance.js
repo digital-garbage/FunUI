@@ -39,6 +39,7 @@ export function enhance(app, own) {
     ["revision_prompt", "Comments", "How comments are applied when there is no conversation.", 5, null, "nochat"],
     ["rating_prefix", "Rating line opening", "The words in front of the rating when Pass the rating is on.", 2, () => RATING_PREFIX, "rate"],
     ["chat_prompt", "Chat answers", "Send in the Chat tab: how the model answers you.", 5, null, "talk"],
+    ["edit_prompt", "Editing its own rules", "Tells the chat model it can read and propose changes to its own rules; [[RULES_SHEET]] is the list.", 5, null, "edit"],
     ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer.", 5, null, "talk"],
     ["compact_prompt", "Conversation notes", "The model that shortens a long conversation.", 6, null, "sum"]];
   const styleNow = () => { const x = (slot() && slot().inputs) || {}; return x.style || "default"; };
@@ -57,7 +58,7 @@ export function enhance(app, own) {
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
     const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), sum: chat && sum };
+    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && engineSet && val("self_edit", false), sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
@@ -81,6 +82,7 @@ export function enhance(app, own) {
       toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
       num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
       toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
+      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown as a before/after and applies only if you allow it. Needs an Engine model that supports tool calls.", "self_edit", false, off(chat, engineSet)),
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),

@@ -135,3 +135,34 @@ test("the Chat tab opens at the bottom of its scrolling window, and Top ^ goes b
     assert.equal(top, 0);
   } finally { teardownDom(); }
 });
+
+test("the rules the model may edit are the person's own text, else the built-in one", async () => {
+  const { rulesOf } = await import("./chat.js");
+  const app = { api: { enhancerDefaults: async () => ({ instructions: "Rewrite.", styles: { dynamic: "Dynamic rewrite." }, reference_intro: "Refs:", prompts: { chat_prompt: "Chat.", notes_prompt: "Notes." } }) } };
+  const rules = await rulesOf(app, { style: "dynamic", chat_prompt: "My chat rule." });
+  assert.equal(rules.instructions, "Dynamic rewrite.");
+  assert.equal(rules.chat_prompt, "My chat rule.");
+  assert.equal(rules.notes_prompt, "Notes.");
+  assert.equal(rules.reference_intro, "Refs:");
+  assert.ok(rules.rating_prefix);
+});
+
+test("a proposed change to a system prompt opens a diff and waits for Allow or Disallow", async () => {
+  setupDom();
+  try {
+    const { askEdit } = await import("./editrequest.js");
+    for (const [label, want] of [["Allow", true], ["Disallow", false]]) {
+      const answer = askEdit({ field: "chat_prompt", old: "Be kind. Answer in one line.", new: "Be kind. Answer in two lines.", reason: "the user wants longer answers" });
+      const modal = document.querySelector(".cx-modal");
+      assert.match(modal.textContent, /Allow changes to system prompt\?/);
+      assert.match(modal.textContent, /Chat answers/);
+      assert.match(modal.textContent, /- Answer in one line\./);
+      assert.match(modal.textContent, /\+ Answer in two lines\./);
+      assert.equal(modal.querySelectorAll(".cx-code-add").length, 1);
+      assert.equal(modal.querySelectorAll(".cx-code-del").length, 1);
+      [...modal.querySelectorAll("button")].find((b) => b.textContent === label).click();
+      assert.equal(await answer, want);
+      assert.equal(document.querySelector(".cx-modal"), null);
+    }
+  } finally { teardownDom(); }
+});

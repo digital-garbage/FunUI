@@ -2,6 +2,8 @@
 // The comments are the project's own (editor_settings.enhance_chat); a generate hook hands them to the enhancer node for the prompt they were about.
 import { composer as c } from "../../composer/composer.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
+import { RATING_PREFIX } from "../rating/choices.js";
+import { askEdit, RULE_LABELS } from "./editrequest.js";
 
 const NODE = "FunUIEnhancePrompt";
 const COMPACT_AT = 0.8;        // the share of the context window at which the conversation is summarised (the node uses the same)
@@ -24,6 +26,13 @@ export function applyNotes(text, add = [], drop = []) {
   const kept = lines.filter((_, i) => !gone.has(i));
   for (const a of add.map((x) => String(x).trim()).filter(Boolean)) if (!kept.some((x) => x.toLowerCase() === a.toLowerCase())) kept.push(a);
   return kept.join("\n");
+}
+
+/** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
+export async function rulesOf(app, inp) {
+  const d = (await app.api.enhancerDefaults().catch(() => null)) || {}, style = inp.style || "default";
+  const built = { ...(d.prompts || {}), instructions: (d.styles || {})[style] || d.instructions || "", reference_intro: d.reference_intro || "", rating_prefix: RATING_PREFIX };
+  return Object.fromEntries(Object.keys(RULE_LABELS).map((k) => [k, String(inp[k] || built[k] || "")]).filter(([, v]) => v));
 }
 
 /** The prompt a comment is about: the picked scene's own text, as typed. */
@@ -105,13 +114,20 @@ export function chat(app, own) {
     const tail = convo.length ? convo[convo.length - 1] : last;
     const comment = () => { if (addComment(app, draft, last, tail)) { draft = ""; draw(true); } };
     const canChat = inp.to_chat === true && Boolean(inp.encoder_file || inp.engine_model);
+    // The model proposes a change to one of its own rules: the person decides, an allowed text is saved into the project.
+    const proposal = async (ev, sl) => {
+      const yes = await askEdit(ev);
+      if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
+      await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
+    };
     const say = async () => {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "chat_prompt", "notes_prompt", "compact_prompt"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "self_edit", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
         const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) };
+        if (inp.engine_model && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to
         let r;
         if (inp.engine_model) {          // the engine writes it in front of you, piece by piece
           live = { message, thinking: "", answer: "", status: "" };
@@ -120,6 +136,7 @@ export function chat(app, own) {
           try {
             r = await app.api.enhancerChatStream(body, (ev) => {
               if (ev.kind === "thinking") live.thinking += ev.text; else if (ev.kind === "answer") live.answer += ev.text; else if (ev.kind === "status") live.status = ev.text;
+              else if (ev.kind === "edit_request") proposal(ev, slot);
               show();
             });
           } finally { live = null; }

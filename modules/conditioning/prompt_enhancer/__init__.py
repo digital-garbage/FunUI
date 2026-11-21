@@ -51,7 +51,8 @@ def routes(table, base, web):
         sampling["do_sample"] = body.get("greedy") is not True
         if isinstance(body.get("seed"), int) and not isinstance(body.get("seed"), bool):
             sampling["seed"] = body["seed"]
-        return dict(notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(),
+        rules = {k: str(v) for k, v in (body.get("rules") or {}).items() if isinstance(v, str)} if isinstance(body.get("rules"), dict) else {}
+        return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(),
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
                     context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400), thinking=body.get("thinking") is True, **sampling)
@@ -120,6 +121,18 @@ def routes(table, base, web):
             raise
         await resp.write_eof()
         return resp
+
+    @table.post(base + "/edit_decision")
+    async def _edit_decision(req):
+        """The person's answer to a rule change the model proposed: {"id", "allow"}."""
+        from . import rules
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not body.get("id"):
+            return web.json_response({"ok": False}, status=400)
+        return web.json_response({"ok": rules.decide(body["id"], body.get("allow") is True)})
 
     @table.get(base + "/engine")
     async def _engine_status(_req):

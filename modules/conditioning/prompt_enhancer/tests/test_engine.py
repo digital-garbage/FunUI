@@ -201,3 +201,81 @@ def test_two_requests_at_once_take_turns_on_the_engine(tiny):
     t1.start(); t2.start(); t1.join(); t2.join()
     flat = "".join(order)
     assert flat in (flat[0] * flat.count(flat[0]) + flat[-1] * flat.count(flat[-1]),) and set(flat) == {"x", "y"}     # never interleaved
+
+
+# --- the model editing its own rules --------------------------------------------
+
+def test_a_rule_change_waits_for_the_person_and_the_model_is_told_the_answer():
+    import threading
+    from modules.conditioning.prompt_enhancer import rules as rl
+    sent = []
+    editor = rl.Editor({"chat_prompt": "Be chatty.", "notes_prompt": "Notes."}, sent.append, wait=5)
+    assert editor({"name": "read_prompt", "args": {"field": "chat_prompt"}}) == "Be chatty."
+    assert editor({"name": "read_prompt", "args": {"field": "nope"}}).startswith("Error: there is no rule called 'nope'")
+    assert "already" in editor({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "Be chatty.", "reason": "x"}})
+
+    def answer(allow):
+        while not sent:
+            pass
+        ev = sent.pop()
+        assert ev["kind"] == "edit_request" and ev["field"] == "chat_prompt" and ev["old"] == "Be chatty." and ev["new"] == "Be short." and ev["reason"] == "too long"
+        assert rl.decide(ev["id"], allow)
+    for allow, word in ((False, "Disallowed"), (True, "Allowed")):
+        t = threading.Thread(target=answer, args=(allow,))
+        t.start()
+        told = editor({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "Be short.", "reason": "too long"}})
+        t.join()
+        assert told.startswith(word)
+    assert editor.rules["chat_prompt"] == "Be short."            # only the allowed change took hold
+    assert rl.Editor({"chat_prompt": "a"}, lambda e: None, wait=0.05)({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "b", "reason": "r"}}).startswith("No answer")
+    assert not rl.decide("edit-999", True)
+
+
+def test_the_model_hears_the_tool_answer_and_carries_on():
+    from modules.conditioning.prompt_enhancer import rules as rl
+
+    class Fake:
+        device, seen = "cpu", []
+
+        def stream(self, messages, **kw):
+            Fake.seen.append([dict(m) for m in messages])
+            if len(Fake.seen) == 1:
+                yield {"kind": "answer", "text": "Let me check. "}
+                yield {"kind": "call", "call": {"name": "read_prompt", "args": {"field": "chat_prompt"}}}
+                yield {"kind": "end", "calls": [{"name": "read_prompt", "args": {"field": "chat_prompt"}}], "tps": 1, "cached": 0}
+            else:
+                yield {"kind": "answer", "text": "It says be chatty."}
+                yield {"kind": "end", "calls": [], "tps": 1, "cached": 0}
+    heard = []
+    clip = eng.EngineClip(Fake(), heard.append, tools=rl.tools(), handler=rl.Editor({"chat_prompt": "Be chatty."}, heard.append))
+    raw, status = clip.run("sys", "what is your chat rule?", max_length=20)
+    assert "Let me check." in raw and "It says be chatty." in raw and "tokens/s" in status
+    second = Fake.seen[1]
+    assert second[-2]["role"] == "assistant" and second[-2]["tool_calls"][0]["function"]["name"] == "read_prompt"
+    assert second[-1] == {"role": "tool", "tool_call_id": "call0_0", "name": "read_prompt", "content": "Be chatty."}
+    assert any(e["kind"] == "tool_result" for e in heard)
+
+
+def test_the_real_chat_template_renders_a_tool_round_trip():
+    pytest.importorskip("jinja2")
+    import json, os
+    from transformers import AutoTokenizer
+    root = os.path.expanduser("~/.cache/funui_llm/Bedovyy__gemma-4-E4B-it-ultra-uncensored-heretic-Comfy/base")
+    if not os.path.exists(os.path.join(root, "chat_template.jinja")):
+        pytest.skip("the Gemma 4 template is not on this machine")
+    from modules.conditioning.prompt_enhancer import rules as rl
+    tok = AutoTokenizer.from_pretrained(root)
+    msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "c0", "type": "function", "function": {"name": "read_prompt", "arguments": {"field": "chat_prompt"}}}]},
+            {"role": "tool", "tool_call_id": "c0", "name": "read_prompt", "content": "Be chatty."}]
+    text = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True, tools=rl.tools())
+    assert "call:read_prompt" in text and "Be chatty." in text and "edit_prompt" in text
+
+
+def test_a_model_without_tool_calls_is_told_it_cannot_edit_its_rules_and_still_chats(tiny, comfyui, monkeypatch):
+    from modules.conditioning.prompt_enhancer import nodes
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    nodes.CONVOS.clear()
+    heard = []
+    out = nodes.chat_reply("e:9", "a b c", engine_model="tiny", max_length=8, do_sample=False, on_event=heard.append, self_edit=True, rules={"chat_prompt": "Be chatty."})
+    assert "ok" in out and any(e["kind"] == "status" and "cannot edit its own rules" in e["text"] for e in heard)

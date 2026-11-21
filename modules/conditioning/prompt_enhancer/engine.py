@@ -455,8 +455,11 @@ class EngineClip:
     is_engine = True
     max_context = 0
 
-    def __init__(self, engine=None, on_event=None, tools=None):
-        self.engine, self.on_event, self.tools, self.calls = engine or ENGINE, on_event, tools, []
+    MAX_TOOL_ROUNDS = 4
+
+    def __init__(self, engine=None, on_event=None, tools=None, handler=None):
+        """`handler(call) -> text` answers the model's tool calls (the answer goes back to the model, which then carries on)."""
+        self.engine, self.on_event, self.tools, self.handler, self.calls = engine or ENGINE, on_event, tools, handler, []
 
     def run(self, system, user, *, rounds=(), thinking=False, max_length=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
             repetition_penalty=1.0, presence_penalty=0.0, do_sample=True, seed=None, image=None):
@@ -466,18 +469,37 @@ class EngineClip:
             messages += [{"role": "user", "content": str(q)}, {"role": "assistant", "content": str(a)}]
         messages.append({"role": "user", "content": str(user)})
         started, thought, answer, speed = time.time(), "", "", ""
+        self.calls = []
         try:
-            for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
-                                         top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                         seed=seed or 0, greedy=not do_sample):
-                if ev["kind"] == "thinking":
-                    thought += ev["text"]
-                elif ev["kind"] == "answer":
-                    answer += ev["text"]
-                elif ev["kind"] == "end":
-                    self.calls, speed = ev["calls"], f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
-                if self.on_event:
-                    self.on_event(ev)
+            for step in range(self.MAX_TOOL_ROUNDS + 1):
+                round_calls, said = [], ""
+                for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
+                                             top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
+                                             seed=seed or 0, greedy=not do_sample):
+                    if ev["kind"] == "thinking":
+                        thought += ev["text"]
+                    elif ev["kind"] == "answer":
+                        answer += ev["text"]
+                        said += ev["text"]
+                    elif ev["kind"] == "end":
+                        round_calls = ev["calls"]
+                        speed = f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
+                    if self.on_event:
+                        self.on_event(ev)
+                self.calls += round_calls
+                if not (round_calls and self.handler and step < self.MAX_TOOL_ROUNDS):
+                    break
+                ids = [f"call{step}_{i}" for i in range(len(round_calls))]
+                messages.append({"role": "assistant", "content": said.strip(), "tool_calls": [{"id": i, "type": "function", "function": {"name": c["name"], "arguments": c["args"]}} for i, c in zip(ids, round_calls)]})
+                for i, c in zip(ids, round_calls):
+                    try:
+                        result = str(self.handler(c))
+                    except Exception as exc:                        # noqa: BLE001 -- the model hears that the tool failed and carries on
+                        result = f"Error: {exc}"
+                    messages.append({"role": "tool", "tool_call_id": i, "name": c["name"], "content": result})
+                    if self.on_event:
+                        self.on_event({"kind": "tool_result", "name": c["name"], "result": result})
+                answer += "\n\n" if answer.strip() else ""
         except Exception as exc:                                    # noqa: BLE001 -- the enhancer hands the original prompt on and says why
             return "", f"generation failed: {exc}"
         raw = (f"<think>{thought}</think>" if thought.strip() else "") + answer
