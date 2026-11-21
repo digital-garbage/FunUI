@@ -15,6 +15,7 @@ Whether a given text encoder writes sensible prose is an open question per model
 result: confirmed working on Gemma3-12B. v5 on a rental: works with Gemma 4 E4B (a real rewrite in 2.5 s); H3's own encoder writes no prose, so there the run keeps your prompt and says why. On H3, pick a chat encoder (Gemma 4) in Composer > Enhance > Encoder: verified end to end.
 """
 
+import time
 from .nodes import RUNS, FunUIEnhancePrompt
 
 ID = "conditioning_prompt_enhancer"
@@ -40,7 +41,7 @@ def routes(table, base, web):
         """The last runs' rewrites, newest last. `?prompt_id=` narrows to one run."""
         want = req.rel_url.query.get("prompt_id")
         runs = [r for r in RUNS if not want or r["prompt_id"] == want]
-        return web.json_response({"runs": runs})
+        return web.json_response({"runs": runs, "now": int(time.time() * 1000)})        # `now`: the app sets its own comments by this clock
 
     @table.post(base + "/chat")
     async def _chat(req):

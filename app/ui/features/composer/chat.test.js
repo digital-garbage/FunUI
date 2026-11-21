@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
 import { createDom } from "../../shell/dom.js";
-import { addComment, applyNotes, chat, chatHook } from "./chat.js";
+import { addComment, applyNotes, chat, chatHook, learnClock } from "./chat.js";
 
 const slots = [{ id: "e", node: "FunUIEnhancePrompt" }, { id: "x", node: "Other" }];
 const project = { editor_settings: { enhance_chat: [{ comment: "warmer", original: "a cat" }, { comment: "old", original: "a dog" }, { comment: "any" }] } };
@@ -35,14 +35,41 @@ test("the Chat tab shows the conversation as bubbles: your prompts on the right,
   } finally { teardownDom(); }
 });
 
+test("comments sit in the order of their chat ids among the messages, even when their run is gone", async () => {
+  setupDom();
+  try {
+    const prefs = { enhance_chat: [{ comment: "late", chat_id: 400 }, { comment: "first", chat_id: 50 }, { comment: "middle", chat_id: 250, run: "gone" }], enhance_chat_epoch: 1 };
+    const runs = [{ prompt_id: "r2", conversation: "p:1", ok: true, chat_id: 300, asked: "an owl", answered: "An owl glides.", before: "an owl", after: "An owl glides." }, { prompt_id: "r1", conversation: "p:1", ok: true, chat_id: 100, asked: "a fox", answered: "A red fox runs.", before: "a fox", after: "A red fox runs." }];
+    const app = { project: { project: { id: "p", scenes: [] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { n: 0 }, selection: {}, dom: createDom(),
+      pipeline: { slots: () => [{ node: "FunUIEnhancePrompt" }], subscribe: () => () => {} }, api: { enhancerRuns: async () => ({ runs }) }, on: () => () => {} };
+    const page = chat(app, () => {});
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 0));
+    const said = [...page.node.querySelectorAll(".cx-bubble")].map((b) => b.querySelector(".cx-bubble-body").textContent);
+    assert.deepEqual(said, ["first", "a fox", "A red fox runs.", "middle", "an owl", "An owl glides.", "late"]);
+  } finally { teardownDom(); }
+});
+
 test("the Comment button's comment is saved like one from the Chat tab, tied to the last rewrite", () => {
   const prefs = {};
   const app = { project: { project: { scenes: [{ id: "s", text: "a fox" }] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { typed: "a fox" }, selection: { focus: "s" } };
   assert.equal(addComment(app, "   ", null), false);
   assert.equal(addComment(app, " warmer ", { ok: true, prompt_id: "r1", answered: "A fox runs.", after: "PRE A fox runs." }), true);
   assert.equal(typeof prefs.enhance_chat[0].id, "string");          // each comment has its own id, so a conversation sends it once
-  delete prefs.enhance_chat[0].id;
+  assert.ok(prefs.enhance_chat[0].chat_id > 0);          // and a chat id that only rises
+  delete prefs.enhance_chat[0].id; delete prefs.enhance_chat[0].chat_id;
   assert.deepEqual(prefs.enhance_chat, [{ rewrites: { whole: "A fox runs." }, comment: "warmer", run: "r1", original: "a fox" }]);
+});
+
+test("a comment takes the next chat id after everything it has seen, on the enhancer's clock, so it keeps its place", () => {
+  const base = Date.now() + 10_000_000, prefs = { enhance_chat: [{ comment: "old", chat_id: base - 1000 }] };
+  const app = { project: { project: { scenes: [] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: {}, selection: {} };
+  learnClock({ now: Date.now() });                       // the enhancer's clock is far behind the numbers it has already given out: ids still go up
+  addComment(app, "new", { ok: true, prompt_id: "r9", chat_id: base, after: "x" });
+  assert.equal(prefs.enhance_chat[1].chat_id, base + 1);
+  learnClock({ now: Date.now() + 50_000 });              // a clock ahead: the comment follows that clock
+  addComment(app, "newer", null);
+  assert.ok(prefs.enhance_chat[2].chat_id > base + 1);
 });
 
 test("in a conversation every comment goes to the enhancer, whatever prompt it was made on", () => {

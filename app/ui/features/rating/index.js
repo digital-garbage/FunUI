@@ -2,7 +2,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { inPlace } from "../../shell/place.js";
 import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
-import { addComment } from "../composer/chat.js";
+import { addComment, learnClock } from "../composer/chat.js";
 import { CHOICES, FORGET, nameOf, tasteOf } from "./choices.js";
 
 /** What to say when a rating taught nothing, or "" when it did. The run captured nothing, a learner is on and no key is
@@ -63,7 +63,7 @@ export default {
         onClick: async () => {
           const text = await c.modal.prompt({ title: "Comment on the last rewrite", label: "The next Generate rewrites again with this applied", placeholder: "e.g. warmer light, no rain", confirmLabel: "Send" }).result;
           if (!text || !text.trim()) return;
-          const last = await Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => (r.runs || []).slice(-1)[0] || null, () => null);
+          const last = await Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => { learnClock(r); return (r.runs || []).slice(-1)[0] || null; }, () => null);
           addComment(app, text, last);
         } });
       const slot = (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt");

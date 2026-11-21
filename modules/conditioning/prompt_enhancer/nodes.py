@@ -93,11 +93,25 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
     ok = bool(reply)
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
-    RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
+    _log({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
                  "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "summary": state["summary"] if did else "", "thinking": thought, "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
+
+
+_LAST_CHAT_ID = [0]
+
+
+def chat_id() -> int:
+    """A number for each message of the Chat tab, rising with every call (milliseconds, pushed up by one when two come in the same one)."""
+    _LAST_CHAT_ID[0] = max(int(time.time() * 1000), _LAST_CHAT_ID[0] + 1)
+    return _LAST_CHAT_ID[0]
+
+
+def _log(entry):
+    """Keep a run for the Chat and Enhance tabs, with its chat id."""
+    RUNS.append({**entry, "chat_id": chat_id()})
 
 
 def _prompt_id():
@@ -203,7 +217,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
-            RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
+            _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
         text = str(text or "")
@@ -213,7 +227,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             pre, post = str(head or "").strip(), str(tail or "").strip()
             if (pre and not text.startswith(pre)) or (post and not text.endswith(post)) or len(pre) + len(post) > len(text):
                 log.warning("FunUI Prompt enhancer", "the global prefix/postfix could not be found in the prompt; the original prompt is used")
-                RUNS.append({"prompt_id": _prompt_id(), "status": "the prefix/postfix could not be found in the prompt; prompt unchanged",
+                _log({"prompt_id": _prompt_id(), "status": "the prefix/postfix could not be found in the prompt; prompt unchanged",
                              "before": text, "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "prefix/postfix not found")
             body = text[len(pre):len(text) - len(post)].strip()
@@ -222,7 +236,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 clip = _own_encoder(encoder_file, encoder_family)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
                 log.warning("FunUI Prompt enhancer", f"could not load {encoder_file}: {e}; the original prompt is used")
-                RUNS.append({"prompt_id": _prompt_id(), "status": f"could not load the encoder {encoder_file}: {e}", "before": text,
+                _log({"prompt_id": _prompt_id(), "status": f"could not load the encoder {encoder_file}: {e}", "before": text,
                              "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "encoder failed")
         lines = lambda s: [x for x in str(s or "").splitlines() if x.strip()]    # noqa: E731
@@ -298,5 +312,5 @@ class FunUIEnhancePrompt(io.ComfyNode):
                           "prompt": body, "feedback": [c for _, c in fresh], "rating": rating_line if pass_rating else "", **({"scene": scene} if scene else {})})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
-        RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, "summary": state["summary"] if (did and state) else "", **info})
+        _log({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, "summary": state["summary"] if (did and state) else "", **info})
         return io.NodeOutput(out, status)

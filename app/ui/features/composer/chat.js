@@ -34,13 +34,20 @@ function typedOf(app) {
 }
 const firstOf = (r) => Object.values(r.rewrites || {})[0];
 
+// Every message has a chat id that only rises: the enhancer numbers its runs by its clock, and a comment takes the next number after everything it has seen,
+// counted on that same clock (the app learns the difference from each reply), so the order holds whichever machine the enhancer runs on.
+let skew = 0;
+export function learnClock(reply) { if (reply && Number.isFinite(reply.now)) skew = reply.now - Date.now(); }
+const idsOf = (...xs) => xs.flat().map((x) => (x && Number.isFinite(x.chat_id) ? x.chat_id : 0));
+
 /** Save one comment on the last rewrite (`last`: the enhancer's latest run, or null). Shared by the Chat tab and the Comment button. */
 export function addComment(app, text, last, tail = last) {
   const p = app.project, comment = String(text || "").trim(), now = Array.isArray(p.pref("enhance_chat", [])) ? p.pref("enhance_chat", []) : [];
   if (!comment) return false;
   const ok = last && last.ok, prev = now.length ? firstOf(now[now.length - 1]) : null, here = typedOf(app);
   const fresh = ok && (last.answered ?? last.after) !== prev && app.lastRun.typed !== undefined && app.lastRun.typed === here;      // a rewrite of THIS prompt that nobody has commented on yet
-  p.setPref("enhance_chat", [...now, { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(tail && tail.prompt_id ? { run: tail.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
+  const chat_id = Math.max(Date.now() + skew, 1 + Math.max(0, ...idsOf(now, last, tail)));
+  p.setPref("enhance_chat", [...now, { chat_id, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, rewrites: fresh ? { whole: last.answered ?? last.after } : {}, comment, ...(tail && tail.prompt_id ? { run: tail.prompt_id } : {}), ...(here === undefined ? {} : { original: here }) }]);
   return true;
 }
 
@@ -73,9 +80,12 @@ export function chat(app, own) {
     const thought = (r) => (r.thinking ? [c.bubble.model({ text: r.thinking, who: "Model (thinking)" })] : []);
     const noted = (r) => [...(r.remember || []).map((x) => `Noted: ${x}`), ...(r.forget || []).map((x) => `Dropped note ${x}`)].map((text) => c.hint.default({ text }));
     let bubbles;
-    if (convo.length) {                      // "Send everything into chat": the whole conversation, each comment under the rewrite it was about
-      const asked = new Set(convo.map((r) => r.prompt_id));
-      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), ...thought(r), model(r.answered ?? r.after), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
+    if (convo.length) {                      // "Send everything into chat": the whole conversation in the order of the chat ids
+      const asked = new Set(convo.map((r) => r.prompt_id)), stamped = (x) => Number.isFinite(x.chat_id);
+      const under = (r) => list.filter((x) => !stamped(x) && x.run === r.prompt_id).map((x) => you(x.comment));      // comments from before they had an id: under the rewrite they were about
+      const rows = [...convo.map((r, i) => ({ at: Number.isFinite(r.chat_id) ? r.chat_id : -1 + i / (convo.length + 1), bubbles: [you(r.asked ?? r.before), ...thought(r), model(r.answered ?? r.after), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...under(r)] })),
+        ...list.filter(stamped).map((x) => ({ at: x.chat_id, bubbles: [you(x.comment)] }))].sort((a, b) => a.at - b.at);
+      bubbles = [...rows.flatMap((x) => x.bubbles), ...list.filter((x) => !stamped(x) && !asked.has(x.run)).map((x) => you(x.comment))];
     } else {
       bubbles = [...list.flatMap((r) => [first(r) ? model(first(r)) : null, you(r.comment)]),
         ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), ...thought(last), model(last.answered ?? last.after)] : []),
@@ -109,7 +119,7 @@ export function chat(app, own) {
       c.region.stack({ gap: "sm", children: bubbles }), notesBox, box,
       c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
   }
-  const look = () => app.api.enhancerRuns().then((r) => { all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
+  const look = () => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
   own(app.on((what) => { if (what === "open" || app.lastRun.n !== runs) { runs = app.lastRun.n; look(); } else draw(); }));
   if (app.pipeline && app.pipeline.subscribe) own(app.pipeline.subscribe(() => draw()));      // a pipeline that gains or loses the enhancer
   draw(true);

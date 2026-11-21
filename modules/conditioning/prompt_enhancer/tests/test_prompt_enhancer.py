@@ -643,3 +643,11 @@ def test_gemma4_writes_the_notes_thinking_with_its_own_sampling_and_other_encode
     plain = FakeClip("SCENES: a fox.")
     en().compact(plain, "", [turn])
     assert plain.seen["gen"]["do_sample"] is False and plain.seen["gen"]["repetition_penalty"] == 1.0 and plain.seen["gen"]["max_length"] == en().COMPACT_TOKENS
+
+
+def test_every_run_gets_a_chat_id_that_only_rises(node):
+    node.RUNS.clear()
+    for _ in range(3):
+        node.FunUIEnhancePrompt.execute(FakeClip("A fox."), "a fox", enabled=True, seed=3)
+    ids = [r["chat_id"] for r in node.RUNS]
+    assert ids == sorted(set(ids)) and len(ids) == 3
