@@ -84,7 +84,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing, editor = False, None
@@ -101,7 +101,14 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             engine_model = ""                                       # an older project's encoder: ComfyUI's own loader reads it
         else:
             clip = EngineClip(ENGINE, on_event, live="chat", cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 0))
-            if self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
+            if helper and on_event:                                  # the helper acts on the project: each call is asked of the person
+                from . import engine as eng, helper as hp
+                template = getattr(ENGINE.tok, "chat_template", "") or ""
+                if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
+                    clip.tools, clip.handler = hp.tools(), hp.Actions(helper.get("scenes"), on_event)
+                else:
+                    return {"ok": False, "reply": "", "status": "the helper needs a model with tool calls; this one has none"}
+            elif self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
                 from . import engine as eng, rules as rl
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
                 editor = rl.Editor(rules, on_event)
@@ -125,7 +132,8 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=(en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
+    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)")) if helper else ""
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl

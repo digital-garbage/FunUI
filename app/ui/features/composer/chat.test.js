@@ -90,7 +90,7 @@ test("Send asks the model now (a conversation and a model of its own are needed)
     const off = await open({ to_chat: true });                                       // no encoder of its own: nothing to answer with
     assert.equal(button(off, "Send").disabled, true);
     const page = await open({ to_chat: true, encoder_file: "g.safetensors", temperature: 0.5 });
-    const box = [...page.node.querySelectorAll("textarea")].pop();        // the Message box comes after the Notes box
+    const box = [...page.node.querySelectorAll("textarea")].at(-2);        // the Message box comes after the Notes box
     box.value = "make it warmer?"; box.dispatchEvent(new window.Event("input", { bubbles: true }));
     button(page, "Send").click();
     await new Promise((r) => setTimeout(r, 0));
