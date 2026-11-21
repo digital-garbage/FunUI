@@ -374,7 +374,7 @@ def test_the_model_s_own_context_size_is_read_when_it_reports_one():
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-14:] == ["style", "scope", "last_frame", "to_chat", "conversation", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-15:] == ["style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]
@@ -597,3 +597,18 @@ def test_a_chat_reply_keeps_the_models_thinking_for_the_chat_tab(node, monkeypat
     monkeypatch.setattr(node, "_own_encoder", lambda f, fam: FakeClip("<think>warm means orange</think>Sure, warmer."))
     out = node.chat_reply("c:1", "warmer?", encoder_file="g.safetensors")
     assert out["reply"] == "Sure, warmer." and node.RUNS[-1]["thinking"] == "warm means orange"
+
+
+def test_a_new_request_for_the_same_scene_replaces_its_earlier_turn(node):
+    node.CONVOS.clear()
+    run = lambda clip, text, scene: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="p:0", scene=scene)
+    run(FakeClip("A red fox runs."), "a fox", "s1")
+    run(FakeClip("A dog sleeps."), "a dog", "s2")
+    edited = FakeClip("An owl glides.")
+    run(edited, "an owl", "s1")
+    seen = edited.seen["text"]
+    assert "a fox" not in seen and "A red fox runs." not in seen         # the abandoned version of scene 1 is gone
+    assert "User: a dog\nYou: A dog sleeps." in seen                       # another scene stays
+    assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["a dog", "an owl"]
+    run(FakeClip(""), "a cat", "s2")                                        # a failed run replaces nothing
+    assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["a dog", "an owl"]

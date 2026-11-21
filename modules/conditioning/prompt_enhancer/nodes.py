@@ -165,6 +165,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Sends every request as part of one running conversation (earlier requests and answers come along) instead of a one-time request."),
                 io.String.Input("conversation", default="", optional=True,
                                 tooltip="Which conversation the requests belong to (set by the app). Only used with Send everything into chat."),
+                io.String.Input("scene", default="", optional=True,
+                                tooltip="Which scene this request is for (set by the app). A new request for the same scene replaces that scene's earlier turn in the conversation."),
                 io.Boolean.Input("compact", default=True, optional=True,
                                  tooltip="When a request nearly fills the context window, the conversation so far is summarised and the summary is sent instead of every turn."),
                 io.Int.Input("context_tokens", default=0, min=0, max=1048576, optional=True,
@@ -198,7 +200,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             RUNS.append({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -241,6 +243,11 @@ class FunUIEnhancePrompt(io.ComfyNode):
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
         history, compacted, context, did = "", "", None, False
         state = CONVOS.get(key) if key else None
+        scene = str(scene or "").strip()
+        before_turns = None
+        if state and scene:            # an edited or repeated prompt replaces this scene's earlier turn: the old version must not pull the new one back
+            before_turns = list(state["turns"])
+            state["turns"] = collections.deque((t for t in before_turns if t.get("scene") != scene), maxlen=en.CONVO_KEEP)
         # In a conversation every comment is part of it, in order: the ones it has not seen yet go in with this request (and so into
         # its turn), and the next request does not repeat them. Outside one, the comments are the Chat tab's labelled block.
         fresh = []
@@ -275,6 +282,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 final = " ".join(x for x in (pre, back, post) if x)
                 info.update(before=text, after=final, asked=asked, answered=back)      # asked/answered: what the model was given and said, without the global prefix and postfix
                 out = final
+        if not info["ok"] and before_turns is not None:
+            state["turns"] = collections.deque(before_turns, maxlen=en.CONVO_KEEP)          # nothing was replaced: the earlier turn stays
         if not info["ok"]:
             # The prompt went through UNCHANGED and the person must know why.
             out = text
@@ -285,7 +294,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             turns = kept["turns"]
             kept["seen"].update(k for k, _ in fresh)
             CONVOS.move_to_end(key)
-            turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out})
+            turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out, **({"scene": scene} if scene else {})})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
         RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, "summary": state["summary"] if (did and state) else "", **info})

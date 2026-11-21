@@ -431,6 +431,8 @@ test("Send everything into chat names the project's conversation, and Reset star
   assert.equal((await go(true, 2)).inputs.e.conversation, "p1:2");
   assert.equal((await go(true, undefined)).inputs.e.conversation, "p1:0");
   assert.equal((await go(false, 2)).inputs.e.conversation, undefined);
+  assert.equal((await go(true, 2)).inputs.e.scene, "s");          // so a new request for the scene replaces its earlier turn
+  assert.equal((await go(false, 2)).inputs.e.scene, undefined);
 });
 
 test("the rating line takes a custom opening", async () => {
