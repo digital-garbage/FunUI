@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Models split into parts need only one part named.** For the Enhance engine, writing `owner/name::model-00002-of-00004.safetensors` (or a `-of-` GGUF part) now downloads every part, plus the index file and the config for safetensors parts, and loads them as one model. Before, only the named file came down and the model would not load. A missing part is named in the error.
 - **The "Story" is now called "Global prompt" everywhere in the app**: the Composer tab and box, the cut words hint, the tour and the shortcut helpers. It is the same box as before.
 - **A scene can have its own prefix.** In the Properties panel, a scene has an "Own prefix" switch: its text goes in front of that scene's prompt instead of the project's anchor, and an empty one means no prefix for that scene. Generate, the prompt preview and the Build tab all use it. The Helper can set it too.
 - **The buttons at the right end of the timeline always come in the same order.** Helper first, then the others, then Sampler, and Composer last at the right edge, whichever order the features were loaded in.

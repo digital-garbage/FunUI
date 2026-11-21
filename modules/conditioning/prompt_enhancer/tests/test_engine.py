@@ -657,3 +657,45 @@ def test_a_helper_that_only_talks_about_a_change_is_told_once_to_call_the_tool(t
     assert asked[1][1] == ["I will use the `set_story` tool to merge the scenes."]        # it sees what it wrote
     assert out["reply"] == "Merged."
     assert [t["reply"] for t in nodes.CONVOS["h:1"]["turns"]] == ["Merged."]                # the conversation keeps the final answer only
+
+
+def test_naming_one_part_of_a_split_gguf_model_downloads_every_part(monkeypatch, tmp_path):
+    import types
+    import huggingface_hub
+    from .. import engine as eng
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    sib = lambda n: types.SimpleNamespace(rfilename=n, size=10)       # noqa: E731
+    info = types.SimpleNamespace(siblings=[sib(f"m-0000{i}-of-00003.gguf") for i in (1, 2, 3)], tags=[])
+    monkeypatch.setattr(huggingface_hub.HfApi, "model_info", lambda self, repo, files_metadata=False: info)
+    got = []
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda repo, f, local_dir=None: got.append(f) or f)
+    folder, weights = eng.Engine()._fetch("a/m::m-00002-of-00003.gguf")
+    assert got == ["m-00001-of-00003.gguf", "m-00002-of-00003.gguf", "m-00003-of-00003.gguf"] and weights.endswith("m-00001-of-00003.gguf")
+
+
+def test_a_missing_part_of_a_split_model_is_named():
+    from .. import engine as eng
+    assert eng.shard_set("model-00002-of-00003.safetensors", {"model-00001-of-00003.safetensors": 1, "model-00002-of-00003.safetensors": 1, "model-00003-of-00003.safetensors": 1}) == [
+        f"model-0000{i}-of-00003.safetensors" for i in (1, 2, 3)]
+    assert eng.shard_set("model.safetensors", {}) == []
+    with __import__("pytest").raises(ValueError, match="no part model-00002-of-00003"):
+        eng.shard_set("model-00001-of-00003.safetensors", {"model-00001-of-00003.safetensors": 1})
+    assert eng.shard_index("model-00001-of-00002.safetensors", {"model.safetensors.index.json": 1}) == "model.safetensors.index.json"
+    assert eng.shard_index("x-00001-of-00002.safetensors", {}) == ""
+
+
+def test_naming_one_safetensors_part_downloads_all_parts_the_index_and_the_config_into_one_folder(monkeypatch, tmp_path):
+    import types
+    import huggingface_hub
+    from .. import engine as eng
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    names = ["config.json", "model.safetensors.index.json", "model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]
+    sib = lambda n: types.SimpleNamespace(rfilename=n, size=10)       # noqa: E731
+    info = types.SimpleNamespace(siblings=[sib(n) for n in names], tags=[])
+    monkeypatch.setattr(huggingface_hub.HfApi, "model_info", lambda self, repo, files_metadata=False: info)
+    got, snaps = [], []
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda repo, f, local_dir=None: got.append(f) or f)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda repo, local_dir=None, **kw: snaps.append((repo, local_dir)))
+    folder, weights = eng.Engine()._fetch("a/m::model-00002-of-00002.safetensors")
+    assert got == ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "model.safetensors.index.json"]
+    assert weights == "" and snaps[0][0] == "a/m" and snaps[0][1] == folder        # read as an ordinary checkpoint folder

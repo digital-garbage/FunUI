@@ -11,6 +11,7 @@ import copy
 import os
 import random
 import re
+import shutil
 import threading
 import time
 
@@ -18,6 +19,31 @@ from ..._core import log
 
 THINK_BUDGET = 3000      # tokens a thinking model may reason in, on top of the length setting for its answer
 REPO_FILES = ["*.json", "*.safetensors", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # no GGUF or other copies of the same weights
+SHARD = re.compile(r"(.+)-(\d{5})-of-(\d{5})(\.[A-Za-z0-9]+)")
+
+
+def shard_set(name, files) -> list:
+    """The parts of a split model that `name` is one of (model-00002-of-00004.safetensors -> all four, in order), or [] for a file that is not a part.
+    Raises when a part is not in the repo."""
+    m = SHARD.fullmatch(str(name or ""))
+    if not m:
+        return []
+    prefix, total, ext = m.group(1), int(m.group(3)), m.group(4)
+    parts = [f"{prefix}-{i:05d}-of-{total:05d}{ext}" for i in range(1, total + 1)]
+    gone = [f for f in parts if f not in files]
+    if gone:
+        raise ValueError(f"the repo has no part {gone[0]} (a split model needs all {total} parts)")
+    return parts
+
+
+def shard_index(part, files) -> str:
+    """The index file of a split safetensors model (the file that says which part holds which weight), or ""."""
+    m = SHARD.fullmatch(str(part or ""))
+    if not m:
+        return ""
+    return next((f for f in (f"{m.group(1)}{m.group(4)}.index.json", f"{m.group(1)}.safetensors.index.json") if f in files), "")
+
+
 def _say(message):
     """A line in FunUI's log: the engine does not run through ComfyUI, so this is how its loading and writing can be followed there."""
     try:
@@ -371,9 +397,12 @@ class Engine:
             return self._cached(target)
         info = HfApi().model_info(repo, files_metadata=True)
         files = {s.rfilename: s.size or 0 for s in info.siblings}
+        parts = shard_set(wanted, files)                             # one part of a split model names them all
+        if parts:
+            wanted, extra = parts[0], [*parts[1:], *[f for f in extra if f not in parts]]
         ggufs = sorted(f for f in files if f.lower().endswith(".gguf"))
         if not wanted and ggufs and "config.json" not in files:
-            raise ValueError(f"{repo} holds GGUF files; pick one with {repo}::{ggufs[0]} (more than one file: {repo}::first.gguf|second.gguf). Files: {', '.join(ggufs[:6])}")
+            raise ValueError(f"{repo} holds GGUF files; pick one with {repo}::{ggufs[0]} (a model split in parts needs only the name of one part). Files: {', '.join(ggufs[:6])}")
         single = wanted or ("" if "config.json" in files else next((f for f in files if f.endswith(".safetensors")), ""))
         for f in [single, *extra]:
             if f and f not in files:
@@ -399,6 +428,18 @@ class Engine:
                                                        or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:") and t.count(":") == 1), ""))
         if not base:
             raise ValueError(f"{repo} holds only a weights file and names no base model for its config: write {repo}::{single}@owner/base-model")
+        if len(pull) > 1 and single.lower().endswith(".safetensors"):        # a split model: every part and its index go into one folder, read as a normal checkpoint
+            index = shard_index(single, files)
+            if not index:
+                raise ValueError(f"{repo} has no index file for the parts of {single}")
+            for f in [*pull, index]:
+                self.message = f"downloading {f}"
+                hf_hub_download(repo, f, local_dir=target)
+            if os.path.basename(index) != "model.safetensors.index.json":
+                shutil.copyfile(os.path.join(target, index), os.path.join(target, "model.safetensors.index.json"))
+            snapshot_download(base, local_dir=target, allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
+            open(os.path.join(target, ".complete"), "w").close()
+            return target, ""
         hf_hub_download(repo, single, local_dir=target)
         snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
         with open(os.path.join(target, ".complete"), "w") as f:
