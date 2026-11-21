@@ -16,7 +16,7 @@ export function enhance(app, own) {
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
   const continuityOn = () => { const k = (ps.currentValues && ps.currentValues() || {}).continuity; return Boolean(k) && k.carry !== false; };      // hidden while Continuity is not there or not carrying the frame
   const field = (label, control, hint) => c.field.default({ label, control, hint });
-  const num = (label, v, lo, hi, step, name, hint) => field(label, c.number.md({ label, value: v, min: lo, max: hi, step, onChange: (x) => set(name, x) }), hint);
+  const num = (label, v, lo, hi, step, name, hint, disabled) => field(label, c.number.md({ label, value: v, min: lo, max: hi, step, disabled, onChange: (x) => set(name, x) }), hint);
 
   function readout() {
     if (!last) return [c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
@@ -24,15 +24,24 @@ export function enhance(app, own) {
     return [c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
       c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model (chat run)", last.sent)].filter(Boolean);
   }
-  const PROMPTS = [["chat_prompt", "Chat answers", "Send in the Chat tab: how the model answers you."], ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer."],
-    ["compact_prompt", "Conversation notes", "The model that shortens a long conversation."], ["revision_prompt", "Comments", "How comments are applied when there is no conversation."],
-    ["conversation_prompt", "Conversation (plain encoders)", "Sent with the earlier turns to an encoder that takes no chat turns."], ["turns_prompt", "Conversation (Gemma 4)", "Sent to a model that takes real chat turns."],
-    ["marks_prompt", "Markup rule", "Keeps (word:1.5) and [a|b] as written."]];
+  // Everything the model is told, in the order a request meets it. `dflt`: what an empty field means.
+  const PROMPTS = [
+    ["instructions", "Rewrite instructions", "What the model does with each prompt. The Style above decides the built-in text.", 6, () => (defaults ? (defaults.styles || {})[styleNow()] || defaults.instructions : "")],
+    ["marks_prompt", "Markup rule", "Keeps (word:1.5) and [a|b] as written.", 4],
+    ["reference_intro", "Reference intro", "Opens the lorebook and shortcut entries sent along with a prompt.", 3, () => (defaults ? defaults.reference_intro : "")],
+    ["conversation_prompt", "Conversation, plain encoders", "Sent with the earlier turns to an encoder that takes no chat turns.", 5, null, "chat"],
+    ["turns_prompt", "Conversation, Gemma 4", "Sent to a model that takes real chat turns.", 5, null, "chat"],
+    ["revision_prompt", "Comments", "How comments are applied when there is no conversation.", 5, null, "nochat"],
+    ["rating_prefix", "Rating line opening", "The words in front of the rating when Pass the rating is on.", 2, () => RATING_PREFIX, "rate"],
+    ["chat_prompt", "Chat answers", "Send in the Chat tab: how the model answers you.", 5, null, "talk"],
+    ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer.", 5, null, "talk"],
+    ["compact_prompt", "Conversation notes", "The model that shortens a long conversation.", 6, null, "sum"]];
+  const styleNow = () => { const x = (slot() && slot().inputs) || {}; return x.style || "default"; };
   const choices = (name) => (name === "encoder_file" ? encoders.files : encoders.families);
-  const pick = (name, label, first, hint, dflt = "") => {
+  const pick = (name, label, first, hint, dflt = "", disabled = false) => {
     const cur = (slot().inputs || {})[name] || dflt, list = choices(name);
     const opts = [...(first ? [{ value: "", label: first }] : []), ...[...list, ...(cur && !list.includes(cur) ? [cur] : [])].map((v) => ({ value: v, label: String(v) }))];
-    return field(label, c.select.md({ label, value: cur, options: opts, onChange: (v) => set(name, v) }), hint);
+    return field(label, c.select.md({ label, value: cur, options: opts, disabled, onChange: (v) => set(name, v) }), hint);
   };
   function draw() {
     if (!alive) return;
@@ -41,42 +50,46 @@ export function enhance(app, own) {
     const v = sl.inputs || {}, val = (n, d) => (v[n] === undefined ? d : v[n]);
     const on = val("enabled", false), greedy = val("greedy", false);
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
+    // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
+    const chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
+    const live = { chat, nochat: !chat, rate: chat && rate, talk: chat && encoder, sum: chat && sum };
+    const off = (...needs) => !on || needs.some((n) => !n);
+    const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
       c.label.section({ text: "Prompt enhancer" }),
-      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a|b] markup is kept as written." }),
-      c.toggle.default({ label: "Enhance prompt", checked: on, onChange: (x) => set("enabled", x) }),
-      ...(!on ? readout() : [
-        pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here."),
-        ...((val("encoder_file", "") && choices("encoder_family").length) ? [pick("encoder_family", "Encoder family", "", "Which family that file is for.", "stable_diffusion")] : []),
-        field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
-        field("Style", c.select.md({ label: "Style", value: style, options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot. Instructions typed below override it."),
-        field("Instructions", c.textarea.md({ label: "Instructions", rows: 6, value: val("instructions", ""), placeholder: defaults ? (defaults.styles || {})[style] || defaults.instructions : "(built-in instructions)", onCommit: (x) => set("instructions", x) }), "Empty uses the built-in instructions of the Style above."),
-        num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be."),
-        ...(continuityOn() ? [c.toggle.default({ label: "Pass the last frame of previous scene as enhancer input", hint: "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference.", checked: val("last_frame", false), onChange: (x) => set("last_frame", x) })] : []),
-        c.toggle.default({ label: "Use the picture", hint: "Sends the scene's picture to the model along with the prompt.", checked: val("use_image", true), onChange: (x) => set("use_image", x) }),
-        c.toggle.default({ label: "Send everything into chat", hint: "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", checked: val("to_chat", false), onChange: (x) => set("to_chat", x) }),
-        ...(val("to_chat", false) ? [
-          c.toggle.default({ label: "Summarise long conversations", hint: "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", checked: val("compact", true), onChange: (x) => set("compact", x) }),
-          ...(val("compact", true) ? [num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.")] : [])] : []),
-        c.toggle.default({ label: "Comment button", hint: "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", checked: val("comment_button", false), onChange: (x) => set("comment_button", x) }),
-        ...(val("to_chat", false) ? [
-          c.toggle.default({ label: "Pass the rating", hint: "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", checked: val("pass_rating", false), onChange: (x) => set("pass_rating", x) }),
-          ...(val("pass_rating", false) ? [field("Rating line opening", c.textarea.md({ label: "Rating line opening", rows: 2, value: val("rating_prefix", ""), placeholder: RATING_PREFIX, onCommit: (x) => set("rating_prefix", x) }), "The words in front of the rating. Empty uses the built-in line shown.")] : [])] : []),
-        c.toggle.default({ label: "Thinking", hint: "Let a thinking model reason first. Its reasoning eats the token budget.", checked: val("thinking", false), onChange: (x) => set("thinking", x) }),
-        c.toggle.default({ label: "Greedy (always the likeliest word)", hint: "The same rewrite every time; the dials below are not used.", checked: greedy, onChange: (x) => set("greedy", x) }),
-        ...(greedy ? [] : DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n))),
-        num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed"),
-        c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
-        c.collapsible.default({ label: "System prompts", body: c.region.stack({ gap: "xs", children: [
-          c.hint.default({ text: "What the model is told in each situation. Empty uses the built-in text shown in the field. Instructions above covers the rewrite itself. Any of these, and Instructions, can use the macros below: each is replaced by what the conversation holds when the model is asked." }),
-          c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [
-            ...Object.entries((defaults && defaults.macros) || {}).map(([n, d]) => c.hint.default({ text: `[[${n}]]: ${d}` })),
-            c.hint.default({ text: "Nothing to show yet gives \"(none yet)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) }),
-          ...PROMPTS.map(([n, label, hint]) => field(label, c.textarea.md({ label, rows: 5, value: val(n, ""), placeholder: defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint))] }) }),
-        c.label.section({ text: "Reference" }),
-        field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
-        field("Reference intro", c.textarea.md({ label: "Reference intro", rows: 2, value: val("reference_intro", ""), placeholder: defaults ? defaults.reference_intro : "", onCommit: (x) => set("reference_intro", x) })),
-        ...readout()]),
+      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a|b] markup is kept as written. Settings that depend on another are greyed out while that one is off." }),
+      toggle("Enhance prompt", "", "enabled", false, false),
+      c.label.section({ text: "Model" }),
+      pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here.", "", off()),
+      pick("encoder_family", "Encoder family", "", "Which family the encoder file is for.", "stable_diffusion", off(encoder)),
+      field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
+      c.label.section({ text: "Picture" }),
+      toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
+      toggle("Pass the last frame of previous scene as enhancer input", "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference. Needs Continuity on.", "last_frame", false, off(pic, cont)),
+      c.label.section({ text: "Conversation" }),
+      toggle("Send everything into chat", "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", "to_chat", false, off()),
+      toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
+      num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
+      toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
+      toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
+      c.label.section({ text: "Writing" }),
+      num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),
+      toggle("Thinking", "Let a thinking model reason first. Its reasoning eats the token budget.", "thinking", false, off()),
+      toggle("Greedy (always the likeliest word)", "The same rewrite every time; the dials below are not used.", "greedy", false, off()),
+      ...DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n, undefined, off(!greedy))),
+      num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed", undefined, off()),
+      c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
+      c.label.section({ text: "System prompts" }),
+      c.collapsible.default({ label: "Everything the model is told", body: c.region.stack({ gap: "xs", children: [
+        c.hint.default({ text: "In the order a request meets it. Leave a field empty to use the built-in text shown in it. Any of these can use the macros at the end: each is replaced by what the conversation holds when the model is asked. A field that does not apply to the current switches is greyed out." }),
+        field("Style", c.select.md({ label: "Style", value: style, disabled: off(), options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Which built-in rewrite instructions an empty Rewrite instructions field means. Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot."),
+        ...PROMPTS.map(([n, label, hint, rows, dflt, dep]) => field(label, c.textarea.md({ label, rows, disabled: off(dep ? live[dep] : true), value: val(n, ""), placeholder: dflt ? dflt() : defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint)),
+        c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [
+          ...Object.entries((defaults && defaults.macros) || {}).map(([n, d]) => c.hint.default({ text: `[[${n}]]: ${d}` })),
+          c.hint.default({ text: "Nothing to show yet gives \"(none yet)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) })] }) }),
+      c.label.section({ text: "Reference" }),
+      field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, disabled: off(), value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
+      ...readout(),
     ]);
   }
   draw();
