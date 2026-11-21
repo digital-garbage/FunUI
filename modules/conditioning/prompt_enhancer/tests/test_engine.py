@@ -607,7 +607,7 @@ def test_a_download_fetches_files_without_touching_the_model_that_is_loaded(monk
     assert seen == [("a/b::q8.gguf", "downloading")]
     assert e.model is model and e.source == "a/b::q4.gguf" and e.phase == "ready"      # still the loaded one
     assert (tmp_path / ".source").read_text() == "a/b::q8.gguf"
-    assert e.message.endswith("Downloaded a/b: q8.gguf.") and "::" not in e.message
+    assert e.message == "a/b::q4.gguf on cuda. Downloaded a/b: q8.gguf."
 
 
 def test_a_model_is_named_short_in_the_status():
