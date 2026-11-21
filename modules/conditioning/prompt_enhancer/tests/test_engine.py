@@ -771,3 +771,25 @@ def test_a_gguf_model_that_cannot_trim_its_memory_starts_empty_for_a_changed_pro
     b.can_trim = lambda: False
     list(b.text_stream("x", max_new_tokens=4, temperature=0, top_p=1, top_k=1, min_p=0, repetition_penalty=1, presence_penalty=0, seed=0, greedy=True))
     assert calls == ["reset", "clear"]
+
+
+def test_a_helper_that_acts_and_then_says_nothing_is_not_a_failure(tiny, comfyui, monkeypatch):
+    import threading
+    from modules.conditioning.prompt_enhancer import nodes, rules
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "plain chat", raising=False)
+    nodes.CONVOS.clear()
+    asked = []
+
+    def on_event(ev):
+        if ev["kind"] == "action_request":
+            threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+
+    def fake(clip, text, **kw):
+        asked.append(text)
+        if len(asked) == 1:
+            return 'TOOL: set_clip_length\n{"seconds": 6, "reason": "asked"}\nEND_TOOL', "ok", [], [], ""
+        return "", "the model returned nothing", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", fake)
+    out = nodes.chat_reply("h:4", "make clips 6 seconds", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 1})
+    assert out["ok"] and out["reply"].startswith("Done.")

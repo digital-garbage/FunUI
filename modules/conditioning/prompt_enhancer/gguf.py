@@ -246,6 +246,9 @@ class Backend:
     def can_trim(self) -> bool:
         """Whether the model's memory can drop its newest part (a plain transformer can; a recurrent or hybrid one such as Qwen3.5 cannot)."""
         import llama_cpp
+        arch = str((getattr(self.llm, "metadata", None) or {}).get("general.architecture", "")).lower()
+        if any(k in arch for k in ("qwen35", "qwen3next", "qwen3_5", "mamba", "rwkv", "jamba", "lfm2", "granitehybrid", "falcon-h1", "nemotron_h", "plamo2", "minimax")):
+            return False
         try:
             return bool(llama_cpp.llama_memory_can_shift(llama_cpp.llama_get_memory(self.llm._ctx.ctx)))
         except Exception:                                           # noqa: BLE001
@@ -277,7 +280,7 @@ class Backend:
                         repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
         if not picture and not self.can_trim():
             cached = llm.input_ids[:llm.n_tokens].tolist() if llm.n_tokens else []
-            if cached != tokens[:len(cached)]:                       # a recurrent or hybrid model cannot drop the end of its memory: it starts from empty instead of reusing a partial prefix
+            if cached != tokens[:len(cached)] or len(cached) >= len(tokens):                       # a recurrent or hybrid model cannot drop the end of its memory: it starts from empty instead of reusing a partial prefix
                 llm.reset()
                 llm._ctx.kv_cache_clear()
         sent = False

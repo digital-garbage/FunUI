@@ -158,6 +158,8 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
                 clip.tools, text_mode, actions = None, True, clip.handler
                 hp_rule += hp.text_rule()
                 reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
+    if helper and not reply and actions is not None and getattr(actions, "calls", 0):          # it acted and then said nothing: that is not a failure
+        reply, status = "Done. The changes it asked for were handled above.", "ok"
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl
         reply, written = rl.parse_edits(reply)
