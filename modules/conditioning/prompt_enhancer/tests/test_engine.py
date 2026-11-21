@@ -501,3 +501,20 @@ def test_a_picture_projector_beside_a_gguf_model_is_found(tmp_path):
     assert gguf.find_projector(tmp_path / "m-Q4_K_M.gguf") == ""
     (tmp_path / "m-mmproj-BF16.gguf").write_bytes(b"x")
     assert gguf.find_projector(tmp_path / "m-Q4_K_M.gguf").endswith("m-mmproj-BF16.gguf")
+
+
+def test_a_picture_is_turned_into_png_and_the_status_says_when_it_could_not_be_sent():
+    import io
+    import torch
+    from PIL import Image
+    from .. import engine as eng, gguf
+    red = torch.zeros(2, 8, 8, 3)
+    red[..., 0] = 1.0
+    shown = Image.open(io.BytesIO(gguf.Backend.png(red)))                  # the first frame of a batch
+    assert shown.size == (8, 8) and shown.getpixel((0, 0)) == (255, 0, 0)
+    e = eng.Engine()
+    e.model = e.tok = _FakeGGUF()
+    e.source, e.phase, e.device = "x.gguf", "ready", "cpu"
+    assert e.sees() is False                                                # no projector file: the picture cannot go in
+    raw, status = eng.EngineClip(e).run("sys", "hi", image=red)
+    assert "picture was not sent" in status

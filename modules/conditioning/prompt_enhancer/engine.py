@@ -512,13 +512,17 @@ class Engine:
                 pass
 
     # -- generating ---------------------------------------------------------
+    def sees(self) -> bool:
+        """Whether the loaded model can be shown a picture (a GGUF model with its projector file)."""
+        return bool(getattr(self.model, "gguf", False) and getattr(self.model, "projector", ""))
+
     def stream(self, messages, **options):
         """One request at a time on the model, independent of ComfyUI: a chat sent while a rewrite runs waits its turn, and neither touches the generation's own memory use."""
         with self.turn:
             yield from self._stream(messages, **options)
 
     def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
-               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=5):
+               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=5, image=None):
         """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...], "tokens", "seconds", "tps", "cached"}.
         `cache`: reuse the start of the last request when this one begins with it (the long instructions are only read once).
         `lookup`: prompt-lookup decoding, up to that many tokens guessed from the text already there and checked in one pass (0 = off);
@@ -530,7 +534,7 @@ class Engine:
         tok, model = self.tok, self.model
         if getattr(model, "gguf", False):
             yield from self._stream_gguf(messages, thinking=thinking, tools=tools, max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p, top_k=top_k,
-                                         min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy)
+                                         min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy, image=image)
             return
         kwargs = {"tools": tools} if tools else {}
         try:
@@ -623,10 +627,11 @@ class Engine:
         _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s" + (f", {stats['cached']} prompt tokens reused)" if stats["cached"] else ")"))
         yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
 
-    def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy):
+    def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy, image=None):
         """The same events as `_stream`, from a GGUF model run by llama.cpp (which reuses the unchanged start of the prompt by itself)."""
         model = self.model
-        text = model.render(messages, tools=tools, thinking=thinking)
+        picture = model.png(image) if image is not None and model.projector else None
+        text = model.render(messages, tools=tools, thinking=thinking, picture=picture is not None)
         dialect = dialect_for({}, model.chat_template)
         ends = ["<turn|>", "<|turn>", "<|im_end|>", "<end_of_turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else ["<|im_end|>", "<end_of_turn>", "<|eot_id|>"]
         drops = [model.bos, model.eos, *ends]
@@ -640,7 +645,7 @@ class Engine:
         def chunks():
             for piece in model.text_stream(text, max_new_tokens=int(max_new_tokens), temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
                                            repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy,
-                                           stops=ends, cancel=cancel, stats=stats):
+                                           stops=ends, cancel=cancel, stats=stats, picture=picture):
                 me.activity.update(stage="writing", tokens=stats["steps"], prompt=stats["prompt"])
                 yield piece
         split = Splitter(dialect, drops, opened)
@@ -748,7 +753,7 @@ class EngineClip:
                 round_calls, said = [], ""
                 for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup):
+                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image):
                     if ev["kind"] == "thinking":
                         thought += ev["text"]
                     elif ev["kind"] == "answer":
@@ -782,5 +787,5 @@ class EngineClip:
         if self.live:
             LIVE.finish()
         raw = (f"<think>{thought}</think>" if thought.strip() else "") + answer
-        note = "; the picture was not sent (the engine reads text only)" if image is not None else ""
+        note = "; the picture was not sent (this model reads text only)" if image is not None and not self.engine.sees() else ""
         return raw, f"generated {len(answer)} chars in {time.time() - started:.1f}s on {self.engine.device} (engine){speed}{note}"

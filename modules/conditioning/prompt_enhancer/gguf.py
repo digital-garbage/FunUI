@@ -73,7 +73,7 @@ class Backend:
         self.name = meta.get("general.name", os.path.basename(path))
         self.device = "gguf"
         self.lock = threading.Lock()
-        self.projector = ""
+        self.projector, self.handler = "", None
 
     def get_vocab(self) -> dict:
         """The engine asks the tokenizer for its vocabulary to spot a dialect; a GGUF's chat template names the markers just as well."""
@@ -93,8 +93,28 @@ class Backend:
     def eos(self) -> str:
         return self.special(self.llm.token_eos()) if self.llm.token_eos() >= 0 else ""
 
-    def render(self, messages, tools=None, thinking=False) -> str:
-        """The chat template of the file, with the generation prompt at the end."""
+    def marker(self) -> str:
+        """The placeholder the projector replaces with the picture's tokens."""
+        return self.handler._mtmd_cpp.mtmd_default_marker().decode("utf-8")
+
+    @staticmethod
+    def png(image) -> bytes:
+        """The first picture of a ComfyUI IMAGE tensor (batch, height, width, channels; 0 to 1), as PNG bytes."""
+        import io
+        import numpy as np
+        from PIL import Image
+        frame = image[0] if getattr(image, "ndim", 0) == 4 else image
+        array = np.clip(255.0 * frame.cpu().numpy() if hasattr(frame, "cpu") else 255.0 * np.asarray(frame), 0, 255).astype("uint8")
+        out = io.BytesIO()
+        Image.fromarray(array[..., :3]).save(out, format="PNG")
+        return out.getvalue()
+
+    def render(self, messages, tools=None, thinking=False, picture=False) -> str:
+        """The chat template of the file, with the generation prompt at the end. `picture`: the last user message opens with the picture's placeholder."""
+        if picture:
+            messages = [dict(m) for m in messages]
+            last = max(i for i, m in enumerate(messages) if m["role"] == "user")
+            messages[last]["content"] = f"{self.marker()}\n\n{messages[last]['content']}"
         from transformers.utils.chat_template_utils import render_jinja_template
         if not self.chat_template:
             raise ValueError("the .gguf file carries no chat template")
@@ -103,11 +123,48 @@ class Backend:
         out = out[0] if isinstance(out, tuple) else out
         return out[0] if isinstance(out, list) else out
 
+    def read_picture(self, text, picture) -> list:
+        """Run the prompt and the picture through the projector into the model's memory. -> the prompt's tokens (the picture's included)."""
+        import ctypes
+        llm, handler = self.llm, self.handler
+        handler._init_mtmd_context(llm)
+        cpp = handler._mtmd_cpp
+        bitmap = handler._create_bitmap_from_bytes(picture)
+        chunks = cpp.mtmd_input_chunks_init()
+        try:
+            wrapped = cpp.mtmd_input_text()
+            raw = text.encode("utf-8")
+            wrapped.text, wrapped.text_len, wrapped.add_special, wrapped.parse_special = raw, len(raw), True, True
+            bitmaps = (cpp.mtmd_bitmap_p_ctypes * 1)(bitmap)
+            if cpp.mtmd_tokenize(handler.mtmd_ctx, chunks, ctypes.byref(wrapped), bitmaps, 1) != 0:
+                raise ValueError("the picture projector could not read the request")
+            llm.reset()
+            llm._ctx.kv_cache_clear()
+            import llama_cpp
+            for i in range(cpp.mtmd_input_chunks_size(chunks)):
+                chunk = cpp.mtmd_input_chunks_get(chunks, i)
+                if chunk is None:
+                    continue
+                if cpp.mtmd_input_chunk_get_type(chunk) == cpp.MTMD_INPUT_CHUNK_TYPE_TEXT:
+                    count = ctypes.c_size_t()
+                    pointer = cpp.mtmd_input_chunk_get_tokens_text(chunk, ctypes.byref(count))
+                    if pointer and count.value:
+                        llm.eval([pointer[j] for j in range(count.value)])
+                else:
+                    past = llama_cpp.llama_pos(0)
+                    if cpp.mtmd_helper_eval_chunk_single(handler.mtmd_ctx, llm._ctx.ctx, chunk, llama_cpp.llama_pos(llm.n_tokens), llama_cpp.llama_seq_id(0), llm.n_batch, False, ctypes.byref(past)) != 0:
+                        raise ValueError("the picture could not be read into the model")
+                    llm.n_tokens = past.value
+            return llm.input_ids[:llm.n_tokens].tolist()
+        finally:
+            cpp.mtmd_input_chunks_free(chunks)
+            cpp.mtmd_bitmap_free(bitmap)
+
     def text_stream(self, text, *, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy,
-                    stops=(), cancel=None, stats=None):
+                    stops=(), cancel=None, stats=None, picture=None):
         """Yield the model's text as it forms (control tokens left in, as the engine's splitter expects). Reuses the start of the last prompt."""
         llm = self.llm
-        tokens = llm.tokenize(text.encode("utf-8"), add_bos=False, special=True)
+        tokens = self.read_picture(text, picture) if picture else llm.tokenize(text.encode("utf-8"), add_bos=False, special=True)
         if stats is not None:
             stats["prompt"] = len(tokens)
         end = {llm.token_eos()}
@@ -174,5 +231,5 @@ def load(path, *, cuda, context=0, say=lambda text: None):
     llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False, chat_handler=handler)
     say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s")
     backend = Backend(llm, str(path))
-    backend.projector = projector
+    backend.projector, backend.handler = projector, handler
     return backend
