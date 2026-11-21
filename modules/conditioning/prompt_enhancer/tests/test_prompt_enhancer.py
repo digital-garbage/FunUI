@@ -683,7 +683,7 @@ def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(no
 
 def test_macros_in_a_system_prompt_become_what_the_conversation_holds(node, monkeypatch):
     node.CONVOS.clear()
-    assert set(en().macro_values()) == set(en().MACROS) and en().expand_macros("[[NOTES]] [[NOPE]]", en().macro_values()) == "(none yet) [[NOPE]]"
+    assert set(en().macro_values()) == set(en().MACROS) and en().expand_macros("[[NOTES]] [[NOPE]]", en().macro_values()) == "(nothing yet: none was given so far) [[NOPE]]"
     run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="m:0", **kw)
     run(FakeClip("A red fox."), "a fox")
     run(FakeClip("A grey owl."), "an owl")
@@ -706,3 +706,34 @@ def test_macros_in_a_system_prompt_become_what_the_conversation_holds(node, monk
     rate = FakeClip("A bat flies.")
     run(rate, "c", pass_rating=True, rating_line="Rated: Loved", instructions="NOW=[[RATING]] LAST=[[LAST_RATING]] ALL=[[RATINGS_HISTORY]]")
     assert "NOW=Rated: Loved LAST=Rated: Disliked ALL=- Rated: Liked" in rate.seen["text"]
+
+
+def test_every_switch_that_is_on_reaches_the_model(comfyui, monkeypatch):
+    """Notes, comments, rating, an earlier rewrite and every macro a prompt names are in the request the model is given."""
+    from modules.conditioning.prompt_enhancer import nodes
+
+    class Engineish:
+        is_engine = native_turns = True
+        asked = []
+
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self, system, user, rounds=(), **k):
+            Engineish.asked.append((system, user, rounds))
+            return "A fox runs through snow.", "ok"
+    monkeypatch.setattr(nodes, "EngineClip", Engineish)
+    monkeypatch.setattr(nodes.ENGINE, "load", lambda s: None)
+    nodes.CONVOS.clear()
+    rules = "Last output: [[PREVIOUS_MODEL_OUTPUT]] Last comment: [[LAST_USER_COMMENT]] Rating: [[RATING]] Notes: [[NOTES]]"
+    run = lambda p, scene, comment="": nodes.FunUIEnhancePrompt.execute(            # noqa: E731
+        None, p, enabled=True, engine_model="m", conversation="c:1", to_chat=True, pass_rating=True, rating_line="Rating: 4/5 stars",
+        chat=json.dumps([{"id": "1", "comment": comment}]) if comment else "", notes="keep it short", scene=scene, instructions=rules)
+    run("a fox", "s0")
+    first = Engineish.asked[-1][0]
+    assert "keep it short" in first and "nothing yet" in first and "Rating: 4/5 stars" in first and "Rating: 4/5 stars" in Engineish.asked[-1][1]
+    run("a fox in rain", "s1", "more rain please")
+    system, user, rounds = Engineish.asked[-1]
+    assert "A fox runs through snow." in system and "more rain please" in system and "keep it short" in system and "Rating: 4/5 stars" in system
+    assert "more rain please" in user and "Rating: 4/5 stars" in user and rounds and rounds[0][1] == "A fox runs through snow."
+    assert "a fox in rain" in nodes.RUNS[-1]["sent"] and "more rain please" in nodes.RUNS[-1]["sent"] and "EARLIER TURN 1" in nodes.RUNS[-1]["sent"]

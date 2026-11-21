@@ -535,8 +535,8 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
         system += "\n\n" + pick(prompts, "conversation_prompt")
         user = str(history) + user
     system = expand_macros(system, macros)
-    if chat or history or rounds:
-        info["sent"] = f"SYSTEM:\n{system}\n\n" + (f"EARLIER TURNS (as real turns): {len(rounds)}\n\n" if rounds else "") + f"MESSAGE:\n{user}"
+    earlier = "".join(f"EARLIER TURN {i}\nUSER: {q}\nMODEL: {a}\n\n" for i, (q, a) in enumerate(rounds, 1))
+    info["sent"] = f"SYSTEM:\n{system}\n\n{earlier}USER:\n{user}"          # exactly what the model is given, whatever switches are on
     raw, status = generate(clip, system, user, rounds=rounds, **sampling)
     info["thinking"] = extract_thinking(raw)
     cleaned = clean(raw)
@@ -628,7 +628,7 @@ def macro_values(turns=(), summary="", comments=(), notes="", prompt="", rating=
     outputs = [cut(t.get("reply", "")) for t in rewrites]
     replies = [cut(t.get("reply", "")) for t in chats]
     rated = [cut(t["rating"]) for t in rewrites if str(t.get("rating") or "").strip()]
-    none = "(none yet)"
+    none = "(nothing yet: none was given so far)"
     last = lambda xs: xs[-1] if xs else none                                               # noqa: E731
     older = lambda xs: "\n".join(f"- {x}" for x in xs[:-1]) if len(xs) > 1 else none      # noqa: E731
     lines = [x for x in notes_lines(notes)]

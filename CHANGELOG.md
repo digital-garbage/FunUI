@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The prompt enhancer shows exactly what the model was given.** The Enhance tab's "Sent to the model" now appears for every rewrite, with the instructions, the earlier turns, your comments, ratings and notes as the model received them. A macro with nothing behind it yet says so plainly ("nothing yet: none was given so far") so the model does not read it as missing context.
 - **The prompt enhancer can run on its own engine** (Composer > Enhance > Engine model). Name any Hugging Face model that the transformers library supports (or a folder) and it is downloaded once and run directly, instead of through ComfyUI's text encoder. Chat answers appear as they are written, with the model's thinking shown first, so there is no waiting for the whole answer or refreshing the Chat tab. Rewrites during Generate can use it too. Thinking and tool-call formats are recognised per model family.
 - **The Enhance tab is organised by what depends on what.** Settings follow the switch they depend on and are greyed out, not hidden, while that switch is off. Every instruction the model is told, including the rewrite instructions, the reference intro and the rating line opening, now sits in one "System prompts" section in the order a request meets them.
 - **The Composer's Story box scales with its window.** It takes the height the window has left, so the Variables section and the hint under it stay in view when the window or the screen is smaller, instead of being pushed out of sight.

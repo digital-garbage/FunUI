@@ -26,7 +26,7 @@ export function enhance(app, own) {
     if (!last) return [c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
     const part = (title, body) => (body ? c.collapsible.default({ label: title, body: c.code.block({ text: body, label: title }) }) : null);
     return [c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
-      c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model (chat run)", last.sent)].filter(Boolean);
+      c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model", last.sent)].filter(Boolean);
   }
   // Everything the model is told, in the order a request meets it. `dflt`: what an empty field means.
   const PROMPTS = [
@@ -95,7 +95,7 @@ export function enhance(app, own) {
         ...PROMPTS.map(([n, label, hint, rows, dflt, dep]) => field(label, c.textarea.md({ label, rows, disabled: off(dep ? live[dep] : true), value: val(n, ""), placeholder: dflt ? dflt() : defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint)),
         c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [
           ...Object.entries((defaults && defaults.macros) || {}).map(([n, d]) => c.hint.default({ text: `[[${n}]]: ${d}` })),
-          c.hint.default({ text: "Nothing to show yet gives \"(none yet)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) })] }) }),
+          c.hint.default({ text: "Nothing to show yet gives \"(nothing yet: none was given so far)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) })] }) }),
       c.label.section({ text: "Reference" }),
       field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, disabled: off(), value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
       ...readout(),
