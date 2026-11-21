@@ -608,3 +608,14 @@ def test_a_download_fetches_files_without_touching_the_model_that_is_loaded(monk
     assert e.model is model and e.source == "a/b::q4.gguf" and e.phase == "ready"      # still the loaded one
     assert (tmp_path / ".source").read_text() == "a/b::q8.gguf"
     assert "downloaded a/b::q8.gguf" in e.message
+
+
+def test_comfy_stop_cancels_a_rewrite_but_not_chat(monkeypatch):
+    from .. import engine as eng
+    stopped = {"on": False}
+    monkeypatch.setattr(eng, "comfy_interrupted", lambda: stopped["on"])
+    rewrite, chat = eng.Cancel(True), eng.Cancel(False)
+    assert not rewrite.is_set() and not chat.is_set()
+    stopped["on"] = True
+    assert rewrite.is_set()
+    assert not chat.is_set()

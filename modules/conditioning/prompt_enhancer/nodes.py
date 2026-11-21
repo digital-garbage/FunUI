@@ -54,6 +54,16 @@ def _own_encoder(file, family):
     return _LOADED["clip"]
 
 
+def _stop_if_interrupted():
+    """Hand ComfyUI's Stop on: it raises its own interrupt, which ends the queue item cleanly instead of going on to the sampler."""
+    try:
+        import comfy.model_management as mm
+        stop = mm.throw_exception_if_processing_interrupted
+    except Exception:                                               # noqa: BLE001 -- not inside a working ComfyUI
+        return
+    stop()
+
+
 def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=None, macros=None):
     """-> (about how many tokens the next request fills, the context window, a status note, whether it was summarised now).
     The conversation is summarised first when the request would fill COMPACT_AT of the window (4 characters a token, the answer's room included)."""
@@ -377,6 +387,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
             do_sample=not greedy)
+        _stop_if_interrupted()
         if info["ok"]:
             back = unmask_markup(out, marks)
             if back is None:

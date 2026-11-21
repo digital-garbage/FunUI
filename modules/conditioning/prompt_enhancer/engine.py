@@ -269,6 +269,26 @@ def write_embedded_tokenizer(weights, folder) -> bool:
         return False
 
 
+def comfy_interrupted() -> bool:
+    """Whether ComfyUI was told to interrupt what it is running (its Stop button). False outside ComfyUI."""
+    try:
+        import comfy.model_management as mm
+        return bool(mm.processing_interrupted())
+    except Exception:                                               # noqa: BLE001 -- not inside ComfyUI
+        return False
+
+
+class Cancel(threading.Event):
+    """A request's stop flag. With `interruptible`, ComfyUI's own interrupt (the Stop button) sets it too: used for a rewrite that runs inside a generation."""
+
+    def __init__(self, interruptible=False):
+        super().__init__()
+        self.interruptible = interruptible
+
+    def is_set(self):
+        return super().is_set() or (self.interruptible and comfy_interrupted())
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
@@ -568,7 +588,7 @@ class Engine:
             yield from self._stream(messages, **options)
 
     def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
-               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, image=None):
+               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, image=None, interruptible=False):
         """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...], "tokens", "seconds", "tps", "cached"}.
         `cache`: reuse the start of the last request when this one begins with it (the long instructions are only read once).
         `lookup`: prompt-lookup decoding, up to that many tokens guessed from the text already there and checked in one pass (0 = off);
@@ -580,7 +600,7 @@ class Engine:
         tok, model = self.tok, self.model
         if getattr(model, "gguf", False):
             yield from self._stream_gguf(messages, thinking=thinking, tools=tools, max_new_tokens=max_new_tokens, temperature=temperature, top_p=top_p, top_k=top_k,
-                                         min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy, image=image)
+                                         min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy, image=image, interruptible=interruptible)
             return
         kwargs = {"tools": tools} if tools else {}
         try:
@@ -597,7 +617,7 @@ class Engine:
         me = self
         streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=False, timeout=600)
         seen = {}
-        cancel = self.cancel = threading.Event()         # this request's own stop flag, made once it has the turn
+        cancel = self.cancel = Cancel(interruptible)         # this request's own stop flag, made once it has the turn
 
         class Stop(StoppingCriteria):
             def __call__(self, input_ids, scores, **kw):
@@ -673,7 +693,7 @@ class Engine:
         _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s" + (f", {stats['cached']} prompt tokens reused)" if stats["cached"] else ")"))
         yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
 
-    def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy, image=None):
+    def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy, image=None, interruptible=False):
         """The same events as `_stream`, from a GGUF model run by llama.cpp (which reuses the unchanged start of the prompt by itself)."""
         model = self.model
         picture = model.png(image) if image is not None and model.projector else None
@@ -685,7 +705,7 @@ class Engine:
         self.activity = {"stage": "reading the prompt", "tokens": 0, "prompt": 0, "started": time.time()}
         yield {"kind": "status", "text": "reading the prompt"}
         stats, calls, started = {"tokens": 0, "cached": 0, "steps": 0, "prompt": 0}, [], time.time()
-        cancel = self.cancel = threading.Event()
+        cancel = self.cancel = Cancel(interruptible)
         me = self
 
         def chunks():
@@ -799,7 +819,7 @@ class EngineClip:
                 round_calls, said = [], ""
                 for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image):
+                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite"):
                     if ev["kind"] == "thinking":
                         thought += ev["text"]
                     elif ev["kind"] == "answer":
