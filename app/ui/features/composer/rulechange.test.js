@@ -18,7 +18,7 @@ test("a rule change the model proposes in the chat opens the Allow window; Allow
       const page = chat(app, () => {});
       document.body.append(page.node);
       await new Promise((r) => setTimeout(r, 0));
-      const box = [...page.node.querySelectorAll("textarea")].at(-2);
+      const box = [...page.node.querySelectorAll("textarea")].pop();
       box.value = "answer longer"; box.dispatchEvent(new window.Event("input", { bubbles: true }));
       [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Send").click();
       for (let i = 0; i < 50 && !document.querySelector(".cx-modal"); i++) await new Promise((r) => setTimeout(r, 10));

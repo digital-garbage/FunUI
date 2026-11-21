@@ -5,9 +5,7 @@ import { effFps, effFrames, genUnitId, isGenerative, unitRoot } from "../../shel
 import { RATING_PREFIX } from "../rating/choices.js";
 import { sizes } from "../../shell/bin.js";
 import { askEdit, RULE_LABELS } from "./editrequest.js";
-import { applyAction, askAction, sheetOf } from "./helper.js";
 
-const helperLog = new Map();        // project id -> [{ you, reply }]: what the helper and the person said, for as long as the page is open
 
 const NODE = "FunUIEnhancePrompt";
 const COMPACT_AT = 0.8;        // the share of the context window at which the conversation is summarised (the node uses the same)
@@ -107,7 +105,7 @@ function scrollParent(node) {
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let helperDraft = "", helping = false, last = null, all = [], live = null, writing = null, tick = 0, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
+  let last = null, all = [], live = null, writing = null, tick = 0, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; clearTimeout(tick); });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
@@ -197,36 +195,9 @@ export function chat(app, own) {
       } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }
       replying = false; stick = true; look(); draw(true);
     };
-    // The helper: its own box and button. It reads the project and proposes changes, each one asked of the person.
-    const turns = helperLog.get(p.project.id) || [], hbox = c.textarea.md({ label: "Helper", rows: 2, value: helperDraft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { helperDraft = v; } });
-    const ask = async () => {
-      const message = helperDraft.trim();
-      if (!message || helping || !eng) return;
-      const mine = helperLog.get(p.project.id) || [], turn = { you: message, reply: "", status: "", done: [] };
-      helperLog.set(p.project.id, [...mine, turn]); helperDraft = ""; helping = true; draw(true);
-      const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project), scenes: (p.project.scenes || []).length }, ...Object.fromEntries(["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "max_length", "context_tokens", "thinking", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"].filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
-      try {
-        const r = await app.api.enhancerChatStream(body, (ev) => {
-          if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
-          else if (ev.kind === "action_request") (async () => {
-            const yes = await askAction(ev);
-            turn.done.push(yes ? applyAction(p, ev) : `Refused: ${ev.summary}`);
-            await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
-          })();
-          draw(true);
-        });
-        if (r && !r.ok) throw new Error(r.status || "the helper could not answer");
-        if (r && r.reply) turn.reply = r.reply;
-      } catch (e) { turn.reply = `No reply: ${(e && e.message) || e}`; }
-      helping = false; draw(true);
-    };
-    const helperBox = c.collapsible.default({ label: "Helper (acts on the project)", open: turns.length > 0, body: c.region.stack({ gap: "sm", children: [
-      c.hint.default({ text: "Ask the helper to change the project: a scene's prompt or length, a new scene, the default clip length. Every change is shown first and needs Allow. Needs an engine model with tool calls." }),
-      ...turns.flatMap((t) => [you(t.you), ...t.done.map((d) => c.hint.default({ text: d })), t.reply ? model(t.reply) : c.hint.default({ text: t.status || "The helper is working…" })]), hbox,
-      c.toolbar.default({ items: [c.button.sm({ label: helping ? "Working…" : "Ask helper", tone: "primary", disabled: !eng || helping, title: eng ? "The helper reads the project and proposes changes" : "Needs an engine model in the Enhance tab", onClick: ask })] })] }) });
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Send gets an answer now. Comment is kept and goes with the next prompt as part of one message. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
       c.region.stack({ gap: "sm", children: bubbles }), notesBox, box,
-      c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] }), helperBox]);
+      c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
   }
   const look = () => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
   // The engine's own writing is not in ComfyUI's log or queue, so the tab asks for it while it is open.
