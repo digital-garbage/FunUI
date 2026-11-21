@@ -16,3 +16,7 @@ gguf
 # The prompt enhancer's own engine builds a model without memory behind it before filling it from a
 # single-file fp8 checkpoint. Pure python; ComfyUI installs already carry it with transformers.
 accelerate
+
+# The enhancer engine reads any model's tokenizer; older ones ship only a sentencepiece file.
+sentencepiece
+protobuf

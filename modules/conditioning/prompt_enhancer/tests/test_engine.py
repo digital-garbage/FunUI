@@ -438,3 +438,16 @@ def test_a_loaded_model_stays_in_memory_across_requests_and_only_a_new_precision
     e.weights = False
     e.load("m", "bf16")
     assert e.model is not None                                   # a model that is not a single fp8 file has no precision to change
+
+
+def test_a_tokenizer_carried_in_the_weights_file_is_written_out_when_the_folder_has_none(tmp_path):
+    import json
+    import torch
+    from safetensors.torch import save_file
+    from .. import engine as eng
+    data = json.dumps({"version": "1.0"}).encode()
+    save_file({"tokenizer_json": torch.tensor(list(data), dtype=torch.uint8)}, str(tmp_path / "w.safetensors"))
+    assert eng.write_embedded_tokenizer(tmp_path / "w.safetensors", tmp_path / "base")
+    assert (tmp_path / "base" / "tokenizer.json").read_bytes() == data
+    save_file({"x": torch.zeros(1)}, str(tmp_path / "n.safetensors"))
+    assert not eng.write_embedded_tokenizer(tmp_path / "n.safetensors", tmp_path / "base2")

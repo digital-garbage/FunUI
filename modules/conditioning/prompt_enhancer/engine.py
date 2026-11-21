@@ -252,6 +252,22 @@ def guess_base(filename):
     raise ValueError(f"no Hugging Face model named '{core}' was found for its config: name the base model, as comfy:{os.path.basename(filename)}@owner/name")
 
 
+def write_embedded_tokenizer(weights, folder) -> bool:
+    """ComfyUI's text-encoder files carry the tokenizer (`tokenizer_json`): write it as tokenizer.json in `folder`. -> whether one was there."""
+    try:
+        from safetensors import safe_open
+        with safe_open(str(weights), "pt") as f:
+            if "tokenizer_json" not in f.keys():
+                return False
+            data = bytes(f.get_tensor("tokenizer_json").tolist())
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "tokenizer.json"), "wb") as out:
+            out.write(data)
+        return True
+    except Exception:                                               # noqa: BLE001 -- the caller says why the tokenizer failed
+        return False
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
@@ -376,7 +392,12 @@ class Engine:
                 import torch
                 from transformers import AutoTokenizer
                 cuda = torch.cuda.is_available()
-                self.tok = AutoTokenizer.from_pretrained(folder)
+                try:
+                    self.tok = AutoTokenizer.from_pretrained(folder)
+                except Exception as exc:                            # noqa: BLE001 -- a base without a tokenizer file of the fast kind: the weights file may carry one
+                    if not (weights and write_embedded_tokenizer(weights, folder)):
+                        raise ValueError(f"{exc} (the model has no tokenizer.json; sentencepiece must be installed to read its older tokenizer file)") from exc
+                    self.tok = AutoTokenizer.from_pretrained(folder)
                 if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
                     from . import fp8
                     def step(done, total):
