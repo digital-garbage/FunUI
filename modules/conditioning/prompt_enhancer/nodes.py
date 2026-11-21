@@ -84,7 +84,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing, editor = False, None
@@ -120,10 +120,10 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
     sheet = __import__(__package__ + ".rules", fromlist=["sheet"]).sheet(rules) if editing else ""
-    macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length)
+    macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)
     used, window, note, did = fit(clip, state, len(en.pick(prompts, "chat_prompt")) + len(en.pick(prompts, "notes_prompt")) + len(str(message)), max_length, compact, context_tokens, prompts, macros)
     if did:
-        macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length)      # the shortened turns are in the notes now
+        macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
     reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=(en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
@@ -281,6 +281,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The global postfix as it stands at the end of the prompt (set by the app). Only used with scope own."),
                 io.String.Input("video_length", default="", optional=True,
                                 tooltip="How long the clip being made is, as text such as '5.0 seconds (121 frames at 24 fps)' (set by the app). The VIDEO_LENGTH macro."),
+                io.String.Input("aspect_ratio", default="", optional=True,
+                                tooltip="The clip's target aspect ratio, as text such as '16:9 landscape' (set by the app). The ASPECT_RATIO macro."),
             ],
             outputs=[io.String.Output(display_name="enhanced"),
                      io.String.Output(display_name="status")],
@@ -296,7 +298,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
@@ -368,7 +370,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             seen = state["seen"] if state else set()
             fresh = [(f"{i}:{r.get('id') or r['comment']}", str(r["comment"]).strip()) for i, r in enumerate(rounds)
                      if isinstance(r, dict) and str(r.get("comment") or "").strip() and f"{i}:{r.get('id') or r['comment']}" not in seen]
-        macros = en.macro_values(state["turns"] if state else (), state["summary"] if state else "", [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post, length=video_length)
+        macros = en.macro_values(state["turns"] if state else (), state["summary"] if state else "", [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post, length=video_length, aspect=aspect_ratio)
         feedback = ("Feedback on your earlier rewrite, apply it:\n" + "\n".join("- " + c for _, c in fresh)) if fresh else ""
         note_text = "\n".join(x for x in (feedback, rating_line if pass_rating else "") if x)
         if key:
@@ -376,7 +378,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
             used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens, prompts, macros)
             if did:
-                macros = en.macro_values(state["turns"], state["summary"], [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post, length=video_length)
+                macros = en.macro_values(state["turns"], state["summary"], [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post, length=video_length, aspect=aspect_ratio)
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}

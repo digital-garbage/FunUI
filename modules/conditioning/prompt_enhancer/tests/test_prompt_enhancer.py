@@ -374,7 +374,7 @@ def test_the_model_s_own_context_size_is_read_when_it_reports_one():
 
 def test_the_node_has_a_style_input_last_and_passes_it_on(node):
     schema = node.FunUIEnhancePrompt.define_schema()
-    assert [i.id for i in schema.inputs][-16:-1] == ["style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
+    assert [i.id for i in schema.inputs][-17:-2] == ["style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail"]
     clip = FakeClip("A fox sprints.")
     node.FunUIEnhancePrompt.execute(clip, "a fox", enabled=True, seed=3, style="dynamic")
     assert en().DYNAMIC_PROMPT in clip.seen["text"]
@@ -842,3 +842,10 @@ def test_the_video_length_macro_says_the_clips_length_or_that_it_is_not_known():
     assert e.macro_values(length="5.00 seconds (125 frames at 25 fps)")["VIDEO_LENGTH"] == "5.00 seconds (125 frames at 25 fps)"
     assert e.macro_values()["VIDEO_LENGTH"] == "(not known)"
     assert e.expand_macros("It runs [[VIDEO_LENGTH]].", e.macro_values(length="4 seconds")) == "It runs 4 seconds."
+
+
+def test_the_aspect_ratio_macro_says_the_target_shape_or_that_it_is_not_known():
+    e = en()
+    assert "ASPECT_RATIO" in e.MACROS
+    assert e.macro_values(aspect="16:9 landscape (1920 x 1080)")["ASPECT_RATIO"] == "16:9 landscape (1920 x 1080)"
+    assert e.macro_values()["ASPECT_RATIO"] == "(not known)"

@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **New macro `[[ASPECT_RATIO]]`** for every system prompt in Composer > Enhance: the clip's target aspect ratio, such as "16:9 landscape (1920 x 1080)", read from the scene's aspect ratio source picture (else the project's size). Pictures and videos in the media bin now remember their size for it. It says "(not known)" when the app did not send it.
 - **New macro `[[VIDEO_LENGTH]]`** for every system prompt in Composer > Enhance: the estimated length of the clip being made, such as "5.04 seconds (121 frames at 24 fps)", taken from the scene's frames and frame rate (clips joined into one count together). In the Chat tab it is the length of the selected scene's clip. It says "(not known)" when the app did not send it.
 - **Chat answers are no longer cut in the middle of a sentence.** An answer was cut at the first mention of words like "earlier in this conversation", "user feedback" or "original prompt:", which a model uses in plain speech. Now only a heading at the start of a line counts as an echoed label.
 - Enhancer: the engine status names a model short (repo and file, or repo and how many files) instead of the whole source text, and a finished download is a separate sentence after the loaded model's line. The download line says what is being downloaded.

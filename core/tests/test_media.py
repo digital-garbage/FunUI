@@ -392,3 +392,21 @@ def test_a_working_video_and_sound_are_kept_like_a_working_picture(store, tmp_pa
     assert media.path_for(sound["id"]) and media.listing() == []
     with pytest.raises(ValueError):
         media.save_scratch("x.exe", b"MZ", temp)
+
+
+def test_a_picture_keeps_its_size_for_the_aspect_ratio_macro(store):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (48, 32), "red").save(buf, "PNG")
+    entry = media.save_upload("a.png", buf.getvalue())
+    assert (entry["width"], entry["height"]) == (48, 32)
+    index = media._index_path()
+    items = json.loads(index.read_text())
+    for it in items:
+        it.pop("width"), it.pop("height")                      # an upload from before sizes were kept
+    index.write_text(json.dumps(items))
+    listed = media.listing()
+    assert (listed[0]["width"], listed[0]["height"]) == (48, 32)      # found once and kept
+    entry = media.save_upload("b.txt.png", b"not a picture")
+    assert (entry["width"], entry["height"]) == (0, 0)             # unreadable: no size, never an error

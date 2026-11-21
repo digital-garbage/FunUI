@@ -6,6 +6,8 @@ export const subjects = new Map();
 export const kinds = new Map();
 /** Which videos carry a soundtrack, as last seen. */
 export const sounds = new Set();
+/** The size of each picture and video, as last seen: id -> [width, height]. */
+export const sizes = new Map();
 export const bin = { version: 0 };
 
 /** Remember a listing (replacing what was known). */
@@ -14,6 +16,7 @@ export function learn(list) {
   subjects.clear();
   kinds.clear();
   sounds.clear();
-  list.forEach((m) => { names.set(m.id, m.name); kinds.set(m.id, m.kind); if (m.sound) sounds.add(m.id); if (m.subject) subjects.set(m.id, m.subject); });
+  sizes.clear();
+  list.forEach((m) => { names.set(m.id, m.name); kinds.set(m.id, m.kind); if (m.sound) sounds.add(m.id); if (m.width > 0 && m.height > 0) sizes.set(m.id, [m.width, m.height]); if (m.subject) subjects.set(m.id, m.subject); });
   bin.version += 1;
 }

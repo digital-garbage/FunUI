@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
 import { createDom } from "../../shell/dom.js";
-import { addComment, applyNotes, chat, chatHook, learnClock, lengthText, unitLength } from "./chat.js";
+import { addComment, applyNotes, chat, chatHook, learnClock, lengthText, unitLength, aspectText, aspectOf } from "./chat.js";
 
 const slots = [{ id: "e", node: "FunUIEnhancePrompt" }, { id: "x", node: "Other" }];
 const project = { editor_settings: { enhance_chat: [{ comment: "warmer", original: "a cat" }, { comment: "old", original: "a dog" }, { comment: "any" }] } };
@@ -187,4 +187,22 @@ test("the clip's length goes to the enhancer for the VIDEO_LENGTH macro, from th
   assert.equal(chatHook({ project: {}, scene: {}, slots: [slots[1]], frames: 125 }), null);
   const open = { frame_rate: 25, num_frames_per_scene: 100, scenes: [{ id: "a" }, { id: "b" }] };
   assert.match(unitLength(open, open.scenes[0]), /seconds \(\d+ frames at 25 fps\)/);
+});
+
+
+test("the target aspect ratio comes from the scene's aspect ratio source picture, else the project size, and goes to the enhancer", async () => {
+  assert.equal(aspectText(1920, 1080), "16:9 landscape (1920 x 1080)");
+  assert.equal(aspectText(720, 1280), "9:16 portrait (720 x 1280)");
+  assert.equal(aspectText(512, 512), "1:1 square (512 x 512)");
+  assert.equal(aspectText(1000, 440), "2.27:1 landscape (1000 x 440)");
+  assert.equal(aspectText(0, 10), "");
+  const { sizes } = await import("../../shell/bin.js");
+  sizes.set("pic", [1080, 1920]);
+  const project = { width: 640, height: 640 };
+  assert.equal(aspectOf(project, { source_image: "pic" }), "9:16 portrait (1080 x 1920)");
+  assert.equal(aspectOf(project, { source_image: "unknown" }), "1:1 square (640 x 640)");
+  assert.equal(aspectOf({}, {}), "");
+  const r = chatHook({ project, scene: { source_image: "pic" }, slots });
+  assert.deepEqual(r.inputs, { e: { aspect_ratio: "9:16 portrait (1080 x 1920)" } });
+  sizes.clear();
 });

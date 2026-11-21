@@ -103,6 +103,23 @@ def _has_sound(path: Path) -> bool:
         return False
 
 
+def _dims(path: Path, kind: str):
+    """(width, height) of a picture or a video, or None when it cannot be read."""
+    try:
+        if kind == "image":
+            from PIL import Image
+            with Image.open(path) as im:
+                return int(im.width), int(im.height)
+        if kind == "video":
+            import av
+            with av.open(str(path)) as container:
+                s = container.streams.video[0]
+                return int(s.codec_context.width), int(s.codec_context.height)
+    except Exception:  # noqa: BLE001 -- an unreadable file simply has no known size
+        pass
+    return None
+
+
 def listing() -> list[dict]:
     """Every upload, newest first. An entry whose file vanished is dropped
     rather than shown -- there is nothing behind it to open. A video says whether it has sound
@@ -113,6 +130,10 @@ def listing() -> list[dict]:
         path = config.MEDIA_DIR / it.get("filename", "")
         if it.get("kind") == "video" and "sound" not in it and path.is_file():
             it["sound"] = _has_sound(path)
+            fresh = True
+        if it.get("kind") in ("image", "video") and "width" not in it and path.is_file():      # looked up once and kept, like the sound
+            dims = _dims(path, it["kind"])
+            it["width"], it["height"] = dims if dims else (0, 0)
             fresh = True
     if fresh:
         with _LOCK:
@@ -157,6 +178,8 @@ def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
     }
     if entry["kind"] == "video":
         entry["sound"] = _has_sound(config.MEDIA_DIR / filename)
+    if entry["kind"] in ("image", "video"):
+        entry["width"], entry["height"] = _dims(config.MEDIA_DIR / filename, entry["kind"]) or (0, 0)
     # The write above needs no lock -- filename is this call's own uuid, so two
     # uploads never touch the same file. The index below is shared, and a
     # read here that raced another upload's write would silently drop it.
