@@ -63,7 +63,7 @@ def routes(table, base, web):
         return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), video_length=str(body.get("video_length") or "")[:200], aspect_ratio=str(body.get("aspect_ratio") or "")[:200], encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body), use_comfy=body.get("use_comfy") is True,
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
-                    helper=({"sheet": str((body.get("helper") or {}).get("sheet") or "")[:12000], "scenes": int((body.get("helper") or {}).get("scenes") or 0)} if isinstance(body.get("helper"), dict) else None), context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=body.get("thinking") is True, **sampling)
+                    helper=({"sheet": str((body.get("helper") or {}).get("sheet") or "")[:12000], "scenes": int((body.get("helper") or {}).get("scenes") or 0), "settings": [x for x in ((body.get("helper") or {}).get("settings") or [])[:3000] if isinstance(x, dict)]} if isinstance(body.get("helper"), dict) else None), context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=body.get("thinking") is True, **sampling)
 
     async def chat_body(req):
         try:

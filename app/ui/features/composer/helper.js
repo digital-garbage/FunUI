@@ -4,6 +4,7 @@ import { composer as c } from "../../composer/composer.js";
 import { addScene } from "../../shell/edits.js";
 import { effFps, effFrames, snapFrames } from "../../shell/scenes.js";
 import { engineOf } from "./chat.js";
+import { clampBlocks } from "../settings/field.js";
 
 const NODE = "FunUIEnhancePrompt";
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said, for as long as the page is open
@@ -13,6 +14,9 @@ let draft = "";
 const short = (id) => String(id);
 const refsOf = (s) => `${(s.references || []).length ? `, references: ${s.references.map(short).join(" ")}` : ", no references"}${s.source_image ? `, aspect source: ${short(s.source_image)}` : ""}`;
 
+/** The modules whose settings the helper can reach, one line (the settings themselves come from find_settings). */
+const modulesLine = (ps) => { const seen = new Set(catalogOf(ps).map((x) => x.title)); return seen.size ? `\nModules with settings: ${[...seen].join(", ")}.` : ""; };
+
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
   if (!project) return "";
@@ -20,8 +24,17 @@ export function sheetOf(project) {
   return [`Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
 }
 
+/** Every setting the app has right now, for the model to look up: module, name, kind, limits and the value in force. */
+export function catalogOf(ps) {
+  if (!ps || !ps.activeModules) return [];
+  const values = ps.currentValues();
+  return ps.activeModules().flatMap((m) => Object.entries(m.settings || {}).filter(([, spec]) => ["bool", "int", "float", "enum", "text", "multiline", "string"].includes(spec.type) || !spec.type)
+    .map(([name, spec]) => ({ module: m.id, title: m.title || m.id, name, label: spec.label || name, type: spec.type || "text", min: spec.min, max: spec.max, options: spec.type === "enum" ? (spec.options || []).map((o) => o.value) : undefined,
+      now: values[m.id] && values[m.id][name] !== undefined ? values[m.id][name] : spec.default, hint: String(spec.hint || "").slice(0, 160) })));
+}
+
 /** Make an allowed change in the project. -> a short plain line saying what was done (or why not). */
-export function applyAction(project, ev) {
+export function applyAction(project, ev, ps) {
   const a = ev.args || {}, n = (project.project.scenes || []).length;
   const secs = (pr, sc, s) => snapFrames(s * effFps(sc, pr));
   if (ev.tool === "edit_scene") {
@@ -51,6 +64,13 @@ export function applyAction(project, ev) {
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
+  }
+  if (ev.tool === "set_setting" && ps) {
+    const spec = (ps.modulesById()[a.module] || { settings: {} }).settings[a.setting];
+    if (!spec) return "no such setting";
+    const blocks = ps.blocks && ps.blocks(), value = spec.model_blocks && typeof a.value === "string" ? clampBlocks(a.value, blocks) : a.value;
+    ps.setModuleValue(a.module, a.setting, value);
+    return `${a.title || a.module}: ${a.label || a.setting} set to ${value}`;
   }
   if (ev.tool === "set_clip_length" && typeof a.seconds === "number" && a.seconds > 0) {
     project.edit((pr) => { pr.num_frames_per_scene = snapFrames(a.seconds * (Number(pr.frame_rate) || 25)); return true; });
@@ -96,13 +116,13 @@ export function openHelper(app, origin) {
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, reply: "", status: "", done: [] };
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; paint();
-    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project), scenes: (p.project.scenes || []).length }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project) + modulesLine(app.pipeline), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
-          turn.done.push(yes ? applyAction(p, ev) : `Refused: ${ev.summary}`);
+          turn.done.push(yes ? applyAction(p, ev, app.pipeline) : `Refused: ${ev.summary}`);
           paint();
           await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
         })();

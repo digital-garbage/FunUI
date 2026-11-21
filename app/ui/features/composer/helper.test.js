@@ -30,3 +30,16 @@ test("allowed changes edit the prompt and length, add a scene after another, and
   assert.equal(p.project.scenes[2].source_image, "m2abcdef");
   assert.equal(applyAction(p, { tool: "edit_scene", args: { scene: 9, text: "x" } }), "no such scene");
 });
+
+import { catalogOf } from "./helper.js";
+
+test("the catalog lists the settings of the active modules with their value now, and set_setting writes through the pipeline", () => {
+  const set = [];
+  const ps = { activeModules: () => [{ id: "sampling_attention_bandit", title: "Attention explorer", settings: { enabled: { type: "bool", default: false, label: "Attention explorer" }, blocks: { type: "string", default: "2-10", model_blocks: true } } }],
+    currentValues: () => ({ sampling_attention_bandit: { enabled: true } }), modulesById: () => ({ sampling_attention_bandit: { settings: { blocks: { type: "string", model_blocks: true } } } }), blocks: () => 50,
+    setModuleValue: (...a) => set.push(a) };
+  const cat = catalogOf(ps);
+  assert.deepEqual(cat.map((x) => [x.name, x.now]), [["enabled", true], ["blocks", "2-10"]]);
+  applyAction({ project: { scenes: [] } }, { tool: "set_setting", args: { module: "sampling_attention_bandit", setting: "blocks", value: "2-10,29-90" } }, ps);
+  assert.deepEqual(set, [["sampling_attention_bandit", "blocks", "2-10,29-49"]]);
+});
