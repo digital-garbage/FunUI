@@ -655,7 +655,7 @@ def test_every_run_gets_a_chat_id_that_only_rises(node):
 
 def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(node, monkeypatch):
     node.CONVOS.clear()
-    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt", "fixed_prompt", "edit_prompt"}
+    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt", "fixed_prompt", "edit_prompt", "refine_prompt"}
     assert all(en().defaults()[k].strip() for k in en().PROMPT_FIELDS) and en().pick({"chat_prompt": "  "}, "chat_prompt") == en().CHAT_REPLY_SYSTEM
     run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="s:0", **kw)
     # conversation rules, flat and as turns; the markup rule
@@ -768,3 +768,29 @@ def test_a_note_line_glued_onto_the_end_of_a_sentence_still_counts():
     assert add == ["Answer in one short sentence."] and text == "I will keep it short."
     assert en().parse_notes("Fine.\nFORGET: 2")[2] == ["2"]
     assert en().parse_notes("He said REMEMBER: this is not a note line")[1] == []              # only after a sentence end or on a line of its own
+
+
+class ScriptedClip(FakeClip):
+    """Answers from a list, one per call, and keeps what each call was asked."""
+
+    def __init__(self, answers):
+        super().__init__()
+        self.answers, self.asked = list(answers), []
+
+    def generate(self, tokens, **kw):
+        self.asked.append(self.seen.get("text", ""))
+        return [1]
+
+    def decode(self, ids, **kw):
+        return self.answers.pop(0) if self.answers else ""
+
+
+def test_refine_passes_let_the_model_check_and_improve_its_own_rewrite():
+    clip = ScriptedClip(["A fox runs.", "The rewrite lost the snow.\nFINAL:\nA red fox runs through deep snow."])
+    out, status, info = en().enhance(clip, "a fox in snow", refine=1, seed=1)
+    assert out == "A red fox runs through deep snow." and "refined 1x" in status
+    assert "YOUR REWRITE:\nA fox runs." in clip.asked[-1] and "WHAT YOU WERE GIVEN:\na fox in snow" in clip.asked[-1]
+    none = ScriptedClip(["A fox runs.", ""])                              # a pass that gives nothing leaves the draft as it was
+    assert en().enhance(none, "a fox in snow", refine=2, seed=1)[0] == "A fox runs."
+    off = ScriptedClip(["A fox runs."])
+    assert en().enhance(off, "a fox in snow", seed=1)[0] == "A fox runs." and len(off.asked) == 1       # no passes by default: one call

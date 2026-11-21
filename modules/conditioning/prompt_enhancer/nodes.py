@@ -176,6 +176,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
                 io.String.Input("fixed_prompt", multiline=True, default="", optional=True,
                                 tooltip="Tells the model about the fixed text around your own text (Only my own text mode). Empty uses the built-in text."),
+                io.Int.Input("refine_passes", default=0, min=0, max=3, optional=True,
+                             tooltip="How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer."),
+                io.String.Input("refine_prompt", multiline=True, default="", optional=True,
+                                tooltip="What the model is told for each self-check pass. Empty uses the built-in text."),
                 io.Boolean.Input("self_edit", default=False, optional=True,
                                  tooltip="Lets the chat model read and propose changes to its own system prompts. Every change is shown to you first and applies only if you allow it."),
                 io.String.Input("edit_prompt", multiline=True, default="", optional=True,
@@ -259,14 +263,14 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False) -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
         prompts = {"chat_prompt": chat_prompt, "notes_prompt": notes_prompt, "compact_prompt": compact_prompt, "revision_prompt": revision_prompt,
-                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt, "edit_prompt": edit_prompt}
+                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt, "edit_prompt": edit_prompt, "refine_prompt": refine_prompt}
         text = str(text or "")
         pre = post = ""
         body = text
@@ -342,7 +346,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
-            note=note_text, notes=notes, prompts=prompts, macros=macros,
+            note=note_text, notes=notes, prompts=prompts, macros=macros, refine=refine_passes,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,

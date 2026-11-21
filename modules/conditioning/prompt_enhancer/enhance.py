@@ -54,6 +54,9 @@ SELF_EDIT_RULE = ("A request to change how you answer or rewrite is a change to 
                   "Use read_prompt to see one in full. Use edit_prompt only when the user asks you to change how you behave, or a rule clearly keeps failing: "
                   "send the whole new text of that rule and one sentence why. The user sees the change and may refuse it; after a refusal, do not propose the same change again. "
                   "Say in your answer what you changed or proposed.")
+REFINE_RULE = ("You are checking your own rewrite of a prompt against the rules you were given. First write one short paragraph on what is weak or missing in the rewrite "
+               "(details the original asked for that got lost, parts that ignore a rule, wording that is vague or repeats). Then write FINAL: and, on the next lines, only the improved rewrite, "
+               "following the same rules. If the rewrite is already right, repeat it after FINAL: unchanged.")
 MARKS_RULE = ("Tokens like {M1}, {M2} stand for fixed markup. Copy every one into your answer exactly as written, "
               "once each, next to the words it belongs to. Never explain them or change them.")
 
@@ -95,7 +98,7 @@ Answer the message directly and briefly (one to four sentences, plain text). You
 Stay consistent with the earlier turns. Do not use markdown or headings."""
 NOTES_RULE = """NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
 PROMPT_FIELDS = {"chat_prompt": "CHAT_REPLY_SYSTEM", "notes_prompt": "NOTES_RULE", "compact_prompt": "COMPACT_SYSTEM", "revision_prompt": "CHAT_SYSTEM",
-                 "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE", "fixed_prompt": "FIXED_RULE", "edit_prompt": "SELF_EDIT_RULE"}      # node input -> the built-in text an empty one means
+                 "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE", "fixed_prompt": "FIXED_RULE", "edit_prompt": "SELF_EDIT_RULE", "refine_prompt": "REFINE_RULE"}      # node input -> the built-in text an empty one means
 
 
 def defaults() -> dict:
@@ -514,7 +517,7 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", prompts=None, macros=None, **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", prompts=None, macros=None, refine=0, **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -565,8 +568,28 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
         # on to the video model, which then made something unrelated to the prompt.
         return original, ("the model wrote no usable words (" + out[:20].replace("\n", " ")
                           + "...); prompt unchanged. This text encoder may not be a chat model"), info
+    passes = 0
+    for _ in range(max(0, min(int(refine or 0), 3))):                       # the model checks its own rewrite against the rules and improves it
+        better = refine_once(clip, system, user, out, prompts, macros, **sampling)
+        if not better:
+            break
+        out, passes = better, passes + 1
     info.update(after=out, ok=True)
-    return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
+    return out, f"{status}{f'; refined {passes}x' if passes else ''}; prompt {len(original)} -> {len(out)} chars", info
+
+
+def refine_once(clip, system, user, draft, prompts=None, macros=None, **sampling):
+    """-> the improved rewrite after one self-check, or "" when the model gave nothing usable (the draft then stands)."""
+    ask = f"RULES YOU WROTE UNDER:\n{system}\n\nWHAT YOU WERE GIVEN:\n{user}\n\nYOUR REWRITE:\n{draft}"
+    raw, status = generate(clip, expand_macros(pick(prompts, "refine_prompt"), macros), ask, **{**sampling, "image": None})
+    text = clean(raw)
+    if "FINAL:" in text:
+        text = text.rsplit("FINAL:", 1)[1]
+    text, _ = trim_runaway(cut_chat_echo(text.strip()), max_length=sampling.get("max_length"))
+    visible = "".join(text.split())
+    if not text or not re.search(r"[^\W\d_]{2,}", text) or sum(c.isalpha() for c in visible) < len(visible) // 4 or "failed" in status:
+        return ""
+    return text.strip()
 
 
 def converse(clip, message, *, convo=None, notes="", prompts=None, macros=None, system_extra="", **sampling):

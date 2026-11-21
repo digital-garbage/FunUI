@@ -40,6 +40,7 @@ export function enhance(app, own) {
     ["rating_prefix", "Rating line opening", "The words in front of the rating when Pass the rating is on.", 2, () => RATING_PREFIX, "rate"],
     ["chat_prompt", "Chat answers", "Send in the Chat tab: how the model answers you.", 5, null, "talk"],
     ["edit_prompt", "Editing its own rules", "Tells the chat model it can read and propose changes to its own rules; [[RULES_SHEET]] is the list.", 5, null, "edit"],
+    ["refine_prompt", "Self-check", "What the model is told in each self-check pass over its own rewrite.", 5, null, "refine"],
     ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer.", 5, null, "talk"],
     ["compact_prompt", "Conversation notes", "The model that shortens a long conversation.", 6, null, "sum"]];
   const styleNow = () => { const x = (slot() && slot().inputs) || {}; return x.style || "default"; };
@@ -58,7 +59,7 @@ export function enhance(app, own) {
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
     const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && engineSet && val("self_edit", false), sum: chat && sum };
+    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), edit: chat && engineSet && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
@@ -86,6 +87,7 @@ export function enhance(app, own) {
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),
+      num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
       toggle("Thinking", "Let a thinking model reason first. Its reasoning eats the token budget.", "thinking", false, off()),
       toggle("Greedy (always the likeliest word)", "The same rewrite every time; the dials below are not used.", "greedy", false, off()),
       ...DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n, undefined, off(!greedy))),
