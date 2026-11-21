@@ -803,3 +803,27 @@ def test_the_comfy_switch_keeps_the_engine_out_of_a_rewrite_and_a_chat(monkeypat
     out = nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="a/b", use_comfy=True)
     assert loaded == [] and out.args[0] == "a fox"                                  # no clip to write with here: the prompt passes, the engine was never asked
     assert nodes.chat_reply("c", "hi", engine_model="a/b", use_comfy=True)["ok"] is False and loaded == []
+
+
+def test_on_the_comfy_path_every_switch_still_reaches_the_encoder_and_the_engine_stays_out(node, monkeypatch):
+    """"Use ComfyUI's text generation instead" with every switch on: notes, comment, rating, the earlier rewrite, the fixed prefix and
+    postfix, and the conversation as real Gemma turns are in the text the encoder is given."""
+    node.CONVOS.clear()
+    asked = []
+    monkeypatch.setattr(node.ENGINE, "load", lambda *a, **k: asked.append(a))
+    gemma = FakeClip("A fox runs through snow.")
+    gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
+    rules = "Last output: [[PREVIOUS_MODEL_OUTPUT]] Last comment: [[LAST_USER_COMMENT]] Rating: [[RATING]] Notes: [[NOTES]]"
+    comment = json.dumps([{"id": "1", "comment": "more rain please"}])
+    run = lambda text, scene, chat="": node.FunUIEnhancePrompt.execute(            # noqa: E731
+        gemma, text, enabled=True, seed=3, engine_model="a/b", use_comfy=True, to_chat=True, conversation="u:0", pass_rating=True, rating_line="Rating: 4/5 stars",
+        scope="own", head="PRE", tail="POST", notes="keep it short", scene=scene, chat=chat, instructions=rules, thinking=True)
+    run("PRE a fox POST", "s0")
+    first = gemma.seen["text"]
+    assert "a fox" in first and "keep it short" in first and "Rating: 4/5 stars" in first and "PRE" in first and "POST" in first
+    run("PRE a fox in rain POST", "s1", comment)
+    second = gemma.seen["text"]
+    assert second.startswith("<|turn>system\n") and "<|turn>user\n" in second           # real Gemma turns, the instructions in the system turn
+    for needed in ("a fox in rain", "more rain please", "keep it short", "Rating: 4/5 stars", "A fox runs through snow.", "PRE", "POST", "<|turn>model\nA fox runs through snow.<turn|>"):
+        assert needed in second, needed
+    assert gemma.seen["thinking"] is True and asked == []
