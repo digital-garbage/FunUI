@@ -176,6 +176,20 @@ def routes(table, base, web):
         started = eng.ENGINE.load_async(source, str((body or {}).get("precision") or "auto"))
         return web.json_response({"ok": True, "started": started, **eng.ENGINE.status()})
 
+    @table.post(base + "/engine/download")
+    async def _engine_download(req):
+        """Download a model's files only, without loading it into memory: {"source": "owner/name::file.gguf|..."}."""
+        from . import engine as eng
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        source = str((body or {}).get("source") or "").strip() if isinstance(body, dict) else ""
+        if not source:
+            return web.json_response({"ok": False, "status": "an engine model is needed"}, status=400)
+        started = eng.ENGINE.download_async(source)
+        return web.json_response({"ok": True, "started": started, **eng.ENGINE.status()})
+
     @table.get(base + "/engine/files")
     async def _engine_files(req):
         """The weight files of a Hugging Face repo with their sizes, so one of them can be picked: ?repo=owner/name."""

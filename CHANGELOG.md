@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Download and Load are separate buttons** (Composer > Enhance). Download fetches only the checked files of a model (a new quantization, say) and leaves the loaded model alone; the result shows in Downloaded models, where Use loads it. Load now loads into memory, downloading first only when files are missing.
 - **A thinking model's answer is no longer cut off.** Its reasoning had to fit in the same token limit as the answer, so a long reasoning left the answer short or empty. The engine now gives the reasoning its own 3000 tokens on top of the length setting.
 - **Conversation rules say the last message is always the prompt to rewrite**, even when it repeats an earlier request word for word. A thinking model had read such a repeat as "no new prompt" and been unsure what to do.
 - **The model can propose a rule change by writing it, not only by calling the tool.** When it cannot or does not call the edit tool, it writes the new rule at the end of its answer; you get the same before/after window, and the answer shows "Rule change ...: saved". The rules also tell it to propose a change when it notices one (the same correction repeated, a rule that keeps failing), not only when asked.

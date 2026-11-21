@@ -274,6 +274,7 @@ class Engine:
 
     def __init__(self):
         self.lock = threading.Lock()           # loading and unloading
+        self.dl_lock, self._dl_worker = threading.Lock(), None          # downloading alone
         self.turn = threading.Lock()           # one generation at a time
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
@@ -400,11 +401,7 @@ class Engine:
             try:
                 folder, weights = self._fetch(source)
                 self.weights = bool(weights)
-                if not os.path.isdir(source) and self._dir and os.path.isdir(self._dir):
-                    try:                                             # remembers what to type to use this download again
-                        open(os.path.join(self._dir, ".source"), "w").write(source)
-                    except OSError:
-                        pass
+                self._remember(source)                                # what to type to use this download again
                 _say(f"engine: files are in place after {time.time() - started:.0f}s, loading the model")
                 self.phase, self.message = "loading", f"loading {source}"
                 import torch
@@ -451,9 +448,55 @@ class Engine:
         self.model, self.tok, self.source, self.device, self._snap, self.weights = model, tokenizer, name, device, None, False
         self.phase, self.message = "ready", f"{name} on {device}"
 
+    def _remember(self, source):
+        """Write what the downloaded folder was fetched from beside it, so it can be picked again."""
+        if not os.path.isdir(source) and self._dir and os.path.isdir(self._dir):
+            try:
+                open(os.path.join(self._dir, ".source"), "w").write(source)
+            except OSError:
+                pass
+
+    def download(self, source):
+        """Fetch a model's files into the models directory, and nothing else: a model that is loaded stays loaded and untouched.
+        Blocks; raises with the reason."""
+        source = str(source or "").strip()
+        if not source:
+            raise ValueError("no engine model is set")
+        with self.dl_lock:
+            keep = (self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes)
+            idle = self.model is None
+            self.wanted, self.done_bytes = source, 0
+            self.phase, self.message = "downloading", f"downloading {source}"
+            try:
+                self._fetch(source)
+                self._remember(source)
+                _say(f"engine: downloaded {source}")
+                done = f"downloaded {source}"
+            except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
+                _say(f"engine: could not download {source}: {exc}")
+                failed = f"download failed: {exc}"
+                self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes = ("error" if idle else keep[0]), failed, *keep[2:]
+                raise
+            self._dir, self.wanted, self.total_bytes, self.done_bytes = keep[2:]
+            self.phase, self.message = ("idle", done) if idle else (keep[0], f"{keep[1]} (also {done})")
+
+    def download_async(self, source):
+        """Start downloading in the background (the status says how far it is). False while a load or another download runs."""
+        if (self._worker is not None and self._worker.is_alive()) or (self._dl_worker is not None and self._dl_worker.is_alive()):
+            return False
+
+        def work():
+            try:
+                self.download(source)
+            except Exception:                                       # noqa: BLE001 -- already in the status
+                pass
+        self._dl_worker = threading.Thread(target=work, daemon=True, name="funui-engine-download")
+        self._dl_worker.start()
+        return True
+
     def load_async(self, source, precision="auto"):
         """Start loading in the background; the status says how far it is."""
-        if self._worker is not None and self._worker.is_alive():
+        if (self._worker is not None and self._worker.is_alive()) or (self._dl_worker is not None and self._dl_worker.is_alive()):
             return False
 
         def work():

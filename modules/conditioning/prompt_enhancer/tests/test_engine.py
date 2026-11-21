@@ -590,3 +590,21 @@ def test_thinking_gets_its_own_token_room_on_top_of_the_answer_s(monkeypatch):
     list(e.stream([], max_new_tokens=400, thinking=True))
     list(e.stream([], max_new_tokens=400, thinking=False))
     assert seen == [400 + eng.THINK_BUDGET, 400]
+
+
+def test_a_download_fetches_files_without_touching_the_model_that_is_loaded(monkeypatch, tmp_path):
+    from .. import engine as eng
+    e = eng.Engine()
+    model = object()
+    e.model, e.tok, e.source, e.phase, e.message = model, model, "a/b::q4.gguf", "ready", "a/b::q4.gguf on cuda"
+    seen = []
+    def fake_fetch(source):
+        seen.append((source, e.phase))
+        e._dir = str(tmp_path)
+        return str(tmp_path), ""
+    monkeypatch.setattr(e, "_fetch", fake_fetch)
+    e.download("a/b::q8.gguf")
+    assert seen == [("a/b::q8.gguf", "downloading")]
+    assert e.model is model and e.source == "a/b::q4.gguf" and e.phase == "ready"      # still the loaded one
+    assert (tmp_path / ".source").read_text() == "a/b::q8.gguf"
+    assert "downloaded a/b::q8.gguf" in e.message
