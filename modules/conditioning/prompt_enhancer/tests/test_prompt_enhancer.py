@@ -497,7 +497,7 @@ def test_own_scope_sends_only_the_middle_and_puts_prefix_and_postfix_back_as_wri
     (out, _), clip = _run(node, "A red fox sprints through snow.", text, scope="own", head="Cinematic, 35mm.", tail="No text on screen.")
     assert out == "Cinematic, 35mm. A red fox sprints through snow. No text on screen."
     sent = clip.seen["text"]
-    assert sent.endswith("a fox runs.") and "Cinematic" not in sent and "No text" not in sent
+    assert sent.endswith("a fox runs.") and sent.count("Cinematic") == 1 and "Fixed text before it: Cinematic, 35mm." in sent       # told once, in the instructions, never inside the text it rewrites
     assert node.RUNS[-1]["before"] == text and node.RUNS[-1]["after"] == out
 
 
@@ -576,7 +576,7 @@ def test_each_scene_of_a_project_is_enhanced_with_its_own_prefix_split_and_nothi
         clip = FakeClip(answer)
         out = node.FunUIEnhancePrompt.execute(clip, full, enabled=True, seed=3, scope="own", **parts).args[0]
         sent = clip.seen["text"]
-        assert "Film grain." not in sent and "No subtitles." not in sent
+        assert sent.count("Film grain.") == 1 and sent.count("No subtitles.") == 1 and "Fixed text before it: Film grain." in sent
         assert out.startswith("Film grain. ") and out.endswith(" No subtitles.") and out.count("Film grain.") == 1
         outs.append(out)
     assert "⟦left¦right⟧" in outs[0]                                        # the alternation came back as the expander wrote it
@@ -655,7 +655,7 @@ def test_every_run_gets_a_chat_id_that_only_rises(node):
 
 def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(node, monkeypatch):
     node.CONVOS.clear()
-    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt"}
+    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt", "fixed_prompt"}
     assert all(en().defaults()[k].strip() for k in en().PROMPT_FIELDS) and en().pick({"chat_prompt": "  "}, "chat_prompt") == en().CHAT_REPLY_SYSTEM
     run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="s:0", **kw)
     # conversation rules, flat and as turns; the markup rule
@@ -737,3 +737,27 @@ def test_every_switch_that_is_on_reaches_the_model(comfyui, monkeypatch):
     assert "A fox runs through snow." in system and "more rain please" in system and "keep it short" in system and "Rating: 4/5 stars" in system
     assert "more rain please" in user and "Rating: 4/5 stars" in user and rounds and rounds[0][1] == "A fox runs through snow."
     assert "a fox in rain" in nodes.RUNS[-1]["sent"] and "more rain please" in nodes.RUNS[-1]["sent"] and "EARLIER TURN 1" in nodes.RUNS[-1]["sent"]
+
+
+def test_in_own_text_mode_the_model_is_told_what_the_fixed_prefix_and_postfix_say(comfyui, monkeypatch):
+    from modules.conditioning.prompt_enhancer import nodes
+    seen = []
+
+    class Engineish:
+        is_engine = native_turns = True
+
+        def __init__(self, *a, **k):
+            pass
+
+        def run(self, system, user, rounds=(), **k):
+            seen.append((system, user))
+            return "a red fox runs", "ok"
+    monkeypatch.setattr(nodes, "EngineClip", Engineish)
+    monkeypatch.setattr(nodes.ENGINE, "load", lambda s: None)
+    out = nodes.FunUIEnhancePrompt.execute(None, "cinematic, a fox, 4k", enabled=True, engine_model="m", scope="own", head="cinematic,", tail=", 4k",
+                                           instructions="Prefix is [[PROMPT_PREFIX]] and postfix is [[PROMPT_POSTFIX]].")
+    system, user = seen[-1]
+    assert "Fixed text before it: cinematic," in system and "Fixed text after it: , 4k" in system and "Prefix is cinematic, and postfix is , 4k." in system
+    assert user.strip() == "a fox" and out.args[0] == "cinematic, a red fox runs , 4k".replace(" ,", ",") or "a red fox runs" in out.args[0]
+    nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="m")
+    assert "Fixed text" not in seen[-1][0]                                   # no prefix or postfix: nothing to tell

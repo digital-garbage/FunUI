@@ -163,6 +163,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The conversation rules sent to an encoder that takes no chat turns. Empty uses the built-in text."),
                 io.String.Input("turns_prompt", multiline=True, default="", optional=True,
                                 tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
+                io.String.Input("fixed_prompt", multiline=True, default="", optional=True,
+                                tooltip="Tells the model about the fixed text around your own text (Only my own text mode). Empty uses the built-in text."),
                 io.String.Input("marks_prompt", multiline=True, default="", optional=True,
                                 tooltip="The rule that keeps (word:1.5) and [a|b] markup. Empty uses the built-in text."),
                 io.Int.Input("max_length", default=400, min=32, max=4096, step=8, optional=True,
@@ -242,14 +244,14 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="") -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
         prompts = {"chat_prompt": chat_prompt, "notes_prompt": notes_prompt, "compact_prompt": compact_prompt, "revision_prompt": revision_prompt,
-                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt}
+                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt}
         text = str(text or "")
         pre = post = ""
         body = text
@@ -293,6 +295,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
         system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
         if marks:
             system += "\n\n" + en.pick(prompts, "marks_prompt")
+        if pre or post:               # the model never sees them in the text it rewrites, so it is told they are there
+            system += "\n\n" + en.pick(prompts, "fixed_prompt")
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
         history, compacted, context, did = "", "", None, False
         state = CONVOS.get(key) if key else None
@@ -308,7 +312,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             seen = state["seen"] if state else set()
             fresh = [(f"{i}:{r.get('id') or r['comment']}", str(r["comment"]).strip()) for i, r in enumerate(rounds)
                      if isinstance(r, dict) and str(r.get("comment") or "").strip() and f"{i}:{r.get('id') or r['comment']}" not in seen]
-        macros = en.macro_values(state["turns"] if state else (), state["summary"] if state else "", [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "")
+        macros = en.macro_values(state["turns"] if state else (), state["summary"] if state else "", [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post)
         feedback = ("Feedback on your earlier rewrite, apply it:\n" + "\n".join("- " + c for _, c in fresh)) if fresh else ""
         note_text = "\n".join(x for x in (feedback, rating_line if pass_rating else "") if x)
         if key:
@@ -316,7 +320,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
             used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens, prompts, macros)
             if did:
-                macros = en.macro_values(state["turns"], state["summary"], [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "")
+                macros = en.macro_values(state["turns"], state["summary"], [r.get("comment") for r in rounds if isinstance(r, dict)], notes, body, rating_line if pass_rating else "", prefix=pre, postfix=post)
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}

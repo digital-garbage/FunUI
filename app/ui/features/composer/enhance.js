@@ -32,6 +32,7 @@ export function enhance(app, own) {
   const PROMPTS = [
     ["instructions", "Rewrite instructions", "What the model does with each prompt. The Style above decides the built-in text.", 6, () => (defaults ? (defaults.styles || {})[styleNow()] || defaults.instructions : "")],
     ["marks_prompt", "Markup rule", "Keeps (word:1.5) and [a|b] as written.", 4],
+    ["fixed_prompt", "Fixed text around it", "Tells the model what the global prefix and postfix say, so it writes for the whole prompt.", 4, null, "own"],
     ["reference_intro", "Reference intro", "Opens the lorebook and shortcut entries sent along with a prompt.", 3, () => (defaults ? defaults.reference_intro : "")],
     ["conversation_prompt", "Conversation, plain encoders", "Sent with the earlier turns to an encoder that takes no chat turns.", 5, null, "chat"],
     ["turns_prompt", "Conversation, Gemma 4", "Sent to a model that takes real chat turns.", 5, null, "chat"],
@@ -56,7 +57,7 @@ export function enhance(app, own) {
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
     const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), sum: chat && sum };
+    const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
