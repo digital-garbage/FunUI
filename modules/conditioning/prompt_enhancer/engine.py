@@ -68,8 +68,20 @@ class Dialect:
 def _json_call(text):
     """`{"name": ..., "arguments": {...}}` (Qwen, Hermes and most others) -> {"name", "args"}, or None."""
     import json
+    import re
+    from .helper import loose_json
+    raw = str(text or "").strip()
+    xml = re.match(r"<function=([\w.-]+)>(.*?)(?:</function>|\Z)", raw, re.S)           # Qwen 3.5: <function=name><parameter=key>value</parameter></function>
+    if xml:
+        got = {}
+        for key, value in re.findall(r"<parameter=([\w.-]+)>\s*(.*?)\s*(?:</parameter>|(?=<parameter=)|\Z)", xml.group(2), re.S):
+            try:
+                got[key] = json.loads(value) if value[:1] in "[{" or value in ("true", "false", "null") or re.fullmatch(r"-?\d+(\.\d+)?", value) else value
+            except ValueError:
+                got[key] = value
+        return {"name": xml.group(1), "args": got}
     try:
-        data = json.loads(str(text or "").strip())
+        data = loose_json(raw)
     except ValueError:
         return None
     if not isinstance(data, dict) or not isinstance(data.get("name"), str):
@@ -77,7 +89,7 @@ def _json_call(text):
     args = data.get("arguments", data.get("parameters", {}))
     if isinstance(args, str):
         try:
-            args = json.loads(args)
+            args = loose_json(args)
         except ValueError:
             return None
     return {"name": data["name"], "args": args if isinstance(args, dict) else {}}

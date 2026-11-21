@@ -255,3 +255,25 @@ def test_text_mode_runs_blocks_until_the_model_answers_in_words():
     assert reply == "Auto contrast is off and can be set." and add == ["note"]
     assert asked[0][0].startswith("TOOL RESULTS:\nfind_settings: post_auto_contrast.mode")
     assert asked[0][1] == [first[0]] and state["turns"] == []                       # it saw its own block; nothing of the loop stays in the conversation
+
+
+def test_tool_arguments_written_loosely_by_a_small_model_are_still_read():
+    from .. import helper
+    for body, want in [
+        ('{"scene": 1, "text": "a face, close-up", "reason": "asked"}', "a face, close-up"),
+        ('```json\n{"scene": 1, "text": "a face", "reason": "x",}\n```', "a face"),
+        ("{'scene': 1, 'text': 'a face', 'reason': 'x'}", "a face"),
+        ('{"scene": 1, "text": "a face\nclose, soft light", "reason": "x"}', "a face\nclose, soft light"),
+        ('{"scene": 1, "text": "she says "hello" softly", "reason": "x"}', 'she says "hello" softly'),
+        ('{"scene": 1, "text": "a face", "reason": "he said "go""}', "a face"),
+    ]:
+        got = helper.loose_json(body)
+        assert got["text"] == want and got["scene"] == 1, body
+    assert helper.parse_calls("TOOL: edit_scene\n" + '{"scene": 2, "text": "x "y" z", "reason": "r"}' + "\nEND_TOOL")[1][0]["args"]["text"] == 'x "y" z'
+
+
+def test_a_qwen_style_xml_call_and_a_loose_json_call_are_both_read():
+    from .. import engine
+    got = engine._json_call("<function=edit_scene>\n<parameter=scene>\n1\n</parameter>\n<parameter=text>\na face, close-up\n</parameter>\n</function>")
+    assert got == {"name": "edit_scene", "args": {"scene": 1, "text": "a face, close-up"}}
+    assert engine._json_call("{'name': 'set_story', 'arguments': {'text': 'a \"b\" c'}}")["args"]["text"] == 'a "b" c'

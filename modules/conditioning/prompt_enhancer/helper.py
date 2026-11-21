@@ -362,6 +362,39 @@ def text_rule() -> str:
             "answers you with TOOL RESULTS; then write the next block, or tell the user in one or two sentences what happened. Tools:\n" + "\n".join(lines))
 
 
+def loose_json(body):
+    """JSON as small models write it: code fences, smart or single quotes, newlines inside strings, trailing commas and unescaped quotes inside a text are all read. Raises ValueError when nothing can be made of it."""
+    t = re.sub(r"^```[a-z]*\s*|\s*```$", "", str(body).strip())
+    t = t.replace("\u201c", '"').replace("\u201d", '"')
+    for attempt in (t, re.sub(r",\s*([}\]])", r"\1", t)):
+        try:
+            return json.loads(attempt, strict=False)
+        except ValueError:
+            pass
+    try:
+        import ast
+        got = ast.literal_eval(t)
+        if isinstance(got, dict):
+            return got
+    except (ValueError, SyntaxError):
+        pass
+    keys = list(re.finditer(r"""["']([A-Za-z_]+)["']\s*:\s*""", t))
+    if not keys:
+        raise ValueError("no arguments")
+    out = {}
+    for i, m in enumerate(keys):
+        end = keys[i + 1].start() if i + 1 < len(keys) else len(t)
+        raw = t[m.end():end].strip().rstrip("}").rstrip().rstrip(",").strip()
+        if raw[:1] in "\"'" and raw[-1:] == raw[:1] and len(raw) >= 2:
+            out[m.group(1)] = raw[1:-1].replace('\\"', '"').replace("\\n", "\n")
+        else:
+            try:
+                out[m.group(1)] = json.loads(raw.lower() if raw.lower() in ("true", "false", "null") else raw)
+            except ValueError:
+                out[m.group(1)] = raw.strip("\"'")
+    return out
+
+
 def parse_calls(text):
     """-> (the answer without TOOL blocks, [{"name", "args"}]). A block whose arguments are not JSON carries "error"."""
     found = []
@@ -369,7 +402,7 @@ def parse_calls(text):
     def take(m):
         body = m.group(2).strip()
         try:
-            args = json.loads(body) if body else {}
+            args = loose_json(body) if body else {}
             found.append({"name": m.group(1), "args": args if isinstance(args, dict) else {}, **({} if isinstance(args, dict) else {"error": "the arguments must be a JSON object"})})
         except ValueError:
             found.append({"name": m.group(1), "args": {}, "error": "the arguments are not valid JSON"})

@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper reads tool calls that small models write sloppily.** Arguments with single or curly quotes, quotes or line breaks inside the text, trailing commas, or code fences are now understood, and Qwen 3.5's `<function=...><parameter=...>` call format works too. Before, such a call ended in a JSON error and nothing changed.
 - **Recurrent and hybrid GGUF models (such as Qwen3.5) no longer fail on follow-up requests.** Their memory cannot drop only the end of a cached prompt, which made llama.cpp stop with "find_slot: non-consecutive token position". These models now start from empty memory when the new prompt does not simply continue the last one.
 - **The Helper tries again in text mode whenever a model answers without calling a tool**, not only when its answer announces a change. Plain questions ending with a question mark are just answered.
 - **Models split into parts need only one part named.** For the Enhance engine, writing `owner/name::model-00002-of-00004.safetensors` (or a `-of-` GGUF part) now downloads every part, plus the index file and the config for safetensors parts, and loads them as one model. Before, only the named file came down and the model would not load. A missing part is named in the error.
