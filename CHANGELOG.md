@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Output speed under the model's answers.** The Chat tab shows "Average output speed: N tokens/sec" below each answer the engine wrote.
 - **"Use ComfyUI's text generation instead"** (Composer > Enhance, off by default). On, the enhancer and the Chat tab write with ComfyUI's own text generation as before, and FunUI's engine stays off.
 - **The chat follows the model as it writes.** While an answer streams in, the Chat tab scrolls down with it, unless you scrolled up to read.
 - **The engine says how it runs a model.** The line under the model picker now ends with "bf16" or "fp8". fp8 widens every layer at every word, which is slow; bf16 (the automatic choice when the graphics card has room) does not.

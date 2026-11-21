@@ -95,22 +95,24 @@ export function chat(app, own) {
     if (!here) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Chat comments go to the enhancer. Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const you = (text) => c.bubble.you({ text, who: "You" }), model = (text) => c.bubble.model({ text, who: "Model" });
     const ck = `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, convo = all.filter((r) => r.conversation === ck && r.ok);
+    // "Average output speed: N tokens/s", under what the model wrote (the run's status line carries it).
+    const pace = (x) => { const m = /([\d.]+) tokens\/s/.exec(String((x && x.status) || x || "")); return m && Number(m[1]) > 0 ? [c.hint.default({ text: `Average output speed: ${m[1]} tokens/sec` })] : []; };
     const thought = (r) => (r.thinking ? [c.bubble.model({ text: r.thinking, who: "Model (thinking)" })] : []);
     const noted = (r) => [...(r.remember || []).map((x) => `Noted: ${x}`), ...(r.forget || []).map((x) => `Dropped note ${x}`)].map((text) => c.hint.default({ text }));
     let bubbles;
     if (convo.length) {                      // "Send everything into chat": the whole conversation in the order of the chat ids
       const asked = new Set(convo.map((r) => r.prompt_id)), stamped = (x) => Number.isFinite(x.chat_id);
       const under = (r) => list.filter((x) => !stamped(x) && x.run === r.prompt_id).map((x) => you(x.comment));      // comments from before they had an id: under the rewrite they were about
-      const rows = [...convo.map((r, i) => ({ at: Number.isFinite(r.chat_id) ? r.chat_id : -1 + i / (convo.length + 1), bubbles: [you(r.asked ?? r.before), ...thought(r), model(r.answered ?? r.after), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...under(r)] })),
+      const rows = [...convo.map((r, i) => ({ at: Number.isFinite(r.chat_id) ? r.chat_id : -1 + i / (convo.length + 1), bubbles: [you(r.asked ?? r.before), ...thought(r), model(r.answered ?? r.after), ...pace(r), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...under(r)] })),
         ...list.filter(stamped).map((x) => ({ at: x.chat_id, bubbles: [you(x.comment)] }))].sort((a, b) => a.at - b.at);
       bubbles = [...rows.flatMap((x) => x.bubbles), ...list.filter((x) => !stamped(x) && !asked.has(x.run)).map((x) => you(x.comment))];
     } else {
       bubbles = [...list.flatMap((r) => [first(r) ? model(first(r)) : null, you(r.comment)]),
-        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), ...thought(last), model(last.answered ?? last.after)] : []),
+        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), ...thought(last), model(last.answered ?? last.after), ...pace(last)] : []),
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
     // An answer that is still forming: the message, the model's thinking and its words so far.
-    if (live) bubbles.push(you(live.message), ...(live.thinking ? [c.bubble.model({ text: live.thinking, who: "Model (thinking)" })] : []), live.answer ? model(live.answer) : c.hint.default({ text: live.status || "The model is writing…" }));
+    if (live) bubbles.push(you(live.message), ...(live.thinking ? [c.bubble.model({ text: live.thinking, who: "Model (thinking)" })] : []), live.answer ? model(live.answer) : c.hint.default({ text: live.status || "The model is writing…" }), ...(live.tps ? [c.hint.default({ text: `Average output speed: ${live.tps} tokens/sec` })] : []));
     // A rewrite that is running inside a generation: what the model has written so far, as it forms.
     if (writing && !live) bubbles.push(c.hint.default({ text: `Writing: ${writing.label}` }), ...(writing.thinking ? [c.bubble.model({ text: writing.thinking, who: "Model (thinking)" })] : []), writing.answer ? model(writing.answer) : c.hint.default({ text: writing.status || "The model is writing…" }));
     bubbles = bubbles.filter(Boolean);
@@ -146,7 +148,7 @@ export function chat(app, own) {
           const show = () => { if (queued) return; queued = true; later(() => { queued = false; if (live) draw(true); }); };
           try {
             r = await app.api.enhancerChatStream(body, (ev) => {
-              if (ev.kind === "thinking") live.thinking += ev.text; else if (ev.kind === "answer") live.answer += ev.text; else if (ev.kind === "status") live.status = ev.text;
+              if (ev.kind === "thinking") live.thinking += ev.text; else if (ev.kind === "answer") live.answer += ev.text; else if (ev.kind === "status") live.status = ev.text; else if (ev.kind === "end" && ev.tps) live.tps = ev.tps;
               else if (ev.kind === "edit_request") proposal(ev, slot);
               show();
             });
