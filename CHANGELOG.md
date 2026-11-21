@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Better summaries of long enhancer conversations.** The model that shortens a long conversation now gets each scene labelled (your request, your comments, the rating, its own answer) and is asked for notes under clear headings: scenes, your feedback and ratings, and what still applies. Its sampling no longer punishes it for repeating words from the conversation.
 - **An edited prompt no longer follows its old version in the enhancer's conversation** (with "Send everything into chat"). When you generate a scene again, the enhancer's earlier request and answer for that scene are replaced instead of kept, so the new rewrite is not pulled back toward the old prompt.
 - **The model's thinking shows in the Chat tab** (when "Thinking" is on), as a message of its own just before each answer, for rewrites and instant replies. It no longer shows in the Enhance tab.
 - **Options a version no longer has never stop a run.** A saved pipeline that still holds a setting a node no longer has is run without it, and a saved modifier choice that is no longer one of the options uses that setting's default. The Log says what was ignored or replaced. Values you typed that are out of range are still refused.

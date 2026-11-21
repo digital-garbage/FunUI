@@ -64,10 +64,15 @@ The message shows EARLIER IN THIS CONVERSATION (each earlier request and your an
 - Rewrite only the NEW REQUEST, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - Never repeat an earlier answer word for word, and never quote or mention the earlier turns.
 Output only the rewritten prompt, nothing else."""
-COMPACT_SYSTEM = """SUMMARY: you are compressing a conversation between a user and a video-prompt writer so it can continue in less space.
-Write one compact summary that keeps: the characters, setting, style, tone and visual details established so far, every instruction the user gave that still applies, and what the latest shots showed.
-Drop greetings, repetition and anything superseded. Output only the summary, plain text, under 250 words."""
-COMPACT_TOKENS = 400         # longest summary the model may write
+COMPACT_SYSTEM = """You are the note-taker of a conversation between a person and a writer of text-to-video prompts. Your only job: write the notes that replace the transcript, so the writer can carry on from them alone.
+Do not continue the conversation. Do not write a video prompt. Do not answer anything in it.
+Write plain text under these headings, leaving out a heading that has nothing:
+SCENES: one short line per scene, oldest first: what the person asked for and what the writer produced (subject, setting, style, key visual details).
+PERSON'S FEEDBACK: every comment, correction and instruction the person gave, close to their own words, and every rating with the scene it was about.
+STILL APPLIES: lasting preferences and rules the writer must keep following.
+If EARLIER NOTES are given, keep everything in them that still applies and add the new turns. Drop greetings, repetition and anything superseded. Under 300 words."""
+COMPACT_ASK = "Now write the notes for the conversation above, under the headings. Output only the notes."
+COMPACT_TOKENS = 600         # longest summary the model may write
 COMPACT_AT = 0.8             # compact once a request would fill this share of the context window
 DEFAULT_WINDOW = 32768       # the working window when the model does not say or reports more, and nothing is set
 CONVO_KEEP = 200             # turns a compacting conversation holds in memory
@@ -261,11 +266,28 @@ def context_window(clip) -> int:
     return 0
 
 
+def compact_turn(t, cut) -> str:
+    """One turn of the transcript for the note-taker, each part labelled (a turn from before the parts were kept has only its request)."""
+    if t.get("kind") == "chat":
+        return f"[Chat] Person: {cut(t['request'])}\nWriter: {cut(t['reply'])}"
+    prompt = t.get("prompt")
+    if prompt is None:
+        return f"[Scene] Person's request: {cut(t['request'])}\nWriter's answer: {cut(t['reply'])}"
+    rows = [f"[Scene] Person's request: {cut(prompt)}"]
+    if t.get("feedback"):
+        rows.append("Person's comments on the earlier answer: " + cut(" | ".join(t["feedback"])))
+    if t.get("rating"):
+        rows.append("Rating of the scene before: " + cut(t["rating"]))
+    rows.append(f"Writer's answer: {cut(t['reply'])}")
+    return "\n".join(rows)
+
+
 def compact(clip, summary, turns, **sampling):
-    """-> new summary text of the old summary plus these turns, or "" when the model could not write one."""
+    """-> new notes text of the old notes plus these turns, or "" when the model could not write them."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
-    text = (f"EARLIER SUMMARY:\n{summary}\n\n" if summary else "") + "TURNS:\n" + "\n".join(f"User: {cut(t['request'])}\nYou: {cut(t['reply'])}" for t in turns)
-    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, "max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "image": None})
+    text = (f"EARLIER NOTES:\n{summary}\n\n" if summary else "") + "TRANSCRIPT:\n" + "\n\n".join(compact_turn(t, cut) for t in turns) + "\n\n" + COMPACT_ASK
+    # Plain and steady: a repetition penalty would punish the notes for using the words they are about.
+    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, "max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0, "image": None})
     return clean(raw)
 
 

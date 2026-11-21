@@ -294,7 +294,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
             turns = kept["turns"]
             kept["seen"].update(k for k, _ in fresh)
             CONVOS.move_to_end(key)
-            turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out, **({"scene": scene} if scene else {})})
+            turns.append({"request": "\n".join(x for x in (body, note_text) if x), "reply": info.get("answered") or out,
+                          "prompt": body, "feedback": [c for _, c in fresh], "rating": rating_line if pass_rating else "", **({"scene": scene} if scene else {})})
             while len(CONVOS) > MAX_CONVOS:
                 CONVOS.popitem(last=False)
         RUNS.append({"prompt_id": _prompt_id(), "status": status + compacted, "conversation": key, "context": context, "compacted": did, "summary": state["summary"] if (did and state) else "", **info})

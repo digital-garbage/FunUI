@@ -290,7 +290,7 @@ def test_a_run_reports_the_model_s_own_words_apart_from_the_global_prefix_and_po
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "PRE a fox POST", enabled=True, seed=3, scope="own", head="PRE", tail="POST", to_chat=True, conversation="x:0", pass_rating=True, rating_line="Rated: Liked")
     run = node.RUNS[-1]
     assert run["after"] == "PRE A fox runs. POST" and run["asked"] == "a fox\nRated: Liked" and run["answered"] == "A fox runs."
-    assert list(node.CONVOS["x:0"]["turns"]) == [{"request": "a fox\nRated: Liked", "reply": "A fox runs."}]
+    assert list(node.CONVOS["x:0"]["turns"]) == [{"request": "a fox\nRated: Liked", "reply": "A fox runs.", "prompt": "a fox", "feedback": [], "rating": "Rated: Liked"}]
 
 
 class Gemma4_Tokenizer:      # the name ComfyUI's Gemma 4 tokenizers derive from
@@ -612,3 +612,22 @@ def test_a_new_request_for_the_same_scene_replaces_its_earlier_turn(node):
     assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["a dog", "an owl"]
     run(FakeClip(""), "a cat", "s2")                                        # a failed run replaces nothing
     assert [t["request"] for t in node.CONVOS["p:0"]["turns"]] == ["a dog", "an owl"]
+
+
+def test_the_note_taker_sees_comments_ratings_and_answers_labelled_and_is_not_penalised_for_repeating_words(node):
+    node.CONVOS.clear()
+    run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="c:2", **kw)
+    run(FakeClip("A red fox runs."), "a fox", rating_line="The previous scene was rated: Liked", pass_rating=True)
+    node.CONVOS["c:2"]["seen"].clear()
+    notes = FakeClip("SCENES: a red fox.")
+    seen = {}
+    real = en().generate
+    def spy(clip, system, user, **kw):
+        seen.update(system=system, user=user, kw=kw)
+        return real(clip, system, user, **kw)
+    import unittest.mock as mock
+    with mock.patch.object(en(), "generate", spy):
+        assert en().compact(notes, "", list(node.CONVOS["c:2"]["turns"])) == "SCENES: a red fox."
+    assert "Person's request: a fox" in seen["user"] and "Rating of the scene before: The previous scene was rated: Liked" in seen["user"] and "Writer's answer: A red fox runs." in seen["user"]
+    assert seen["user"].endswith(en().COMPACT_ASK) and "PERSON'S FEEDBACK" in seen["system"]
+    assert seen["kw"]["repetition_penalty"] == 1.0 and seen["kw"]["do_sample"] is False
