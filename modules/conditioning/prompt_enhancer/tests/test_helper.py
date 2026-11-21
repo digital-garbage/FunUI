@@ -67,3 +67,22 @@ def test_allowed_setting_change_carries_the_typed_value():
     out = helper.Actions(1, on_event, wait=2, settings=SETTINGS)({"name": "set_setting", "args": {"module": "sampling_attention_bandit", "setting": "enabled", "value": "true", "reason": "r"}})
     assert out.startswith("Allowed") and seen[0]["args"]["value"] is True
     assert "Attention explorer" in seen[0]["summary"]
+
+
+def test_project_text_variables_and_shortcuts_are_checked_before_asking():
+    acts = helper.Actions(1, lambda ev: None, wait=1, variables=["dog"], shortcuts=[{"name": "sunset", "triggers": ["sunset"], "replacements": ["golden light"]}])
+    for bad in ({"name": "set_project_text", "args": {"field": "title", "text": "x"}}, {"name": "set_variable", "args": {"name": "a b", "value": "x"}},
+                {"name": "remove_variable", "args": {"name": "cat"}}, {"name": "save_shortcut", "args": {"name": "x", "triggers": [], "replacements": ["y"]}},
+                {"name": "remove_shortcut", "args": {"name": "nope"}}):
+        assert acts(bad).startswith("Error"), bad
+    assert "golden light" in acts({"name": "find_shortcuts", "args": {"query": "sunset"}})
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    live = helper.Actions(1, on_event, wait=2, variables=["dog"], shortcuts=[{"name": "sunset", "triggers": ["sunset"], "replacements": ["x"]}])
+    assert live({"name": "save_shortcut", "args": {"name": "sunset", "triggers": ["sunset"], "replacements": ["y"], "reason": "r"}}).startswith("Allowed")
+    assert seen[0]["args"]["existing"] is True
+    assert live({"name": "set_variable", "args": {"name": "$cat", "value": "tabby", "reason": "r"}}).startswith("Allowed")
+    assert live({"name": "remove_variable", "args": {"name": "cat", "reason": "r"}}).startswith("Allowed")

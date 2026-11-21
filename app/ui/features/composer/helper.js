@@ -21,7 +21,9 @@ const modulesLine = (ps) => { const seen = new Set(catalogOf(ps).map((x) => x.ti
 export function sheetOf(project) {
   if (!project) return "";
   const fps = Number(project.frame_rate) || 25, lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}): ${(s.text || "").trim() || "(empty)"}`);
-  return [`Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
+  const vars = (project.variables || []).map((v) => `$${v.name} = ${String(v.value).slice(0, 200)}`);
+  return [`Prefix: ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
+    `Variables: ${vars.length ? "" : "(none)"}`, ...vars, `Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
 }
 
 /** Every setting the app has right now, for the model to look up: module, name, kind, limits and the value in force. */
@@ -34,7 +36,7 @@ export function catalogOf(ps) {
 }
 
 /** Make an allowed change in the project. -> a short plain line saying what was done (or why not). */
-export function applyAction(project, ev, ps) {
+export function applyAction(project, ev, ps, api) {
   const a = ev.args || {}, n = (project.project.scenes || []).length;
   const secs = (pr, sc, s) => snapFrames(s * effFps(sc, pr));
   if (ev.tool === "edit_scene") {
@@ -64,6 +66,20 @@ export function applyAction(project, ev, ps) {
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
+  }
+  if (ev.tool === "set_project_text") {
+    ({ prefix: () => project.setAnchor(a.text), postfix: () => project.setPostfix(a.text), negative: () => project.setNegative(a.text) })[a.field]?.();
+    return `Changed the ${a.field}`;
+  }
+  if (ev.tool === "set_variable" || ev.tool === "remove_variable") {
+    const list = [...(project.project.variables || [])].map((v) => ({ ...v })), at = list.findIndex((v) => v.name === a.name);
+    if (ev.tool === "remove_variable") { if (at >= 0) list.splice(at, 1); } else if (at >= 0) list[at].value = a.value; else list.push({ name: a.name, value: a.value });
+    project.setField("variables", list);
+    return ev.tool === "remove_variable" ? `Removed $${a.name}` : `Set $${a.name}`;
+  }
+  if ((ev.tool === "save_shortcut" || ev.tool === "remove_shortcut") && api) {
+    const done = ev.tool === "remove_shortcut" ? api.deleteShortcut(a.name) : api.saveShortcut({ name: a.name, triggers: a.triggers, replacements: a.replacements, enabled: true, category: a.category || "", sub_category: "" }, a.existing ? a.name : undefined);
+    return Promise.resolve(done).then(() => (ev.tool === "remove_shortcut" ? `Deleted shortcut ${a.name}` : `Saved shortcut ${a.name}`), (e) => `Shortcut not saved: ${(e && e.message) || e}`);
   }
   if (ev.tool === "set_setting" && ps) {
     const spec = (ps.modulesById()[a.module] || { settings: {} }).settings[a.setting];
@@ -116,13 +132,14 @@ export function openHelper(app, origin) {
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, reply: "", status: "", done: [] };
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; paint();
-    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project) + modulesLine(app.pipeline), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
+    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project) + modulesLine(app.pipeline), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
-          turn.done.push(yes ? applyAction(p, ev, app.pipeline) : `Refused: ${ev.summary}`);
+          turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api) : `Refused: ${ev.summary}`);
           paint();
           await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
         })();

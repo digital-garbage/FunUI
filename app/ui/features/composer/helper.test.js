@@ -43,3 +43,20 @@ test("the catalog lists the settings of the active modules with their value now,
   applyAction({ project: { scenes: [] } }, { tool: "set_setting", args: { module: "sampling_attention_bandit", setting: "blocks", value: "2-10,29-90" } }, ps);
   assert.deepEqual(set, [["sampling_attention_bandit", "blocks", "2-10,29-49"]]);
 });
+
+test("prefix, postfix, variables and shortcuts: the sheet shows them and allowed changes reach the project and the library", async () => {
+  const calls = [];
+  const project = { anchor: "film still", postfix: "", negative: "", variables: [{ name: "dog", value: "a collie" }], scenes: [] };
+  const p = { project, setAnchor: (v) => { project.anchor = v; }, setPostfix: (v) => { project.postfix = v; }, setNegative: (v) => { project.negative = v; }, setField: (k, v) => { project[k] = v; } };
+  const api = { saveShortcut: async (...a) => { calls.push(["save", ...a]); }, deleteShortcut: async (n) => { calls.push(["delete", n]); } };
+  assert.match(sheetOf(project), /Prefix: film still[\s\S]*\$dog = a collie/);
+  applyAction(p, { tool: "set_project_text", args: { field: "prefix", text: "cinema" } });
+  applyAction(p, { tool: "set_variable", args: { name: "cat", value: "a tabby" } });
+  applyAction(p, { tool: "set_variable", args: { name: "dog", value: "a pug" } });
+  applyAction(p, { tool: "remove_variable", args: { name: "cat" } });
+  assert.equal(project.anchor, "cinema");
+  assert.deepEqual(project.variables, [{ name: "dog", value: "a pug" }]);
+  await applyAction(p, { tool: "save_shortcut", args: { name: "sunset", triggers: ["sunset"], replacements: ["golden light"], existing: true } }, null, api);
+  await applyAction(p, { tool: "remove_shortcut", args: { name: "old" } }, null, api);
+  assert.deepEqual(calls, [["save", { name: "sunset", triggers: ["sunset"], replacements: ["golden light"], enabled: true, category: "", sub_category: "" }, "sunset"], ["delete", "old"]]);
+});

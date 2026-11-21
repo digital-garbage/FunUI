@@ -11,6 +11,8 @@ import threading
 from . import rules
 
 MAX_TEXT = 4000
+TEXTS = {"prefix": "the prefix", "postfix": "the postfix", "negative": "the negative prompt"}
+EXTRA = ("set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
                "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
@@ -27,6 +29,12 @@ def tools() -> list:
     return [fn("edit_scene", "Change the prompt and/or the length of one scene.", {"scene": scene, "text": text, "seconds": seconds, "reason": reason}, ["scene", "reason"]),
             fn("add_scene", "Add a new scene after another one (the last when after is left out).", {"text": text, "after": {"type": "integer", "description": "The scene number to add it after."}, "reason": reason}, ["text", "reason"]),
             fn("copy_reference", "Give a scene the same reference pictures and aspect ratio source picture as another scene.", {"scene": scene, "from_scene": {"type": "integer", "description": "The scene number to copy them from."}, "reason": reason}, ["scene", "from_scene", "reason"]),
+            fn("set_project_text", "Set the project's prefix, postfix or negative prompt (the whole new text; empty clears it).", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
+            fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
+            fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
+            fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
+            fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
+            fn("remove_shortcut", "Delete a shortcut of the library.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("find_settings", "Look up settings of the app by words (a module name, what it does). Answers with each match: module, setting, kind, allowed values and the value now.", {"query": {"type": "string", "description": "Words to look for."}}, ["query"]),
             fn("set_setting", "Change one setting of a module. Use the module and setting names find_settings gave.", {"module": {"type": "string"}, "setting": {"type": "string"}, "value": {"type": ["string", "number", "boolean"], "description": "true or false for a switch, a number, one of the allowed values, or text (for blocks a list such as 2-10,29-46)."}, "reason": reason}, ["module", "setting", "value", "reason"]),
             fn("set_clip_length", "Set the default clip length of the whole project.", {"seconds": seconds, "reason": reason}, ["seconds", "reason"])]
@@ -43,14 +51,26 @@ def describe(name, args) -> str:
         return f"Scene {args.get('scene')}: use the same reference pictures as scene {args.get('from_scene')}"
     if name == "set_setting":
         return f"{args.get('title') or args.get('module')}: {args.get('label') or args.get('setting')}: {args.get('now')} -> {args.get('value')}"
+    if name == "set_project_text":
+        return f"Set {TEXTS.get(args.get('field'))} to: {args.get('text') or '(empty)'}"
+    if name == "set_variable":
+        return f"Set ${args.get('name')} to: {args.get('value')}"
+    if name == "remove_variable":
+        return f"Remove ${args.get('name')}"
+    if name == "save_shortcut":
+        return f"Save shortcut {args.get('name')}: {', '.join(args.get('triggers') or [])} -> {' | '.join(args.get('replacements') or [])}"
+    if name == "remove_shortcut":
+        return f"Delete shortcut {args.get('name')}"
     return f"Set the default clip length to {args.get('seconds')} seconds"
 
 
 class Actions:
     """Answers the model's tool calls for one helper request. `scenes`: how many scenes the project has."""
 
-    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=()):
+    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=()):
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
+        self.variables = {str(v) for v in variables}
+        self.shortcuts = {str(x["name"]): x for x in shortcuts if isinstance(x, dict) and x.get("name")}
         self.settings = {(x["module"], x["name"]): x for x in settings if isinstance(x, dict) and x.get("module") and x.get("name")}
 
     def find(self, query) -> str:
@@ -64,6 +84,31 @@ class Actions:
         if not scored:
             return "No setting matches. Try other words."
         return "\n".join(line(x) for _, _, x in sorted(scored, key=lambda t: t[:2])[:15])
+
+    def find_shortcut(self, query) -> str:
+        words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
+        hits = [x for x in self.shortcuts.values() if words and all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
+        return "\n".join(f"{x['name']}: {', '.join(x.get('triggers') or [])} -> {' | '.join(x.get('replacements') or [])}{'' if x.get('enabled', True) else ' (off)'}" for x in hits[:15]) or "No shortcut matches."
+
+    def extra(self, name, args):
+        """-> an error text, or None when the call is valid (args may gain fields the page needs)."""
+        text = lambda v, n=MAX_TEXT: isinstance(v, str) and len(v) <= n        # noqa: E731
+        if name == "set_project_text":
+            return None if args.get("field") in TEXTS and text(args.get("text")) else f"Error: field is one of {', '.join(TEXTS)} and text is at most {MAX_TEXT} characters."
+        if name in ("set_variable", "remove_variable"):
+            if not isinstance(args.get("name"), str) or not re.fullmatch(r"[A-Za-z0-9_]{1,40}", args["name"].lstrip("$")):
+                return "Error: a variable name is letters, digits and _ without the $."
+            args["name"] = args["name"].lstrip("$")
+            if name == "remove_variable":
+                return None if args["name"] in self.variables else f"Error: there is no variable ${args['name']}."
+            return None if text(args.get("value")) else "Error: value must be text."
+        if name == "save_shortcut":
+            ok = lambda v: isinstance(v, list) and v and all(isinstance(x, str) and x.strip() and len(x) <= 500 for x in v)        # noqa: E731
+            if not text(args.get("name"), 80) or not args["name"].strip() or not ok(args.get("triggers")) or not ok(args.get("replacements")):
+                return "Error: a shortcut needs a name, at least one trigger and at least one replacement."
+            args["existing"] = args["name"] in self.shortcuts
+            return None
+        return None if args.get("name") in self.shortcuts else f"Error: there is no shortcut called '{args.get('name')}'."        # remove_shortcut
 
     def check(self, args):
         """-> (the setting, the value as it will be saved) or an error text."""
@@ -91,12 +136,19 @@ class Actions:
 
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
-        if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting"):
+        if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts") + EXTRA:
             return f"Error: there is no tool called '{name}'."
         num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 600        # noqa: E731
         if name == "find_settings":
             return self.find(args.get("query"))
-        if name == "set_setting":
+        if name == "find_shortcuts":
+            return self.find_shortcut(args.get("query"))
+        if name in EXTRA:
+            args = dict(args)
+            err = self.extra(name, args)
+            if err:
+                return err
+        elif name == "set_setting":
             err, value = self.check(args)
             if err:
                 return err
@@ -135,6 +187,14 @@ class Actions:
         if slot["allow"]:
             if name == "add_scene":
                 self.scenes += 1
+            elif name == "set_variable":
+                self.variables.add(args["name"])
+            elif name == "remove_variable":
+                self.variables.discard(args["name"])
+            elif name == "save_shortcut":
+                self.shortcuts[args["name"]] = args
+            elif name == "remove_shortcut":
+                self.shortcuts.pop(args["name"], None)
             return "Allowed: the change is made in the project."
         return "Disallowed by the user. Nothing was changed. Do not propose the same change again."
 
