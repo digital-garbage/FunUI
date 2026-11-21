@@ -27,6 +27,7 @@ How does it do it?
 - **Timeline:** add videos, audio, pictures, effects and text. Crop, split, move and render.
 - **Media bin:** upload media, select and clear aspect ratio sources and references/starting images in one click.
 - **Prompt management:** build your shortcuts (keywords that expand into full sentences and act like wildcards), use variables (type $variable_name in the prompt and it's replaced with its value), prepend and append text to each scene's prompt with Prefix and Postfix, and split scenes on timeline automatically with Cut words in your prompt.
+- **Advanced prompt enhancement:** a language model rewrites each prompt, can look at the scene's picture or the last frame of the previous scene, and keeps one running conversation across your scenes, with long ones summarised automatically. Chat with it, leave comments on its rewrites, pass it your ratings, and keep Notes it can edit itself. Every instruction it is given is editable, with macros such as `[[PREVIOUS_MODEL_OUTPUT]]` and `[[LAST_USER_COMMENT]]` that fill in from your conversation.
 - **Projects:** switch between different pipelines in one click.
 - **Presets:** you don't have to wire all nodes manually - built-in presets save you time on generic tasks.
 - **Controls:** fast access to sampler settings, project settings and customizable picker wheel - what's most used is most accessible.
