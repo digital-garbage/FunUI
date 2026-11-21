@@ -266,6 +266,8 @@ def convo_block(turns, summary="", keep=CONVO_TURNS) -> str:
 
 def context_window(clip) -> int:
     """What the loaded text model says its context size is (tokens), or 0 when it does not say."""
+    if getattr(clip, "max_context", 0):
+        return int(clip.max_context)
     seen, stack = set(), [getattr(clip, "cond_stage_model", None)]
     while stack:
         node = stack.pop()
@@ -421,6 +423,8 @@ def _is_gemma4(tokenizer) -> bool:
 
 def native_turns(clip) -> bool:
     """True when this encoder takes a conversation as real role-tagged turns (Gemma 4: a text that opens with its turn marker is used as written)."""
+    if getattr(clip, "is_engine", False):
+        return True
     outer = getattr(clip, "tokenizer", None)
     stock = getattr(getattr(outer, "tokenize_with_weights", None), "__qualname__", "").startswith("SD1Tokenizer.")
     inner = (getattr(outer, getattr(outer, "clip", None) or "", None) if stock else None) or outer
@@ -444,6 +448,9 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
     No ComfyUI tokenizer takes a system prompt (they swallow unknown kwargs), so the
     instructions go first in the user turn, inside the model's own chat template --
     which is also what places an image marker."""
+    if getattr(clip, "is_engine", False):         # our own transformers engine, not ComfyUI's text generation
+        return clip.run(system, user, rounds=rounds, image=image, thinking=thinking, max_length=max(32, int(max_length or 400)), temperature=temperature,
+                        top_p=top_p, top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, do_sample=do_sample, seed=seed)
     if clip is None or not hasattr(clip, "generate") or not hasattr(clip, "decode"):
         return "", ("unavailable: the connected CLIP does not expose text generation; wire a "
                     "generation-capable text encoder")

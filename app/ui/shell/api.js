@@ -9,6 +9,33 @@ function why(res, payload) {
   return [detail, p.why, p.error, list.join("; ")].find((s) => typeof s === "string" && s.trim()) || `HTTP ${res.status}`;
 }
 
+/** POST and read server-sent events ("data: {json}" blocks) as they arrive; resolves the {kind: "result"} event's result. */
+export async function streamEvents(path, body, onEvent) {
+  const res = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok || !res.body) {
+    const payload = await res.json().catch(() => null);
+    throw Object.assign(new Error(why(res, payload)), { status: res.status });
+  }
+  const reader = res.body.getReader(), decoder = new TextDecoder();
+  let buf = "", result = null;
+  const take = (block) => {
+    const line = block.split("\n").find((l) => l.startsWith("data:"));
+    if (!line) return;
+    let ev; try { ev = JSON.parse(line.slice(5)); } catch { return; }
+    if (ev.kind === "result") result = ev.result; else onEvent && onEvent(ev);
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let at;
+    while ((at = buf.indexOf("\n\n")) >= 0) { take(buf.slice(0, at)); buf = buf.slice(at + 2); }
+  }
+  if (buf.trim()) take(buf);
+  if (!result) throw new Error("The answer stopped before it finished.");
+  return result;
+}
+
 export async function call(method, path, body) {
   const res = await fetch(BASE + path, {
     method, headers: body === undefined ? {} : { "Content-Type": "application/json" },
@@ -75,6 +102,11 @@ export const api = {
   enhancerEncoders: () => call("GET", "/api/m/conditioning_prompt_enhancer/encoders"),
   enhancerChat: (body) => call("POST", "/api/m/conditioning_prompt_enhancer/chat", body),
   enhancerRuns: () => call("GET", "/api/m/conditioning_prompt_enhancer/runs"),
+  enhancerEngine: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine"),
+  enhancerEngineLoad: (source) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/load", { source }),
+  enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),
+  /** The chat answer as it forms: `onEvent` hears {kind: status | thinking | answer | call} pieces; resolves the final result. */
+  enhancerChatStream: (body, onEvent) => streamEvents("/api/m/conditioning_prompt_enhancer/chat_stream", body, onEvent),
   rateTaste: (promptId, rating, axis) => call("POST", "/api/m/taste/rate", { prompt_id: promptId, rating, axis: axis || null }),
   newTasteGeneration: (promptId) => call("POST", "/api/m/taste/generation", promptId ? { prompt_id: promptId } : {}),
   shotMemory: () => call("GET", "/api/m/conditioning_shot_camera/memory"),

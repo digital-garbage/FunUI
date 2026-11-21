@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The prompt enhancer can run on its own engine** (Composer > Enhance > Engine model). Name any Hugging Face model that the transformers library supports (or a folder) and it is downloaded once and run directly, instead of through ComfyUI's text encoder. Chat answers appear as they are written, with the model's thinking shown first, so there is no waiting for the whole answer or refreshing the Chat tab. Rewrites during Generate can use it too. Thinking and tool-call formats are recognised per model family.
 - **The Enhance tab is organised by what depends on what.** Settings follow the switch they depend on and are greyed out, not hidden, while that switch is off. Every instruction the model is told, including the rewrite instructions, the reference intro and the rating line opening, now sits in one "System prompts" section in the order a request meets them.
 - **The Composer's Story box scales with its window.** It takes the height the window has left, so the Variables section and the hint under it stay in view when the window or the screen is smaller, instead of being pushed out of sight.
 - **Macros in the enhancer's instructions.** Write `[[PREVIOUS_MODEL_OUTPUT]]`, `[[LAST_USER_COMMENT]]`, `[[LAST_CHAT_MESSAGE]]`, `[[LAST_RATING]]`, `[[COMMENTS_HISTORY]]` and more in Instructions or any system prompt, and each is replaced by what the conversation holds when the model is asked. The full list is in Composer > Enhance > System prompts > Macros.

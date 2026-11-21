@@ -43,36 +43,109 @@ def routes(table, base, web):
         runs = [r for r in RUNS if not want or r["prompt_id"] == want]
         return web.json_response({"runs": runs, "now": int(time.time() * 1000)})        # `now`: the app sets its own comments by this clock
 
-    @table.post(base + "/chat")
-    async def _chat(req):
-        """A live answer in a conversation (the Chat tab): the encoder picked in Enhance answers under its own chat prompt."""
-        import asyncio
-        from . import enhance, nodes
-        try:
-            body = await req.json()
-        except ValueError:
-            body = None
-        if not isinstance(body, dict) or not str(body.get("message") or "").strip() or not str(body.get("conversation") or "").strip():
-            return web.json_response({"ok": False, "reply": "", "status": "a conversation and a message are needed"}, status=400)
-        try:
-            from server import PromptServer
-            if PromptServer.instance.prompt_queue.get_tasks_remaining() > 0:
-                return web.json_response({"ok": False, "reply": "", "status": "a generation is running: the encoder shares its memory, so the reply waits for it"}, status=409)
-        except Exception:                                           # noqa: BLE001 -- not inside ComfyUI: nothing to wait for
-            pass
+    def chat_args(body):
+        """The request body of a chat message -> chat_reply's arguments."""
+        from . import enhance
         keys = ("temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty")
         sampling = {k: body[k] for k in keys if isinstance(body.get(k), (int, float)) and not isinstance(body.get(k), bool)}
         sampling["do_sample"] = body.get("greedy") is not True
         if isinstance(body.get("seed"), int) and not isinstance(body.get("seed"), bool):
             sampling["seed"] = body["seed"]
+        return dict(notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(),
+                    encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
+                    comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
+                    context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400), thinking=body.get("thinking") is True, **sampling)
+
+    async def chat_body(req):
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not str(body.get("message") or "").strip() or not str(body.get("conversation") or "").strip():
+            return None
+        return body
+
+    @table.post(base + "/chat")
+    async def _chat(req):
+        """A live answer in a conversation (the Chat tab): the encoder picked in Enhance answers under its own chat prompt."""
+        import asyncio
+        from . import nodes
+        body = await chat_body(req)
+        if body is None:
+            return web.json_response({"ok": False, "reply": "", "status": "a conversation and a message are needed"}, status=400)
+        args = chat_args(body)
+        if not args["engine_model"]:                     # ComfyUI's encoder shares its memory with a generation; the engine has its own
+            try:
+                from server import PromptServer
+                if PromptServer.instance.prompt_queue.get_tasks_remaining() > 0:
+                    return web.json_response({"ok": False, "reply": "", "status": "a generation is running: the encoder shares its memory, so the reply waits for it"}, status=409)
+            except Exception:                                       # noqa: BLE001 -- not inside ComfyUI: nothing to wait for
+                pass
+        result = await asyncio.get_running_loop().run_in_executor(None, lambda: nodes.chat_reply(body["conversation"], body["message"], **args))
+        return web.json_response(result, status=200 if result["ok"] else 422)
+
+    @table.post(base + "/chat_stream")
+    async def _chat_stream(req):
+        """The same answer, sent as it forms: server-sent events {"kind": status | thinking | answer | call | result}. Needs an engine model."""
+        import asyncio
+        import json
+        from . import engine as eng, nodes
+        body = await chat_body(req)
+        if body is None or not str(body.get("engine_model") or "").strip():
+            return web.json_response({"ok": False, "reply": "", "status": "a conversation, a message and an engine model are needed"}, status=400)
+        args = chat_args(body)
+        loop, queue = asyncio.get_running_loop(), asyncio.Queue()
+        push = lambda ev: loop.call_soon_threadsafe(queue.put_nowait, ev)       # noqa: E731
 
         def work():
-            return nodes.chat_reply(body["conversation"], body["message"], notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""),
-                                    encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS}, comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
-                                    context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400),
-                                    thinking=body.get("thinking") is True, **sampling)
-        result = await asyncio.get_running_loop().run_in_executor(None, work)
-        return web.json_response(result, status=200 if result["ok"] else 422)
+            try:
+                if eng.ENGINE.model is None or eng.ENGINE.source != args["engine_model"]:
+                    push({"kind": "status", "text": f"loading {args['engine_model']} (the first time downloads it)"})
+                result = nodes.chat_reply(body["conversation"], body["message"], on_event=push, **args)
+            except Exception as exc:                                # noqa: BLE001 -- the stream must end with a result
+                result = {"ok": False, "reply": "", "status": str(exc)}
+            push({"kind": "result", "result": result})
+            push(None)
+        loop.run_in_executor(None, work)
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        await resp.prepare(req)
+        try:
+            while True:
+                ev = await queue.get()
+                if ev is None:
+                    break
+                await resp.write(b"data: " + json.dumps(ev).encode() + b"\n\n")
+        except (ConnectionResetError, asyncio.CancelledError):
+            eng.ENGINE.cancel.set()                                  # the page went away: stop writing
+            raise
+        await resp.write_eof()
+        return resp
+
+    @table.get(base + "/engine")
+    async def _engine_status(_req):
+        """Where the engine model is: idle, downloading (with bytes), loading, ready or error."""
+        from . import engine as eng
+        return web.json_response(eng.ENGINE.status())
+
+    @table.post(base + "/engine/load")
+    async def _engine_load(req):
+        """Download (once) and load the engine model in the background: {"source": "owner/name" or a folder}."""
+        from . import engine as eng
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        source = str((body or {}).get("source") or "").strip() if isinstance(body, dict) else ""
+        if not source:
+            return web.json_response({"ok": False, "status": "an engine model is needed"}, status=400)
+        started = eng.ENGINE.load_async(source)
+        return web.json_response({"ok": True, "started": started, **eng.ENGINE.status()})
+
+    @table.post(base + "/engine/unload")
+    async def _engine_unload(_req):
+        from . import engine as eng
+        eng.ENGINE.unload()
+        return web.json_response(eng.ENGINE.status())
 
     @table.get(base + "/encoders")
     async def _encoders(_req):

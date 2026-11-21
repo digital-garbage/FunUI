@@ -59,7 +59,7 @@ function scrollParent(node) {
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let last = null, all = [], replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
+  let last = null, all = [], live = null, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
@@ -91,6 +91,8 @@ export function chat(app, own) {
         ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), ...thought(last), model(last.answered ?? last.after)] : []),
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
+    // An answer that is still forming: the message, the model's thinking and its words so far.
+    if (live) bubbles.push(you(live.message), ...(live.thinking ? [c.bubble.model({ text: live.thinking, who: "Model (thinking)" })] : []), live.answer ? model(live.answer) : c.hint.default({ text: live.status || "The model is writing…" }));
     bubbles = bubbles.filter(Boolean);
     const lastEntry = convo.length && convo[convo.length - 1], cx = lastEntry && lastEntry.context, cxFor = lastEntry && lastEntry.kind === "chat" ? "last chat reply" : "last rewrite";
     if (cx) bubbles.push(c.hint.default({ text: `Context (${cxFor}): about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
@@ -102,14 +104,27 @@ export function chat(app, own) {
     const slot = ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inp = (slot && slot.inputs) || {};
     const tail = convo.length ? convo[convo.length - 1] : last;
     const comment = () => { if (addComment(app, draft, last, tail)) { draft = ""; draw(true); } };
-    const canChat = inp.to_chat === true && Boolean(inp.encoder_file);
+    const canChat = inp.to_chat === true && Boolean(inp.encoder_file || inp.engine_model);
     const say = async () => {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "encoder_file", "encoder_family", "chat_prompt", "notes_prompt", "compact_prompt"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "chat_prompt", "notes_prompt", "compact_prompt"];
       try {
-        const r = await app.api.enhancerChat({ conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) });
+        const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) };
+        let r;
+        if (inp.engine_model) {          // the engine writes it in front of you, piece by piece
+          live = { message, thinking: "", answer: "", status: "" };
+          let queued = false;
+          const show = () => { if (queued) return; queued = true; later(() => { queued = false; if (live) draw(true); }); };
+          try {
+            r = await app.api.enhancerChatStream(body, (ev) => {
+              if (ev.kind === "thinking") live.thinking += ev.text; else if (ev.kind === "answer") live.answer += ev.text; else if (ev.kind === "status") live.status = ev.text;
+              show();
+            });
+          } finally { live = null; }
+          if (r && !r.ok) throw new Error(r.status || "the model could not answer");
+        } else r = await app.api.enhancerChat(body);
         if (r && r.compacted) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised." });
         if (r && ((r.remember || []).length || (r.forget || []).length)) p.setPref("enhance_notes", applyNotes(p.pref("enhance_notes", ""), r.remember, r.forget));
       } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }

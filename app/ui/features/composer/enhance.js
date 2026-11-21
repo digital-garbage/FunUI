@@ -10,8 +10,12 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, encoders = { files: [], families: [] };
-  own(() => { alive = false; });
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] };
+  own(() => { alive = false; clearTimeout(poll); });
+  const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
+  const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: `Ready: ${engine.message || ""}`,
+    downloading: `Downloading: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
+  const refreshEngine = () => app.api.enhancerEngine().then((r) => { engine = r; if (alive && !app.dom.typingIn(page.node)) draw(); clearTimeout(poll); if (alive && (r.phase === "downloading" || r.phase === "loading")) poll = setTimeout(refreshEngine, 1500); }).catch(() => {});
   const slot = () => (ps.slots() || []).find((s) => s.node === NODE) || null;
   const set = async (name, value) => { const sl = slot(); if (sl) { await ps.save({ inputs: { [sl.id]: { [name]: value } } }); draw(); } };
   const continuityOn = () => { const k = (ps.currentValues && ps.currentValues() || {}).continuity; return Boolean(k) && k.carry !== false; };      // hidden while Continuity is not there or not carrying the frame
@@ -51,8 +55,8 @@ export function enhance(app, own) {
     const on = val("enabled", false), greedy = val("greedy", false);
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
-    const chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
-    const live = { chat, nochat: !chat, rate: chat && rate, talk: chat && encoder, sum: chat && sum };
+    const engineSet = Boolean(String(val("engine_model", "")).trim()), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
+    const live = { chat, nochat: !chat, rate: chat && rate, talk: chat && (encoder || engineSet), sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
@@ -60,8 +64,13 @@ export function enhance(app, own) {
       c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a|b] markup is kept as written. Settings that depend on another are greyed out while that one is off." }),
       toggle("Enhance prompt", "", "enabled", false, false),
       c.label.section({ text: "Model" }),
-      pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here.", "", off()),
-      pick("encoder_family", "Encoder family", "", "Which family the encoder file is for.", "stable_diffusion", off(encoder)),
+      field("Engine model", c.input.sm({ label: "Engine model", value: val("engine_model", ""), placeholder: "owner/name on Hugging Face, or a folder", disabled: off(), onCommit: (x) => { set("engine_model", x.trim()); refreshEngine(); } }),
+        "Runs the model on FunUI's own engine, which can use any model that transformers supports and shows the chat as it is written. The first use downloads it. Empty uses the encoder below."),
+      c.hint.default({ text: engineSet ? engineLine() : "No engine model set: the encoder below writes the rewrites." }),
+      c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", "")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
+        c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),
+      pick("encoder_file", "Encoder", "The model's own encoder", "The text encoder that writes the rewrite when no engine model is set. Models like H3's own encoder cannot write prose: pick a chat model such as Gemma 4 here.", "", off(!engineSet)),
+      pick("encoder_family", "Encoder family", "", "Which family the encoder file is for.", "stable_diffusion", off(encoder, !engineSet)),
       field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
       c.label.section({ text: "Picture" }),
       toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
@@ -93,6 +102,7 @@ export function enhance(app, own) {
     ]);
   }
   draw();
+  refreshEngine();
   ps.ensureLoaded().then(draw);
   app.api.enhancerEncoders().then((r) => { encoders = { files: r.files || [], families: r.families || [] }; draw(); }).catch(() => {});
   // Another project's pipeline, or an edit made elsewhere: redraw, but never under a field being typed in.

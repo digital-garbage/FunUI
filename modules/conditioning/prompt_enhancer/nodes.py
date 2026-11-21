@@ -9,6 +9,7 @@ from comfy_api.latest import io
 
 from ..._core import log
 from . import enhance as en
+from .engine import ENGINE, EngineClip
 
 #: The last runs' rewrites, newest last: what the Composer's readout shows. In
 #: memory on purpose -- it is the last run's answer, not state to keep.
@@ -73,17 +74,24 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
-    if not encoder_file:
+    if engine_model:
+        try:
+            ENGINE.load(engine_model)
+        except Exception as e:                                      # noqa: BLE001
+            return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
+        clip = EngineClip(ENGINE, on_event)
+    elif not encoder_file:
         return {"ok": False, "reply": "", "status": "pick an Encoder in Composer > Enhance: the model's own encoder cannot chat"}
-    try:
-        clip = _own_encoder(encoder_file, encoder_family)
-    except Exception as e:                                          # noqa: BLE001
-        return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
+    else:
+        try:
+            clip = _own_encoder(encoder_file, encoder_family)
+        except Exception as e:                                      # noqa: BLE001
+            return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
     macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message)
@@ -139,6 +147,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.String.Input("text", multiline=True, default=""),
                 io.Boolean.Input("enabled", default=False,
                                  tooltip="Off: the prompt passes through and the model is not run."),
+                io.String.Input("engine_model", default="", optional=True,
+                                tooltip="A Hugging Face model (owner/name) or a folder, run by FunUI's own transformers engine instead of the encoder. Empty uses the encoder."),
                 io.String.Input("instructions", multiline=True, default="", optional=True,
                                 tooltip="What the model is told to do. Empty uses the built-in instructions."),
                 io.String.Input("chat_prompt", multiline=True, default="", optional=True,
@@ -228,7 +238,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         return time.time() if enabled and not seed else ""
 
     @classmethod
-    def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
+    def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
@@ -251,7 +261,16 @@ class FunUIEnhancePrompt(io.ComfyNode):
                              "before": text, "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "prefix/postfix not found")
             body = text[len(pre):len(text) - len(post)].strip()
-        if encoder_file:
+        if str(engine_model or "").strip():
+            try:
+                ENGINE.load(str(engine_model).strip())
+                clip = EngineClip(ENGINE)
+            except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
+                log.warning("FunUI Prompt enhancer", f"could not load the engine model {engine_model}: {e}; the original prompt is used")
+                _log({"prompt_id": _prompt_id(), "status": f"could not load the engine model {engine_model}: {e}", "before": text,
+                      "after": text, "thinking": "", "sent": "", "ok": False})
+                return io.NodeOutput(text, "engine failed")
+        elif encoder_file:
             try:
                 clip = _own_encoder(encoder_file, encoder_family)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through

@@ -10,7 +10,7 @@ test.after(() => teardownDom());
 test("the Enhance tab follows the open project's pipeline: no enhancer there, no toggle shown", async () => {
   let live = [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], heard;
   const ps = { slots: () => live, ensureLoaded: async () => {}, save: async () => {}, subscribe: (fn) => { heard = fn; return () => {}; } };
-  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
   assert.match(page.node.textContent, /Enhance prompt/);
@@ -22,7 +22,7 @@ test("the Enhance tab follows the open project's pipeline: no enhancer there, no
 test("a run that ends while Enhance is open shows its final prompt without reopening the tab", async () => {
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: {} }], ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
   let runs = [], tell;
-  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs }) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs }) };
   const generate = { subscribe: (fn) => { tell = fn; fn({ phase: "idle" }); return () => {}; } };
   const page = enhance({ dom: createDom(), pipeline: ps, api, generate }, () => {});
   await new Promise((r) => setTimeout(r, 0));
@@ -49,7 +49,7 @@ test("Chat on a pipeline with no enhancer says so instead of taking comments tha
 test("the Encoder pick lists the encoder files, and its family is greyed out until a file is picked", async () => {
   let inputs = { enabled: true }, saved;
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs }], ensureLoaded: async () => {}, save: async (b) => { saved = b; inputs = { ...inputs, ...b.inputs.e }; }, subscribe: () => () => {} };
-  const api = { enhancerEncoders: async () => ({ files: ["gemma4.safetensors"], families: ["stable_diffusion", "ltxv"] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: ["gemma4.safetensors"], families: ["stable_diffusion", "ltxv"] }), enhancerDefaults: async () => ({}), enhancerRuns: async () => ({ runs: [] }) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));
@@ -68,7 +68,7 @@ test("Style picks the built-in instructions shown as the placeholder, and choosi
   const saved = [];
   const slot = { id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } };
   const ps = { slots: () => [slot], ensureLoaded: async () => {}, save: async (...a) => { saved.push(a); }, subscribe: () => () => {} };
-  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }),
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }),
     enhancerDefaults: async () => ({ instructions: "DEFAULT TEXT", reference_intro: "", styles: { default: "DEFAULT TEXT", dynamic: "DYNAMIC TEXT" } }) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
@@ -83,7 +83,7 @@ test("the last-frame toggle is greyed out unless Continuity is loaded and carryi
   const saved = [];
   const mk = (continuity) => ({ slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], currentValues: () => (continuity === undefined ? {} : { continuity }),
     ensureLoaded: async () => {}, save: async (b) => { saved.push(b); }, subscribe: () => () => {} });
-  const api = { enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}) };
   const shows = async (continuity) => {
     const page = enhance({ dom: createDom(), pipeline: mk(continuity), api }, () => {});
     document.body.append(page.node);
@@ -100,7 +100,7 @@ test("the last-frame toggle is greyed out unless Continuity is loaded and carryi
 
 test("settings that hang on another switch follow it and are greyed out while it is off", async () => {
   const mk = (inputs) => ({ slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} });
-  const api = { enhancerEncoders: async () => ({ files: ["g.safetensors"], families: ["stable_diffusion"] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({ prompts: {}, macros: { LAST_RATING: "x" }, styles: {} }) };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: ["g.safetensors"], families: ["stable_diffusion"] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({ prompts: {}, macros: { LAST_RATING: "x" }, styles: {} }) };
   const grey = async (inputs) => {
     const page = enhance({ dom: createDom(), pipeline: mk(inputs), api }, () => {});
     document.body.append(page.node);
