@@ -188,7 +188,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.Boolean.Input("prefix_cache", default=True, optional=True,
                                  tooltip="Reuses the start of the request that did not change since the last one, so only the new part is read again."),
                 io.Int.Input("lookup_tokens", default=0, min=0, max=10, optional=True,
-                             tooltip="Words the model may guess from the prompt itself and check in one step. Helps only when a rewrite mostly repeats the prompt; slower otherwise, so 0 (off) by default."),
+                             tooltip="Words guessed from the prompt and checked in one step. Helps only when a rewrite mostly repeats the prompt; slower otherwise. 0 = off."),
                 io.Int.Input("refine_passes", default=0, min=0, max=3, optional=True,
                              tooltip="How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer."),
                 io.String.Input("refine_prompt", multiline=True, default="", optional=True,
