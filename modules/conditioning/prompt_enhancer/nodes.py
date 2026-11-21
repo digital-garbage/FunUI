@@ -160,7 +160,7 @@ def _chat_memory(helper, notes) -> str:
     parts = [("\n\nNOTES (the user's standing instructions):\n" + str(notes).strip()) if str(notes or "").strip() else ""]
     if chat:
         turns = "\n".join(f"User: {t['request']}\nModel: {t['reply']}" for t in list(chat["turns"])[-6:])
-        parts.append("\n\nTHE CHAT TAB CONVERSATION (read only, for what the user said before; it is not a field of the project, and the global prompt is the anchor, never this):\n" + ((("Condensed earlier part of that conversation: " + chat["summary"] + "\n") if chat["summary"] else "") + turns)[-6000:])
+        parts.append("\n\nTHE CHAT TAB CONVERSATION (read only, for what the user said before; it is not a field of the project):\n" + ((("Condensed earlier part of that conversation: " + chat["summary"] + "\n") if chat["summary"] else "") + turns)[-6000:])
     return "".join(parts)
 
 

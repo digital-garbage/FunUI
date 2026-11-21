@@ -23,7 +23,7 @@ export function sheetOf(project) {
   if (!project) return "";
   const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
   const vars = (project.variables || []).map((v) => `$${v.name} = ${String(v.value).slice(0, 200)}`);
-  return [`Anchor (also called prefix or global prompt, put in front of every scene prompt): ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
+  return [`Anchor (also called prefix, put in front of every scene prompt): ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
     `Variables: ${vars.length ? "" : "(none)"}`, ...vars, `Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
 }
 

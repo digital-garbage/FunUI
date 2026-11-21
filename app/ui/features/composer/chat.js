@@ -99,7 +99,9 @@ export function addComment(app, text, last, tail = last) {
 
 /** The nearest ancestor that scrolls (the Composer window's body). */
 export function scrollParent(node) {
-  for (let n = node.parentElement; n; n = n.parentElement) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
+  const style = globalThis.getComputedStyle || (globalThis.window && globalThis.window.getComputedStyle);
+  if (!style) return null;
+  for (let n = node.parentElement; n; n = n.parentElement) { const o = style.call(globalThis.window || globalThis, n).overflowY; if (o === "auto" || o === "scroll") return n; }
   return null;
 }
 
