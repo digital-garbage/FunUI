@@ -86,3 +86,27 @@ def test_project_text_variables_and_shortcuts_are_checked_before_asking():
     assert seen[0]["args"]["existing"] is True
     assert live({"name": "set_variable", "args": {"name": "$cat", "value": "tabby", "reason": "r"}}).startswith("Allowed")
     assert live({"name": "remove_variable", "args": {"name": "cat", "reason": "r"}}).startswith("Allowed")
+
+
+INPUTS = [{"slot": "s1", "node": "FunUISampler", "group": "Sampling", "name": "steps", "label": "steps", "type": "INT", "min": 1, "max": 100, "now": 20},
+          {"slot": "s1", "node": "FunUISampler", "group": "Sampling", "name": "sampler_name", "label": "sampler_name", "type": "COMBO", "choices": ["euler", "seeds_2"], "now": "euler"},
+          {"slot": "L", "node": "UNETLoader", "group": "Models", "name": "unet_name", "label": "unet_name", "type": "COMBO", "choices": ["h3.safetensors"], "now": ""}]
+
+
+def test_pipeline_inputs_are_looked_up_checked_and_changed_under_one_question():
+    acts = helper.Actions(1, lambda ev: None, wait=1, inputs=INPUTS, presets=[{"id": "fast", "title": "H3 fast"}])
+    found = acts({"name": "find_node_inputs", "args": {"query": "model unet"}})
+    assert "L.unet_name" in found and "NOT SET" in found and "h3.safetensors" in found
+    for bad in ([{"slot": "s1", "input": "steps", "value": 500}], [{"slot": "s1", "input": "sampler_name", "value": "nope"}], [{"slot": "zz", "input": "steps", "value": 5}], []):
+        assert acts({"name": "set_node_inputs", "args": {"changes": bad}}).startswith("Error"), bad
+    assert acts({"name": "apply_preset", "args": {"preset": "other"}}).startswith("Error")
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    live = helper.Actions(1, on_event, wait=2, inputs=INPUTS, presets=[{"id": "fast", "title": "H3 fast"}])
+    assert live({"name": "set_node_inputs", "args": {"changes": [{"slot": "s1", "input": "steps", "value": "5"}, {"slot": "L", "input": "unet_name", "value": "h3.safetensors"}], "reason": "r"}}).startswith("Allowed")
+    assert seen[0]["args"]["changes"][0]["value"] == 5 and "20 -> 5" in seen[0]["summary"]
+    assert live({"name": "apply_preset", "args": {"preset": "fast", "reason": "r"}}).startswith("Allowed")
+    assert "H3 fast" in seen[1]["summary"]

@@ -16,6 +16,7 @@ const refsOf = (s) => `${(s.references || []).length ? `, references: ${s.refere
 
 /** The modules whose settings the helper can reach, one line (the settings themselves come from find_settings). */
 const modulesLine = (ps) => { const seen = new Set(catalogOf(ps).map((x) => x.title)); return seen.size ? `\nModules with settings: ${[...seen].join(", ")}.` : ""; };
+const presetsLine = (list) => (list.length ? `\nPipeline starting points (apply_preset): ${list.map((x) => `${x.id} = ${x.title}`).join("; ")}.` : "");
 
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
@@ -33,6 +34,15 @@ export function catalogOf(ps) {
   return ps.activeModules().flatMap((m) => Object.entries(m.settings || {}).filter(([, spec]) => ["bool", "int", "float", "enum", "text", "multiline", "string"].includes(spec.type) || !spec.type)
     .map(([name, spec]) => ({ module: m.id, title: m.title || m.id, name, label: spec.label || name, type: spec.type || "text", min: spec.min, max: spec.max, options: spec.type === "enum" ? (spec.options || []).map((o) => o.value) : undefined,
       now: values[m.id] && values[m.id][name] !== undefined ? values[m.id][name] : spec.default, hint: String(spec.hint || "").slice(0, 160) })));
+}
+
+/** Every input of every pipeline node that holds a value (not a wire), with its kind, limits, choices and the value in force. */
+export async function inputsOf(app) {
+  const ps = app.pipeline, slots = (ps && ps.slots && ps.slots()) || [];
+  if (!slots.length || !app.api.describeNodes) return [];
+  const specs = ((await app.api.describeNodes([...new Set(slots.map((s) => s.node))]).catch(() => null)) || {}).nodes || {};
+  return slots.flatMap((s) => ((specs[s.node] || {}).widgets || []).filter((w) => !Array.isArray((s.inputs || {})[w.name]))
+    .map((w) => ({ slot: s.id, node: s.node, group: s.group || "", name: w.name, label: w.name, type: w.type, min: w.min, max: w.max, choices: w.type === "COMBO" ? (w.choices || []).slice(0, 200) : undefined, now: (s.inputs || {})[w.name] ?? w.default })));
 }
 
 /** Make an allowed change in the project. -> a short plain line saying what was done (or why not). */
@@ -80,6 +90,19 @@ export function applyAction(project, ev, ps, api) {
   if ((ev.tool === "save_shortcut" || ev.tool === "remove_shortcut") && api) {
     const done = ev.tool === "remove_shortcut" ? api.deleteShortcut(a.name) : api.saveShortcut({ name: a.name, triggers: a.triggers, replacements: a.replacements, enabled: true, category: a.category || "", sub_category: "" }, a.existing ? a.name : undefined);
     return Promise.resolve(done).then(() => (ev.tool === "remove_shortcut" ? `Deleted shortcut ${a.name}` : `Saved shortcut ${a.name}`), (e) => `Shortcut not saved: ${(e && e.message) || e}`);
+  }
+  if (ev.tool === "set_node_inputs" && ps) {
+    const inputs = {};
+    for (const x of a.changes || []) (inputs[x.slot] ||= {})[x.input] = x.value;
+    return Promise.resolve(ps.save({ inputs })).then(() => `Changed ${(a.changes || []).length} pipeline input(s)`);
+  }
+  if (ev.tool === "apply_preset" && ps && ev.preset) {
+    return Promise.resolve(ps.restore({ slots: ev.preset.slots, removed: [], unwired: {} })).then((r) => {
+      if (r && r.refused && r.refused.length) return `Not changed: ${r.refused[0]}`;
+      Object.entries(ev.preset.prefs || {}).forEach(([k, v]) => project.setPref(k, v));
+      Object.entries(ev.preset.project || {}).forEach(([k, v]) => project.setField(k, v));
+      return `Pipeline replaced with ${ev.preset.title}`;
+    });
   }
   if (ev.tool === "set_setting" && ps) {
     const spec = (ps.modulesById()[a.module] || { settings: {} }).settings[a.setting];
@@ -133,12 +156,14 @@ export function openHelper(app, origin) {
     const turn = { you: message, reply: "", status: "", done: [] };
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; paint();
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project) + modulesLine(app.pipeline), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
+    const body = { conversation: `helper:${p.project.id}`, message, notes: "", helper: { sheet: sheetOf(p.project) + modulesLine(app.pipeline) + presetsLine(presets), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
+          if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);
           turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api) : `Refused: ${ev.summary}`);
           paint();
           await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});

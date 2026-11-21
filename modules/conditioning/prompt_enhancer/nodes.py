@@ -105,7 +105,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
                 from . import engine as eng, helper as hp
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
-                    clip.tools, clip.handler = hp.tools(), hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or ())
+                    clip.tools, clip.handler = hp.tools(), hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or ())
                 else:
                     return {"ok": False, "reply": "", "status": "the helper needs a model with tool calls; this one has none"}
             elif self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person

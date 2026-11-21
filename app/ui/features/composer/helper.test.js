@@ -60,3 +60,20 @@ test("prefix, postfix, variables and shortcuts: the sheet shows them and allowed
   await applyAction(p, { tool: "remove_shortcut", args: { name: "old" } }, null, api);
   assert.deepEqual(calls, [["save", { name: "sunset", triggers: ["sunset"], replacements: ["golden light"], enabled: true, category: "", sub_category: "" }, "sunset"], ["delete", "old"]]);
 });
+
+import { inputsOf } from "./helper.js";
+
+test("pipeline inputs are listed with their choices, set together in one save, and a preset replaces the pipeline", async () => {
+  const saved = [], restored = [], prefs = {};
+  const ps = { slots: () => [{ id: "s1", node: "FunUISampler", group: "Sampling", inputs: { steps: 20, model: ["x", 0] } }],
+    save: async (b) => { saved.push(b); }, restore: async (b) => { restored.push(b); return { refused: [] }; } };
+  const app = { pipeline: ps, api: { describeNodes: async () => ({ nodes: { FunUISampler: { widgets: [{ name: "steps", type: "INT", min: 1, max: 100, default: 20 }, { name: "sampler_name", type: "COMBO", choices: ["euler", "seeds_2"], default: "euler" }, { name: "model", type: "COMBO", choices: ["a"] }] } } }) } };
+  const list = await inputsOf(app);
+  assert.deepEqual(list.map((x) => [x.slot, x.name, x.now]), [["s1", "steps", 20], ["s1", "sampler_name", "euler"]]);       // a wired input is not a value
+  const p = { project: { scenes: [] }, setPref: (k, v) => { prefs[k] = v; }, setField: (k, v) => { prefs[k] = v; } };
+  await applyAction(p, { tool: "set_node_inputs", args: { changes: [{ slot: "s1", input: "steps", value: 5 }, { slot: "s1", input: "sampler_name", value: "seeds_2" }] } }, ps);
+  assert.deepEqual(saved, [{ inputs: { s1: { steps: 5, sampler_name: "seeds_2" } } }]);
+  await applyAction(p, { tool: "apply_preset", args: { preset: "fast" }, preset: { title: "H3 fast", slots: [{ id: "n" }], prefs: { a: 1 }, project: { b: 2 } } }, ps);
+  assert.deepEqual(restored, [{ slots: [{ id: "n" }], removed: [], unwired: {} }]);
+  assert.deepEqual(prefs, { a: 1, b: 2 });
+});

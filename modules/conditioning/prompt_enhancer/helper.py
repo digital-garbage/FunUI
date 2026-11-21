@@ -12,10 +12,13 @@ from . import rules
 
 MAX_TEXT = 4000
 TEXTS = {"prefix": "the prefix", "postfix": "the postfix", "negative": "the negative prompt"}
-EXTRA = ("set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
+EXTRA = ("set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
                "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
+               "The project has a prefix (put in front of every scene prompt), a postfix (after it), a negative prompt and $variables; change them with set_project_text, set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
+               "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
+               "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
                "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, accept it and do not ask again.")
 
 
@@ -35,6 +38,9 @@ def tools() -> list:
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("remove_shortcut", "Delete a shortcut of the library.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
+            fn("find_node_inputs", "Look up inputs of the pipeline's nodes by words (a node, a group, an input such as steps or sampler). Answers with each match: slot, input, allowed values and the value now.", {"query": {"type": "string"}}, ["query"]),
+            fn("set_node_inputs", "Change inputs of pipeline nodes, all under one question to the user.", {"changes": {"type": "array", "items": {"type": "object", "properties": {"slot": {"type": "string"}, "input": {"type": "string"}, "value": {"type": ["string", "number", "boolean"]}}, "required": ["slot", "input", "value"]}}, "reason": reason}, ["changes", "reason"]),
+            fn("apply_preset", "Replace the whole pipeline with one of the listed starting points.", {"preset": {"type": "string", "description": "The id of the starting point."}, "reason": reason}, ["preset", "reason"]),
             fn("find_settings", "Look up settings of the app by words (a module name, what it does). Answers with each match: module, setting, kind, allowed values and the value now.", {"query": {"type": "string", "description": "Words to look for."}}, ["query"]),
             fn("set_setting", "Change one setting of a module. Use the module and setting names find_settings gave.", {"module": {"type": "string"}, "setting": {"type": "string"}, "value": {"type": ["string", "number", "boolean"], "description": "true or false for a switch, a number, one of the allowed values, or text (for blocks a list such as 2-10,29-46)."}, "reason": reason}, ["module", "setting", "value", "reason"]),
             fn("set_clip_length", "Set the default clip length of the whole project.", {"seconds": seconds, "reason": reason}, ["seconds", "reason"])]
@@ -51,6 +57,10 @@ def describe(name, args) -> str:
         return f"Scene {args.get('scene')}: use the same reference pictures as scene {args.get('from_scene')}"
     if name == "set_setting":
         return f"{args.get('title') or args.get('module')}: {args.get('label') or args.get('setting')}: {args.get('now')} -> {args.get('value')}"
+    if name == "set_node_inputs":
+        return "Change the pipeline: " + "; ".join(f"{c['slot']}.{c['input']}: {c.get('now')} -> {c['value']}" for c in args.get("changes") or [])
+    if name == "apply_preset":
+        return f"Replace the whole pipeline with the starting point '{args.get('title') or args.get('preset')}'. Every file and value set in the pipeline is cleared"
     if name == "set_project_text":
         return f"Set {TEXTS.get(args.get('field'))} to: {args.get('text') or '(empty)'}"
     if name == "set_variable":
@@ -67,8 +77,10 @@ def describe(name, args) -> str:
 class Actions:
     """Answers the model's tool calls for one helper request. `scenes`: how many scenes the project has."""
 
-    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=()):
+    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=()):
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
+        self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
+        self.presets = {str(x["id"]): x for x in presets if isinstance(x, dict) and x.get("id")}
         self.variables = {str(v) for v in variables}
         self.shortcuts = {str(x["name"]): x for x in shortcuts if isinstance(x, dict) and x.get("name")}
         self.settings = {(x["module"], x["name"]): x for x in settings if isinstance(x, dict) and x.get("module") and x.get("name")}
@@ -85,6 +97,41 @@ class Actions:
             return "No setting matches. Try other words."
         return "\n".join(line(x) for _, _, x in sorted(scored, key=lambda t: t[:2])[:15])
 
+    def find_input(self, query) -> str:
+        words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
+        hits = []
+        for x in self.inputs.values():
+            hay = " ".join(str(x.get(k) or "") for k in ("slot", "node", "group", "name", "label")).lower().replace("_", " ")
+            if words and any(w in hay for w in words):
+                hits.append((-sum(w in hay for w in words), len(hits), x))
+        return "\n".join(node_line(x) for _, _, x in sorted(hits, key=lambda t: t[:2])[:20]) or "No pipeline input matches. Try other words (a node name, steps, sampler, model)."
+
+    def check_input(self, change):
+        """-> an error text, or None; `change` gains "now" and the typed value."""
+        spec = self.inputs.get((str(change.get("slot")), str(change.get("input"))))
+        if spec is None:
+            return f"there is no input {change.get('slot')}.{change.get('input')} (call find_node_inputs first)"
+        kind, v = spec.get("type"), change.get("value")
+        if kind == "COMBO":
+            if v not in (spec.get("choices") or []):
+                return f"{change['slot']}.{change['input']} must be one of the listed files or values"
+        elif kind in ("INT", "FLOAT"):
+            try:
+                v = float(v) if not isinstance(v, bool) else None
+            except (TypeError, ValueError):
+                v = None
+            if v is None or v != v or (spec.get("min") is not None and v < spec["min"]) or (spec.get("max") is not None and v > spec["max"]):
+                return f"{change['slot']}.{change['input']} takes a number from {spec.get('min')} to {spec.get('max')}"
+            v = int(round(v)) if kind == "INT" else v
+        elif kind == "BOOLEAN":
+            v = {"true": True, "false": False}.get(v.strip().lower()) if isinstance(v, str) else v
+            if not isinstance(v, bool):
+                return f"{change['slot']}.{change['input']} is true or false"
+        elif not isinstance(v, str) or len(v) > MAX_TEXT:
+            return f"{change['slot']}.{change['input']} takes text"
+        change["value"], change["now"] = v, spec.get("now")
+        return None
+
     def find_shortcut(self, query) -> str:
         words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
         hits = [x for x in self.shortcuts.values() if words and all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
@@ -93,6 +140,19 @@ class Actions:
     def extra(self, name, args):
         """-> an error text, or None when the call is valid (args may gain fields the page needs)."""
         text = lambda v, n=MAX_TEXT: isinstance(v, str) and len(v) <= n        # noqa: E731
+        if name == "set_node_inputs":
+            changes = args.get("changes")
+            if not isinstance(changes, list) or not 0 < len(changes) <= 40 or not all(isinstance(c, dict) for c in changes):
+                return "Error: changes is a list of {slot, input, value}."
+            args["changes"] = changes = [dict(c) for c in changes]
+            bad = [e for e in (self.check_input(c) for c in changes) if e]
+            return "Error: " + "; ".join(bad[:3]) if bad else None
+        if name == "apply_preset":
+            spec = self.presets.get(str(args.get("preset")))
+            if spec is None:
+                return f"Error: there is no starting point '{args.get('preset')}'. They are: {', '.join(self.presets)}."
+            args["title"] = spec.get("title")
+            return None
         if name == "set_project_text":
             return None if args.get("field") in TEXTS and text(args.get("text")) else f"Error: field is one of {', '.join(TEXTS)} and text is at most {MAX_TEXT} characters."
         if name in ("set_variable", "remove_variable"):
@@ -136,13 +196,15 @@ class Actions:
 
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
-        if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts") + EXTRA:
+        if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:
             return f"Error: there is no tool called '{name}'."
         num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 600        # noqa: E731
         if name == "find_settings":
             return self.find(args.get("query"))
         if name == "find_shortcuts":
             return self.find_shortcut(args.get("query"))
+        if name == "find_node_inputs":
+            return self.find_input(args.get("query"))
         if name in EXTRA:
             args = dict(args)
             err = self.extra(name, args)
@@ -204,3 +266,11 @@ def line(x) -> str:
     kind = x.get("type")
     allowed = f"one of {', '.join(map(str, x['options']))}" if kind == "enum" else f"{x['min']} to {x['max']}" if x.get("min") is not None and x.get("max") is not None else kind
     return f"{x['module']}.{x['name']} ({x.get('title') or ''}: {x.get('label') or x['name']}; {allowed}; now {x.get('now')}) {str(x.get('hint') or '')[:140]}"
+
+
+def node_line(x) -> str:
+    """One pipeline input as the model reads it."""
+    kind = x.get("type")
+    allowed = f"one of {', '.join(map(str, x.get('choices') or []))}" if kind == "COMBO" else f"{x.get('min')} to {x.get('max')}" if x.get("min") is not None and x.get("max") is not None else str(kind).lower()
+    now = x.get("now")
+    return f"{x['slot']}.{x['name']} ({x.get('node')}, {x.get('group') or 'no group'}; {allowed}; now {'NOT SET' if now in (None, '') else now})"

@@ -58,6 +58,8 @@ export const story = (app, own) => {
   ] });
 };
 
+const RISK = "Use at your own risk. The Helper can change almost anything in FunUI: scenes, prompts, variables, shortcuts, settings, model files and the whole pipeline. How exactly a change matches what you asked depends heavily on the model you chose, and nobody can promise that it follows instructions correctly. Read every change before you press Allow. Changes to shortcuts and to the pipeline are not covered by Undo.";
+
 // Tabs whose backend module may be missing.
 const TAB_MODULE = { enhance: "conditioning_prompt_enhancer", chat: "conditioning_prompt_enhancer" };
 
@@ -89,8 +91,8 @@ export default {
     const offHelper = app.on(showHelper);
     app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
       c.toggle.default({ label: "Helper", hint: "A button that opens a window where the model can change scenes, their length and the clip length when you ask. You allow each change first.",
-        checked: app.project.pref("helper", false) === true, onChange: (v) => { app.project.setPref("helper", v); showHelper(); if (v) c.toast.warn({ text: "The helper can change your project. Read every change before you press Allow." }); } }),
-      c.banner.warn({ text: "The helper edits your project. Read each change before pressing Allow: a wrong one can overwrite prompts or lengths, and Undo is the only way back." })] }));
+        checked: app.project.pref("helper", false) === true, onChange: async (v) => { if (v && !(await c.modal.dialogue({ title: "Switch on the Helper?", message: RISK, tone: "danger", confirmLabel: "I understand, switch it on" }).result)) { app.project.setPref("helper", false); showHelper(); return; } app.project.setPref("helper", v); showHelper(); } }),
+      c.banner.warn({ text: RISK })] }));
     app.inputHooks.push(chatHook);          // last, so a setup that failed above leaves nothing behind
     // A run that summarised the conversation says so, whether or not the Composer is open.
     let phase = null, told = new Set();
