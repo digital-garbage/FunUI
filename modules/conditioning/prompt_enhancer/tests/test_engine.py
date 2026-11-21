@@ -403,6 +403,7 @@ def test_downloaded_models_are_listed_and_can_be_deleted_even_the_loaded_one(tin
     (tmp_path / "b__small" / "c.json").write_text("{}")
     tiny.loaded_dir = str(tmp_path / "a__big")
     assert [(m["name"], m["loaded"]) for m in tiny.downloads()] == [("a__big", True), ("b__small", False)]        # biggest first
+    assert [m["source"] for m in tiny.downloads()] == ["a/big", "b/small"]                                  # what to load to use each again
     for bad in ("", "..", "../x", "a__big/w.safetensors", "nope"):
         with pytest.raises(ValueError):
             tiny.delete(bad)

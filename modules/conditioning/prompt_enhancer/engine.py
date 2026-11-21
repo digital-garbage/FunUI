@@ -366,6 +366,11 @@ class Engine:
             try:
                 folder, weights = self._fetch(source)
                 self.weights = bool(weights)
+                if not os.path.isdir(source) and self._dir and os.path.isdir(self._dir):
+                    try:                                             # remembers what to type to use this download again
+                        open(os.path.join(self._dir, ".source"), "w").write(source)
+                    except OSError:
+                        pass
                 _say(f"engine: files are in place after {time.time() - started:.0f}s, loading the model")
                 self.phase, self.message = "loading", f"loading {source}"
                 import torch
@@ -416,6 +421,18 @@ class Engine:
         self._worker.start()
         return True
 
+    @staticmethod
+    def _source_of(path, name):
+        """What to load to use this download again: what it was fetched from, else the repo its folder name spells."""
+        try:
+            said = open(os.path.join(path, ".source")).read().strip()
+            if said:
+                return said
+        except OSError:
+            pass
+        owner, sep, repo = name.partition("__")
+        return f"{owner}/{repo}" if sep and "__" not in repo else path
+
     def downloads(self):
         """The models this engine downloaded: [{"name": folder name, "size", "loaded"}], biggest first."""
         root = models_dir()
@@ -423,7 +440,7 @@ class Engine:
         for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
             path = os.path.join(root, name)
             if os.path.isdir(path):
-                out.append({"name": name, "size": _folder_size(path), "loaded": bool(self.model is not None and self.loaded_dir == path)})
+                out.append({"name": name, "source": self._source_of(path, name), "size": _folder_size(path), "loaded": bool(self.model is not None and self.loaded_dir == path)})
         return sorted(out, key=lambda m: -m["size"])
 
     def delete(self, name):

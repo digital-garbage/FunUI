@@ -120,16 +120,19 @@ test("settings that hang on another switch follow it and are greyed out while it
   assert.equal(chat("temperature"), true);                   // greedy: the dials are not used
 });
 
-test("downloaded models are listed with a Delete button that asks first and removes only that model", async () => {
-  const deleted = [];
-  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+test("downloaded models are listed with Use and Delete buttons; Use picks the model, Delete asks first and removes only that model", async () => {
+  const deleted = [], saved = [];
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async (x) => { saved.push(x); }, subscribe: () => () => {} };
   const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
-    enhancerEngineModels: async () => ({ models: [{ name: "a__big", size: 3 * 2 ** 30, loaded: true }, { name: "b__small", size: 2 ** 20, loaded: false }] }), enhancerEngineDelete: async (n) => { deleted.push(n); } };
+    enhancerEngineModels: async () => ({ models: [{ name: "a__big", size: 3 * 2 ** 30, loaded: true }, { name: "b__small", size: 2 ** 20, loaded: false }] }), enhancerEngineDelete: async (n) => { deleted.push(n); }, enhancerEngineLoad: async () => ({}) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));
   assert.match(page.node.textContent, /Downloaded models \(2\)/);
   assert.match(page.node.textContent, /a\/big: 3\.0 GB \(loaded\)/);
+  [...page.node.querySelectorAll("button")].filter((b) => b.textContent === "Use")[1].click();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(saved.slice(-1), [{ inputs: { e: { engine_model: "b/small" } } }]);
   [...page.node.querySelectorAll("button")].filter((b) => b.textContent === "Delete")[0].click();
   await new Promise((r) => setTimeout(r, 0));
   const dialog = document.querySelector(".cx-modal");
