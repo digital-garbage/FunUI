@@ -149,3 +149,19 @@ test("the engine line shows what a running request is doing, so a busy model doe
   assert.match(page.node.textContent, /writing: 42 tokens, 3\.5s/);
   stop();
 });
+
+test("a rewrite running inside a generation shows up as it is written, and goes away when it ends", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  let now = { kind: "rewrite", label: "a fox", thinking: "Let me think", answer: "A fox in snow", status: "writing", done: false };
+  const api = { enhancerEngine: async () => ({ phase: "ready" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}), enhancerLive: async () => now };
+  let stop = () => {};
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(page.node.textContent, /Writing now/);
+  assert.match(page.node.textContent, /A fox in snow/);
+  now = { ...now, done: true };
+  await new Promise((r) => setTimeout(r, 800));
+  assert.doesNotMatch(page.node.textContent, /Writing now/);
+  stop();
+});

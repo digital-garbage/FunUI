@@ -168,6 +168,11 @@ def test_a_scaled_fp8_file_runs_like_the_same_weights_widened(tmp_path):
         got, want = model(ids).logits.float(), reference(ids).logits.float()
     assert torch.allclose(got, want, atol=0.05, rtol=0.05)
     assert next(m for m in model.modules() if isinstance(m, fp8.FP8Linear)).weight.dtype == torch.float8_e4m3fn      # still fp8 in memory
+    wide = fp8.build(tmp_path, tmp_path / "w.safetensors", precision="bf16")                  # widened once: same words, no fp8 left
+    with torch.inference_mode():
+        assert torch.allclose(wide(ids).logits.float(), got, atol=0.05, rtol=0.05)
+    assert all(m.weight.dtype == torch.bfloat16 for m in wide.modules() if isinstance(m, fp8.FP8Linear))
+    assert next(m for m in fp8.build(tmp_path, tmp_path / "w.safetensors", precision="auto").modules() if isinstance(m, fp8.FP8Linear)).weight.dtype == torch.float8_e4m3fn      # no card here: auto keeps fp8
 
 
 def test_an_engine_source_may_name_a_file_and_a_base():
