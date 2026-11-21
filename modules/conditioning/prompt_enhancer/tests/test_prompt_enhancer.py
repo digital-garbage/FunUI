@@ -631,3 +631,15 @@ def test_the_note_taker_sees_comments_ratings_and_answers_labelled_and_is_not_pe
     assert "Person's request: a fox" in seen["user"] and "Rating of the scene before: The previous scene was rated: Liked" in seen["user"] and "Writer's answer: A red fox runs." in seen["user"]
     assert seen["user"].endswith(en().COMPACT_ASK) and "PERSON'S FEEDBACK" in seen["system"]
     assert seen["kw"]["repetition_penalty"] == 1.0 and seen["kw"]["do_sample"] is False
+
+
+def test_gemma4_writes_the_notes_thinking_with_its_own_sampling_and_other_encoders_plainly():
+    gemma = FakeClip("<think>x</think>SCENES: a fox."); gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
+    turn = {"request": "a fox", "reply": "A red fox."}
+    assert en().compact(gemma, "", [turn]) == "SCENES: a fox."
+    assert gemma.seen["thinking"] is True
+    assert {k: gemma.seen["gen"][k] for k in ("do_sample", "temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length")} == {
+        "do_sample": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05, "repetition_penalty": 1.0, "presence_penalty": 0.0, "max_length": en().COMPACT_THINK_TOKENS}
+    plain = FakeClip("SCENES: a fox.")
+    en().compact(plain, "", [turn])
+    assert plain.seen["gen"]["do_sample"] is False and plain.seen["gen"]["repetition_penalty"] == 1.0 and plain.seen["gen"]["max_length"] == en().COMPACT_TOKENS

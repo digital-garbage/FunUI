@@ -72,6 +72,7 @@ PERSON'S FEEDBACK: every comment, correction and instruction the person gave, cl
 STILL APPLIES: lasting preferences and rules the writer must keep following.
 If EARLIER NOTES are given, keep everything in them that still applies and add the new turns. Drop greetings, repetition and anything superseded. Under 300 words."""
 COMPACT_ASK = "Now write the notes for the conversation above, under the headings. Output only the notes."
+COMPACT_THINK_TOKENS = 3000  # the same with a thinking model: its reasoning comes out of this budget first
 COMPACT_TOKENS = 600         # longest summary the model may write
 COMPACT_AT = 0.8             # compact once a request would fill this share of the context window
 DEFAULT_WINDOW = 32768       # the working window when the model does not say or reports more, and nothing is set
@@ -286,8 +287,11 @@ def compact(clip, summary, turns, **sampling):
     """-> new notes text of the old notes plus these turns, or "" when the model could not write them."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     text = (f"EARLIER NOTES:\n{summary}\n\n" if summary else "") + "TRANSCRIPT:\n" + "\n\n".join(compact_turn(t, cut) for t in turns) + "\n\n" + COMPACT_ASK
-    # Plain and steady: a repetition penalty would punish the notes for using the words they are about.
-    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, "max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0, "image": None})
+    # A repetition penalty would punish the notes for using the words they are about. Gemma 4 thinks first, with Google's own sampling.
+    plain = {"max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
+    gemma = {"max_length": COMPACT_THINK_TOKENS, "do_sample": True, "thinking": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
+             "repetition_penalty": 1.0, "presence_penalty": 0.0, "seed": 0}
+    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
     return clean(raw)
 
 
