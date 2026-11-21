@@ -264,7 +264,7 @@ class Backend:
         window = llm.n_ctx()
         if len(tokens) + 64 > window:
             raise ValueError(f"the request is {len(tokens)} tokens but the model's window is {window}; shorten the conversation (Summarise long conversations) or the prompts")
-        max_new_tokens = min(int(max_new_tokens), window - len(tokens) - 8)           # what is left of the window after the request
+        max_new_tokens = min(int(max_new_tokens) or window, window - len(tokens) - 8)           # what is left of the window after the request
         sampling = dict(top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
                         repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
         sent = False

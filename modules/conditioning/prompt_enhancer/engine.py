@@ -562,7 +562,7 @@ class Engine:
 
     def stream(self, messages, **options):
         """One request at a time on the model, independent of ComfyUI: a chat sent while a rewrite runs waits its turn, and neither touches the generation's own memory use."""
-        if options.get("thinking"):                      # the reasoning has its own room: the length setting is for what is written after it
+        if options.get("thinking") and int(options.get("max_new_tokens") or 0) > 0:                      # the reasoning has its own room: the length setting is for what is written after it
             options["max_new_tokens"] = int(options.get("max_new_tokens") or 400) + THINK_BUDGET
         with self.turn:
             yield from self._stream(messages, **options)
@@ -613,7 +613,7 @@ class Engine:
                 return scores
 
         sample = not greedy and float(temperature) > 0
-        gen = dict(**inputs, streamer=streamer, max_new_tokens=int(max_new_tokens), do_sample=sample, repetition_penalty=float(repetition_penalty),
+        gen = dict(**inputs, streamer=streamer, max_new_tokens=int(max_new_tokens) or max(256, min(1 << 16, int(getattr(model.config, "max_position_embeddings", 0) or 32768) - size)), do_sample=sample, repetition_penalty=float(repetition_penalty),
                    stopping_criteria=StoppingCriteriaList([Stop()]), logits_processor=LogitsProcessorList([Presence()]))
         if sample:
             gen.update(temperature=max(float(temperature), 0.01), top_p=float(top_p), top_k=int(top_k), min_p=float(min_p))
@@ -783,7 +783,7 @@ class EngineClip:
         self.engine, self.on_event, self.tools, self.handler, self.calls, self.live = engine or ENGINE, on_event, tools, handler, [], live
         self.cache, self.lookup = bool(cache), max(0, int(lookup))
 
-    def run(self, system, user, *, rounds=(), thinking=False, max_length=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
+    def run(self, system, user, *, rounds=(), thinking=False, max_length=0, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
             repetition_penalty=1.0, presence_penalty=0.0, do_sample=True, seed=None, image=None):
         """-> (raw text with the thinking inside <think>..</think>, status); the same as enhance.generate."""
         messages = ([{"role": "system", "content": str(system)}] if str(system).strip() else [])

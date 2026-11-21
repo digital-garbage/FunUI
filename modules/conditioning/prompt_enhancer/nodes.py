@@ -61,7 +61,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     # works to DEFAULT_WINDOW unless the person sets a size.
     window = int(context_tokens or 0) or min(en.context_window(clip) or en.DEFAULT_WINDOW, en.DEFAULT_WINDOW)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + int(max_length)    # noqa: E731
+    size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + (int(max_length) or 1024)    # noqa: E731
     note, did = "", False
     if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
         summary = en.compact(clip, state["summary"], list(state["turns"]), prompts=prompts, macros=macros)
@@ -208,8 +208,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="Tells the chat model it can read and propose changes to its own rules. Empty uses the built-in text."),
                 io.String.Input("marks_prompt", multiline=True, default="", optional=True,
                                 tooltip="The rule that keeps (word:1.5) and [a|b] markup. Empty uses the built-in text."),
-                io.Int.Input("max_length", default=400, min=32, max=4096, step=8, optional=True,
-                             tooltip="The longest rewrite, in tokens."),
+                io.Int.Input("max_length", default=0, min=0, max=4096, step=8, optional=True,
+                             tooltip="The longest rewrite, in tokens. 0 = no limit."),
                 io.Boolean.Input("greedy", default=False, optional=True,
                                  tooltip="Always the likeliest word. Hides the sampling dials below."),
                 io.Float.Input("temperature", default=0.7, min=0.0, max=2.0, step=0.05, optional=True),
@@ -281,7 +281,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         return time.time() if enabled and not seed else ""
 
     @classmethod
-    def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=400, greedy=False,
+    def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",

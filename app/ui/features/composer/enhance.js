@@ -111,7 +111,7 @@ export function enhance(app, own) {
       toggle("Reuse the unchanged start of a request", "The start of a request that did not change since the last one (the rules, the conversation) is not read again, only the new part is.", "prefix_cache", true, off(engineSet)),
       num("Guess ahead (words)", val("lookup_tokens", 0), 0, 10, 1, "lookup_tokens", "The model may guess up to this many words from the prompt itself and check them in one step. Only helps when a rewrite mostly repeats the prompt, and costs time otherwise: off by default (0).", off(engineSet)),
       c.label.section({ text: "Writing" }),
-      num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),
+      num("Max tokens", val("max_length", 0), 0, 4096, 8, "max_length", "The longest the rewrite may be. 0 means no limit: the model stops by itself, or when the context window is full.", off()),
       num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
       toggle("Thinking", "Let a thinking model reason first. Its reasoning eats the token budget.", "thinking", false, off()),
       toggle("Greedy (always the likeliest word)", "The same rewrite every time; the dials below are not used.", "greedy", false, off()),

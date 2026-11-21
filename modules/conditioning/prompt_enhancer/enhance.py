@@ -385,7 +385,7 @@ def trim_runaway(text, max_length=None):
             kept = " ".join(sentences[:i]).strip()
             if kept:
                 return kept, "repeat"
-    if max_length is None:
+    if not max_length:
         return text, False
     cap = max(64, int(max_length) * CHARS_PER_TOKEN)
     if len(text) <= cap:
@@ -467,12 +467,12 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
     instructions go first in the user turn, inside the model's own chat template --
     which is also what places an image marker."""
     if getattr(clip, "is_engine", False):         # our own transformers engine, not ComfyUI's text generation
-        return clip.run(system, user, rounds=rounds, image=image, thinking=thinking, max_length=max(32, int(max_length or 400)), temperature=temperature,
+        return clip.run(system, user, rounds=rounds, image=image, thinking=thinking, max_length=max(32, int(max_length)) if max_length else 0, temperature=temperature,
                         top_p=top_p, top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, do_sample=do_sample, seed=seed)
     if clip is None or not hasattr(clip, "generate") or not hasattr(clip, "decode"):
         return "", ("unavailable: the connected CLIP does not expose text generation; wire a "
                     "generation-capable text encoder")
-    max_length = max(32, int(max_length or 400))
+    max_length = max(32, int(max_length)) if max_length else 4096          # ComfyUI's generation needs a number
     started = time.time()
     notes = []
     try:

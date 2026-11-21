@@ -63,7 +63,7 @@ def routes(table, base, web):
         return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body), use_comfy=body.get("use_comfy") is True,
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
-                    context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400), thinking=body.get("thinking") is True, **sampling)
+                    context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=body.get("thinking") is True, **sampling)
 
     async def chat_body(req):
         try:

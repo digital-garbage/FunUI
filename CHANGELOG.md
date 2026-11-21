@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **No token limit by default.** Max tokens is now 0 = no limit: the engine writes until the model stops by itself or the context window is full (a model's reasoning no longer counts against it either). Set a number to cap it. ComfyUI's own text generation still uses 4096 when it is 0.
 - **Download and Load are separate buttons** (Composer > Enhance). Download fetches only the checked files of a model (a new quantization, say) and leaves the loaded model alone; the result shows in Downloaded models, where Use loads it. Load now loads into memory, downloading first only when files are missing.
 - **A thinking model's answer is no longer cut off.** Its reasoning had to fit in the same token limit as the answer, so a long reasoning left the answer short or empty. The engine now gives the reasoning its own 3000 tokens on top of the length setting.
 - **Conversation rules say the last message is always the prompt to rewrite**, even when it repeats an earlier request word for word. A thinking model had read such a repeat as "no new prompt" and been unsure what to do.
