@@ -24,6 +24,10 @@ export function enhance(app, own) {
     return [c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
       c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model (chat run)", last.sent)].filter(Boolean);
   }
+  const PROMPTS = [["chat_prompt", "Chat answers", "Send in the Chat tab: how the model answers you."], ["notes_prompt", "Notes rule", "How the model adds and drops Notes in a chat answer."],
+    ["compact_prompt", "Conversation notes", "The model that shortens a long conversation."], ["revision_prompt", "Comments", "How comments are applied when there is no conversation."],
+    ["conversation_prompt", "Conversation (plain encoders)", "Sent with the earlier turns to an encoder that takes no chat turns."], ["turns_prompt", "Conversation (Gemma 4)", "Sent to a model that takes real chat turns."],
+    ["marks_prompt", "Markup rule", "Keeps (word:1.5) and [a|b] as written."]];
   const choices = (name) => (name === "encoder_file" ? encoders.files : encoders.families);
   const pick = (name, label, first, hint, dflt = "") => {
     const cur = (slot().inputs || {})[name] || dflt, list = choices(name);
@@ -63,6 +67,9 @@ export function enhance(app, own) {
         ...(greedy ? [] : DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n))),
         num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed"),
         c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
+        c.collapsible.default({ label: "System prompts", body: c.region.stack({ gap: "xs", children: [
+          c.hint.default({ text: "What the model is told in each situation. Empty uses the built-in text shown in the field. Instructions above covers the rewrite itself." }),
+          ...PROMPTS.map(([n, label, hint]) => field(label, c.textarea.md({ label, rows: 5, value: val(n, ""), placeholder: defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint))] }) }),
         c.label.section({ text: "Reference" }),
         field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
         field("Reference intro", c.textarea.md({ label: "Reference intro", rows: 2, value: val("reference_intro", ""), placeholder: defaults ? defaults.reference_intro : "", onCommit: (x) => set("reference_intro", x) })),

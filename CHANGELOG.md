@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Every instruction the prompt enhancer gives the model can be edited** (Composer > Enhance > "System prompts"): chat answers, the Notes rule, the conversation notes writer, how comments are applied, the conversation rules (for plain encoders and for Gemma 4) and the markup rule. A field left empty uses the built-in text, which is shown in the field.
 - **Chat tab messages keep their order.** Every message and comment has a number that only rises, so a comment stays exactly where it was written, even when the rewrite it was about is gone from the enhancer's memory (it keeps the last 20) or the enhancer restarted.
 - **Better summaries of long enhancer conversations.** The model that shortens a long conversation now gets each scene labelled (your request, your comments, the rating, its own answer) and is asked for notes under clear headings: scenes, your feedback and ratings, and what still applies. With Gemma 4 it thinks first and samples with Google's own settings (temperature 1.0, top_p 0.95, top_k 64, min_p 0.05, no repetition penalty); other encoders write the notes plainly and without a repetition penalty.
 - **An edited prompt no longer follows its old version in the enhancer's conversation** (with "Send everything into chat"). When you generate a scene again, the enhancer's earlier request and answer for that scene are replaced instead of kept, so the new rewrite is not pulled back toward the old prompt.

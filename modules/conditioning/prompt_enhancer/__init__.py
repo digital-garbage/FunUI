@@ -34,7 +34,7 @@ def routes(table, base, web):
         from . import enhance
         return web.json_response({"instructions": enhance.SYSTEM_PROMPT,
                                   "reference_intro": enhance.REFERENCE_INTRO,
-                                  "styles": enhance.STYLES})
+                                  "styles": enhance.STYLES, "prompts": enhance.defaults()})
 
     @table.get(base + "/runs")
     async def _runs(req):
@@ -47,7 +47,7 @@ def routes(table, base, web):
     async def _chat(req):
         """A live answer in a conversation (the Chat tab): the encoder picked in Enhance answers under its own chat prompt."""
         import asyncio
-        from . import nodes
+        from . import enhance, nodes
         try:
             body = await req.json()
         except ValueError:
@@ -68,7 +68,7 @@ def routes(table, base, web):
 
         def work():
             return nodes.chat_reply(body["conversation"], body["message"], notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""),
-                                    encoder_family=str(body.get("encoder_family") or "stable_diffusion"), compact=body.get("compact") is not False,
+                                    encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS}, compact=body.get("compact") is not False,
                                     context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400),
                                     thinking=body.get("thinking") is True, **sampling)
         result = await asyncio.get_running_loop().run_in_executor(None, work)

@@ -84,8 +84,22 @@ The earlier turns are above; the last message is the new request.
 Output only the rewritten prompt, nothing else."""
 CHAT_REPLY_SYSTEM = """CHAT: you are helping a person write prompts for a text-to-video model, in a live conversation about the prompts you rewrite for them.
 Answer the message directly and briefly (one to four sentences, plain text). You may suggest wording, but never output a full rewritten prompt unless asked: rewrites happen later, when the person generates, and any comments they leave are applied then.
-Stay consistent with the earlier turns. Do not use markdown or headings.
-NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
+Stay consistent with the earlier turns. Do not use markdown or headings."""
+NOTES_RULE = """NOTES: the person keeps standing notes that apply to every rewrite. When they state a lasting preference or correction, add it on a line of its own at the very end of your answer as "REMEMBER: <short instruction>". To drop a note that no longer applies, write "FORGET: <its number>". Never mention these lines in your answer. Do not note one-off requests."""
+PROMPT_FIELDS = {"chat_prompt": "CHAT_REPLY_SYSTEM", "notes_prompt": "NOTES_RULE", "compact_prompt": "COMPACT_SYSTEM", "revision_prompt": "CHAT_SYSTEM",
+                 "conversation_prompt": "CONVO_SYSTEM", "turns_prompt": "CONVO_NATIVE_SYSTEM", "marks_prompt": "MARKS_RULE"}      # node input -> the built-in text an empty one means
+
+
+def defaults() -> dict:
+    """What each empty system prompt field means, by the node input's name."""
+    return {k: globals()[v] for k, v in PROMPT_FIELDS.items()}
+
+
+def pick(prompts, field) -> str:
+    """The person's own text for a system prompt field, or the built-in one while it is empty."""
+    return str((prompts or {}).get(field) or "").strip() or defaults()[field]
+
+
 NOTES_CHARS = 2000           # longest notes text sent
 CONVO_TURNS = 8              # how many earlier turns a conversation sends
 CONVO_CHARS = 1500           # longest earlier request or answer sent, in characters
@@ -283,7 +297,7 @@ def compact_turn(t, cut) -> str:
     return "\n".join(rows)
 
 
-def compact(clip, summary, turns, **sampling):
+def compact(clip, summary, turns, prompts=None, **sampling):
     """-> new notes text of the old notes plus these turns, or "" when the model could not write them."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     text = (f"EARLIER NOTES:\n{summary}\n\n" if summary else "") + "TRANSCRIPT:\n" + "\n\n".join(compact_turn(t, cut) for t in turns) + "\n\n" + COMPACT_ASK
@@ -291,7 +305,7 @@ def compact(clip, summary, turns, **sampling):
     plain = {"max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
     gemma = {"max_length": COMPACT_THINK_TOKENS, "do_sample": True, "thinking": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
              "repetition_penalty": 1.0, "presence_penalty": 0.0, "seed": 0}
-    raw, _ = generate(clip, COMPACT_SYSTEM, text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
+    raw, _ = generate(clip, pick(prompts, "compact_prompt"), text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
     return clean(raw)
 
 
@@ -485,7 +499,7 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
         return "", f"generation failed: {exc}"
 
 
-def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", **sampling):
+def enhance(clip, text, *, system="", reference_text="", chat="", style="default", note="", history="", convo=None, notes="", prompts=None, **sampling):
     """-> (text, status, info). On any failure the ORIGINAL text comes back."""
     original = str(text or "").strip()
     info = {"before": original, "after": original, "thinking": "", "sent": "", "ok": False}
@@ -497,7 +511,7 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     if chat:
         # Labelled parts plus a revision rule in the SYSTEM turn: with the conversation merely
         # appended, a model rewrote it as more prompt text and echoed it back.
-        system += "\n\n" + CHAT_SYSTEM
+        system += "\n\n" + pick(prompts, "revision_prompt")
         user = "ORIGINAL PROMPT:\n" + user + str(chat)
     note = str(note or "").strip()
     if note:                                            # one closing line, after everything else in the request
@@ -507,11 +521,11 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
         # real turns: the earlier requests and answers go in as turns of their own, the summary into the system turn
         rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
                        if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip())
-        system += "\n\n" + CONVO_NATIVE_SYSTEM
+        system += "\n\n" + pick(prompts, "turns_prompt")
         if str(convo.get("summary") or "").strip():
             system += "\n\nSUMMARY OF THE CONVERSATION SO FAR:\n" + str(convo["summary"]).strip()
     elif history:
-        system += "\n\n" + CONVO_SYSTEM
+        system += "\n\n" + pick(prompts, "conversation_prompt")
         user = str(history) + user
     if chat or history or rounds:
         info["sent"] = f"SYSTEM:\n{system}\n\n" + (f"EARLIER TURNS (as real turns): {len(rounds)}\n\n" if rounds else "") + f"MESSAGE:\n{user}"
@@ -539,13 +553,13 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     return out, f"{status}; prompt {len(original)} -> {len(out)} chars", info
 
 
-def converse(clip, message, *, convo=None, notes="", **sampling):
+def converse(clip, message, *, convo=None, notes="", prompts=None, **sampling):
     """-> (reply, status, notes to add, notes to drop, the model's thinking): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
     `convo`: {"summary", "turns", "keep"} as in enhance()."""
     message = str(message or "").strip()
     if not message:
         return "", "the message is empty", [], [], ""
-    system, rounds, user = CHAT_REPLY_SYSTEM + notes_system(notes, numbered=True), (), message
+    system, rounds, user = pick(prompts, "chat_prompt") + "\n" + pick(prompts, "notes_prompt") + notes_system(notes, numbered=True), (), message
     convo = convo or {}
     if native_turns(clip) and (convo.get("turns") or convo.get("summary")):
         rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]

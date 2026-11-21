@@ -53,7 +53,7 @@ def _own_encoder(file, family):
     return _LOADED["clip"]
 
 
-def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
+def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=None):
     """-> (about how many tokens the next request fills, the context window, a status note, whether it was summarised now).
     The conversation is summarised first when the request would fill COMPACT_AT of the window (4 characters a token, the answer's room included)."""
     # A small local model slows down and loses focus on a very long context, so what it reports is only a ceiling: summarising
@@ -63,7 +63,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
     size = lambda: (fixed_chars + len(en.convo_block(state["turns"] if state else (), state["summary"] if state else "", keep))) // en.CHARS_PER_TOKEN + int(max_length)    # noqa: E731
     note, did = "", False
     if state and compact and state["turns"] and size() > en.COMPACT_AT * window:
-        summary = en.compact(clip, state["summary"], list(state["turns"]))
+        summary = en.compact(clip, state["summary"], list(state["turns"]), prompts=prompts)
         if summary:
             state["summary"] = summary
             state["turns"].clear()
@@ -73,7 +73,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens):
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, encoder_file, encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     if not key:
@@ -86,9 +86,9 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
         return {"ok": False, "reply": "", "status": f"could not load the encoder {encoder_file}: {e}"}
     state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
     CONVOS.move_to_end(key)
-    used, window, note, did = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
+    used, window, note, did = fit(clip, state, len(en.pick(prompts, "chat_prompt")) + len(en.pick(prompts, "notes_prompt")) + len(str(message)), max_length, compact, context_tokens, prompts)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes,
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts,
                                            max_length=max_length, thinking=thinking, **sampling)
     ok = bool(reply)
     if ok:
@@ -138,6 +138,20 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Off: the prompt passes through and the model is not run."),
                 io.String.Input("instructions", multiline=True, default="", optional=True,
                                 tooltip="What the model is told to do. Empty uses the built-in instructions."),
+                io.String.Input("chat_prompt", multiline=True, default="", optional=True,
+                                tooltip="The chat answers' instructions (Chat tab, Send). Empty uses the built-in text."),
+                io.String.Input("notes_prompt", multiline=True, default="", optional=True,
+                                tooltip="How the model is told to add and drop Notes. Used with the chat instructions. Empty uses the built-in text."),
+                io.String.Input("compact_prompt", multiline=True, default="", optional=True,
+                                tooltip="What the model that shortens a long conversation is told. Empty uses the built-in text."),
+                io.String.Input("revision_prompt", multiline=True, default="", optional=True,
+                                tooltip="How the model is told to apply your comments, in a one-time request. Empty uses the built-in text."),
+                io.String.Input("conversation_prompt", multiline=True, default="", optional=True,
+                                tooltip="The conversation rules sent to an encoder that takes no chat turns. Empty uses the built-in text."),
+                io.String.Input("turns_prompt", multiline=True, default="", optional=True,
+                                tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
+                io.String.Input("marks_prompt", multiline=True, default="", optional=True,
+                                tooltip="The rule that keeps (word:1.5) and [a|b] markup. Empty uses the built-in text."),
                 io.Int.Input("max_length", default=400, min=32, max=4096, step=8, optional=True,
                              tooltip="The longest rewrite, in tokens."),
                 io.Boolean.Input("greedy", default=False, optional=True,
@@ -214,12 +228,15 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, instructions="", max_length=400, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="") -> io.NodeOutput:
+                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="") -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
                          "thinking": "", "sent": "", "ok": True})
             return io.NodeOutput(text, "off")
+        prompts = {"chat_prompt": chat_prompt, "notes_prompt": notes_prompt, "compact_prompt": compact_prompt, "revision_prompt": revision_prompt,
+                   "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt}
         text = str(text or "")
         pre = post = ""
         body = text
@@ -253,7 +270,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         masked, marks = mask_markup(body)
         system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
         if marks:
-            system += "\n\n" + en.MARKS_RULE
+            system += "\n\n" + en.pick(prompts, "marks_prompt")
         asked = "\n".join(x for x in (body, rating_line if pass_rating else "") if x)      # what the person wrote, with the rating line that went with it
         history, compacted, context, did = "", "", None, False
         state = CONVOS.get(key) if key else None
@@ -274,14 +291,14 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if key:
             keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
             fixed = len(system) + len(masked) + len(reference_text) + len(note_text)
-            used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens)
+            used, window, compacted, did = fit(clip, state, fixed, max_length, compact, context_tokens, prompts)
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
-            note=note_text, notes=notes,
+            note=note_text, notes=notes, prompts=prompts,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
             seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,

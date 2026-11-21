@@ -107,7 +107,7 @@ export function chat(app, own) {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "encoder_file", "encoder_family"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "encoder_file", "encoder_family", "chat_prompt", "notes_prompt", "compact_prompt"];
       try {
         const r = await app.api.enhancerChat({ conversation: ck, message, notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])) });
         if (r && r.compacted) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised." });

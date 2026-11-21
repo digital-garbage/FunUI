@@ -651,3 +651,31 @@ def test_every_run_gets_a_chat_id_that_only_rises(node):
         node.FunUIEnhancePrompt.execute(FakeClip("A fox."), "a fox", enabled=True, seed=3)
     ids = [r["chat_id"] for r in node.RUNS]
     assert ids == sorted(set(ids)) and len(ids) == 3
+
+
+def test_every_system_prompt_can_be_replaced_and_empty_means_the_built_in_one(node, monkeypatch):
+    node.CONVOS.clear()
+    assert set(en().PROMPT_FIELDS) == {"chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt", "marks_prompt"}
+    assert all(en().defaults()[k].strip() for k in en().PROMPT_FIELDS) and en().pick({"chat_prompt": "  "}, "chat_prompt") == en().CHAT_REPLY_SYSTEM
+    run = lambda clip, text, **kw: node.FunUIEnhancePrompt.execute(clip, text, enabled=True, seed=3, to_chat=True, conversation="s:0", **kw)
+    # conversation rules, flat and as turns; the markup rule
+    run(FakeClip("A fox."), "a fox")
+    flat = FakeClip("An owl.")
+    run(flat, "an (owl:1.5)", conversation_prompt="MY FLAT RULES", marks_prompt="MY MARKS")
+    assert "MY FLAT RULES" in flat.seen["text"] and en().CONVO_SYSTEM not in flat.seen["text"]
+    assert "MY MARKS" in flat.seen["text"] and en().MARKS_RULE not in flat.seen["text"]
+    gemma = FakeClip("A bat."); gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
+    run(gemma, "a bat", turns_prompt="MY TURN RULES")
+    assert "MY TURN RULES" in gemma.seen["text"] and en().CONVO_NATIVE_SYSTEM not in gemma.seen["text"]
+    # the revision rules for comments outside a conversation
+    rev = FakeClip("A fox.")
+    node.FunUIEnhancePrompt.execute(rev, "a fox", enabled=True, seed=3, chat=json.dumps([{"comment": "warmer", "rewrites": {"whole": "A fox."}}]), revision_prompt="MY REVISION")
+    assert "MY REVISION" in rev.seen["text"] and en().CHAT_SYSTEM not in rev.seen["text"]
+    # the chat answer and the notes rule, and the note-taker
+    chat = FakeClip("Sure.")
+    monkeypatch.setattr(node, "_own_encoder", lambda f, fam: chat)
+    node.chat_reply("s:1", "hi", encoder_file="g", prompts={"chat_prompt": "MY CHAT", "notes_prompt": "MY NOTES"})
+    assert "MY CHAT" in chat.seen["text"] and "MY NOTES" in chat.seen["text"] and en().CHAT_REPLY_SYSTEM not in chat.seen["text"]
+    keep = FakeClip("SCENES: x.")
+    en().compact(keep, "", [{"request": "a", "reply": "b"}], prompts={"compact_prompt": "MY NOTE-TAKER"})
+    assert "MY NOTE-TAKER" in keep.seen["text"] and en().COMPACT_SYSTEM not in keep.seen["text"]
