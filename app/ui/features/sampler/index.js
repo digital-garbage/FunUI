@@ -55,6 +55,7 @@ export default {
     };
     const button = c.button.sm({ label: "⏱ Sampler", tone: "neutral", title: "Steps, sampler, scheduler and sampling settings: one click, no modal.", onClick: () => (pop ? pop.close() : open()) });
     button.node.hidden = true;
+    button.node.dataset.row = "sampler";        // the Composer button keeps this one right before itself
     host.append(button.node);
 
     const body = c.region.stack({ gap: "md" });

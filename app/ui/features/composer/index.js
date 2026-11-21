@@ -82,11 +82,19 @@ export default {
         onClose: () => { cleanup(); win = null; } });
     };
     const button = c.button.sm({ label: "◆ Composer", tone: "neutral", onClick: () => (win ? win.close() : open()) });
-    host.append(button.node);       // the button toggles it, as v4
     // The helper changes the project itself, so it stays off until the person turns it on (Settings > Editor), with a warning.
     const helper = c.button.sm({ label: "✦ Helper", tone: "neutral", title: "Ask the model to change the project", onClick: () => { if (app.hasModule && !app.hasModule("conditioning_prompt_enhancer")) c.toast.warn({ text: "The helper needs the prompt enhancer module." }); else openHelper(app, helper); } });
     const showHelper = () => { helper.node.hidden = app.project.pref("helper", false) !== true; };
-    host.append(helper.node);
+    // The row reads: Helper first, then whatever other features added, then Sampler, then Composer last at the right edge, whichever feature added its button later.
+    const settle = () => {
+      const sampler = host.querySelector('[data-row="sampler"]');
+      if (host.firstElementChild !== helper.node) host.prepend(helper.node);
+      const tail = sampler ? [sampler, button.node] : [button.node];
+      if (!tail.every((n, i) => host.children[host.children.length - tail.length + i] === n)) host.append(...tail);
+    };
+    settle();
+    const Watch = globalThis.MutationObserver || (globalThis.window && globalThis.window.MutationObserver), keepLast = Watch ? new Watch(settle) : null;
+    if (keepLast) keepLast.observe(host, { childList: true });
     showHelper();
     const offHelper = app.on(showHelper);
     app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
@@ -105,6 +113,6 @@ export default {
           if (hit.length) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised for the enhancer." });
         }).catch(() => {});
     }) : () => {};
-    return () => { offRun(); offHelper(); cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
+    return () => { offRun(); offHelper(); if (keepLast) keepLast.disconnect(); cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
   },
 };
