@@ -761,3 +761,10 @@ def test_in_own_text_mode_the_model_is_told_what_the_fixed_prefix_and_postfix_sa
     assert user.strip() == "a fox" and out.args[0] == "cinematic, a red fox runs , 4k".replace(" ,", ",") or "a red fox runs" in out.args[0]
     nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="m")
     assert "Fixed text" not in seen[-1][0]                                   # no prefix or postfix: nothing to tell
+
+
+def test_a_note_line_glued_onto_the_end_of_a_sentence_still_counts():
+    text, add, drop = en().parse_notes("I will keep it short. REMEMBER: Answer in one short sentence.")
+    assert add == ["Answer in one short sentence."] and text == "I will keep it short."
+    assert en().parse_notes("Fine.\nFORGET: 2")[2] == ["2"]
+    assert en().parse_notes("He said REMEMBER: this is not a note line")[1] == []              # only after a sentence end or on a line of its own

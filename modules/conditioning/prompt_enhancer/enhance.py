@@ -49,7 +49,8 @@ STYLES = {"default": SYSTEM_PROMPT, "dynamic": DYNAMIC_PROMPT}
 FIXED_RULE = ("The prompt you rewrite is only the middle of a longer one. Fixed text before it: [[PROMPT_PREFIX]]\nFixed text after it: [[PROMPT_POSTFIX]]\n"
               "That text is added around your answer afterwards and stays exactly as it is. Use it only to understand the whole prompt: never repeat it, "
               "and write what you add so it reads well between the two.")
-SELF_EDIT_RULE = ("You can read and change your own rules, the system prompts that tell you how to work. They are:\n[[RULES_SHEET]]\n"
+SELF_EDIT_RULE = ("A request to change how you answer or rewrite is a change to your own rules: call edit_prompt for it and do not write REMEMBER (REMEMBER is only for what the person wants in every prompt). "
+                  "You can read and change your own rules, the system prompts that tell you how to work. They are:\n[[RULES_SHEET]]\n"
                   "Use read_prompt to see one in full. Use edit_prompt only when the user asks you to change how you behave, or a rule clearly keeps failing: "
                   "send the whole new text of that rule and one sentence why. The user sees the change and may refuse it; after a refusal, do not propose the same change again. "
                   "Say in your answer what you changed or proposed.")
@@ -666,7 +667,7 @@ def notes_system(notes, numbered=False) -> str:
 
 # A small model dresses the line up: "**REMEMBER:** x", "- Remember: x", "> REMEMBER : x", "(REMEMBER: x)".
 _DRESS = r"[ \t>\-*•_`\"'(\[]*"
-_NOTE_OP = re.compile(r"(?im)^" + _DRESS + r"(REMEMBER|FORGET)" + r"[*_`\"']*[ \t]*[:：][*_`\"']*[ \t]*(.+?)[ \t]*$")
+_NOTE_OP = re.compile(r"(?im)(?:^|(?<=[.!?])[ \t]+)" + _DRESS + r"(REMEMBER|FORGET)" + r"[*_`\"']*[ \t]*[:：][*_`\"']*[ \t]*(.+?)[ \t]*$")
 
 
 def parse_notes(text):
