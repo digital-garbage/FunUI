@@ -214,7 +214,8 @@ class Engine:
         self.lock = threading.Lock()           # loading and unloading
         self.turn = threading.Lock()           # one generation at a time
         self.model = self.tok = None
-        self.source = ""
+        self.source = ""                       # what the loaded model came from
+        self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
         self.done_bytes = self.total_bytes = 0
         self.device = ""
@@ -224,8 +225,9 @@ class Engine:
 
     # -- loading ------------------------------------------------------------
     def status(self):
-        size = _folder_size(local_dir(self.source)) if self.phase == "downloading" and self.source else self.done_bytes
-        return {"phase": self.phase, "message": self.message, "source": self.source, "device": self.device,
+        shown = self.wanted if self.phase in ("loading", "downloading") and self.wanted else self.source
+        size = _folder_size(local_dir(shown)) if self.phase == "downloading" and shown else self.done_bytes
+        return {"phase": self.phase, "message": self.message, "source": shown, "device": self.device,
                 "downloaded": size, "total": self.total_bytes}
 
     def _fetch(self, source):
@@ -278,7 +280,8 @@ class Engine:
             if self.model is not None and self.source == source:
                 return
             self.model = self.tok = self._snap = None
-            self.source, self.done_bytes = source, 0
+            self.source = self.wanted = source
+            self.done_bytes = 0
             try:
                 folder, weights = self._fetch(source)
                 self.phase, self.message = "loading", f"loading {source}"
@@ -320,7 +323,7 @@ class Engine:
                 self.load(source)
             except Exception:                                       # noqa: BLE001 -- already in the status
                 pass
-        self.phase, self.message, self.source = "loading", f"starting {source}", str(source).strip()
+        self.phase, self.message, self.wanted = "loading", f"starting {source}", str(source).strip()
         self._worker = threading.Thread(target=work, daemon=True, name="funui-engine-load")
         self._worker.start()
         return True
@@ -364,8 +367,7 @@ class Engine:
         inputs = tok(text, return_tensors="pt", add_special_tokens=False).to(model.device)
         streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=False, timeout=600)
         seen = {}
-        cancel = self.cancel
-        cancel.clear()
+        cancel = self.cancel = threading.Event()         # this request's own stop flag, made once it has the turn
 
         class Stop(StoppingCriteria):
             def __call__(self, input_ids, scores, **kw):
@@ -423,6 +425,25 @@ class Engine:
         worker = threading.Thread(target=work, daemon=True, name="funui-engine-generate")
         worker.start()
         split, calls, call_text = Splitter(dialect, drops, opened), [], ""
+        try:
+            yield from self._pieces(streamer, split, calls, dialect)
+        finally:
+            if worker.is_alive():                           # the reader went away (page closed, request dropped): stop writing before the next request starts
+                cancel.set()
+                worker.join(timeout=60)
+        for kind, part in split.feed("", final=True):
+            if kind in ("thinking", "answer"):
+                yield {"kind": kind, "text": part}
+        worker.join()
+        if failure:
+            raise failure[0]
+        took = max(time.time() - started, 1e-6)
+        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
+
+    @staticmethod
+    def _pieces(streamer, split, calls, dialect):
+        """The events the model's text makes as it arrives (tool calls are collected in `calls`)."""
+        call_text = ""
         for chunk in streamer:
             for kind, part in split.feed(chunk):
                 if kind == "call":
@@ -435,14 +456,6 @@ class Engine:
                         yield {"kind": "call", "call": parsed}
                 else:
                     yield {"kind": kind, "text": part}
-        for kind, part in split.feed("", final=True):
-            if kind in ("thinking", "answer"):
-                yield {"kind": kind, "text": part}
-        worker.join()
-        if failure:
-            raise failure[0]
-        took = max(time.time() - started, 1e-6)
-        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
 
 
 ENGINE = Engine()

@@ -279,3 +279,52 @@ def test_a_model_without_tool_calls_is_told_it_cannot_edit_its_rules_and_still_c
     heard = []
     out = nodes.chat_reply("e:9", "a b c", engine_model="tiny", max_length=8, do_sample=False, on_event=heard.append, self_edit=True, rules={"chat_prompt": "Be chatty."})
     assert "ok" in out and any(e["kind"] == "status" and "cannot edit its own rules" in e["text"] for e in heard)
+
+
+def test_choosing_another_engine_model_really_loads_it(tiny, monkeypatch):
+    asked = []
+    monkeypatch.setattr(tiny, "_fetch", lambda source: (asked.append(source), (_ for _ in ()).throw(ValueError("stop here")))[1])
+    assert tiny.load_async("other/model") is True
+    tiny._worker.join(5)
+    assert asked == ["other/model"] and tiny.phase == "error"            # not skipped because the name was already set for the status
+    assert tiny.status()["source"] == "other/model"
+
+
+def test_a_reader_that_goes_away_stops_the_writing_before_the_next_request(tiny):
+    import threading
+    gen = tiny.stream([{"role": "user", "content": "a b c"}], max_new_tokens=200, greedy=True)
+    next(gen)
+    gen.close()
+    assert not [t for t in threading.enumerate() if t.name == "funui-engine-generate" and t.is_alive()]
+    assert tiny.turn.acquire(blocking=False)                              # the turn was given back
+    tiny.turn.release()
+
+
+def test_a_model_with_biases_loads_from_an_fp8_file_in_any_order(tmp_path):
+    """Qwen-style attention biases: the filled bias survives whichever order the file's tensors are read in."""
+    import torch
+    from safetensors.torch import save_file
+    from transformers import Qwen2Config, Qwen2ForCausalLM
+    from modules.conditioning.prompt_enhancer import fp8
+    torch.manual_seed(2)
+    cfg = Qwen2Config(vocab_size=64, hidden_size=32, intermediate_size=64, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, tie_word_embeddings=True)
+    cfg.save_pretrained(tmp_path)
+    reference = Qwen2ForCausalLM(cfg).eval().to(torch.bfloat16)
+    tensors = {}
+    for name, value in reference.state_dict().items():
+        if name == "lm_head.weight":
+            continue
+        if value.ndim == 2 and ("proj" in name or "embed_tokens" in name):
+            scale = value.abs().max().float() / 400
+            packed = (value.float() / scale).to(torch.float8_e4m3fn)
+            tensors[name], tensors[name[:-6] + "weight_scale"] = packed, scale.reshape(())
+            tensors[name[:-6] + "comfy_quant"] = torch.tensor(list(b"{}"), dtype=torch.uint8)
+            value.copy_((packed.float() * scale).to(torch.bfloat16))
+        else:
+            tensors[name] = value
+    assert any(k.endswith("q_proj.bias") for k in tensors)
+    save_file(dict(reversed(list(tensors.items()))), str(tmp_path / "w.safetensors"))
+    model = fp8.build(tmp_path, tmp_path / "w.safetensors")
+    ids = torch.tensor([[1, 5, 9, 12]])
+    with torch.inference_mode():
+        assert torch.allclose(model(ids).logits.float(), reference(ids).logits.float(), atol=0.05, rtol=0.05)
