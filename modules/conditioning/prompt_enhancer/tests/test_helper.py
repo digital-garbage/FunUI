@@ -217,3 +217,7 @@ def test_a_scene_prefix_is_a_valid_change_on_its_own():
     assert live({"name": "edit_scene", "args": {"scene": 1, "prefix": "", "reason": "r"}}).startswith("Allowed")
     assert "(none)" in seen[0]["summary"]
     assert live({"name": "edit_scene", "args": {"scene": 2, "project_prefix": True, "reason": "r"}}).startswith("Allowed")
+
+
+def test_rules_forbid_shot_labels_in_the_story():
+    assert "never labels or numbering such as [Shot 1]" in helper.HELPER_RULE
