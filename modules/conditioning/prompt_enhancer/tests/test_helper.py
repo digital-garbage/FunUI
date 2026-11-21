@@ -233,3 +233,25 @@ def test_share_reference_names_a_real_scene():
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(2, on_event, wait=2)({"name": "share_reference", "args": {"from_scene": 1, "reason": "r"}}).startswith("Allowed")
     assert "every scene" in seen[0]["summary"]
+
+
+def test_tool_blocks_in_an_answer_are_parsed_run_and_answered():
+    text, calls = helper.parse_calls('Sure.\nTOOL: set_clip_length\n{"seconds": 6, "reason": "r"}\nEND_TOOL\nTOOL: find_settings\n{"query": "contrast"}')
+    assert text == "Sure." and [c["name"] for c in calls] == ["set_clip_length", "find_settings"] and calls[0]["args"]["seconds"] == 6
+    assert helper.parse_calls("TOOL: x\nnot json\nEND_TOOL")[1][0]["error"]
+    assert "TOOL: set_clip_length" in helper.text_rule() and "edit_scene(" in helper.text_rule()
+
+
+def test_text_mode_runs_blocks_until_the_model_answers_in_words():
+    acts = helper.Actions(1, lambda ev: None, wait=1, settings=SETTINGS)
+    state = {"turns": []}
+    asked = []
+
+    def ask(text):
+        asked.append((text, [t["reply"] for t in state["turns"]]))
+        return ("Auto contrast is off and can be set.", "ok", [], [], "")
+    first = ('TOOL: find_settings\n{"query": "contrast"}\nEND_TOOL', "ok", ["note"], [], "")
+    reply, status, add, drop, thought = helper.run_text_calls(ask, acts, "turn on auto contrast", state, first)
+    assert reply == "Auto contrast is off and can be set." and add == ["note"]
+    assert asked[0][0].startswith("TOOL RESULTS:\nfind_settings: post_auto_contrast.mode")
+    assert asked[0][1] == [first[0]] and state["turns"] == []                       # it saw its own block; nothing of the loop stays in the conversation

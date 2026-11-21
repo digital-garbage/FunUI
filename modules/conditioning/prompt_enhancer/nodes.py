@@ -87,7 +87,7 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
 def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
-    editing, editor = False, None
+    editing, editor, text_mode, actions = False, None, False, None
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
     engine_model = "" if use_comfy else (str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else ""))
@@ -104,10 +104,11 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             if helper and on_event:                                  # the helper acts on the project: each call is asked of the person
                 from . import engine as eng, helper as hp
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
+                actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or ())
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
-                    clip.tools, clip.handler = hp.tools(), hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or ())
-                else:
-                    return {"ok": False, "reply": "", "status": "the helper needs a model with tool calls; this one has none"}
+                    clip.tools, clip.handler = hp.tools(), actions
+                else:                                                # no tool calls: it writes TOOL blocks in its answer and the app runs them
+                    text_mode = True
             elif self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
                 from . import engine as eng, rules as rl
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
@@ -132,10 +133,12 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) if helper else ""
+    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule() if text_mode else "") if helper else ""
     ask = lambda text: en.converse(clip, text, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     reply, status, add, drop, thought = ask(message)
+    if helper and text_mode and actions is not None:
+        reply, status, add, drop, thought = __import__(__package__ + ".helper", fromlist=["x"]).run_text_calls(ask, actions, message, state, (reply, status, add, drop, thought))
     if helper and clip.tools and getattr(clip.handler, "calls", 1) == 0 and __import__(__package__ + ".helper", fromlist=["x"]).announced(reply):
         # the model wrote about a change instead of calling the tool: it is told once to call it (its own answer stays in the conversation for that turn)
         hp = __import__(__package__ + ".helper", fromlist=["x"])
@@ -146,6 +149,11 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             state["turns"].pop()
         if second[0] or clip.handler.calls:
             reply, status, add, drop, thought = second[0] or "Done.", second[1], add + second[2], drop + second[3], second[4]
+        if not clip.handler.calls and hp.announced(reply):
+            # the model has tool calls on paper but does not use them: it is asked again in text mode, writing TOOL blocks that the app runs
+            clip.tools, text_mode, actions = None, True, clip.handler
+            hp_rule += hp.text_rule()
+            reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl
         reply, written = rl.parse_edits(reply)

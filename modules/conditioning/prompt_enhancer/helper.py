@@ -5,6 +5,7 @@ The model gets a sheet of the project (scenes by number, with prompt and length)
 Disallow, and the answer (the same route as a rule change) goes back to the model. The page does the change in the project.
 """
 
+import json
 import re
 import threading
 
@@ -343,3 +344,61 @@ _TOOL_WORDS = re.compile(r"\b(" + "|".join(["edit_scene", "add_scene", "copy_ref
 def announced(reply) -> bool:
     """Whether an answer talks about a change (a tool name, or "I will / I propose") instead of making it."""
     return bool(_TOOL_WORDS.search(str(reply or "")))
+
+
+_TOOL_BLOCK = re.compile(r"(?<![A-Z_])TOOL[ \t]*:[ \t]*([A-Za-z_]+)[ \t]*\n(.*?)(?:\n?[ \t]*END_TOOL|\Z)", re.S)
+
+
+def text_rule() -> str:
+    """How a model without tool calls makes its changes: it writes TOOL blocks, the app runs them and answers with the results."""
+    lines = []
+    for t in tools():
+        f = t["function"]
+        props = ", ".join(f["parameters"]["properties"])
+        lines.append(f"- {f['name']}({props}): {f['description']}")
+    return ("\n\nYou have no built-in tool calls, so make every change or lookup by writing a block in your answer, exactly like this, one block per call:\n"
+            "TOOL: set_clip_length\n{\"seconds\": 6, \"reason\": \"why\"}\nEND_TOOL\n"
+            "The line after TOOL: holds the tool name, the next lines are its arguments as JSON. Write no text of your own before the blocks. The app shows each change to the user, runs it if allowed and "
+            "answers you with TOOL RESULTS; then write the next block, or tell the user in one or two sentences what happened. Tools:\n" + "\n".join(lines))
+
+
+def parse_calls(text):
+    """-> (the answer without TOOL blocks, [{"name", "args"}]). A block whose arguments are not JSON carries "error"."""
+    found = []
+
+    def take(m):
+        body = m.group(2).strip()
+        try:
+            args = json.loads(body) if body else {}
+            found.append({"name": m.group(1), "args": args if isinstance(args, dict) else {}, **({} if isinstance(args, dict) else {"error": "the arguments must be a JSON object"})})
+        except ValueError:
+            found.append({"name": m.group(1), "args": {}, "error": "the arguments are not valid JSON"})
+        return ""
+    clean = _TOOL_BLOCK.sub(take, str(text or ""))
+    return re.sub(r"\n{3,}", "\n\n", clean).strip(), found
+
+
+def run_text_calls(ask, actions, message, state, first, rounds=4):
+    """The text-mode loop for a model without tool calls: run its TOOL blocks, tell it the results, until it answers in words. -> the last result tuple."""
+    reply, status, add, drop, thought = first
+    pushed, ran = 0, []
+    try:
+        for _ in range(rounds):
+            text, calls = parse_calls(reply)
+            if not calls:
+                break
+            results = []
+            for call in calls:
+                out = f"Error: {call['error']}." if call.get("error") else actions(call)
+                results.append(f"{call['name']}: {out}")
+                ran.append(f"{call['name']}: {str(out).splitlines()[0][:120]}")
+            state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
+            pushed += 1
+            message = "TOOL RESULTS:\n" + "\n".join(results) + "\nNow write the next TOOL block, or tell the user in one or two sentences what happened."
+            reply, status, more_add, more_drop, thought = ask(message)
+            add, drop = add + more_add, drop + more_drop
+    finally:
+        for _ in range(pushed):
+            state["turns"].pop()
+    text, _calls = parse_calls(reply)
+    return text or "Done.", status, add, drop, thought

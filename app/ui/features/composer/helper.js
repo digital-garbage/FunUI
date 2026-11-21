@@ -199,7 +199,7 @@ export function openHelper(app, origin) {
     pin = false;
     const t = turns();
     history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...(x.thinking ? [c.bubble.model({ text: x.thinking, who: "Helper (thinking)" })] : []), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
-      : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model from Composer > Enhance, which must support tool calls." })]);
+      : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
     send.setLabel ? send.setLabel(busy ? "Working…" : "Ask helper") : null;
     if (send.setDisabled) send.setDisabled(busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });

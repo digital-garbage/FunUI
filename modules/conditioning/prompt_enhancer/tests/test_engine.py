@@ -699,3 +699,28 @@ def test_naming_one_safetensors_part_downloads_all_parts_the_index_and_the_confi
     folder, weights = eng.Engine()._fetch("a/m::model-00002-of-00002.safetensors")
     assert got == ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "model.safetensors.index.json"]
     assert weights == "" and snaps[0][0] == "a/m" and snaps[0][1] == folder        # read as an ordinary checkpoint folder
+
+
+def test_a_helper_model_without_tool_calls_works_through_tool_blocks_in_its_answer(tiny, comfyui, monkeypatch):
+    import threading
+    from modules.conditioning.prompt_enhancer import helper, nodes, rules
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "plain chat", raising=False)
+    nodes.CONVOS.clear()
+    asked, heard = [], []
+
+    def on_event(ev):
+        heard.append(ev)
+        if ev["kind"] == "action_request":
+            threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+
+    def fake(clip, text, **kw):
+        asked.append(text)
+        assert "TOOL: set_clip_length" in kw["system_extra"]                                  # the text-mode instructions went in
+        if len(asked) == 1:
+            return 'TOOL: set_clip_length\n{"seconds": 6, "reason": "asked"}\nEND_TOOL', "ok", [], [], ""
+        return "Clip length is 6 seconds now.", "ok", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", fake)
+    out = nodes.chat_reply("h:2", "make clips 6 seconds", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 1})
+    assert out["reply"] == "Clip length is 6 seconds now." and asked[1].startswith("TOOL RESULTS:\nset_clip_length: Allowed")
+    assert any(e["kind"] == "action_request" and e["tool"] == "set_clip_length" for e in heard)
