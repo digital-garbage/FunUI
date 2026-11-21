@@ -589,3 +589,11 @@ def test_notes_lines_survive_the_markdown_a_small_model_adds():
     body, add, drop = en().parse_notes("Sure, warmer.\n**REMEMBER:** warm light\n- Remember : \"no rain\"\n> FORGET: 2\n(forget: 3)")
     assert body == "Sure, warmer." and add == ["warm light", "no rain"] and drop == ["2", "3"]
     assert en().parse_notes("I will remember: that is fine.")[1:] == ([], [])      # mid-sentence stays an answer
+
+
+def test_a_chat_reply_keeps_the_models_thinking_for_the_chat_tab(node, monkeypatch):
+    node.CONVOS.clear()
+    node.RUNS.clear()
+    monkeypatch.setattr(node, "_own_encoder", lambda f, fam: FakeClip("<think>warm means orange</think>Sure, warmer."))
+    out = node.chat_reply("c:1", "warmer?", encoder_file="g.safetensors")
+    assert out["reply"] == "Sure, warmer." and node.RUNS[-1]["thinking"] == "warm means orange"

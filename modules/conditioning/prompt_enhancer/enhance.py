@@ -514,11 +514,11 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
 
 
 def converse(clip, message, *, convo=None, notes="", **sampling):
-    """-> (reply, status): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
+    """-> (reply, status, notes to add, notes to drop, the model's thinking): one live chat answer inside the conversation, under its own system prompt (not the rewrite's).
     `convo`: {"summary", "turns", "keep"} as in enhance()."""
     message = str(message or "").strip()
     if not message:
-        return "", "the message is empty", [], []
+        return "", "the message is empty", [], [], ""
     system, rounds, user = CHAT_REPLY_SYSTEM + notes_system(notes, numbered=True), (), message
     convo = convo or {}
     if native_turns(clip) and (convo.get("turns") or convo.get("summary")):
@@ -532,8 +532,8 @@ def converse(clip, message, *, convo=None, notes="", **sampling):
     body, add, drop = parse_notes(raw)
     text, _ = trim_runaway(cut_chat_echo(clean(body)), max_length=sampling.get("max_length"))
     if not text:
-        return "", (status if "failed" in status or "unavailable" in status else "the model returned nothing"), [], []
-    return text, status, add, drop
+        return "", (status if "failed" in status or "unavailable" in status else "the model returned nothing"), [], [], extract_thinking(raw)
+    return text, status, add, drop, extract_thinking(raw)
 
 
 def notes_lines(notes) -> list:

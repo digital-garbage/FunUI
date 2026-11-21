@@ -88,13 +88,13 @@ def chat_reply(conversation, message, *, notes="", encoder_file, encoder_family=
     CONVOS.move_to_end(key)
     used, window, note, did = fit(clip, state, len(en.CHAT_REPLY_SYSTEM) + len(str(message)), max_length, compact, context_tokens)
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    reply, status, add, drop = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes,
+    reply, status, add, drop, thought = en.converse(clip, message, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes,
                                            max_length=max_length, thinking=thinking, **sampling)
     ok = bool(reply)
     if ok:
         state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
     RUNS.append({"prompt_id": f"chat-{time.time_ns()}", "kind": "chat", "conversation": key, "ok": ok, "status": status + note, "before": str(message), "after": reply,
-                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "summary": state["summary"] if did else "", "thinking": "", "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
+                 "asked": str(message).strip(), "answered": reply, "remember": add, "forget": drop, "compacted": did, "summary": state["summary"] if did else "", "thinking": thought, "sent": "", "context": {"used": used, "window": window, "compact": bool(compact)}})
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}

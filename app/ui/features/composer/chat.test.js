@@ -22,7 +22,7 @@ test("the Chat tab shows the conversation as bubbles: your prompts on the right,
   setupDom();
   try {
     const prefs = { enhance_chat: [{ comment: "warmer", run: "r1" }], enhance_chat_epoch: 1 };
-    const runs = [{ prompt_id: "r1", conversation: "p:1", ok: true, before: "PRE a fox POST", after: "PRE A red fox runs. POST", asked: "a fox", answered: "A red fox runs." }, { prompt_id: "r2", conversation: "p:1", ok: true, context: { used: 2048, window: 8192, compact: true }, compacted: true, summary: "A fox story in the snow.", before: "an owl", after: "An owl glides." }, { prompt_id: "r0", conversation: "p:0", ok: true, before: "old", after: "older" }];
+    const runs = [{ prompt_id: "r1", conversation: "p:1", ok: true, before: "PRE a fox POST", after: "PRE A red fox runs. POST", asked: "a fox", answered: "A red fox runs.", thinking: "The fox should be red." }, { prompt_id: "r2", conversation: "p:1", ok: true, context: { used: 2048, window: 8192, compact: true }, compacted: true, summary: "A fox story in the snow.", before: "an owl", after: "An owl glides." }, { prompt_id: "r0", conversation: "p:0", ok: true, before: "old", after: "older" }];
     const app = { project: { project: { id: "p", scenes: [] }, pref: (k, d) => prefs[k] ?? d, setPref: (k, v) => { prefs[k] = v; } }, lastRun: { n: 0 }, selection: {}, dom: createDom(),
       pipeline: { slots: () => [{ node: "FunUIEnhancePrompt" }], subscribe: () => () => {} }, api: { enhancerRuns: async () => ({ runs }) }, on: () => () => {} };
     const page = chat(app, () => {});
@@ -31,6 +31,7 @@ test("the Chat tab shows the conversation as bubbles: your prompts on the right,
     const said = [...page.node.querySelectorAll(".cx-bubble")].map((b) => `${b.classList.contains("cx-bubble-you") ? "you" : "model"}:${b.querySelector(".cx-bubble-body").textContent}`);
     assert.match(page.node.textContent, /Context \(last rewrite\): about 2,048 of 8,192 tokens \(25%\)\. Summarised at 80%\./);
     assert.match(page.node.textContent, /summarised here[\s\S]*Summary the model now works from[\s\S]*A fox story in the snow\./);
+    assert.match(page.node.textContent, /Model's thinking[\s\S]*The fox should be red\./);
     assert.deepEqual(said, ["you:a fox", "model:A red fox runs.", "you:warmer", "you:an owl", "model:An owl glides."]);       // the older conversation (p:0) is not shown
   } finally { teardownDom(); }
 });

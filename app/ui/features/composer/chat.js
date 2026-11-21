@@ -70,14 +70,15 @@ export function chat(app, own) {
     if (!here) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Chat comments go to the enhancer. Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const you = (text) => c.bubble.you({ text, who: "You" }), model = (text) => c.bubble.model({ text, who: "Model" });
     const ck = `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, convo = all.filter((r) => r.conversation === ck && r.ok);
+    const thought = (r) => (r.thinking ? [c.collapsible.default({ label: "Model's thinking", body: c.text.sm({ text: r.thinking }) })] : []);
     const noted = (r) => [...(r.remember || []).map((x) => `Noted: ${x}`), ...(r.forget || []).map((x) => `Dropped note ${x}`)].map((text) => c.hint.default({ text }));
     let bubbles;
     if (convo.length) {                      // "Send everything into chat": the whole conversation, each comment under the rewrite it was about
       const asked = new Set(convo.map((r) => r.prompt_id));
-      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), model(r.answered ?? r.after), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
+      bubbles = [...convo.flatMap((r) => [you(r.asked ?? r.before), model(r.answered ?? r.after), ...thought(r), ...noted(r), ...(r.compacted ? [c.hint.default({ text: "The earlier conversation was summarised here to fit the context window." }), ...(r.summary ? [c.collapsible.default({ label: "Summary the model now works from", body: c.text.sm({ text: r.summary }) })] : [])] : []), ...list.filter((x) => x.run === r.prompt_id).map((x) => you(x.comment))]), ...list.filter((x) => !asked.has(x.run)).map((x) => you(x.comment))];
     } else {
       bubbles = [...list.flatMap((r) => [first(r) ? model(first(r)) : null, you(r.comment)]),
-        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), model(last.answered ?? last.after)] : []),
+        ...(ok ? [c.hint.default({ text: `Last rewrite of: ${String(last.asked ?? last.before ?? "").slice(0, 80)}` }), model(last.answered ?? last.after), ...thought(last)] : []),
         ...(!list.length && !ok ? [c.hint.default({ text: "Generate once with the enhancer on, then comment here." })] : [])];
     }
     bubbles = bubbles.filter(Boolean);

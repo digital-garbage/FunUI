@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The model's thinking shows in the Chat tab** (when "Thinking" is on), as an expandable block under each answer, for rewrites and instant replies. It no longer shows in the Enhance tab.
 - **Options a version no longer has never stop a run.** A saved pipeline that still holds a setting a node no longer has is run without it, and a saved modifier choice that is no longer one of the options uses that setting's default. The Log says what was ignored or replaced. Values you typed that are out of range are still refused.
 - **A "Comment..." button next to a scene's rating** (Composer > Enhance > "Comment button"). It opens a small window to comment on the enhancer's last rewrite, the same as a comment in the Chat tab. Off by default.
 - **Instant replies in the Chat tab** (with "Send everything into chat" and an Encoder of its own picked in Enhance). "Send" asks the model now and shows its answer as a bubble; the model answers under a chat prompt of its own, with the whole conversation so far. "Comment" keeps your note instead and it goes with the next prompt as part of one message. A reply waits while a generation is running.

@@ -22,7 +22,7 @@ export function enhance(app, own) {
     if (!last) return [c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
     const part = (title, body) => (body ? c.collapsible.default({ label: title, body: c.code.block({ text: body, label: title }) }) : null);
     return [c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
-      c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Model's thinking", last.thinking), part("Sent to the model (chat run)", last.sent)].filter(Boolean);
+      c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model (chat run)", last.sent)].filter(Boolean);
   }
   const choices = (name) => (name === "encoder_file" ? encoders.files : encoders.families);
   const pick = (name, label, first, hint, dflt = "") => {
