@@ -39,7 +39,7 @@ export function enhance(app, own) {
   const num = (label, v, lo, hi, step, name, hint, disabled) => field(label, c.number.md({ label, value: v, min: lo, max: hi, step, disabled, onChange: (x) => set(name, x) }), hint);
 
   function readout() {
-    const now = writing && !writing.done ? [c.label.section({ text: "Writing now" }), c.hint.default({ text: writing.status || `Rewriting: ${writing.label}` }),
+    const now = writing && !writing.done ? [c.label.section({ text: "Writing now" }), c.hint.default({ text: writing.status || `Writing: ${writing.label}` }),
       ...(writing.thinking ? [c.collapsible.default({ label: "Thinking", open: true, body: c.code.block({ text: writing.thinking, label: "Thinking" }) })] : []), ...(writing.answer ? [c.code.block({ text: writing.answer, label: "Rewrite so far" })] : [])] : [];
     if (!last) return [...now, c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
     const part = (title, body) => (body ? c.collapsible.default({ label: title, body: c.code.block({ text: body, label: title }) }) : null);
@@ -131,7 +131,7 @@ export function enhance(app, own) {
   ps.ensureLoaded().then(draw);
   refreshDownloads();
   const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
-    const now = r && r.kind === "rewrite" && !r.done ? r : null;
+    const now = r && r.id && !r.done ? r : null;
     if (JSON.stringify(now) !== JSON.stringify(writing)) { const ended = writing && !now; writing = now; if (alive && !app.dom.typingIn(page.node)) { if (ended) app.api.enhancerRuns().then((x) => { last = (x.runs || []).slice(-1)[0] || last; draw(); }).catch(() => draw()); else draw(); } }
   }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2500); if (tick && tick.unref) tick.unref(); } });
   watch();

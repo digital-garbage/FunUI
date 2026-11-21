@@ -152,7 +152,7 @@ test("the engine line shows what a running request is doing, so a busy model doe
 
 test("a rewrite running inside a generation shows up as it is written, and goes away when it ends", async () => {
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
-  let now = { kind: "rewrite", label: "a fox", thinking: "Let me think", answer: "A fox in snow", status: "writing", done: false };
+  let now = { id: 1, kind: "rewrite", label: "a fox", thinking: "Let me think", answer: "A fox in snow", status: "writing", done: false };
   const api = { enhancerEngine: async () => ({ phase: "ready" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}), enhancerLive: async () => now };
   let stop = () => {};
   const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });

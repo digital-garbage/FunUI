@@ -106,7 +106,7 @@ export function chat(app, own) {
     // An answer that is still forming: the message, the model's thinking and its words so far.
     if (live) bubbles.push(you(live.message), ...(live.thinking ? [c.bubble.model({ text: live.thinking, who: "Model (thinking)" })] : []), live.answer ? model(live.answer) : c.hint.default({ text: live.status || "The model is writing…" }));
     // A rewrite that is running inside a generation: what the model has written so far, as it forms.
-    if (writing && !live) bubbles.push(c.hint.default({ text: `Rewriting: ${writing.label}` }), ...(writing.thinking ? [c.bubble.model({ text: writing.thinking, who: "Model (thinking)" })] : []), writing.answer ? model(writing.answer) : c.hint.default({ text: writing.status || "The model is writing…" }));
+    if (writing && !live) bubbles.push(c.hint.default({ text: `Writing: ${writing.label}` }), ...(writing.thinking ? [c.bubble.model({ text: writing.thinking, who: "Model (thinking)" })] : []), writing.answer ? model(writing.answer) : c.hint.default({ text: writing.status || "The model is writing…" }));
     bubbles = bubbles.filter(Boolean);
     const lastEntry = convo.length && convo[convo.length - 1], cx = lastEntry && lastEntry.context, cxFor = lastEntry && lastEntry.kind === "chat" ? "last chat reply" : "last rewrite";
     if (cx) bubbles.push(c.hint.default({ text: `Context (${cxFor}): about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
@@ -159,7 +159,7 @@ export function chat(app, own) {
   const look = () => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
   // The engine's own writing is not in ComfyUI's log or queue, so the tab asks for it while it is open.
   const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
-    const was = writing, now = r && r.kind === "rewrite" && !r.done ? r : null;
+    const was = writing, now = r && r.id && !r.done ? r : null;
     if (JSON.stringify(now) !== JSON.stringify(was)) { writing = now; if (alive && !app.dom.typingIn(page.node)) { if (was && !now) { stick = true; look(); } else draw(true); } }
   }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2000); if (tick && tick.unref) tick.unref(); } });
   watch();

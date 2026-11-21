@@ -90,7 +90,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
                 return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
             engine_model = ""                                       # an older project's encoder: ComfyUI's own loader reads it
         else:
-            clip = EngineClip(ENGINE, on_event, cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 5))
+            clip = EngineClip(ENGINE, on_event, live="chat", cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 5))
             if self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
                 from . import engine as eng
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
