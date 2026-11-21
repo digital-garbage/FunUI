@@ -331,11 +331,13 @@ def compact(clip, summary, turns, prompts=None, macros=None, **sampling):
 
 def cut_chat_echo(text) -> str:
     """A model that treats the conversation as more prompt text repeats its labels:
-    a leading label is removed, and everything from the first later label is cut."""
+    a leading label is removed, and everything from the first later label is cut. A label is
+    the capitalised heading at the start of a line, so the same words inside a sentence
+    ("as we said earlier in this conversation") are left alone."""
     text = str(text or "").strip()
     labels = "|".join(re.escape(l.rstrip(":")) for l in CHAT_LABELS)
-    text = re.sub(rf"(?i)^\s*(?:{labels})[^:\n]*:\s*", "", text)
-    hit = re.search(rf"(?i)(?:{labels})", text)
+    text = re.sub(rf"^\s*(?:{labels})[^:\n]*:\s*", "", text)
+    hit = re.search(rf"(?m)^[ \t>*_#-]*(?:{labels})\b", text)
     return (text[:hit.start()] if hit else text).strip()
 
 

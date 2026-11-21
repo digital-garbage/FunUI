@@ -827,3 +827,10 @@ def test_on_the_comfy_path_every_switch_still_reaches_the_encoder_and_the_engine
     for needed in ("a fox in rain", "more rain please", "keep it short", "Rating: 4/5 stars", "A fox runs through snow.", "PRE", "POST", "<|turn>model\nA fox runs through snow.<turn|>"):
         assert needed in second, needed
     assert gemma.seen["thinking"] is True and asked == []
+
+
+def test_the_same_words_inside_a_sentence_are_not_a_repeated_label():
+    e = en()
+    said = "Sure. As we discussed earlier in this conversation, the fox runs. The user feedback says warmer light, so I made it warmer. The original prompt: a fox, stays."
+    assert e.cut_chat_echo(said) == said
+    assert e.cut_chat_echo("The fox runs.\n**USER FEEDBACK** (oldest first):\n- warmer") == "The fox runs."
