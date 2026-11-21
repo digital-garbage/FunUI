@@ -221,3 +221,15 @@ def test_a_scene_prefix_is_a_valid_change_on_its_own():
 
 def test_rules_forbid_shot_labels_in_the_story():
     assert "never labels or numbering such as [Shot 1]" in helper.HELPER_RULE
+
+
+def test_share_reference_names_a_real_scene():
+    acts = helper.Actions(2, lambda ev: None, wait=1)
+    assert acts({"name": "share_reference", "args": {"from_scene": 3}}).startswith("Error")
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    assert helper.Actions(2, on_event, wait=2)({"name": "share_reference", "args": {"from_scene": 1, "reason": "r"}}).startswith("Allowed")
+    assert "every scene" in seen[0]["summary"]

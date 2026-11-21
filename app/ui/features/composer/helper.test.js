@@ -127,3 +127,16 @@ test("a scene can get its own prefix and go back to the project's", () => {
   applyAction(p, { tool: "edit_scene", args: { scene: 2, project_prefix: true } });
   assert.equal("anchor" in p.project.scenes[1], false);
 });
+
+test("pinned references show in the sheet, share_reference gives every scene the same ones, copy_reference picks the scene so the media bin shows it", () => {
+  const picked = [];
+  const project = { frame_rate: 24, num_frames_per_scene: 97, fixed_references: { pin1: 1 }, scenes: [{ id: "a", text: "x", references: ["r1", "r2"] }, { id: "b", text: "y" }, { id: "c", text: "z", references: ["r1"] }] };
+  const p = { project, edit: (fn) => fn(project) };
+  assert.match(sheetOf(project), /Scene 2 .*references: pin1 \(pinned to every scene\)/);
+  const out = applyAction(p, { tool: "share_reference", args: { from_scene: 1 } });
+  assert.match(out, /2 scenes got the references of scene 1/);
+  assert.deepEqual(project.scenes[1].references, ["r1", "r2"]);
+  assert.deepEqual(project.scenes[2].references, ["r1", "r2"]);
+  applyAction(p, { tool: "copy_reference", args: { scene: 2, from_scene: 3 } }, null, null, { selection: { pick: (id) => picked.push(id) } });
+  assert.deepEqual(picked, ["b"]);
+});

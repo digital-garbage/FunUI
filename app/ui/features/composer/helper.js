@@ -4,6 +4,7 @@ import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js";
 import { addScene, split } from "../../shell/edits.js";
 import { applyStory, shownStory } from "./story.js";
+import { MAX_REFERENCES, sceneReferences } from "../../shell/reference_wiring.js";
 import { engineOf, scrollParent } from "./chat.js";
 import { clampBlocks } from "../settings/field.js";
 
@@ -13,7 +14,7 @@ let draft = "";
 
 /** The pictures a scene works from, as ids the model can compare: ", references: ab12 cd34, aspect source: ef56". */
 const short = (id) => String(id);
-const refsOf = (s) => `${(s.references || []).length ? `, references: ${s.references.map(short).join(" ")}` : ", no references"}${s.source_image ? `, aspect source: ${short(s.source_image)}` : ""}`;
+const refsOf = (s, fixed) => { const ids = sceneReferences(s, fixed).ids; return `${ids.length ? `, references: ${ids.map((id) => (id in (fixed || {}) ? `${short(id)} (pinned to every scene)` : short(id))).join(" ")}` : ", no references"}${s.source_image ? `, aspect source: ${short(s.source_image)}` : ""}`; };
 
 /** The modules whose settings the helper can reach, one line (the settings themselves come from find_settings). */
 const modulesLine = (ps) => { const seen = new Set(catalogOf(ps).map((x) => x.title)); return seen.size ? `\nModules with settings: ${[...seen].join(", ")}.` : ""; };
@@ -26,7 +27,7 @@ const presetsLine = (list) => (list.length ? `\nPipeline starting points (apply_
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
   if (!project) return "";
-  const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}${typeof s.anchor === "string" ? `, own prefix: ${s.anchor.trim() || "(none)"}` : ""}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
+  const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s, project.fixed_references)}${typeof s.anchor === "string" ? `, own prefix: ${s.anchor.trim() || "(none)"}` : ""}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
   const vars = (project.variables || []).map((v) => `$${v.name} = ${String(v.value).slice(0, 200)}`);
   return [`Anchor (also called prefix, put in front of every scene prompt): ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
     `Variables: ${vars.length ? "" : "(none)"}`, ...vars, `Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
@@ -82,6 +83,7 @@ export function applyAction(project, ev, ps, api, app) {
     const to = Number(a.scene) - 1, from = Number(a.from_scene) - 1;
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
+    if (app && app.selection) app.selection.pick(project.project.scenes[to].id);        // the media bin shows the references of the picked scene
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
   }
   if (ev.tool === "run_action" && app) {
@@ -99,6 +101,21 @@ export function applyAction(project, ev, ps, api, app) {
       project.edit((pr) => { did = Boolean(applyStory(pr, scenes, shown)); return did; });
       return did ? `Story rewritten (${scenes.length} scene${scenes.length === 1 ? "" : "s"})` : "the Story was not changed";
     }, (e) => `Story not changed: ${(e && e.message) || e}`);
+  }
+  if (ev.tool === "share_reference") {
+    const from = Number(a.from_scene) - 1;
+    if (!(from >= 0 && from < n)) return "no such scene";
+    let given = 0;
+    project.edit((pr) => {
+      const src = pr.scenes[from], fx = pr.fixed_references || {};
+      for (const sc of pr.scenes) {
+        if (sc === src) continue;
+        const plan = sceneReferences(sc, fx), add = (src.references || []).filter((id) => !plan.ids.includes(id));
+        if (add.length && plan.ids.length + add.length <= MAX_REFERENCES) { sc.references = [...(sc.references || []), ...add]; given += 1; }
+      }
+      return given > 0;
+    });
+    return given ? `${given} scene${given === 1 ? "" : "s"} got the references of scene ${from + 1}` : "every scene already has them";
   }
   if (ev.tool === "cut_scene") {
     const at = Number(a.scene) - 1;
