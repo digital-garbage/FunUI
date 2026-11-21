@@ -187,8 +187,8 @@ def test_run_action_is_checked_against_the_offered_actions():
     assert seen[0]["summary"] == "Run: Generate selected on scenes 2, 3"
 
 
-def test_rules_keep_shot_detail_out_of_the_global_prompt():
-    assert "must not contain detailed descriptions of each shot" in helper.HELPER_RULE
+def test_rules_make_the_global_prompt_a_quick_summary_per_shot():
+    assert "never write detailed descriptions of each shot" in helper.HELPER_RULE and "quick summary of the whole video" in helper.HELPER_RULE
 
 
 def test_announcing_a_change_without_calling_is_noticed():
