@@ -583,3 +583,9 @@ def test_each_scene_of_a_project_is_enhanced_with_its_own_prefix_split_and_nothi
     assert "river" not in outs[1] + outs[2] and "fox sprints" not in outs[1] + outs[2]
     assert [o.count("No subtitles.") for o in outs] == [1, 1, 1]
 
+
+
+def test_notes_lines_survive_the_markdown_a_small_model_adds():
+    body, add, drop = en().parse_notes("Sure, warmer.\n**REMEMBER:** warm light\n- Remember : \"no rain\"\n> FORGET: 2\n(forget: 3)")
+    assert body == "Sure, warmer." and add == ["warm light", "no rain"] and drop == ["2", "3"]
+    assert en().parse_notes("I will remember: that is fine.")[1:] == ([], [])      # mid-sentence stays an answer

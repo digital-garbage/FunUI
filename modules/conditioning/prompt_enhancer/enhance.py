@@ -556,12 +556,14 @@ def notes_system(notes, numbered=False) -> str:
     return "\n\nSTANDING NOTES from the user (they always apply):\n" + body
 
 
-_NOTE_OP = re.compile(r"(?im)^[ \t]*(REMEMBER|FORGET)[ \t]*:[ \t]*(.+?)[ \t]*$")
+# A small model dresses the line up: "**REMEMBER:** x", "- Remember: x", "> REMEMBER : x", "(REMEMBER: x)".
+_DRESS = r"[ \t>\-*•_`\"'(\[]*"
+_NOTE_OP = re.compile(r"(?im)^" + _DRESS + r"(REMEMBER|FORGET)" + r"[*_`\"']*[ \t]*[:：][*_`\"']*[ \t]*(.+?)[ \t]*$")
 
 
 def parse_notes(text):
     """-> (the answer without its REMEMBER/FORGET lines, [notes to add], [numbers or texts to drop])."""
     add, drop = [], []
     for kind, value in _NOTE_OP.findall(str(text or "")):
-        (add if kind.upper() == "REMEMBER" else drop).append(value.strip().strip('"'))
+        (add if kind.upper() == "REMEMBER" else drop).append(value.strip().strip('"*_`)]\' '))
     return _NOTE_OP.sub("", str(text or "")).strip(), add, drop
