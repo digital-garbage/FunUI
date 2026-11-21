@@ -90,12 +90,12 @@ def tiny():
 
 def test_a_model_streams_through_the_engine_piece_by_piece(tiny):
     events = list(tiny.stream([{"role": "user", "content": "a b c"}], max_new_tokens=12, greedy=True))
-    assert events[-1] == {"kind": "end", "calls": []}
+    assert events[-1]["kind"] == "end" and events[-1]["calls"] == [] and events[-1]["tokens"] > 0 and "tps" in events[-1]
     assert all(e["kind"] in ("thinking", "answer") and e["text"] for e in events[:-1])
     again = list(tiny.stream([{"role": "user", "content": "a b c"}], max_new_tokens=12, greedy=True))
-    assert events == again                                                              # greedy: the same words every time
+    assert [e for e in events if e['kind'] != 'end'] == [e for e in again if e['kind'] != 'end']                                                              # greedy: the same words every time
     seeded = [list(tiny.stream([{"role": "user", "content": "a"}], max_new_tokens=8, seed=7)) for _ in range(2)]
-    assert seeded[0] == seeded[1]                                                       # the same seed repeats a sampled answer too
+    assert seeded[0][:-1] == seeded[1][:-1]                                                       # the same seed repeats a sampled answer too
 
 
 def test_the_enhancer_asks_the_engine_through_a_clip_stand_in_and_hears_each_piece(tiny):
@@ -175,3 +175,29 @@ def test_an_engine_source_may_name_a_file_and_a_base():
     pattern = r"([\w.\-]+/[\w.\-]+)(?:::([^@]+))?(?:@([\w.\-]+/[\w.\-]+))?"
     assert re.fullmatch(pattern, "a/b::x/y.safetensors@c/d").groups() == ("a/b", "x/y.safetensors", "c/d")
     assert eng.local_dir("a/b::f.safetensors@c/d") == eng.local_dir("a/b")
+
+
+def test_the_speed_ups_write_the_same_words_as_the_plain_way_and_the_cache_is_reused(tiny):
+    prompt = [{"role": "user", "content": "a b c d e f a b c d e f a b c"}]
+    plain = lambda **k: "".join(e.get("text", "") for e in tiny.stream(prompt, max_new_tokens=14, greedy=True, **k))     # noqa: E731
+    base = plain(cache=False, lookup=0)
+    assert plain(cache=False, lookup=4) == base                     # prompt lookup changes the speed, never the words
+    assert plain(cache=True, lookup=0) == base and tiny._snap is not None
+    again = list(tiny.stream(prompt + [{"role": "user", "content": "g h"}], max_new_tokens=14, greedy=True, lookup=0))
+    assert again[-1]["cached"] > 0                                  # the shared start of the two requests was not read twice
+    other = list(tiny.stream([{"role": "user", "content": "p o n"}], max_new_tokens=6, greedy=True))
+    assert other[-1]["cached"] == 0                                 # a request that begins differently starts fresh
+    assert plain(cache=True, lookup=4) == base
+
+
+def test_two_requests_at_once_take_turns_on_the_engine(tiny):
+    import threading
+    order, done = [], threading.Event()
+
+    def ask(tag):
+        for e in tiny.stream([{"role": "user", "content": "a b"}], max_new_tokens=6, greedy=True):
+            order.append(tag)
+    t1, t2 = threading.Thread(target=ask, args=("x",)), threading.Thread(target=ask, args=("y",))
+    t1.start(); t2.start(); t1.join(); t2.join()
+    flat = "".join(order)
+    assert flat in (flat[0] * flat.count(flat[0]) + flat[-1] * flat.count(flat[-1]),) and set(flat) == {"x", "y"}     # never interleaved

@@ -7,6 +7,7 @@ tool calls a Gemma 4 model writes. It is optional: with no engine model set, the
 Nothing here imports torch or transformers until a model is asked for, so a machine without them loads the module.
 """
 
+import copy
 import os
 import random
 import re
@@ -210,12 +211,14 @@ class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
     def __init__(self):
-        self.lock = threading.Lock()           # one generation at a time
+        self.lock = threading.Lock()           # loading and unloading
+        self.turn = threading.Lock()           # one generation at a time
         self.model = self.tok = None
         self.source = ""
         self.phase, self.message = "idle", ""
         self.done_bytes = self.total_bytes = 0
         self.device = ""
+        self._snap = None                      # (ids, cache) of the last request, minus its final token
         self.cancel = threading.Event()
         self._worker = None
 
@@ -274,7 +277,7 @@ class Engine:
         with self.lock:
             if self.model is not None and self.source == source:
                 return
-            self.model = self.tok = None
+            self.model = self.tok = self._snap = None
             self.source, self.done_bytes = source, 0
             try:
                 folder, weights = self._fetch(source)
@@ -304,7 +307,7 @@ class Engine:
 
     def use(self, model, tokenizer, name="test", device="cpu"):
         """Install a model that was built elsewhere (the tests' tiny one)."""
-        self.model, self.tok, self.source, self.device = model, tokenizer, name, device
+        self.model, self.tok, self.source, self.device, self._snap = model, tokenizer, name, device, None
         self.phase, self.message = "ready", f"{name} on {device}"
 
     def load_async(self, source):
@@ -324,7 +327,7 @@ class Engine:
 
     def unload(self):
         with self.lock:
-            self.model = self.tok = None
+            self.model = self.tok = self._snap = None
             self.phase, self.message = "idle", ""
             try:
                 import torch
@@ -334,10 +337,17 @@ class Engine:
                 pass
 
     # -- generating ---------------------------------------------------------
-    def stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
-               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False):
-        """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...]}.
-        Raises when the model is not loaded or generation fails."""
+    def stream(self, messages, **options):
+        """One request at a time on the model, independent of ComfyUI: a chat sent while a rewrite runs waits its turn, and neither touches the generation's own memory use."""
+        with self.turn:
+            yield from self._stream(messages, **options)
+
+    def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
+               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=5):
+        """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...], "tokens", "seconds", "tps", "cached"}.
+        `cache`: reuse the start of the last request when this one begins with it (the long instructions are only read once).
+        `lookup`: prompt-lookup decoding, up to that many tokens guessed from the text already there and checked in one pass (0 = off);
+        the words written are the same as without it. Raises when the model is not loaded or generation fails."""
         if self.model is None:
             raise RuntimeError("the engine model is not loaded")
         import torch
@@ -359,6 +369,7 @@ class Engine:
 
         class Stop(StoppingCriteria):
             def __call__(self, input_ids, scores, **kw):
+                stats["steps"] += 1
                 return cancel.is_set()
 
         class Presence(LogitsProcessor):
@@ -374,16 +385,43 @@ class Engine:
         if sample:
             gen.update(temperature=max(float(temperature), 0.01), top_p=float(top_p), top_k=int(top_k), min_p=float(min_p))
         torch.manual_seed(int(seed) if seed else random.randrange(1, 2 ** 31))
-        failure = []
+        failure, stats, started = [], {"tokens": 0, "cached": 0, "steps": 0}, time.time()
+        ids = inputs["input_ids"]
+
+        def run(fast):
+            """One generation; `fast`: with the prefix cache and prompt lookup."""
+            extra, start, cache_obj = {}, 0, None
+            if fast and cache and ids.shape[1] > 1:
+                from transformers import DynamicCache
+                cache_obj = DynamicCache()
+                snap = self._snap
+                if snap is not None and len(snap[0]) <= ids.shape[1] - 1 and torch.equal(ids[0, :len(snap[0])].cpu(), snap[0]):
+                    cache_obj, start = copy.deepcopy(snap[1]), len(snap[0])
+                if ids.shape[1] - 1 > start:
+                    model(input_ids=ids[:, start:-1], past_key_values=cache_obj, use_cache=True)
+                self._snap = (ids[0, :-1].detach().cpu().clone(), copy.deepcopy(cache_obj))
+                extra["past_key_values"] = cache_obj
+            if fast and lookup:
+                extra["prompt_lookup_num_tokens"] = int(lookup)
+            stats["cached"] = start
+            out = model.generate(**gen, **extra)
+            stats["tokens"] = int(out.shape[1] - ids.shape[1])
 
         def work():
             try:
                 with torch.inference_mode():
-                    model.generate(**gen)
+                    try:
+                        run(True)
+                    except Exception:                               # noqa: BLE001 -- a model that cannot do the speed-ups still answers, the plain way
+                        if not (cache or lookup) or stats["steps"] or self.cancel.is_set():
+                            raise
+                        self._snap = None
+                        run(False)
             except Exception as exc:                                # noqa: BLE001 -- handed to the reader of the stream
                 failure.append(exc)
                 streamer.end()
-        threading.Thread(target=work, daemon=True, name="funui-engine-generate").start()
+        worker = threading.Thread(target=work, daemon=True, name="funui-engine-generate")
+        worker.start()
         split, calls, call_text = Splitter(dialect, drops, opened), [], ""
         for chunk in streamer:
             for kind, part in split.feed(chunk):
@@ -400,9 +438,11 @@ class Engine:
         for kind, part in split.feed("", final=True):
             if kind in ("thinking", "answer"):
                 yield {"kind": kind, "text": part}
+        worker.join()
         if failure:
             raise failure[0]
-        yield {"kind": "end", "calls": calls}
+        took = max(time.time() - started, 1e-6)
+        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
 
 
 ENGINE = Engine()
@@ -425,7 +465,7 @@ class EngineClip:
         for q, a in rounds:
             messages += [{"role": "user", "content": str(q)}, {"role": "assistant", "content": str(a)}]
         messages.append({"role": "user", "content": str(user)})
-        started, thought, answer = time.time(), "", ""
+        started, thought, answer, speed = time.time(), "", "", ""
         try:
             for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                          top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
@@ -435,11 +475,11 @@ class EngineClip:
                 elif ev["kind"] == "answer":
                     answer += ev["text"]
                 elif ev["kind"] == "end":
-                    self.calls = ev["calls"]
+                    self.calls, speed = ev["calls"], f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
                 if self.on_event:
                     self.on_event(ev)
         except Exception as exc:                                    # noqa: BLE001 -- the enhancer hands the original prompt on and says why
             return "", f"generation failed: {exc}"
         raw = (f"<think>{thought}</think>" if thought.strip() else "") + answer
         note = "; the picture was not sent (the engine reads text only)" if image is not None else ""
-        return raw, f"generated {len(answer)} chars in {time.time() - started:.1f}s on {self.engine.device} (engine){note}"
+        return raw, f"generated {len(answer)} chars in {time.time() - started:.1f}s on {self.engine.device} (engine){speed}{note}"
