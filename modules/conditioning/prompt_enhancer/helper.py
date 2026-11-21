@@ -19,7 +19,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "The project has a prefix (put in front of every scene prompt), a postfix (after it), a negative prompt and $variables; change them with set_project_text, set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
-               "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, accept it and do not ask again.")
+               "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
 def tools() -> list:
@@ -258,7 +258,8 @@ class Actions:
             elif name == "remove_shortcut":
                 self.shortcuts.pop(args["name"], None)
             return "Allowed: the change is made in the project."
-        return "Disallowed by the user. Nothing was changed. Do not propose the same change again."
+        return ("Disallowed by the user. Nothing was changed. Ask yourself why: compare this change with what the user asked and with the project as it is, and find what you got wrong "
+                "(the wrong scene, a value too far, more than was asked). Then propose one corrected change that fixes it, or, if you cannot tell, ask the user one short question. Never propose the same change again.")
 
 
 def line(x) -> str:

@@ -21,7 +21,7 @@ def test_allowed_change_asks_once_and_says_so():
 
 def test_refused_change_tells_the_model_not_to_repeat():
     out, _ = run({"name": "add_scene", "args": {"text": "a cat", "reason": "r"}}, answer=False)
-    assert out.startswith("Disallowed")
+    assert out.startswith("Disallowed") and "Ask yourself why" in out
 
 
 def test_bad_calls_never_reach_the_person():
