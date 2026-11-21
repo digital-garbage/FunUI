@@ -34,3 +34,10 @@ def test_bad_calls_never_reach_the_person():
 def test_unanswered_change_is_not_made():
     out, _ = run({"name": "set_clip_length", "args": {"seconds": 5}})
     assert out.startswith("No answer")
+
+
+def test_copy_reference_needs_two_different_scenes():
+    out, seen = run({"name": "copy_reference", "args": {"scene": 2, "from_scene": 2}})
+    assert out.startswith("Error") and not seen
+    out, seen = run({"name": "copy_reference", "args": {"scene": 2, "from_scene": 1, "reason": "r"}}, answer=True)
+    assert out.startswith("Allowed") and "same reference" in seen[0]["summary"]

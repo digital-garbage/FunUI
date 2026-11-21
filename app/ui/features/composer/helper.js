@@ -9,10 +9,14 @@ const NODE = "FunUIEnhancePrompt";
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said, for as long as the page is open
 let draft = "";
 
+/** The pictures a scene works from, as ids the model can compare: ", references: ab12 cd34, aspect source: ef56". */
+const short = (id) => String(id);
+const refsOf = (s) => `${(s.references || []).length ? `, references: ${s.references.map(short).join(" ")}` : ", no references"}${s.source_image ? `, aspect source: ${short(s.source_image)}` : ""}`;
+
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
   if (!project) return "";
-  const fps = Number(project.frame_rate) || 25, lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}): ${(s.text || "").trim() || "(empty)"}`);
+  const fps = Number(project.frame_rate) || 25, lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}): ${(s.text || "").trim() || "(empty)"}`);
   return [`Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
 }
 
@@ -41,6 +45,12 @@ export function applyAction(project, ev) {
       return true;
     });
     return "Scene added";
+  }
+  if (ev.tool === "copy_reference") {
+    const to = Number(a.scene) - 1, from = Number(a.from_scene) - 1;
+    if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
+    project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
+    return `Scene ${to + 1} uses the references of scene ${from + 1}`;
   }
   if (ev.tool === "set_clip_length" && typeof a.seconds === "number" && a.seconds > 0) {
     project.edit((pr) => { pr.num_frames_per_scene = snapFrames(a.seconds * (Number(pr.frame_rate) || 25)); return true; });

@@ -12,7 +12,7 @@ from . import rules
 MAX_TEXT = 4000
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
-               "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene. "
+               "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
                "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, accept it and do not ask again.")
 
 
@@ -25,6 +25,7 @@ def tools() -> list:
     seconds = {"type": "number", "description": "The length in seconds."}
     return [fn("edit_scene", "Change the prompt and/or the length of one scene.", {"scene": scene, "text": text, "seconds": seconds, "reason": reason}, ["scene", "reason"]),
             fn("add_scene", "Add a new scene after another one (the last when after is left out).", {"text": text, "after": {"type": "integer", "description": "The scene number to add it after."}, "reason": reason}, ["text", "reason"]),
+            fn("copy_reference", "Give a scene the same reference pictures and aspect ratio source picture as another scene.", {"scene": scene, "from_scene": {"type": "integer", "description": "The scene number to copy them from."}, "reason": reason}, ["scene", "from_scene", "reason"]),
             fn("set_clip_length", "Set the default clip length of the whole project.", {"seconds": seconds, "reason": reason}, ["seconds", "reason"])]
 
 
@@ -35,6 +36,8 @@ def describe(name, args) -> str:
         return f"Scene {args.get('scene')}: " + " and ".join(parts)
     if name == "add_scene":
         return f"Add a scene after scene {args['after']}: {str(args.get('text')).strip()}" if isinstance(args.get("after"), int) else f"Add a scene at the end: {str(args.get('text')).strip()}"
+    if name == "copy_reference":
+        return f"Scene {args.get('scene')}: use the same reference pictures as scene {args.get('from_scene')}"
     return f"Set the default clip length to {args.get('seconds')} seconds"
 
 
@@ -46,7 +49,7 @@ class Actions:
 
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
-        if name not in ("edit_scene", "add_scene", "set_clip_length"):
+        if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length"):
             return f"Error: there is no tool called '{name}'."
         num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 600        # noqa: E731
         if name == "edit_scene":
@@ -62,6 +65,10 @@ class Actions:
                 return f"Error: text must be the prompt of the new scene, at most {MAX_TEXT} characters."
             if args.get("after") is not None and (not isinstance(args["after"], int) or not 1 <= args["after"] <= self.scenes):
                 return f"Error: after must be a scene number from 1 to {self.scenes}."
+        elif name == "copy_reference":
+            a, b = args.get("scene"), args.get("from_scene")
+            if not all(isinstance(v, int) and 1 <= v <= self.scenes for v in (a, b)) or a == b:
+                return f"Error: scene and from_scene must be two different scene numbers from 1 to {self.scenes}."
         elif not num(args.get("seconds")):
             return "Error: seconds must be a number above 0."
         pid = f"act-{next(rules._IDS)}"
