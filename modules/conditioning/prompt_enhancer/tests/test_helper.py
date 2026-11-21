@@ -122,3 +122,20 @@ def test_helper_reads_the_chat_conversation_and_notes():
         nodes.CONVOS.pop("p:0", None)
     assert "no rain" in text and "talked about dogs" in text and "make it warmer" in text
     assert nodes._chat_memory({"chat": "none"}, "") == ""
+
+
+def test_cuts_are_checked_and_counted():
+    acts = helper.Actions(2, lambda ev: None, wait=1)
+    for bad in ({"name": "cut_scene", "args": {"scene": 3}}, {"name": "cut_scene", "args": {"scene": 1, "at_seconds": -2}},
+                {"name": "set_cut_words", "args": {"words": []}}, {"name": "set_cut_words", "args": {"words": ["two words"]}}):
+        assert acts(bad).startswith("Error"), bad
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    live = helper.Actions(1, on_event, wait=2)
+    assert live({"name": "cut_scene", "args": {"scene": 1, "at_seconds": 2, "reason": "r"}}).startswith("Allowed")
+    assert live({"name": "cut_scene", "args": {"scene": 2, "reason": "r"}}).startswith("Allowed")      # the cut made a second scene
+    assert live({"name": "set_cut_words", "args": {"words": ["qcut"], "reason": "r"}}).startswith("Allowed")
+    assert "at 2 seconds" in seen[0]["summary"]

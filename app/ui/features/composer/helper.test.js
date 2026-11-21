@@ -77,3 +77,15 @@ test("pipeline inputs are listed with their choices, set together in one save, a
   assert.deepEqual(restored, [{ slots: [{ id: "n" }], removed: [], unwired: {} }]);
   assert.deepEqual(prefs, { a: 1, b: 2 });
 });
+
+test("cuts: the sheet says which scenes are one clip, cut_scene splits a scene, set_cut_words saves the words", async () => {
+  const saved = [];
+  const project = { frame_rate: 24, num_frames_per_scene: 97, scenes: [{ id: "a", text: "a dog runs" }, { id: "b", text: "" }] };
+  const p = { project, edit: (fn) => fn(project) };
+  assert.match(sheetOf(project), /Scene 1 /);
+  applyAction(p, { tool: "cut_scene", args: { scene: 1 } });
+  assert.equal(project.scenes.length, 3);
+  assert.match(sheetOf(project), /Scene 1 .*one clip with scenes 1 and 2/);
+  await applyAction(p, { tool: "set_cut_words", args: { words: ["qcut", "scene"] } }, null, { saveStoryMarkers: async (w) => { saved.push(w); } });
+  assert.deepEqual(saved, [["qcut", "scene"]]);
+});

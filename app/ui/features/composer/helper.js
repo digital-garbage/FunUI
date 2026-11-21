@@ -1,8 +1,8 @@
 // The helper: ask the model to act on the project. It sees a sheet of the scenes and proposes changes; each one is a card with Allow and
 // Disallow, and an allowed change is made here, in the open project (so it can be undone like any other edit).
 import { composer as c } from "../../composer/composer.js";
-import { addScene } from "../../shell/edits.js";
-import { effFps, effFrames, snapFrames } from "../../shell/scenes.js";
+import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js";
+import { addScene, split } from "../../shell/edits.js";
 import { engineOf } from "./chat.js";
 import { clampBlocks } from "../settings/field.js";
 
@@ -21,7 +21,7 @@ const presetsLine = (list) => (list.length ? `\nPipeline starting points (apply_
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
   if (!project) return "";
-  const fps = Number(project.frame_rate) || 25, lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}): ${(s.text || "").trim() || "(empty)"}`);
+  const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
   const vars = (project.variables || []).map((v) => `$${v.name} = ${String(v.value).slice(0, 200)}`);
   return [`Prefix: ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
     `Variables: ${vars.length ? "" : "(none)"}`, ...vars, `Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
@@ -76,6 +76,16 @@ export function applyAction(project, ev, ps, api) {
     if (!(to >= 0 && to < n && from >= 0 && from < n && to !== from)) return "no such scene";
     project.edit((pr) => { const src = pr.scenes[from], dst = pr.scenes[to]; dst.references = [...(src.references || [])]; if (src.source_image) dst.source_image = src.source_image; else delete dst.source_image; return true; });
     return `Scene ${to + 1} uses the references of scene ${from + 1}`;
+  }
+  if (ev.tool === "cut_scene") {
+    const at = Number(a.scene) - 1;
+    if (!(at >= 0 && at < n)) return "no such scene";
+    let did = false;
+    project.edit((pr) => { const sc = pr.scenes[at]; did = Boolean(split(pr, sc.id, typeof a.at_seconds === "number" ? Math.round(a.at_seconds * effFps(sc, pr)) : undefined)); return did; });
+    return did ? `Scene ${at + 1} cut in two` : "that scene cannot be cut there";
+  }
+  if (ev.tool === "set_cut_words" && api) {
+    return Promise.resolve(api.saveStoryMarkers(a.words)).then(() => `Cut words: ${a.words.join(", ")}`, (e) => `Cut words not saved: ${(e && e.message) || e}`);
   }
   if (ev.tool === "set_project_text") {
     ({ prefix: () => project.setAnchor(a.text), postfix: () => project.setPostfix(a.text), negative: () => project.setNegative(a.text) })[a.field]?.();
@@ -157,7 +167,8 @@ export function openHelper(app, origin) {
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; paint();
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + modulesLine(app.pipeline) + presetsLine(presets), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
+    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the Story: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "status") turn.status = ev.text;
