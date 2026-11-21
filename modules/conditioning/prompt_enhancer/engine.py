@@ -522,7 +522,7 @@ class Engine:
             yield from self._stream(messages, **options)
 
     def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
-               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=5, image=None):
+               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, image=None):
         """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...], "tokens", "seconds", "tps", "cached"}.
         `cache`: reuse the start of the last request when this one begins with it (the long instructions are only read once).
         `lookup`: prompt-lookup decoding, up to that many tokens guessed from the text already there and checked in one pass (0 = off);
@@ -731,7 +731,7 @@ class EngineClip:
 
     MAX_TOOL_ROUNDS = 4
 
-    def __init__(self, engine=None, on_event=None, tools=None, handler=None, live="", cache=True, lookup=5):
+    def __init__(self, engine=None, on_event=None, tools=None, handler=None, live="", cache=True, lookup=0):
         """`handler(call) -> text` answers the model's tool calls (the answer goes back to the model, which then carries on).
         `live`: a name for what is being written ("rewrite"): the pieces are then also kept in LIVE for the tabs to show."""
         self.engine, self.on_event, self.tools, self.handler, self.calls, self.live = engine or ENGINE, on_event, tools, handler, [], live

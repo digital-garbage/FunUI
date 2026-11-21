@@ -46,9 +46,9 @@ def routes(table, base, web):
     def speed_of(body):
         """The speed settings a request carries: precision, prefix cache, prompt-lookup count."""
         try:
-            look = max(0, min(10, int(body.get("lookup_tokens", 5))))
+            look = max(0, min(10, int(body.get("lookup_tokens", 0))))
         except (TypeError, ValueError):
-            look = 5
+            look = 0
         return dict(precision=str(body.get("precision") or "auto"), prefix_cache=body.get("prefix_cache") is not False, lookup_tokens=look)
 
     def chat_args(body):
