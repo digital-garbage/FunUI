@@ -70,7 +70,7 @@ export function enhance(app, own) {
     const on = val("enabled", false), greedy = val("greedy", false);
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";
     // A setting that hangs on another is greyed out, not hidden, while that one is off: `dep` names what it hangs on.
-    const engineSet = Boolean(String(val("engine_model", "")).trim() || val("encoder_file", "")), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
+    const engineSet = !val("use_comfy", false) && Boolean(String(val("engine_model", "")).trim() || val("encoder_file", "")), chat = val("to_chat", false), sum = val("compact", true), rate = val("pass_rating", false), encoder = Boolean(val("encoder_file", "")), pic = val("use_image", true), cont = continuityOn();
     const live = { own: val("scope", "whole") === "own", chat, nochat: !chat, rate: chat && rate, talk: chat && engineSet, edit: chat && engineSet && val("self_edit", false), refine: val("refine_passes", 0) > 0, sum: chat && sum };
     const off = (...needs) => !on || needs.some((n) => !n);
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
@@ -86,6 +86,7 @@ export function enhance(app, own) {
       ...(() => { const r = repoOf(val("engine_model", "")); if (!r) return []; listRepo(val("engine_model", "")); const sel = repoFiles.repo === r.repo ? repoFiles.files : [];
         return sel.length > 1 || r.file ? [field("File in the repo", c.select.md({ label: "File in the repo", value: r.file, disabled: off(), options: [{ value: "", label: "The whole repo" }, ...sel.map((f) => ({ value: f.name, label: `${f.name} (${gb(f.size)})` }))], onChange: (x) => { set("engine_model", x ? `${r.repo}::${x}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); } }),
           "Downloads only that one weights file (for example an fp8 one), not every copy in the repo.")] : []; })(),
+      toggle("Use ComfyUI's text generation instead", "Writes with ComfyUI's own text generation (the pipeline's text encoder, or the file picked below) and leaves FunUI's engine off. No streaming, no model editing its own rules.", "use_comfy", false, off()),
       c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),
       c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", ""), val("precision", "auto")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
         c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),

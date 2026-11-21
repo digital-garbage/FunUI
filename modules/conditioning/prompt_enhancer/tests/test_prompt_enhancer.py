@@ -794,3 +794,12 @@ def test_refine_passes_let_the_model_check_and_improve_its_own_rewrite():
     assert en().enhance(none, "a fox in snow", refine=2, seed=1)[0] == "A fox runs."
     off = ScriptedClip(["A fox runs."])
     assert en().enhance(off, "a fox in snow", seed=1)[0] == "A fox runs." and len(off.asked) == 1       # no passes by default: one call
+
+
+def test_the_comfy_switch_keeps_the_engine_out_of_a_rewrite_and_a_chat(monkeypatch):
+    from .. import nodes
+    loaded = []
+    monkeypatch.setattr(nodes.ENGINE, "load", lambda s, p="auto": loaded.append(s))
+    out = nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="a/b", use_comfy=True)
+    assert loaded == [] and out.args[0] == "a fox"                                  # no clip to write with here: the prompt passes, the engine was never asked
+    assert nodes.chat_reply("c", "hi", engine_model="a/b", use_comfy=True)["ok"] is False and loaded == []

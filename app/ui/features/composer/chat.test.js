@@ -173,4 +173,5 @@ test("a model picked from ComfyUI's list, or an older project's saved encoder, r
   assert.equal(engineOf({ encoder_file: "x.safetensors", self_edit: true }), "comfy:x.safetensors");
   assert.equal(engineOf({ encoder_file: "x.safetensors" }), "comfy:x.safetensors");
   assert.equal(engineOf({}), "");
+  assert.equal(engineOf({ engine_model: "a/b", encoder_file: "x.safetensors", use_comfy: true }), "");      // ComfyUI's own text generation: the engine stays out
 });

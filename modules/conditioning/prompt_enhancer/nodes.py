@@ -74,13 +74,13 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing = False
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
-    engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")
+    engine_model = "" if use_comfy else (str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else ""))
     speed = speed or {}
     if engine_model:
         try:
@@ -181,6 +181,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
                 io.String.Input("fixed_prompt", multiline=True, default="", optional=True,
                                 tooltip="Tells the model about the fixed text around your own text (Only my own text mode). Empty uses the built-in text."),
+                io.Boolean.Input("use_comfy", default=False, optional=True,
+                                 tooltip="Writes with ComfyUI's own text generation (the encoder from the pipeline or the picked file) instead of FunUI's engine. The engine is not used."),
                 io.Combo.Input("precision", options=["auto", "fp8", "bf16"], default="auto", optional=True,
                                tooltip="How a single fp8 model file is run. bf16 is faster but needs twice the memory; fp8 is the smallest; auto picks bf16 when the graphics card has room."),
                 io.Boolean.Input("prefix_cache", default=True, optional=True,
@@ -274,7 +276,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=5) -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=5, use_comfy=False) -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -293,7 +295,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                              "before": text, "after": text, "thinking": "", "sent": "", "ok": False})
                 return io.NodeOutput(text, "prefix/postfix not found")
             body = text[len(pre):len(text) - len(post)].strip()
-        engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")          # a file picked from ComfyUI's list runs on the engine
+        engine_model = "" if use_comfy else (str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else ""))          # a file picked from ComfyUI's list runs on the engine
         if engine_model:
             try:
                 ENGINE.load(engine_model, precision)

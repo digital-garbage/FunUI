@@ -414,8 +414,9 @@ class Engine:
                         raise failure
                 self.loaded_dir = "" if os.path.isdir(source) else self._dir
                 self.device = "cuda" if cuda else "cpu"
-                self.phase, self.message = "ready", f"{source} on {self.device}"
-                _say(f"engine: {source} is ready on {self.device} ({time.time() - started:.0f}s)")
+                how = getattr(self.model, "funui_precision", "")
+                self.phase, self.message = "ready", f"{source} on {self.device}" + (f", {how}" if how else "")
+                _say(f"engine: {source} is ready on {self.device}" + (f" as {how}" if how else "") + f" ({time.time() - started:.0f}s)")
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 self.model = self.tok = None
                 self.phase, self.message = "error", str(exc)

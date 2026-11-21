@@ -29,7 +29,7 @@ export function applyNotes(text, add = [], drop = []) {
 }
 
 /** The engine model a chat runs on: the one set, or the file picked from ComfyUI's list (an older project's saved encoder runs the same way). */
-export const engineOf = (inp) => String(inp.engine_model || "").trim() || (inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
+export const engineOf = (inp) => inp.use_comfy === true ? "" : String(inp.engine_model || "").trim() || (inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
 
 /** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
 export async function rulesOf(app, inp) {
@@ -78,7 +78,13 @@ export function chat(app, own) {
   // The conversation opens at its end (newest message and the message box); "Top ^" goes back to the start.
   const scrollTo = (end) => { const sp = scrollParent(page.node); if (sp) sp.scrollTop = end ? sp.scrollHeight : 0; };
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
+  // While the model writes, the view follows it down, unless the person scrolled up to read.
   function draw(force) {
+    const sp = scrollParent(page.node), end = !sp || sp.scrollHeight - sp.scrollTop - sp.clientHeight < 160;
+    paint(force);
+    if ((live || writing) && end) later(() => scrollTo(true));
+  }
+  function paint(force) {
     if (!alive) return;
     const here = ((app.pipeline && app.pipeline.slots()) || []).some((s) => s.node === NODE);
     const list = rounds(), ok = last && last.ok, next = JSON.stringify([p.project && p.project.id, p.pref("enhance_notes", ""), list, last && (last.answered ?? last.after), here, all.length, p.pref("enhance_chat_epoch", 0)]);
@@ -129,7 +135,7 @@ export function chat(app, own) {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "use_comfy", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
         const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
         if (eng && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to

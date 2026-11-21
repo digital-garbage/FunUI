@@ -4,6 +4,9 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **"Use ComfyUI's text generation instead"** (Composer > Enhance, off by default). On, the enhancer and the Chat tab write with ComfyUI's own text generation as before, and FunUI's engine stays off.
+- **The chat follows the model as it writes.** While an answer streams in, the Chat tab scrolls down with it, unless you scrolled up to read.
+- **The engine says how it runs a model.** The line under the model picker now ends with "bf16" or "fp8". fp8 widens every layer at every word, which is slow; bf16 (the automatic choice when the graphics card has room) does not.
 - **Engine models whose tokenizer is missing now load.** A ComfyUI text-encoder file carries its own tokenizer, which the engine uses when the downloaded config folder has none of the usual kind. Models that only ship an older sentencepiece tokenizer file need the `sentencepiece` package, now in the requirements (restart after updating); the error says so.
 - **Downloaded engine models can be picked again.** Each model in Composer > Enhance > Downloaded models has a Use button next to Delete: it sets the engine model and starts loading it.
 - **Speed controls and live writing for the enhancer.** Composer > Enhance > Speed: Precision (a single fp8 model file can be widened to bf16 once when the graphics card has room, so every word is faster; the default picks this on its own), Reuse the unchanged start of a request, and Guess ahead (0 to 10 words checked in one step). Every model output (rewrites, self-checks, summaries, chat answers) is shown live: a run that happens during Generate now appears in the Enhance tab ("Writing now") and in the Chat tab, thinking and answer as they form. The loaded model stays in memory between Generates and reloads only when the model or precision changes.

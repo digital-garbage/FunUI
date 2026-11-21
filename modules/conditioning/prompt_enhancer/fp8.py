@@ -152,8 +152,10 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu", progress=N
     except Exception:                                         # noqa: BLE001 -- a base without one keeps the config's own
         pass
     model = model.to(device).eval()
+    model.funui_precision = "fp8"
     if precision == "bf16" or (precision == "auto" and str(device).startswith("cuda") and _room(model, device)):
         widen(model, dtype)
+        model.funui_precision = "bf16"
     return model
 
 
