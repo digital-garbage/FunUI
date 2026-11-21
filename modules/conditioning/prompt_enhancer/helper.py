@@ -11,13 +11,14 @@ import threading
 from . import rules
 
 MAX_TEXT = 4000
-TEXTS = {"prefix": "the prefix", "postfix": "the postfix", "negative": "the negative prompt"}
+TEXTS = {"anchor": "the anchor (the global prompt)", "postfix": "the postfix", "negative": "the negative prompt", "postfix_enabled": "the postfix switch"}
+ALIASES = {"prefix": "anchor", "global_prompt": "anchor", "global prompt": "anchor", "globalprompt": "anchor", "main_prompt": "anchor", "negative_prompt": "negative", "postfix_on": "postfix_enabled", "postfix_switch": "postfix_enabled"}
 EXTRA = ("cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
                "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
                "Cuts: the Story is cut into scenes at the cut words (the first one is written between scenes, change them with set_cut_words); a scene can also be cut in two on the timeline with cut_scene, and the halves stay one generated clip (the project says which scenes belong to one clip). "
-               "The project has a prefix (put in front of every scene prompt), a postfix (after it), a negative prompt and $variables; change them with set_project_text, set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
+               "The project has an anchor (also called the prefix or the global prompt: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. When the user says global prompt, prefix or anchor, they mean the anchor. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
                "Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
@@ -33,7 +34,7 @@ def tools() -> list:
     return [fn("edit_scene", "Change the prompt and/or the length of one scene.", {"scene": scene, "text": text, "seconds": seconds, "reason": reason}, ["scene", "reason"]),
             fn("add_scene", "Add a new scene after another one (the last when after is left out).", {"text": text, "after": {"type": "integer", "description": "The scene number to add it after."}, "reason": reason}, ["text", "reason"]),
             fn("copy_reference", "Give a scene the same reference pictures and aspect ratio source picture as another scene.", {"scene": scene, "from_scene": {"type": "integer", "description": "The scene number to copy them from."}, "reason": reason}, ["scene", "from_scene", "reason"]),
-            fn("set_project_text", "Set the project's prefix, postfix or negative prompt (the whole new text; empty clears it).", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
+            fn("set_project_text", "Set the project's anchor (= prefix = global prompt), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
             fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
@@ -69,6 +70,8 @@ def describe(name, args) -> str:
     if name == "apply_preset":
         return f"Replace the whole pipeline with the starting point '{args.get('title') or args.get('preset')}'. Every file and value set in the pipeline is cleared"
     if name == "set_project_text":
+        if args.get("field") == "postfix_enabled":
+            return f"Switch the postfix {'on' if args.get('text') else 'off'}"
         return f"Set {TEXTS.get(args.get('field'))} to: {args.get('text') or '(empty)'}"
     if name == "set_variable":
         return f"Set ${args.get('name')} to: {args.get('value')}"
@@ -171,6 +174,13 @@ class Actions:
             args["title"] = spec.get("title")
             return None
         if name == "set_project_text":
+            args["field"] = ALIASES.get(str(args.get("field")).strip().lower(), str(args.get("field")).strip().lower())
+            if args["field"] == "postfix_enabled":
+                on = {"true": True, "on": True, "false": False, "off": False}.get(str(args.get("text")).strip().lower())
+                if on is None:
+                    return "Error: for postfix_enabled the text is true or false."
+                args["text"] = on
+                return None
             return None if args.get("field") in TEXTS and text(args.get("text")) else f"Error: field is one of {', '.join(TEXTS)} and text is at most {MAX_TEXT} characters."
         if name in ("set_variable", "remove_variable"):
             if not isinstance(args.get("name"), str) or not re.fullmatch(r"[A-Za-z0-9_]{1,40}", args["name"].lstrip("$")):

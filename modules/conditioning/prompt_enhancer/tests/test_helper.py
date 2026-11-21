@@ -120,7 +120,7 @@ def test_helper_reads_the_chat_conversation_and_notes():
         text = nodes._chat_memory({"chat": "p:0"}, "no rain")
     finally:
         nodes.CONVOS.pop("p:0", None)
-    assert "no rain" in text and "talked about dogs" in text and "make it warmer" in text
+    assert "no rain" in text and "talked about dogs" in text and "global prompt is the anchor" in text and "make it warmer" in text
     assert nodes._chat_memory({"chat": "none"}, "") == ""
 
 
@@ -139,3 +139,18 @@ def test_cuts_are_checked_and_counted():
     assert live({"name": "cut_scene", "args": {"scene": 2, "reason": "r"}}).startswith("Allowed")      # the cut made a second scene
     assert live({"name": "set_cut_words", "args": {"words": ["qcut"], "reason": "r"}}).startswith("Allowed")
     assert "at 2 seconds" in seen[0]["summary"]
+
+
+def test_global_prompt_means_the_anchor_and_the_postfix_switch_takes_on_off():
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    acts = helper.Actions(1, on_event, wait=2)
+    for name in ("global prompt", "prefix", "Anchor"):
+        assert acts({"name": "set_project_text", "args": {"field": name, "text": "cinema", "reason": "r"}}).startswith("Allowed")
+        assert seen[-1]["args"]["field"] == "anchor"
+    assert acts({"name": "set_project_text", "args": {"field": "postfix_enabled", "text": "off", "reason": "r"}}).startswith("Allowed")
+    assert seen[-1]["args"]["text"] is False and "off" in seen[-1]["summary"]
+    assert acts({"name": "set_project_text", "args": {"field": "postfix_enabled", "text": "maybe"}}).startswith("Error")

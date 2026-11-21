@@ -47,10 +47,10 @@ test("the catalog lists the settings of the active modules with their value now,
 test("prefix, postfix, variables and shortcuts: the sheet shows them and allowed changes reach the project and the library", async () => {
   const calls = [];
   const project = { anchor: "film still", postfix: "", negative: "", variables: [{ name: "dog", value: "a collie" }], scenes: [] };
-  const p = { project, setAnchor: (v) => { project.anchor = v; }, setPostfix: (v) => { project.postfix = v; }, setNegative: (v) => { project.negative = v; }, setField: (k, v) => { project[k] = v; } };
+  const p = { project, setAnchor: (v) => { project.anchor = v; }, setPostfix: (v) => { project.postfix = v; }, setPostfixEnabled: (v) => { project.postfix_enabled = v; }, setNegative: (v) => { project.negative = v; }, setField: (k, v) => { project[k] = v; } };
   const api = { saveShortcut: async (...a) => { calls.push(["save", ...a]); }, deleteShortcut: async (n) => { calls.push(["delete", n]); } };
-  assert.match(sheetOf(project), /Prefix: film still[\s\S]*\$dog = a collie/);
-  applyAction(p, { tool: "set_project_text", args: { field: "prefix", text: "cinema" } });
+  assert.match(sheetOf(project), /scene prompt\): film still[\s\S]*\$dog = a collie/);
+  applyAction(p, { tool: "set_project_text", args: { field: "anchor", text: "cinema" } });
   applyAction(p, { tool: "set_variable", args: { name: "cat", value: "a tabby" } });
   applyAction(p, { tool: "set_variable", args: { name: "dog", value: "a pug" } });
   applyAction(p, { tool: "remove_variable", args: { name: "cat" } });
@@ -88,4 +88,10 @@ test("cuts: the sheet says which scenes are one clip, cut_scene splits a scene, 
   assert.match(sheetOf(project), /Scene 1 .*one clip with scenes 1 and 2/);
   await applyAction(p, { tool: "set_cut_words", args: { words: ["qcut", "scene"] } }, null, { saveStoryMarkers: async (w) => { saved.push(w); } });
   assert.deepEqual(saved, [["qcut", "scene"]]);
+});
+
+test("the postfix switch is changed through the same tool", () => {
+  const project = { scenes: [], postfix_enabled: true };
+  applyAction({ project, setPostfixEnabled: (v) => { project.postfix_enabled = v; } }, { tool: "set_project_text", args: { field: "postfix_enabled", text: false } });
+  assert.equal(project.postfix_enabled, false);
 });
