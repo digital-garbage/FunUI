@@ -10,15 +10,21 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [];
-  own(() => { alive = false; clearTimeout(poll); });
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], writing = null, tick = 0;
+  own(() => { alive = false; clearTimeout(poll); clearTimeout(tick); });
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
-  const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: `Ready: ${engine.message || ""}`,
+  const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: engine.busy && engine.busy.stage ? `${engine.busy.stage}${engine.busy.tokens ? `: ${engine.busy.tokens} tokens` : engine.busy.prompt ? ` (${engine.busy.prompt} tokens)` : ""}, ${engine.busy.seconds}s` : `Ready: ${engine.message || ""}`,
     downloading: `Downloading: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
-  const refreshEngine = () => app.api.enhancerEngine().then((r) => { engine = r; if (alive && !app.dom.typingIn(page.node)) draw(); clearTimeout(poll); if (alive && (r.phase === "downloading" || r.phase === "loading")) poll = setTimeout(refreshEngine, 1500); }).catch(() => {});
+  const refreshEngine = () => app.api.enhancerEngine().then((r) => {
+    const changed = JSON.stringify(r) !== JSON.stringify(engine);
+    engine = r;
+    if (changed && alive && !app.dom.typingIn(page.node)) draw();
+    clearTimeout(poll);
+    if (alive) { poll = setTimeout(refreshEngine, r.phase === "downloading" || r.phase === "loading" || (r.busy && r.busy.stage) ? 1000 : 5000); if (poll && poll.unref) poll.unref(); }     // keeps watching: a model that works or loads in the background shows it here
+  }).catch(() => {});
   // The weight files of the typed Hugging Face repo, so one of them can be picked (an fp8 file without the bf16 ones).
   const repoOf = (v) => { const m = /^([\w.-]+\/[\w.-]+)(?:::([^@]+))?(?:@(.+))?$/.exec(String(v || "").trim()); return m ? { repo: m[1], file: m[2] || "", base: m[3] || "" } : null; };
-  const listRepo = (v) => { const r = repoOf(v); if (!r || r.repo === repoFiles.repo) return; repoFiles = { repo: r.repo, files: [], why: "Looking…" }; app.api.enhancerEngineFiles(r.repo).then((x) => { if (repoFiles.repo === r.repo) { repoFiles = { repo: r.repo, files: x.files || [], why: x.why || "" }; if (alive && !app.dom.typingIn(page.node)) draw(); } }).catch(() => {}); };
+  const listRepo = (v) => { const r = repoOf(v); if (!r || r.repo === repoFiles.repo) return; repoFiles = { repo: r.repo, files: [], why: "Looking…" }; Promise.resolve().then(() => app.api.enhancerEngineFiles(r.repo)).then((x) => { if (repoFiles.repo === r.repo) { repoFiles = { repo: r.repo, files: x.files || [], why: x.why || "" }; if (alive && !app.dom.typingIn(page.node)) draw(); } }).catch(() => {}); };
   const refreshDownloads = () => Promise.resolve().then(() => app.api.enhancerEngineModels()).then((r) => { downloads = r.models || []; if (alive && !app.dom.typingIn(page.node)) draw(); }).catch(() => {});
   const forget = async (m) => {
     if (!(await c.modal.dialogue({ title: "Delete downloaded model", message: `Delete ${m.name.replace("__", "/")} (${gb(m.size)}) from disk? It downloads again the next time it is used.${m.loaded ? " It is loaded now and will be unloaded." : ""}`, tone: "danger", confirmLabel: "Delete" }).result)) return;
@@ -33,9 +39,11 @@ export function enhance(app, own) {
   const num = (label, v, lo, hi, step, name, hint, disabled) => field(label, c.number.md({ label, value: v, min: lo, max: hi, step, disabled, onChange: (x) => set(name, x) }), hint);
 
   function readout() {
-    if (!last) return [c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
+    const now = writing && !writing.done ? [c.label.section({ text: "Writing now" }), c.hint.default({ text: writing.status || `Rewriting: ${writing.label}` }),
+      ...(writing.thinking ? [c.collapsible.default({ label: "Thinking", open: true, body: c.code.block({ text: writing.thinking, label: "Thinking" }) })] : []), ...(writing.answer ? [c.code.block({ text: writing.answer, label: "Rewrite so far" })] : [])] : [];
+    if (!last) return [...now, c.label.section({ text: "Last run" }), c.hint.default({ text: "Nothing yet. The rewrite of a run shows here." })];
     const part = (title, body) => (body ? c.collapsible.default({ label: title, body: c.code.block({ text: body, label: title }) }) : null);
-    return [c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
+    return [...now, c.label.section({ text: "Last run" }), c.hint.default({ text: last.status || "" }), part("Before", last.before),
       c.field.default({ label: "After", control: c.text.sm({ text: last.after || "" }) }), part("Sent to the model", last.sent)].filter(Boolean);
   }
   // Everything the model is told, in the order a request meets it. `dflt`: what an empty field means.
@@ -79,7 +87,7 @@ export function enhance(app, own) {
         return sel.length > 1 || r.file ? [field("File in the repo", c.select.md({ label: "File in the repo", value: r.file, disabled: off(), options: [{ value: "", label: "The whole repo" }, ...sel.map((f) => ({ value: f.name, label: `${f.name} (${gb(f.size)})` }))], onChange: (x) => { set("engine_model", x ? `${r.repo}::${x}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); } }),
           "Downloads only that one weights file (for example an fp8 one), not every copy in the repo.")] : []; })(),
       c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),
-      c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", "")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
+      c.toolbar.default({ items: [c.button.sm({ label: "Load now", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", ""), val("precision", "auto")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
         c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] }),
       ...(downloads.length ? [c.collapsible.default({ label: `Downloaded models (${downloads.length})`, body: c.region.stack({ gap: "xs", children: downloads.map((m) => c.toolbar.default({ items: [c.text.sm({ text: `${m.name.replace("__", "/")}: ${gb(m.size)}${m.loaded ? " (loaded)" : ""}` })], trailing: [c.button.sm({ label: "Delete", tone: "ghost", title: "Remove this model's downloaded files from disk", onClick: () => forget(m) })] })) }) })] : []),
       field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
@@ -93,6 +101,10 @@ export function enhance(app, own) {
       toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
       toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models).", "self_edit", false, off(chat, engineSet)),
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
+      c.label.section({ text: "Speed" }),
+      field("Precision", c.select.md({ label: "Precision", value: val("precision", "auto"), disabled: off(engineSet), options: [{ value: "auto", label: "Automatic" }, { value: "bf16", label: "bf16 (fastest, double memory)" }, { value: "fp8", label: "fp8 (smallest)" }] , onChange: (x) => set("precision", x) }), "How a single fp8 model file is run. Automatic widens it to bf16 once when the graphics card has room, which makes every word faster; on the processor it stays fp8. Applies the next time the model loads."),
+      toggle("Reuse the unchanged start of a request", "The start of a request that did not change since the last one (the rules, the conversation) is not read again, only the new part is.", "prefix_cache", true, off(engineSet)),
+      num("Guess ahead (words)", val("lookup_tokens", 5), 0, 10, 1, "lookup_tokens", "The model may guess up to this many words from the prompt itself and check them in one step. Faster when a rewrite repeats the prompt; 0 turns it off.", off(engineSet)),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 400), 32, 4096, 8, "max_length", "The longest the rewrite may be.", off()),
       num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
@@ -118,6 +130,11 @@ export function enhance(app, own) {
   refreshEngine();
   ps.ensureLoaded().then(draw);
   refreshDownloads();
+  const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
+    const now = r && r.kind === "rewrite" && !r.done ? r : null;
+    if (JSON.stringify(now) !== JSON.stringify(writing)) { const ended = writing && !now; writing = now; if (alive && !app.dom.typingIn(page.node)) { if (ended) app.api.enhancerRuns().then((x) => { last = (x.runs || []).slice(-1)[0] || last; draw(); }).catch(() => draw()); else draw(); } }
+  }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2500); if (tick && tick.unref) tick.unref(); } });
+  watch();
   app.api.enhancerEncoders().then((r) => { encoders = { files: r.files || [], families: r.families || [] }; draw(); }).catch(() => {});
   // Another project's pipeline, or an edit made elsewhere: redraw, but never under a field being typed in.
   const typing = () => app.dom.typingIn(page.node);

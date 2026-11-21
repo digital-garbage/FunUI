@@ -74,22 +74,23 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
+def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing = False
     if not key:
         return {"ok": False, "reply": "", "status": "no conversation"}
     engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")
+    speed = speed or {}
     if engine_model:
         try:
-            ENGINE.load(engine_model)
+            ENGINE.load(engine_model, speed.get("precision", "auto"))
         except Exception as e:                                      # noqa: BLE001
             if not encoder_file:
                 return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
             engine_model = ""                                       # an older project's encoder: ComfyUI's own loader reads it
         else:
-            clip = EngineClip(ENGINE, on_event)
+            clip = EngineClip(ENGINE, on_event, cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 5))
             if self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
                 from . import engine as eng
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
@@ -180,6 +181,12 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="The conversation rules sent to Gemma 4, which takes real chat turns. Empty uses the built-in text."),
                 io.String.Input("fixed_prompt", multiline=True, default="", optional=True,
                                 tooltip="Tells the model about the fixed text around your own text (Only my own text mode). Empty uses the built-in text."),
+                io.Combo.Input("precision", options=["auto", "fp8", "bf16"], default="auto", optional=True,
+                               tooltip="How a single fp8 model file is run. bf16 is faster but needs twice the memory; fp8 is the smallest; auto picks bf16 when the graphics card has room."),
+                io.Boolean.Input("prefix_cache", default=True, optional=True,
+                                 tooltip="Reuses the start of the request that did not change since the last one, so only the new part is read again."),
+                io.Int.Input("lookup_tokens", default=5, min=0, max=10, optional=True,
+                             tooltip="Words the model may guess from the prompt itself and check in one step. Faster when a rewrite repeats the prompt; 0 turns it off."),
                 io.Int.Input("refine_passes", default=0, min=0, max=3, optional=True,
                              tooltip="How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer."),
                 io.String.Input("refine_prompt", multiline=True, default="", optional=True,
@@ -267,7 +274,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="") -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=5) -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
@@ -289,8 +296,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
         engine_model = str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else "")          # a file picked from ComfyUI's list runs on the engine
         if engine_model:
             try:
-                ENGINE.load(engine_model)
-                clip = EngineClip(ENGINE)
+                ENGINE.load(engine_model, precision)
+                clip = EngineClip(ENGINE, live="rewrite", cache=prefix_cache, lookup=lookup_tokens)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
                 if not encoder_file:
                     log.warning("FunUI Prompt enhancer", f"could not load the engine model {engine_model}: {e}; the original prompt is used")

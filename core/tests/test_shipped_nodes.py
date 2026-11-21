@@ -61,7 +61,7 @@ FROZEN = {
     "FunUIShotCamera": ["text", "settings", "length", "frame_rate", "project"],
     "FunUIEnhancePrompt": [
         "clip", "text", "enabled", "engine_model", "instructions", "chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt",
-        "fixed_prompt", "refine_passes", "refine_prompt", "self_edit", "edit_prompt", "marks_prompt", "max_length", "greedy", "temperature", "top_p", "top_k", "min_p",
+        "fixed_prompt", "precision", "prefix_cache", "lookup_tokens", "refine_passes", "refine_prompt", "self_edit", "edit_prompt", "marks_prompt", "max_length", "greedy", "temperature", "top_p", "top_k", "min_p",
         "repetition_penalty", "presence_penalty", "seed", "thinking", "encoder_file", "encoder_family", "image", "use_image", "shortcuts", "lorebooks", "reference_intro", "chat",
         "style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail",
     ],

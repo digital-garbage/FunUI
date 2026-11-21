@@ -71,8 +71,8 @@ function scrollParent(node) {
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let last = null, all = [], live = null, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
-  own(() => { alive = false; });
+  let last = null, all = [], live = null, writing = null, tick = 0, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
+  own(() => { alive = false; clearTimeout(tick); });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
   // The conversation opens at its end (newest message and the message box); "Top ^" goes back to the start.
@@ -105,6 +105,8 @@ export function chat(app, own) {
     }
     // An answer that is still forming: the message, the model's thinking and its words so far.
     if (live) bubbles.push(you(live.message), ...(live.thinking ? [c.bubble.model({ text: live.thinking, who: "Model (thinking)" })] : []), live.answer ? model(live.answer) : c.hint.default({ text: live.status || "The model is writing…" }));
+    // A rewrite that is running inside a generation: what the model has written so far, as it forms.
+    if (writing && !live) bubbles.push(c.hint.default({ text: `Rewriting: ${writing.label}` }), ...(writing.thinking ? [c.bubble.model({ text: writing.thinking, who: "Model (thinking)" })] : []), writing.answer ? model(writing.answer) : c.hint.default({ text: writing.status || "The model is writing…" }));
     bubbles = bubbles.filter(Boolean);
     const lastEntry = convo.length && convo[convo.length - 1], cx = lastEntry && lastEntry.context, cxFor = lastEntry && lastEntry.kind === "chat" ? "last chat reply" : "last rewrite";
     if (cx) bubbles.push(c.hint.default({ text: `Context (${cxFor}): about ${cx.used.toLocaleString("en-US")} of ${cx.window.toLocaleString("en-US")} tokens (${Math.round(100 * cx.used / cx.window)}%). ${cx.compact ? `Summarised at ${Math.round(100 * COMPACT_AT)}%.` : "Summarising is off."}` }));      // as of the last request
@@ -127,7 +129,7 @@ export function chat(app, own) {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "self_edit", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
         const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
         if (eng && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to
@@ -155,6 +157,12 @@ export function chat(app, own) {
       c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
   }
   const look = () => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
+  // The engine's own writing is not in ComfyUI's log or queue, so the tab asks for it while it is open.
+  const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
+    const was = writing, now = r && r.kind === "rewrite" && !r.done ? r : null;
+    if (JSON.stringify(now) !== JSON.stringify(was)) { writing = now; if (alive && !app.dom.typingIn(page.node)) { if (was && !now) { stick = true; look(); } else draw(true); } }
+  }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2000); if (tick && tick.unref) tick.unref(); } });
+  watch();
   own(app.on((what) => { if (what === "open" || app.lastRun.n !== runs) { runs = app.lastRun.n; look(); } else draw(); }));
   if (app.pipeline && app.pipeline.subscribe) own(app.pipeline.subscribe(() => draw()));      // a pipeline that gains or loses the enhancer
   draw(true);

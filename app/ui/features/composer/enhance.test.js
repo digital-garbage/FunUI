@@ -138,3 +138,14 @@ test("downloaded models are listed with a Delete button that asks first and remo
   await new Promise((r) => setTimeout(r, 0));
   assert.deepEqual(deleted, ["a__big"]);
 });
+
+test("the engine line shows what a running request is doing, so a busy model does not look stale", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "ready", message: "a/b on cuda", busy: { stage: "writing", tokens: 42, seconds: 3.5 } }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}) };
+  let stop = () => {};
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 5));
+  assert.match(page.node.textContent, /writing: 42 tokens, 3\.5s/);
+  stop();
+});

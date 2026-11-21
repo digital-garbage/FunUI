@@ -43,6 +43,14 @@ def routes(table, base, web):
         runs = [r for r in RUNS if not want or r["prompt_id"] == want]
         return web.json_response({"runs": runs, "now": int(time.time() * 1000)})        # `now`: the app sets its own comments by this clock
 
+    def speed_of(body):
+        """The speed settings a request carries: precision, prefix cache, prompt-lookup count."""
+        try:
+            look = max(0, min(10, int(body.get("lookup_tokens", 5))))
+        except (TypeError, ValueError):
+            look = 5
+        return dict(precision=str(body.get("precision") or "auto"), prefix_cache=body.get("prefix_cache") is not False, lookup_tokens=look)
+
     def chat_args(body):
         """The request body of a chat message -> chat_reply's arguments."""
         from . import enhance
@@ -52,7 +60,7 @@ def routes(table, base, web):
         if isinstance(body.get("seed"), int) and not isinstance(body.get("seed"), bool):
             sampling["seed"] = body["seed"]
         rules = {k: str(v) for k, v in (body.get("rules") or {}).items() if isinstance(v, str)} if isinstance(body.get("rules"), dict) else {}
-        return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(),
+        return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body),
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
                     context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 400), thinking=body.get("thinking") is True, **sampling)
@@ -90,6 +98,7 @@ def routes(table, base, web):
         """The same answer, sent as it forms: server-sent events {"kind": status | thinking | answer | call | result}. Needs an engine model."""
         import asyncio
         import json
+        import threading
         from . import engine as eng, nodes
         body = await chat_body(req)
         if body is None or not str(body.get("engine_model") or "").strip():
@@ -100,9 +109,22 @@ def routes(table, base, web):
 
         def work():
             try:
-                if eng.ENGINE.model is None or eng.ENGINE.source != args["engine_model"]:
+                done = threading.Event()
+                if eng.ENGINE.model is None or eng.ENGINE.source != args["engine_model"] or eng.ENGINE.precision != args["speed"]["precision"]:
                     push({"kind": "status", "text": f"loading {args['engine_model']} (the first time downloads it)"})
-                result = nodes.chat_reply(body["conversation"], body["message"], on_event=push, **args)
+
+                    def tick():             # the page sees the download and the loading move, not one line that looks stuck
+                        while not done.wait(2):
+                            st = eng.ENGINE.status()
+                            if st["phase"] == "downloading":
+                                push({"kind": "status", "text": f"downloading: {st['downloaded'] / 2 ** 30:.1f}" + (f" of {st['total'] / 2 ** 30:.1f}" if st["total"] else "") + " GB"})
+                            elif st["phase"] == "loading":
+                                push({"kind": "status", "text": st["message"]})
+                    threading.Thread(target=tick, daemon=True, name="funui-engine-status").start()
+                try:
+                    result = nodes.chat_reply(body["conversation"], body["message"], on_event=push, **args)
+                finally:
+                    done.set()
             except Exception as exc:                                # noqa: BLE001 -- the stream must end with a result
                 result = {"ok": False, "reply": "", "status": str(exc)}
             push({"kind": "result", "result": result})
@@ -151,7 +173,7 @@ def routes(table, base, web):
         source = str((body or {}).get("source") or "").strip() if isinstance(body, dict) else ""
         if not source:
             return web.json_response({"ok": False, "status": "an engine model is needed"}, status=400)
-        started = eng.ENGINE.load_async(source)
+        started = eng.ENGINE.load_async(source, str((body or {}).get("precision") or "auto"))
         return web.json_response({"ok": True, "started": started, **eng.ENGINE.status()})
 
     @table.get(base + "/engine/files")
@@ -171,6 +193,12 @@ def routes(table, base, web):
             return web.json_response({"files": await asyncio.get_running_loop().run_in_executor(None, look), "why": ""})
         except Exception as exc:                                    # noqa: BLE001 -- said in the panel
             return web.json_response({"files": [], "why": f"could not read {repo}: {exc}"})
+
+    @table.get(base + "/engine/live")
+    async def _engine_live(_req):
+        """What the engine is writing now (or wrote last): {id, kind, label, thinking, answer, status, done}. The tabs poll it to show a rewrite as it forms."""
+        from . import engine as eng
+        return web.json_response(eng.LIVE.read())
 
     @table.get(base + "/engine/models")
     async def _engine_models(_req):

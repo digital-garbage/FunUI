@@ -451,7 +451,7 @@ def test_the_readout_routes_are_provided_and_answer():
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/engine/files", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/unload", "/m/engine/files", "/m/engine/live", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():
@@ -723,7 +723,7 @@ def test_every_switch_that_is_on_reaches_the_model(comfyui, monkeypatch):
             Engineish.asked.append((system, user, rounds))
             return "A fox runs through snow.", "ok"
     monkeypatch.setattr(nodes, "EngineClip", Engineish)
-    monkeypatch.setattr(nodes.ENGINE, "load", lambda s: None)
+    monkeypatch.setattr(nodes.ENGINE, "load", lambda s, p="auto": None)
     nodes.CONVOS.clear()
     rules = "Last output: [[PREVIOUS_MODEL_OUTPUT]] Last comment: [[LAST_USER_COMMENT]] Rating: [[RATING]] Notes: [[NOTES]]"
     run = lambda p, scene, comment="": nodes.FunUIEnhancePrompt.execute(            # noqa: E731
@@ -753,7 +753,7 @@ def test_in_own_text_mode_the_model_is_told_what_the_fixed_prefix_and_postfix_sa
             seen.append((system, user))
             return "a red fox runs", "ok"
     monkeypatch.setattr(nodes, "EngineClip", Engineish)
-    monkeypatch.setattr(nodes.ENGINE, "load", lambda s: None)
+    monkeypatch.setattr(nodes.ENGINE, "load", lambda s, p="auto": None)
     out = nodes.FunUIEnhancePrompt.execute(None, "cinematic, a fox, 4k", enabled=True, engine_model="m", scope="own", head="cinematic,", tail=", 4k",
                                            instructions="Prefix is [[PROMPT_PREFIX]] and postfix is [[PROMPT_POSTFIX]].")
     system, user = seen[-1]

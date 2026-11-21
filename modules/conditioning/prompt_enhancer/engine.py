@@ -14,7 +14,17 @@ import re
 import threading
 import time
 
+from ..._core import log
+
 REPO_FILES = ["*.json", "*.safetensors", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # no GGUF or other copies of the same weights
+def _say(message):
+    """A line in FunUI's log: the engine does not run through ComfyUI, so this is how its loading and writing can be followed there."""
+    try:
+        log.info("FunUI Prompt enhancer", message)
+    except Exception:                                               # noqa: BLE001 -- a log line never stops the model
+        pass
+
+
 QUOTE = '<|"|>'               # how Gemma 4 quotes a string inside a tool call
 
 
@@ -251,11 +261,13 @@ class Engine:
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
         self._dir = ""                         # the folder a download goes into
+        self.activity = {}                     # what a running request is doing: stage, tokens, started
         self.loaded_dir = ""                   # the download folder the loaded model came from ("" for a folder given by hand)
         self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
         self.done_bytes = self.total_bytes = 0
         self.device = ""
+        self.precision, self.weights = "auto", False
         self._snap = None                      # (ids, cache) of the last request, minus its final token
         self.cancel = threading.Event()
         self._worker = None
@@ -264,7 +276,10 @@ class Engine:
     def status(self):
         shown = self.wanted if self.phase in ("loading", "downloading") and self.wanted else self.source
         size = _folder_size(self._dir or local_dir(shown)) if self.phase == "downloading" and shown else self.done_bytes
-        return {"phase": self.phase, "message": self.message, "source": shown, "device": self.device,
+        busy = dict(self.activity)
+        if busy:
+            busy["seconds"] = round(time.time() - busy.get("started", time.time()), 1)
+        return {"busy": busy, "phase": self.phase, "message": self.message, "source": shown, "device": self.device,
                 "downloaded": size, "total": self.total_bytes}
 
     BASE_FILES = ["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # a base model's config and tokenizer, never its weights
@@ -308,6 +323,7 @@ class Engine:
             raise ValueError(f"{repo} has no file {single}")
         self.total_bytes = sum(size for name, size in files.items() if name.endswith((".safetensors", ".json")) and (not single or name == single))
         self.phase, self.message = "downloading", f"downloading {repo}"
+        _say(f"engine: downloading {repo}" + (f" ({self.total_bytes / 2 ** 30:.1f} GB)" if self.total_bytes else ""))
         os.makedirs(target, exist_ok=True)
         if not single:
             snapshot_download(repo, local_dir=target, allow_patterns=REPO_FILES)
@@ -330,19 +346,27 @@ class Engine:
         marker = open(os.path.join(target, ".complete")).read().strip()
         return (os.path.join(target, "base"), os.path.join(target, marker)) if marker else (target, "")
 
-    def load(self, source):
-        """Make `source` the loaded model (a no-op when it already is). Blocks; raises with the reason."""
+    def load(self, source, precision="auto"):
+        """Make `source` the loaded model (a no-op when it already is). Blocks; raises with the reason.
+        `precision` ("auto", "fp8", "bf16") only matters for a single fp8 file; a different one loads it again."""
         source = str(source or "").strip()
+        precision = precision if precision in ("auto", "fp8", "bf16") else "auto"
         if not source:
             raise ValueError("no engine model is set")
         with self.lock:
-            if self.model is not None and self.source == source:
+            if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
                 return
+            self.precision = precision
             self.model = self.tok = self._snap = None
             self.source = self.wanted = source
             self.done_bytes = 0
+            started = time.time()
+            self.phase, self.message = "loading", f"looking for {source}"
+            _say(f"engine: loading {source} (the first time downloads it)")
             try:
                 folder, weights = self._fetch(source)
+                self.weights = bool(weights)
+                _say(f"engine: files are in place after {time.time() - started:.0f}s, loading the model")
                 self.phase, self.message = "loading", f"loading {source}"
                 import torch
                 from transformers import AutoTokenizer
@@ -350,7 +374,9 @@ class Engine:
                 self.tok = AutoTokenizer.from_pretrained(folder)
                 if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
                     from . import fp8
-                    self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu")
+                    def step(done, total):
+                        self.message = f"loading the weights: {100 * done // max(total, 1)}%"
+                    self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu", progress=step, precision=precision)
                 else:
                     for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
                         try:
@@ -363,24 +389,26 @@ class Engine:
                 self.loaded_dir = "" if os.path.isdir(source) else self._dir
                 self.device = "cuda" if cuda else "cpu"
                 self.phase, self.message = "ready", f"{source} on {self.device}"
+                _say(f"engine: {source} is ready on {self.device} ({time.time() - started:.0f}s)")
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 self.model = self.tok = None
                 self.phase, self.message = "error", str(exc)
+                _say(f"engine: could not load {source}: {exc}")
                 raise
 
     def use(self, model, tokenizer, name="test", device="cpu"):
         """Install a model that was built elsewhere (the tests' tiny one)."""
-        self.model, self.tok, self.source, self.device, self._snap = model, tokenizer, name, device, None
+        self.model, self.tok, self.source, self.device, self._snap, self.weights = model, tokenizer, name, device, None, False
         self.phase, self.message = "ready", f"{name} on {device}"
 
-    def load_async(self, source):
+    def load_async(self, source, precision="auto"):
         """Start loading in the background; the status says how far it is."""
         if self._worker is not None and self._worker.is_alive():
             return False
 
         def work():
             try:
-                self.load(source)
+                self.load(source, precision)
             except Exception:                                       # noqa: BLE001 -- already in the status
                 pass
         self.phase, self.message, self.wanted = "loading", f"starting {source}", str(source).strip()
@@ -448,6 +476,10 @@ class Engine:
         drops = [getattr(tok, n, None) for n in ("eos_token", "bos_token", "pad_token")] + (["<turn|>", "<|turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else [])
         opened = bool(dialect.think_open) and not dialect.label and text.rstrip().endswith(dialect.think_open)       # the prompt itself opened the thinking
         inputs = tok(text, return_tensors="pt", add_special_tokens=False).to(model.device)
+        size = int(inputs["input_ids"].shape[1])
+        self.activity = {"stage": "reading the prompt", "tokens": 0, "prompt": size, "started": time.time()}
+        yield {"kind": "status", "text": f"reading the prompt ({size} tokens)"}
+        me = self
         streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=False, timeout=600)
         seen = {}
         cancel = self.cancel = threading.Event()         # this request's own stop flag, made once it has the turn
@@ -455,6 +487,7 @@ class Engine:
         class Stop(StoppingCriteria):
             def __call__(self, input_ids, scores, **kw):
                 stats["steps"] += 1
+                me.activity.update(stage="writing", tokens=stats["steps"])
                 return cancel.is_set()
 
         class Presence(LogitsProcessor):
@@ -511,6 +544,7 @@ class Engine:
         try:
             yield from self._pieces(streamer, split, calls, dialect)
         finally:
+            self.activity = {}
             if worker.is_alive():                           # the reader went away (page closed, request dropped): stop writing before the next request starts
                 cancel.set()
                 worker.join(timeout=60)
@@ -521,6 +555,7 @@ class Engine:
         if failure:
             raise failure[0]
         took = max(time.time() - started, 1e-6)
+        _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s" + (f", {stats['cached']} prompt tokens reused)" if stats["cached"] else ")"))
         yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": stats["cached"]}
 
     @staticmethod
@@ -544,6 +579,46 @@ class Engine:
 ENGINE = Engine()
 
 
+class Live:
+    """What the engine is writing right now, for the Enhance and Chat tabs to show while a rewrite runs inside a generation (the page cannot hear it
+    any other way: that run belongs to ComfyUI's queue). One run at a time; the last one stays until the next starts."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.seq = 0
+        self.run = {}
+
+    def start(self, kind, label=""):
+        with self.lock:
+            self.seq += 1
+            self.run = {"id": self.seq, "kind": kind, "label": label, "thinking": "", "answer": "", "status": "", "done": False, "tps": 0.0}
+
+    def feed(self, ev):
+        with self.lock:
+            run = self.run
+            if not run or run["done"]:
+                return
+            kind = ev.get("kind")
+            if kind in ("thinking", "answer"):
+                run[kind] += ev["text"]
+            elif kind == "status":
+                run["status"] = ev["text"]
+            elif kind == "end":
+                run.update(done=True, tps=ev.get("tps", 0.0), status="")
+
+    def finish(self, status=""):
+        with self.lock:
+            if self.run and not self.run["done"]:
+                self.run.update(done=True, status=status)
+
+    def read(self):
+        with self.lock:
+            return dict(self.run)
+
+
+LIVE = Live()
+
+
 class EngineClip:
     """Stands in for a ComfyUI CLIP where the enhancer asks for text: `generate()` hands the request to the engine.
     `on_event` hears each piece as it forms."""
@@ -553,9 +628,11 @@ class EngineClip:
 
     MAX_TOOL_ROUNDS = 4
 
-    def __init__(self, engine=None, on_event=None, tools=None, handler=None):
-        """`handler(call) -> text` answers the model's tool calls (the answer goes back to the model, which then carries on)."""
-        self.engine, self.on_event, self.tools, self.handler, self.calls = engine or ENGINE, on_event, tools, handler, []
+    def __init__(self, engine=None, on_event=None, tools=None, handler=None, live="", cache=True, lookup=5):
+        """`handler(call) -> text` answers the model's tool calls (the answer goes back to the model, which then carries on).
+        `live`: a name for what is being written ("rewrite"): the pieces are then also kept in LIVE for the tabs to show."""
+        self.engine, self.on_event, self.tools, self.handler, self.calls, self.live = engine or ENGINE, on_event, tools, handler, [], live
+        self.cache, self.lookup = bool(cache), max(0, int(lookup))
 
     def run(self, system, user, *, rounds=(), thinking=False, max_length=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
             repetition_penalty=1.0, presence_penalty=0.0, do_sample=True, seed=None, image=None):
@@ -566,12 +643,14 @@ class EngineClip:
         messages.append({"role": "user", "content": str(user)})
         started, thought, answer, speed = time.time(), "", "", ""
         self.calls = []
+        if self.live:
+            LIVE.start(self.live, str(user)[:80])
         try:
             for step in range(self.MAX_TOOL_ROUNDS + 1):
                 round_calls, said = [], ""
                 for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                             seed=seed or 0, greedy=not do_sample):
+                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup):
                     if ev["kind"] == "thinking":
                         thought += ev["text"]
                     elif ev["kind"] == "answer":
@@ -580,6 +659,8 @@ class EngineClip:
                     elif ev["kind"] == "end":
                         round_calls = ev["calls"]
                         speed = f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
+                    if self.live and not (ev["kind"] == "end" and ev.get("calls") and self.handler):          # a round that ends in a tool call is not the end
+                        LIVE.feed(ev)
                     if self.on_event:
                         self.on_event(ev)
                 self.calls += round_calls
@@ -597,7 +678,11 @@ class EngineClip:
                         self.on_event({"kind": "tool_result", "name": c["name"], "result": result})
                 answer += "\n\n" if answer.strip() else ""
         except Exception as exc:                                    # noqa: BLE001 -- the enhancer hands the original prompt on and says why
+            if self.live:
+                LIVE.finish(f"failed: {exc}")
             return "", f"generation failed: {exc}"
+        if self.live:
+            LIVE.finish()
         raw = (f"<think>{thought}</think>" if thought.strip() else "") + answer
         note = "; the picture was not sent (the engine reads text only)" if image is not None else ""
         return raw, f"generated {len(answer)} chars in {time.time() - started:.1f}s on {self.engine.device} (engine){speed}{note}"

@@ -103,8 +103,10 @@ export const api = {
   enhancerChat: (body) => call("POST", "/api/m/conditioning_prompt_enhancer/chat", body),
   enhancerRuns: () => call("GET", "/api/m/conditioning_prompt_enhancer/runs"),
   enhancerEngine: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine"),
-  enhancerEngineLoad: (source) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/load", { source }),
+  enhancerEngineLoad: (source, precision) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/load", { source, precision }),
   enhancerEngineFiles: (repo) => call("GET", `/api/m/conditioning_prompt_enhancer/engine/files?repo=${encodeURIComponent(repo)}`),
+  /** What the engine is writing now, or wrote last: { id, kind, label, thinking, answer, status, done }. */
+  enhancerLive: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine/live"),
   enhancerEngineModels: () => call("GET", "/api/m/conditioning_prompt_enhancer/engine/models"),
   enhancerEngineDelete: (name) => call("POST", "/api/m/conditioning_prompt_enhancer/engine/delete", { name }),
   enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),

@@ -31,9 +31,17 @@ class FP8Linear(nn.Module):
         self.register_buffer("weight", weight)
         self.register_buffer("scale", scale)
         self.bias = bias
-        self.keep, self._wide = keep, None
+        self.keep, self._wide, self.plain = keep, None, False
+
+    def widen(self, dtype):
+        """Widen the weight once and for all (twice the memory of fp8, but no work per call)."""
+        if not self.plain:
+            self.weight = (self.weight.to(dtype) * self.scale.to(self.weight.device, dtype)).contiguous()
+            self.plain = True
 
     def forward(self, x):
+        if self.plain:
+            return F.linear(x, self.weight.to(x.dtype), None if self.bias is None else self.bias.to(x.dtype))
         if self._wide is not None and self._wide.dtype == x.dtype and self._wide.device == x.device:
             w = self._wide
         else:
@@ -80,8 +88,23 @@ def _rename(wanted, found):
     return out
 
 
-def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
-    """-> the model, from the config in `base_dir` and the weights in `weights_file` (a scaled-fp8 safetensors file)."""
+def fp8_bytes(model) -> int:
+    """How many bytes the model's fp8 weights take."""
+    return sum(m.weight.numel() for m in model.modules() if isinstance(m, FP8Linear) and not m.plain)
+
+
+def widen(model, dtype=torch.bfloat16):
+    """Widen every fp8 linear layer to `dtype`, one at a time (the output layer shares nothing with the input table afterwards)."""
+    for m in model.modules():
+        if isinstance(m, FP8Linear):
+            m.widen(dtype)
+    return model
+
+
+def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu", progress=None, precision="auto"):
+    """-> the model, from the config in `base_dir` and the weights in `weights_file` (a scaled-fp8 safetensors file).
+    `precision`: "fp8" keeps the weights fp8 (smallest); "bf16" widens them once (fastest, twice the memory);
+    "auto" widens on a graphics card that has room for it, and keeps fp8 otherwise (on the processor, always)."""
     from accelerate import init_empty_weights
     from safetensors import safe_open
     from transformers import AutoConfig, AutoModelForCausalLM
@@ -95,7 +118,9 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
         missing = sorted(wanted - {"lm_head.weight"} - set(names))          # an output layer the file lacks is the input table, shared
         if len(missing) > len(wanted) // 20:
             raise ValueError(f"{len(missing)} of the model's {len(wanted)} tensors are not in {weights_file}, for example {missing[:3]}")
-        for want, have in names.items():
+        for done, (want, have) in enumerate(names.items()):
+            if progress and done % 20 == 0:
+                progress(done, len(names))
             tensor = f.get_tensor(have)
             owner, attr = _slot(model, want)
             scale_key = have[:-len("weight")] + "weight_scale" if have.endswith(".weight") else ""
@@ -126,4 +151,16 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
         model.generation_config = GenerationConfig.from_pretrained(base_dir)
     except Exception:                                         # noqa: BLE001 -- a base without one keeps the config's own
         pass
-    return model.to(device).eval()
+    model = model.to(device).eval()
+    if precision == "bf16" or (precision == "auto" and str(device).startswith("cuda") and _room(model, device)):
+        widen(model, dtype)
+    return model
+
+
+def _room(model, device) -> bool:
+    """Whether the card has about twice the fp8 weights' size free, with some left for the work."""
+    try:
+        free = torch.cuda.mem_get_info(torch.device(device))[0]
+    except Exception:                                         # noqa: BLE001 -- no card to ask: keep fp8
+        return False
+    return free > 2.2 * fp8_bytes(model) + (1 << 30)

@@ -91,11 +91,11 @@ def tiny():
 def test_a_model_streams_through_the_engine_piece_by_piece(tiny):
     events = list(tiny.stream([{"role": "user", "content": "a b c"}], max_new_tokens=12, greedy=True))
     assert events[-1]["kind"] == "end" and events[-1]["calls"] == [] and events[-1]["tokens"] > 0 and "tps" in events[-1]
-    assert all(e["kind"] in ("thinking", "answer") and e["text"] for e in events[:-1])
+    assert all(e["kind"] in ("thinking", "answer", "status") and e["text"] for e in events[:-1]) and events[0]["kind"] == "status" and "reading the prompt" in events[0]["text"]
     again = list(tiny.stream([{"role": "user", "content": "a b c"}], max_new_tokens=12, greedy=True))
-    assert [e for e in events if e['kind'] != 'end'] == [e for e in again if e['kind'] != 'end']                                                              # greedy: the same words every time
+    assert [e for e in events if e['kind'] not in ('end', 'status')] == [e for e in again if e['kind'] not in ('end', 'status')]                                                              # greedy: the same words every time
     seeded = [list(tiny.stream([{"role": "user", "content": "a"}], max_new_tokens=8, seed=7)) for _ in range(2)]
-    assert seeded[0][:-1] == seeded[1][:-1]                                                       # the same seed repeats a sampled answer too
+    assert [e for e in seeded[0] if e["kind"] in ("thinking", "answer")] == [e for e in seeded[1] if e["kind"] in ("thinking", "answer")]                                                       # the same seed repeats a sampled answer too
 
 
 def test_the_enhancer_asks_the_engine_through_a_clip_stand_in_and_hears_each_piece(tiny):
@@ -405,3 +405,30 @@ def test_downloaded_models_are_listed_and_can_be_deleted_even_the_loaded_one(tin
     assert not (tmp_path / "a__big").exists() and tiny.model is None and tiny.phase == "idle"          # the loaded one was unloaded first
     tiny.delete("b__small")
     assert tiny.downloads() == []
+
+
+def test_a_rewrite_is_kept_in_live_as_it_forms_for_the_tabs_to_show(tiny):
+    clip = eng.EngineClip(tiny, live="rewrite")
+    seen = []
+
+    def spy(ev):
+        seen.append(dict(eng.LIVE.read()))
+    clip.on_event = spy
+    raw, _ = clip.run("rules", "a b c", max_length=8, do_sample=False)
+    run = eng.LIVE.read()
+    assert run["kind"] == "rewrite" and run["done"] and run["label"].startswith("a b c") and run["tps"] > 0
+    assert (run["thinking"] + run["answer"]) and run["answer"] in raw.replace("<think>", "").replace("</think>", "")
+    assert any(not r["done"] and r["answer"] for r in seen) or any(not r["done"] and r["thinking"] for r in seen)       # it was readable before it was finished
+    eng.EngineClip(tiny).run("rules", "d e", max_length=4)                                                          # a run that does not ask for it leaves LIVE alone
+    assert eng.LIVE.read()["label"].startswith("a b c")
+
+
+def test_a_loaded_model_stays_in_memory_across_requests_and_only_a_new_precision_loads_it_again(monkeypatch):
+    from .. import engine as eng
+    e = eng.Engine()
+    e.model, e.source, e.weights, e.precision = object(), "m", True, "auto"
+    e.load("m", "auto")
+    assert e.model is not None                                   # same model, same precision: nothing is read again
+    e.weights = False
+    e.load("m", "bf16")
+    assert e.model is not None                                   # a model that is not a single fp8 file has no precision to change
