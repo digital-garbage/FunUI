@@ -478,9 +478,10 @@ def test_a_gguf_model_streams_thinking_and_answer_through_the_same_events():
     assert events[-1]["kind"] == "end" and events[-1]["tokens"] == 6
 
 
-def test_a_repo_of_gguf_files_asks_for_a_pick_and_several_files_can_be_named(monkeypatch):
+def test_a_repo_of_gguf_files_asks_for_a_pick_and_several_files_can_be_named(monkeypatch, tmp_path):
     import types
     from .. import engine as eng
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
     sib = lambda n: types.SimpleNamespace(rfilename=n, size=10)       # noqa: E731
     info = types.SimpleNamespace(siblings=[sib("m-00001-of-00002.gguf"), sib("m-00002-of-00002.gguf"), sib("README.md")], tags=[])
     import huggingface_hub
@@ -492,3 +493,11 @@ def test_a_repo_of_gguf_files_asks_for_a_pick_and_several_files_can_be_named(mon
         e._fetch("a/m")
     folder, weights = e._fetch("a/m::m-00001-of-00002.gguf|m-00002-of-00002.gguf")
     assert got == ["m-00001-of-00002.gguf", "m-00002-of-00002.gguf"] and weights.endswith("m-00001-of-00002.gguf")
+
+
+def test_a_picture_projector_beside_a_gguf_model_is_found(tmp_path):
+    from .. import gguf
+    (tmp_path / "m-Q4_K_M.gguf").write_bytes(b"x")
+    assert gguf.find_projector(tmp_path / "m-Q4_K_M.gguf") == ""
+    (tmp_path / "m-mmproj-BF16.gguf").write_bytes(b"x")
+    assert gguf.find_projector(tmp_path / "m-Q4_K_M.gguf").endswith("m-mmproj-BF16.gguf")

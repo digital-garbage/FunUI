@@ -73,6 +73,11 @@ class Backend:
         self.name = meta.get("general.name", os.path.basename(path))
         self.device = "gguf"
         self.lock = threading.Lock()
+        self.projector = ""
+
+    def get_vocab(self) -> dict:
+        """The engine asks the tokenizer for its vocabulary to spot a dialect; a GGUF's chat template names the markers just as well."""
+        return {}
 
     def special(self, token) -> str:
         try:
@@ -138,10 +143,36 @@ class Backend:
             stats["tokens"], stats["cached"] = count, 0
 
 
+def find_projector(path) -> str:
+    """The picture projector (`*mmproj*.gguf`) that sits beside the model file, or ""."""
+    folder = os.path.dirname(str(path))
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if "mmproj" in name.lower() and name.lower().endswith(".gguf"):
+            return os.path.join(folder, name)
+    return ""
+
+
+def projector_handler(llama_cpp, projector, name=""):
+    """The llama.cpp handler that reads pictures through `projector`; the one for the model's family when there is one."""
+    fmt = llama_cpp.llama_chat_format
+    family = "Gemma4ChatHandler" if "gemma-4" in name.lower() or "gemma4" in name.lower() else "MTMDChatHandler"
+    return getattr(fmt, family, fmt.MTMDChatHandler)(clip_model_path=projector, verbose=False)
+
+
 def load(path, *, cuda, context=0, say=lambda text: None):
-    """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it)."""
+    """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it).
+    A projector file beside it is loaded too, so the model can see pictures."""
     llama_cpp = ensure_llama(say)
     started = time.time()
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False)
-    say(f"engine: llama.cpp loaded {os.path.basename(str(path))} in {time.time() - started:.0f}s")
-    return Backend(llm, str(path))
+    projector, handler = find_projector(path), None
+    if projector:
+        try:
+            handler = projector_handler(llama_cpp, projector, os.path.basename(str(path)))
+        except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
+            say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
+            projector = ""
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 16384, flash_attn=bool(cuda), verbose=False, chat_handler=handler)
+    say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s")
+    backend = Backend(llm, str(path))
+    backend.projector = projector
+    return backend
