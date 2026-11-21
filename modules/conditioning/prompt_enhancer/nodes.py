@@ -84,6 +84,12 @@ def fit(clip, state, fixed_chars, max_length, compact, context_tokens, prompts=N
     return size(), window, note, did
 
 
+def _pictures(*images):
+    """The connected pictures: none, one, or a list when several are connected."""
+    got = [i for i in images if i is not None]
+    return got[0] if len(got) == 1 else (got or None)
+
+
 def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
@@ -283,6 +289,9 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.String.Input("encoder_family", default="stable_diffusion", optional=True,
                                 tooltip="Which family that file is for. Only used with an encoder file."),
                 io.Image.Input("image", optional=True, tooltip="Shown to the model alongside the prompt."),
+                io.Image.Input("image_2", optional=True, tooltip="A second picture shown to the model (a model that reads several pictures)."),
+                io.Image.Input("image_3", optional=True, tooltip="A third picture shown to the model."),
+                io.Image.Input("image_4", optional=True, tooltip="A fourth picture shown to the model."),
                 io.Boolean.Input("use_image", default=True, optional=True,
                                  tooltip="Send the picture (when one is connected) to the model."),
                 io.String.Input("shortcuts", multiline=True, default="", optional=True,
@@ -341,7 +350,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
-                presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, use_image=True, shortcuts="",
+                presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
         if not enabled:
@@ -431,7 +440,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
             note=note_text, notes=notes, prompts=prompts, macros=macros, refine=refine_passes,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
-            seed=seed, image=image if use_image else None, thinking=thinking, max_length=max_length,
+            seed=seed, image=_pictures(image, image_2, image_3, image_4) if use_image else None, thinking=thinking, max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
             do_sample=not greedy)

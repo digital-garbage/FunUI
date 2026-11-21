@@ -793,3 +793,16 @@ def test_a_helper_that_acts_and_then_says_nothing_is_not_a_failure(tiny, comfyui
     monkeypatch.setattr(nodes.en, "converse", fake)
     out = nodes.chat_reply("h:4", "make clips 6 seconds", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 1})
     assert out["ok"] and out["reply"].startswith("Done.")
+
+
+def test_several_pictures_each_get_a_placeholder_and_a_bitmap():
+    from .. import gguf
+    b = gguf.Backend.__new__(gguf.Backend)
+    b.chat_template = "{% for m in messages %}{{ m['content'] }}{% endfor %}"
+    b.marker = lambda: "<__media__>"
+    b.llm = type("L", (), {"token_bos": lambda self: -1, "token_eos": lambda self: -1})()
+    text = b.render([{"role": "user", "content": "describe"}], picture=3)
+    assert text.count("<__media__>") == 3 and text.rstrip().endswith("describe")
+    np = __import__("numpy")
+    frames = [np.zeros((1, 4, 4, 3)), np.ones((2, 4, 4, 3))]
+    assert len(gguf.Backend.pngs(frames)) == 2 and len(gguf.Backend.pngs(frames[0])) == 1

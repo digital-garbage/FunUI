@@ -473,6 +473,8 @@ def generate(clip, system, user, *, seed=None, rounds=(), image=None, thinking=F
     if getattr(clip, "is_engine", False):         # our own transformers engine, not ComfyUI's text generation
         return clip.run(system, user, rounds=rounds, image=image, thinking=thinking, max_length=max(32, int(max_length)) if max_length else 0, temperature=temperature,
                         top_p=top_p, top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, do_sample=do_sample, seed=seed)
+    if isinstance(image, (list, tuple)):          # ComfyUI's own text encoders take one picture
+        image = image[0] if image else None
     if clip is None or not hasattr(clip, "generate") or not hasattr(clip, "decode"):
         return "", ("unavailable: the connected CLIP does not expose text generation; wire a "
                     "generation-capable text encoder")

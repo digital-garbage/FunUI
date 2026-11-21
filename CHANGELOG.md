@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A picture-reading model is now shown several pictures at once.** Prompt enhancer: the first four picture references of a scene go to a GGUF model with its projector file (before, only the first). Enhance nodes get `image_2` to `image_4` inputs for them.
 - **The chat and rewrite system prompts now say that earlier turns are history.** The model is told that earlier requests, answers and (for the Helper) tool results are already done: it answers only the newest message and trusts the project as shown now.
 - **The Helper no longer reports a failure when it made a change and then said nothing.** The window now says it is done, instead of "the model returned nothing".
 - **The Helper reads tool calls that small models write sloppily.** Arguments with single or curly quotes, quotes or line breaks inside the text, trailing commas, or code fences are now understood, and Qwen 3.5's `<function=...><parameter=...>` call format works too. Before, such a call ended in a JSON error and nothing changed.

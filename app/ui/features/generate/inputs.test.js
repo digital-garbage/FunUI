@@ -112,7 +112,7 @@ test("text-only on a pipeline saved before the preset named a stand-in: the resi
   assert.deepEqual(inputs.e, { use_image: false });
 });
 
-test("the prompt enhancer is shown the first picture reference, never the aspect source", async () => {
+test("the prompt enhancer is shown the first picture reference first, never the aspect source", async () => {
   const { learn } = await import("../../shell/bin.js");
   learn([{ id: "asp", name: "a.png", kind: "image" }, { id: "p1", name: "p1.png", kind: "image" }, { id: "p2", name: "p2.png", kind: "image" }]);
   const s = [{ id: "src", node: "FunUILoadMedia", roles: [{ at: "assets.source_image", input: "media_id" }] },
@@ -122,7 +122,7 @@ test("the prompt enhancer is shown the first picture reference, never the aspect
     { id: "r2v", node: "Model", inputs: {} }];
   const run = (scene) => buildInputs({ project: {}, scene, slots: s, expand: async () => null });
   const withRefs = await run({ source_image: "asp", references: ["p1", "p2"] });
-  assert.deepEqual(withRefs.inputs.e, { image: ["ref1", 0] });
+  assert.deepEqual(withRefs.inputs.e, { image: ["ref1", 0], image_2: ["ref2", 0] });       // the next references go in as the extra pictures
   assert.equal(withRefs.inputs.src.media_id, "asp");                                 // the aspect source still gives the shape
   assert.deepEqual((await run({ source_image: "asp", references: [] })).inputs.e, { use_image: false });
   learn([]);

@@ -110,12 +110,18 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
   const lastFrame = carried.find((id) => kinds.get(id) === "image" && !noRoom.includes(id));
   let noLastFrame = false;
   const first = firstByNumber((id) => kinds.get(id) === "image" && !leave.has(id));
+  const rest = plan.ids.map((id, i) => [id, numberOf[i]]).filter(([id]) => kinds.get(id) === "image" && !leave.has(id)).sort((a, b) => a[1] - b[1]).map(([id]) => id);
   for (const e of (slots || []).filter((s) => s.node === "FunUIEnhancePrompt")) {
     const wantsLast = ((raw[e.id] || {}).last_frame ?? (e.inputs || {}).last_frame) === true;
     if (wantsLast && !lastFrame) noLastFrame = true;
     const shown = wantsLast && lastFrame ? lastFrame : first;
     const holder = shown && Object.keys(overrides).find((k) => overrides[k].media_id === shown);
     if (holder) put(e, "image", [holder, 0]); else put(e, "use_image", false);
+    // The next picture references (by number) go in as the extra pictures, for a model that reads several.
+    if (holder) rest.filter((id) => id !== shown).slice(0, 3).forEach((id, i) => {
+      const other = Object.keys(overrides).find((k) => overrides[k].media_id === id);
+      if (other) put(e, `image_${i + 2}`, [other, 0]);
+    });
     // "Send everything into chat": the conversation is the project's, and Reset in the Chat tab starts a new one.
     // The scene goes along, so a new request for it replaces its earlier turn instead of following it.
     if (((raw[e.id] || {}).to_chat ?? (e.inputs || {}).to_chat) === true) { put(e, "conversation", `${project.id || ""}:${(project.editor_settings || {}).enhance_chat_epoch || 0}`); if (scene && scene.id) put(e, "scene", String(scene.id)); }

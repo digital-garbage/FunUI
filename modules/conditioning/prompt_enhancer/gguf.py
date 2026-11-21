@@ -180,6 +180,11 @@ class Backend:
         """The placeholder the projector replaces with the picture's tokens."""
         return self.handler._mtmd_cpp.mtmd_default_marker().decode("utf-8")
 
+    @classmethod
+    def pngs(cls, image) -> list:
+        """One PNG per picture: the first frame of each ComfyUI IMAGE in a list, or of one IMAGE."""
+        return [cls.png(i) for i in (image if isinstance(image, (list, tuple)) else [image]) if i is not None]
+
     @staticmethod
     def png(image) -> bytes:
         """The first picture of a ComfyUI IMAGE tensor (batch, height, width, channels; 0 to 1), as PNG bytes."""
@@ -193,11 +198,11 @@ class Backend:
         return out.getvalue()
 
     def render(self, messages, tools=None, thinking=False, picture=False) -> str:
-        """The chat template of the file, with the generation prompt at the end. `picture`: the last user message opens with the picture's placeholder."""
+        """The chat template of the file, with the generation prompt at the end. `picture`: the last user message opens with a placeholder for each picture (True is one, or the number of pictures)."""
         if picture:
             messages = [dict(m) for m in messages]
             last = max(i for i, m in enumerate(messages) if m["role"] == "user")
-            messages[last]["content"] = f"{self.marker()}\n\n{messages[last]['content']}"
+            messages[last]["content"] = f"{(self.marker() + chr(10)) * max(1, int(picture))}\n{messages[last]['content']}"
         from transformers.utils.chat_template_utils import render_jinja_template
         if not self.chat_template:
             raise ValueError("the .gguf file carries no chat template")
@@ -212,14 +217,15 @@ class Backend:
         llm, handler = self.llm, self.handler
         handler._init_mtmd_context(llm)
         cpp = handler._mtmd_cpp
-        bitmap = handler._create_bitmap_from_bytes(picture)
+        pictures = [picture] if isinstance(picture, (bytes, bytearray)) else list(picture)
+        bitmaps = [handler._create_bitmap_from_bytes(p) for p in pictures]
         chunks = cpp.mtmd_input_chunks_init()
         try:
             wrapped = cpp.mtmd_input_text()
             raw = text.encode("utf-8")
             wrapped.text, wrapped.text_len, wrapped.add_special, wrapped.parse_special = raw, len(raw), True, True
-            bitmaps = (cpp.mtmd_bitmap_p_ctypes * 1)(bitmap)
-            if cpp.mtmd_tokenize(handler.mtmd_ctx, chunks, ctypes.byref(wrapped), bitmaps, 1) != 0:
+            handles = (cpp.mtmd_bitmap_p_ctypes * len(bitmaps))(*bitmaps)
+            if cpp.mtmd_tokenize(handler.mtmd_ctx, chunks, ctypes.byref(wrapped), handles, len(bitmaps)) != 0:
                 raise ValueError("the picture projector could not read the request")
             llm.reset()
             llm._ctx.kv_cache_clear()
@@ -241,7 +247,8 @@ class Backend:
             return llm.input_ids[:llm.n_tokens].tolist()
         finally:
             cpp.mtmd_input_chunks_free(chunks)
-            cpp.mtmd_bitmap_free(bitmap)
+            for bitmap in bitmaps:
+                cpp.mtmd_bitmap_free(bitmap)
 
     def can_trim(self) -> bool:
         """Whether the model's memory can drop its newest part (a plain transformer can; a recurrent or hybrid one such as Qwen3.5 cannot)."""

@@ -19,6 +19,8 @@ from ..._core import log
 
 THINK_BUDGET = 3000      # tokens a thinking model may reason in, on top of the length setting for its answer
 REPO_FILES = ["*.json", "*.safetensors", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # no GGUF or other copies of the same weights
+MAX_PICTURES = 4          # pictures sent to the model in one request
+
 SHARD = re.compile(r"(.+)-(\d{5})-of-(\d{5})(\.[A-Za-z0-9]+)")
 
 
@@ -759,8 +761,8 @@ class Engine:
     def _stream_gguf(self, messages, *, thinking, tools, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy, image=None, interruptible=False):
         """The same events as `_stream`, from a GGUF model run by llama.cpp (which reuses the unchanged start of the prompt by itself)."""
         model = self.model
-        picture = model.png(image) if image is not None and model.projector else None
-        text = model.render(messages, tools=tools, thinking=thinking, picture=picture is not None)
+        picture = model.pngs(image)[:MAX_PICTURES] if image is not None and model.projector else None
+        text = model.render(messages, tools=tools, thinking=thinking, picture=len(picture) if picture else False)
         dialect = dialect_for({}, model.chat_template)
         ends = ["<turn|>", "<|turn>", "<|im_end|>", "<end_of_turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else ["<|im_end|>", "<end_of_turn>", "<|eot_id|>"]
         drops = [model.bos, model.eos, *ends]
