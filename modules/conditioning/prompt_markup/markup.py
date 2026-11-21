@@ -43,6 +43,24 @@ MAX_ABS_BIAS = 6.0
 OVERLAP_HEADROOM = 1.5
 
 
+_INNER = re.compile(_WEIGHTED.pattern + "|" + _BRACKET_WEIGHTED.pattern)      # a weight written inside one option of an [A|B]
+
+
+def _unweighted(option):
+    """-> (the option without its weight markup, [(c0, c1, w)] into that text): `(red:1.3) car` -> "red car", [(0, 3, 1.3)]."""
+    pieces, spans, pos, width = [], [], 0, 0
+    for m in _INNER.finditer(option):
+        pieces.append(option[pos:m.start()])
+        width += len(pieces[-1])
+        phrase, weight = (m.group(1), m.group(2)) if m.group(1) is not None else (m.group(3), m.group(4))
+        spans.append((width, width + len(phrase), float(weight)))
+        pieces.append(phrase)
+        width += len(phrase)
+        pos = m.end()
+    pieces.append(option[pos:])
+    return "".join(pieces), spans
+
+
 def _options(raw):
     return [o.strip() for o in raw.split(SEP) if o.strip()]
 
@@ -60,7 +78,9 @@ def parse(text, pick=None, main="while"):
         pieces.append(text[pos:m.start()])
         width += len(pieces[-1])
         if m.group(1) is not None:
-            opts = _options(m.group(1))
+            parts = [_unweighted(o) for o in _options(m.group(1))]
+            opts, inner = [t for t, _ in parts], [sp for _, sp in parts]
+            shown = list(range(len(opts)))         # which options the phrase holds, in order
             if len(opts) < 2:                      # "[x|]": nothing to be simultaneous with
                 phrase = opts[0] if opts else ""
             else:
@@ -71,7 +91,13 @@ def parse(text, pick=None, main="while"):
                     pick_here = None
                 else:
                     pick_here = pick
-                phrase = (MAIN_MODES.get(main, " while ").join(opts) if pick_here is None else opts[min(pick_here, len(opts) - 1)])
+                joiner = MAIN_MODES.get(main, " while ")
+                phrase = (joiner.join(opts) if pick_here is None else opts[min(pick_here, len(opts) - 1)])
+                shown = list(range(len(opts))) if pick_here is None else [min(pick_here, len(opts) - 1)]
+            at = 0
+            for i in shown:                        # weights written inside an option still weigh that option's words
+                out["weighted"] += [(width + at + c0, width + at + c1, w) for c0, c1, w in inner[i]]
+                at += len(opts[i]) + (len(MAIN_MODES.get(main, " while ") or "") if len(opts) > 1 and len(shown) > 1 else 0)
         else:
             phrase = m.group(2) if m.group(2) is not None else m.group(4)
             weight = m.group(3) if m.group(3) is not None else m.group(5)

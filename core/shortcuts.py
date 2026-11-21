@@ -530,9 +530,10 @@ def matcher(items=None):
     return fired
 
 
-def expand(text: str, shortcuts: list[Shortcut] | None = None, seed: int = 0, commit: bool = False) -> str:
+def expand(text: str, shortcuts: list[Shortcut] | None = None, seed: int = 0, commit: bool = False, alternatives: bool = False) -> str:
+    """`alternatives`: carry `DANCE|ZOOM` as ⟦a¦b⟧ for Prompt markup to read; otherwise it reads "a | b" like any plain text."""
     with _REVOLVER_LOCK:
-        return _expand(text, shortcuts, seed, commit)
+        return _expand(text, shortcuts, seed, commit, alternatives)
 
 
 #: How the prompt carries "A or B" options once the raw text has been split: ⟦A¦B⟧. Not "[A|B]", because expanded
@@ -541,7 +542,7 @@ ALT_OPEN, ALT_SEP, ALT_CLOSE = "⟦", "¦", "⟧"
 _PIPE = re.compile(r"\s*\|\s*")
 
 
-def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
+def _expand(text: str, shortcuts, seed: int, commit: bool, alternatives: bool = False) -> str:
     """Every enabled shortcut's trigger, replaced with one of its
     replacements (random when there is more than one). Deterministic: the
     pick is seeded from `seed`, or from the text itself when seed is 0 --
@@ -596,7 +597,7 @@ def _expand(text: str, shortcuts, seed: int, commit: bool) -> str:
             chosen.append(replace(nxt))
             end = nxt.end()
         if len(chosen) > 1 and all(chosen):
-            pieces.append(ALT_OPEN + ALT_SEP.join(chosen) + ALT_CLOSE)
+            pieces.append(ALT_OPEN + ALT_SEP.join(chosen) + ALT_CLOSE if alternatives else " | ".join(chosen))
         else:
             pieces.append("".join(c + sp for c, sp in zip(chosen, [*seps, ""])))
         pos = end

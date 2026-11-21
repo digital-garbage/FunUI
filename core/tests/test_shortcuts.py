@@ -349,10 +349,10 @@ def test_shortcuts_joined_by_a_pipe_become_options_and_anything_else_is_left_alo
     items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]),
              shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"]),
              shortcuts.Shortcut("box", ["box"], ["[Shot 1] a | b"])]
-    expand = lambda t: shortcuts.expand(t, shortcuts=items, seed=1)           # noqa: E731
-    assert expand("A girl. DANCE | zoom. Dusk") == "A girl. ⟦she dances¦the camera zooms in⟧. Dusk"
+    expand = lambda t, **k: shortcuts.expand(t, shortcuts=items, seed=1, **k)    # noqa: E731
+    assert expand("A girl. DANCE | zoom. Dusk", alternatives=True) == "A girl. ⟦she dances¦the camera zooms in⟧. Dusk"
     assert expand("dance|walk") == "she dances|walk"                          # a phrase on one side: ignored
-    assert expand("dance|box") == "⟦she dances¦[Shot 1] a | b⟧"                # brackets and bars inside a shortcut are fine
+    assert expand("dance|box", alternatives=True) == "⟦she dances¦[Shot 1] a | b⟧"                # brackets and bars inside a shortcut are fine
     assert expand("dance, zoom") == "she dances, the camera zooms in"
 
 
@@ -362,3 +362,9 @@ def test_typed_options_are_split_before_shortcuts_and_variables_put_brackets_of_
     variables = [{"name": "s2", "value": "[Shot 1] flat 2d"}, {"name": "s3", "value": "[Shot 1] glossy | 3d"}]
     out = prompt_build.build("[$s2|$s3] dance|zoom [Shot 2] plain", shortcuts=items, variables=variables, seed=1)
     assert out == "⟦[Shot 1] flat 2d¦[Shot 1] glossy | 3d⟧ ⟦she dances¦the camera zooms in⟧ [Shot 2] plain"
+
+
+def test_alternatives_are_plain_text_unless_the_caller_reads_the_glyphs():
+    items = [shortcuts.Shortcut("dance", ["dance"], ["she dances"]), shortcuts.Shortcut("zoom", ["zoom"], ["the camera zooms in"])]
+    assert shortcuts.expand("dance|zoom", shortcuts=items) == "she dances | the camera zooms in"           # a training caption, a pipeline without Prompt markup
+    assert shortcuts.expand("dance|zoom", shortcuts=items, alternatives=True) == "⟦she dances¦the camera zooms in⟧"

@@ -64,7 +64,7 @@ export function enhance(app, own) {
     const toggle = (label, hint, name, dflt, disabled) => c.toggle.default({ label, hint, checked: val(name, dflt), disabled, onChange: (x) => set(name, x) });
     page.set([
       c.label.section({ text: "Prompt enhancer" }),
-      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. (word:1.5) and [a|b] markup is kept as written. Settings that depend on another are greyed out while that one is off." }),
+      c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. Markup like (word:1.5) is kept. Dependent settings are greyed out while their switch is off." }),
       toggle("Enhance prompt", "", "enabled", false, false),
       c.label.section({ text: "Model" }),
       field("Engine model", c.input.sm({ label: "Engine model", value: val("engine_model", ""), placeholder: "owner/name on Hugging Face, or a folder", disabled: off(), onCommit: (x) => { set("engine_model", x.trim()); refreshEngine(); } }),
@@ -95,7 +95,7 @@ export function enhance(app, own) {
       c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
       c.label.section({ text: "System prompts" }),
       c.collapsible.default({ label: "Everything the model is told", body: c.region.stack({ gap: "xs", children: [
-        c.hint.default({ text: "In the order a request meets it. Leave a field empty to use the built-in text shown in it. Any of these can use the macros at the end: each is replaced by what the conversation holds when the model is asked. A field that does not apply to the current switches is greyed out." }),
+        c.hint.default({ text: "In the order a request meets it. An empty field uses the built-in text shown in it. Any field can use the macros listed below. Fields that do not apply are greyed out." }),
         field("Style", c.select.md({ label: "Style", value: style, disabled: off(), options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Which built-in rewrite instructions an empty Rewrite instructions field means. Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot."),
         ...PROMPTS.map(([n, label, hint, rows, dflt, dep]) => field(label, c.textarea.md({ label, rows, disabled: off(dep ? live[dep] : true), value: val(n, ""), placeholder: dflt ? dflt() : defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint)),
         c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [

@@ -41,7 +41,7 @@ def build(scene_text: str, *, anchor: str = "", postfix: str = "",
     postfix = (postfix or "").strip() if postfix_enabled else ""
     combined = " ".join(p for p in (anchor, str(scene_text or "").strip(), postfix) if p)
     combined = _TYPED_ALTERNATIVES.sub(_protect, combined)
-    expanded = shortcuts_mod.expand(combined, shortcuts=shortcuts, seed=seed, commit=commit)
+    expanded = shortcuts_mod.expand(combined, shortcuts=shortcuts, seed=seed, commit=commit, alternatives=True)
     return shortcuts_mod.resolve_variables(expanded, variables)
 
 

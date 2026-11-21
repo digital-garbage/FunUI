@@ -182,3 +182,14 @@ def test_options_from_the_app_survive_brackets_and_bars_inside_them():
     from modules.conditioning.prompt_markup import markup as mk
     got = mk.parse("⟦[Shot 1] flat 2d¦[Shot 1] glossy | 3d⟧ ⟦she dances¦the camera zooms in⟧ [Shot 2] plain")
     assert got["variants"] == ["[Shot 1] flat 2d she dances [Shot 2] plain", "[Shot 1] glossy | 3d the camera zooms in [Shot 2] plain"]
+
+
+def test_a_weight_written_inside_an_option_still_weighs_its_words():
+    from modules.conditioning.prompt_markup import markup
+    out = markup.parse("a ⟦(red:1.3) car¦(blue:1.2) truck⟧ rolls")
+    assert out["clean"] == "a red car while blue truck rolls"
+    spans = [(out["clean"][a:b], w) for a, b, w in out["weighted"]]
+    assert spans == [("red", 1.3), ("blue", 1.2)]
+    first = markup.parse("a ⟦(red:1.3) car¦(blue:1.2) truck⟧ rolls", main="first")
+    assert first["clean"] == "a red car rolls" and [(first["clean"][a:b], w) for a, b, w in first["weighted"]] == [("red", 1.3)]
+    assert [v for v in markup.parse("a ⟦(red:1.3) car¦truck⟧", main="while")["variants"]] == ["a red car", "a truck"]

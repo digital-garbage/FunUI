@@ -362,3 +362,31 @@ def test_a_merge_in_the_first_stage_is_not_called_inactive_by_the_second(tiny_h3
     stage(1, True)
     stage(2, False)
     assert not [e for e in log.history() if "Inactive" in e["message"]]
+
+
+def test_both_stages_of_one_run_use_the_same_random_second_seed(tiny_h3):
+    from comfy.patcher_extension import WrappersMP
+    from core import dit_hooks, log
+    from modules.sampling.modifiers.nodes import FunUILoadModifiers
+
+    class Guider:
+        pass
+
+    patched, _ = FunUILoadModifiers.execute(tiny_h3.patcher, {"noise_merge": {"enabled": True, "steps": "1", "seed": -1}}).result
+    start = [w for ws in patched.wrappers[WrappersMP.OUTER_SAMPLE].values() for w in ws][-1]
+
+    def seed_of(stage):
+        guider = Guider()
+        setattr(guider, dit_hooks.STAGE, stage)
+
+        class Executor:
+            class_obj = guider
+
+            def __call__(self, *a, **k):
+                return None
+        log._reset()
+        start(Executor())
+        return next(e["message"] for e in log.history() if "second seed" in e["message"]).split("second seed")[-1].strip()
+    first, second = seed_of(1), seed_of(2)
+    assert first == second                                  # one run, one second seed
+    assert seed_of(1) != first                              # the next run draws its own

@@ -241,7 +241,10 @@ def install(patcher, values, key):
     def start(executor, *args, **kwargs):
         # Two stages is two sampler calls of one run: merges counted in the first still count, and the verdict comes after the last.
         stage = dit_hooks.stage_of(getattr(executor, "class_obj", None))
-        live["seed"] = chosen if chosen >= 0 else random.randrange(2 ** 31)
+        if chosen >= 0:
+            live["seed"] = chosen
+        elif stage != 2 or not live["seed"]:                # the second stage of one run keeps the second seed its first stage drew
+            live["seed"] = random.randrange(2 ** 31)
         live["prev"], live["options"] = None, {}
         if stage != 2:
             live["merged"] = 0
