@@ -607,7 +607,14 @@ def test_a_download_fetches_files_without_touching_the_model_that_is_loaded(monk
     assert seen == [("a/b::q8.gguf", "downloading")]
     assert e.model is model and e.source == "a/b::q4.gguf" and e.phase == "ready"      # still the loaded one
     assert (tmp_path / ".source").read_text() == "a/b::q8.gguf"
-    assert "downloaded a/b::q8.gguf" in e.message
+    assert e.message.endswith("Downloaded a/b: q8.gguf.") and "::" not in e.message
+
+
+def test_a_model_is_named_short_in_the_status():
+    from ..engine import label
+    assert label("a/b::x.gguf") == "a/b: x.gguf"
+    assert label("a/b::x.gguf|y.gguf|z.gguf@c/d") == "a/b (3 files)"
+    assert label("a/b") == "a/b" and label("") == ""
 
 
 def test_comfy_stop_cancels_a_rewrite_but_not_chat(monkeypatch):

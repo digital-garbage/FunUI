@@ -14,7 +14,7 @@ export function enhance(app, own) {
   own(() => { alive = false; clearTimeout(poll); clearTimeout(tick); });
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
   const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load now.", loading: `Loading… ${engine.message || ""}`, ready: engine.busy && engine.busy.stage ? `${engine.busy.stage}${engine.busy.tokens ? `: ${engine.busy.tokens} tokens` : engine.busy.prompt ? ` (${engine.busy.prompt} tokens)` : ""}, ${engine.busy.seconds}s` : `Ready: ${engine.message || ""}`,
-    downloading: `Downloading: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
+    downloading: `Downloading${engine.label ? ` ${engine.label}` : ""}: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
   const refreshEngine = () => app.api.enhancerEngine().then((r) => {
     const changed = JSON.stringify(r) !== JSON.stringify(engine);
     const was = engine.phase;

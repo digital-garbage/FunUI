@@ -269,6 +269,16 @@ def write_embedded_tokenizer(weights, folder) -> bool:
         return False
 
 
+def label(source):
+    """A model's name for a status line: the repo and, for files of it, the one file or how many."""
+    source = str(source or "")
+    repo, _, rest = source.partition("::")
+    files = [f for f in rest.partition("@")[0].split("|") if f]
+    if len(files) == 1:
+        return f"{repo}: {files[0]}"
+    return f"{repo} ({len(files)} files)" if files else source.partition("@")[0]
+
+
 def comfy_interrupted() -> bool:
     """Whether ComfyUI was told to interrupt what it is running (its Stop button). False outside ComfyUI."""
     try:
@@ -317,7 +327,7 @@ class Engine:
         busy = dict(self.activity)
         if busy:
             busy["seconds"] = round(time.time() - busy.get("started", time.time()), 1)
-        return {"busy": busy, "phase": self.phase, "message": self.message, "source": shown, "device": self.device,
+        return {"busy": busy, "phase": self.phase, "message": self.message, "source": shown, "label": label(shown), "device": self.device,
                 "downloaded": size, "total": self.total_bytes}
 
     BASE_FILES = ["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # a base model's config and tokenizer, never its weights
@@ -455,8 +465,8 @@ class Engine:
                 self.loaded_dir = "" if os.path.isdir(source) else self._dir
                 self.device = "cuda" if cuda else "cpu"
                 how = getattr(self.model, "funui_precision", "")
-                self.phase, self.message = "ready", f"{source} on {self.device}" + (f", {how}" if how else "")
-                _say(f"engine: {source} is ready on {self.device}" + (f" as {how}" if how else "") + f" ({time.time() - started:.0f}s)")
+                self.phase, self.message = "ready", f"{label(source)} on {self.device}" + (f", {how}" if how else "")
+                _say(f"engine: {label(source)} is ready on {self.device}" + (f" as {how}" if how else "") + f" ({time.time() - started:.0f}s)")
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 self.model = self.tok = None
                 self.phase, self.message = "error", str(exc)
@@ -486,19 +496,19 @@ class Engine:
             keep = (self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes)
             idle = self.model is None
             self.wanted, self.done_bytes = source, 0
-            self.phase, self.message = "downloading", f"downloading {source}"
+            self.phase, self.message = "downloading", f"downloading {label(source)}"
             try:
                 self._fetch(source)
                 self._remember(source)
                 _say(f"engine: downloaded {source}")
-                done = f"downloaded {source}"
+                done = f"downloaded {label(source)}"
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 _say(f"engine: could not download {source}: {exc}")
                 failed = f"download failed: {exc}"
                 self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes = ("error" if idle else keep[0]), failed, *keep[2:]
                 raise
             self._dir, self.wanted, self.total_bytes, self.done_bytes = keep[2:]
-            self.phase, self.message = ("idle", done) if idle else (keep[0], f"{keep[1]} (also {done})")
+            self.phase, self.message = ("idle", done) if idle else (keep[0], f"{keep[1]}. {done[0].upper()}{done[1:]}.")
 
     def download_async(self, source):
         """Start downloading in the background (the status says how far it is). False while a load or another download runs."""
