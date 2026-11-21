@@ -3,7 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js";
 import { addScene, split } from "../../shell/edits.js";
-import { engineOf } from "./chat.js";
+import { engineOf, scrollParent } from "./chat.js";
 import { clampBlocks } from "../settings/field.js";
 
 const NODE = "FunUIEnhancePrompt";
@@ -151,20 +151,25 @@ export function openHelper(app, origin) {
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const turns = () => log.get(p.project.id) || [];
+  const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
+  let follow = true, pin = true;          // the view follows the answer down, unless the person scrolled up to read
   const paint = () => {
+    const sc = scrollParent(history.node);
+    follow = pin || !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
+    pin = false;
     const t = turns();
     history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
       : [c.hint.default({ text: "Ask the helper to change the project: a scene's prompt or length, a new scene, the default clip length. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance, which must support tool calls." })]);
     send.setLabel ? send.setLabel(busy ? "Working…" : "Ask helper") : null;
     if (send.setDisabled) send.setDisabled(busy);
-    const sc = history.node.parentElement; if (sc) sc.scrollTop = sc.scrollHeight;
+    if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });
   };
   async function ask() {
     const message = draft.trim(), inp = inputs(), eng = engineOf(inp);
     if (!message || busy) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, reply: "", status: "", done: [] };
-    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; paint();
+    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; pin = true; paint();
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
