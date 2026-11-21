@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- Enhancer: a rule change the model writes at the end of its answer is now found even when the model forgets the closing line, so the Allow window opens (a model that ignored the closing line used to change nothing and show no window).
 - Enhancer: pressing Download now refreshes the Downloaded models list right away (a quick download used to be missed until the page was reopened), warns when a download or load is already running, and marks files in the repo list that are already downloaded.
 - Pressing Stop while a prompt is being rewritten by the built-in engine now stops the rewrite right away and ends the run, instead of waiting for the model to finish.
 - **No token limit by default.** Max tokens is now 0 = no limit: the engine writes until the model stops by itself or the context window is full (a model's reasoning no longer counts against it either). Set a number to cap it. ComfyUI's own text generation still uses 4096 when it is 0.

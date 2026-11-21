@@ -619,3 +619,12 @@ def test_comfy_stop_cancels_a_rewrite_but_not_chat(monkeypatch):
     stopped["on"] = True
     assert rewrite.is_set()
     assert not chat.is_set()
+
+
+def test_a_written_rule_change_without_the_closing_line_still_counts():
+    from .. import rules as rl
+    clean, found = rl.parse_edits("I will do that.\nEDIT_RULE: chat_prompt\nAnswer in one sentence.")
+    assert clean == "I will do that."
+    assert found == [{"field": "chat_prompt", "new_text": "Answer in one sentence."}]
+    clean, found = rl.parse_edits("A\nEDIT_RULE: chat_prompt\nx\nEND_EDIT_RULE\nthen B")
+    assert found == [{"field": "chat_prompt", "new_text": "x"}] and clean.startswith("A") and clean.endswith("then B")

@@ -45,7 +45,7 @@ def tools() -> list:
                                                                                               "reason": {"type": "string", "description": "Why, in one sentence."}}, "required": ["field", "new_text", "reason"]}}}]
 
 
-_EDIT_BLOCK = re.compile(r"EDIT_RULE[ \t]*:?[ \t]*([A-Za-z_]+)[ \t]*[,:]?[ \t]*\n?(.*?)\n?[ ,\t]*END_EDIT_RULE", re.S)
+_EDIT_BLOCK = re.compile(r"(?<![A-Z_])EDIT_RULE[ \t]*:?[ \t]*([A-Za-z_]+)[ \t]*[,:]?[ \t]*\n?(.*?)(?:\n?[ ,\t]*END_EDIT_RULE|\Z)", re.S)
 
 
 def parse_edits(text):
