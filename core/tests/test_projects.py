@@ -642,3 +642,9 @@ def test_a_saved_scene_with_an_old_source_type_loads_as_carry_through_the_projec
     from core import projects
     p = projects.Project.from_dict({"scenes": [{"text": "a", "source": {"type": "image"}}, {"text": "b", "source": {"type": "v2v", "media_ref": "m"}}]})
     assert [s.source["type"] for s in p.scenes] == ["carry", "v2v"]
+
+
+def test_a_scene_keeps_its_own_prefix_even_an_empty_one():
+    p = projects.Project.from_dict({"scenes": [{"id": "a" * 12, "text": "x"}, {"id": "b" * 12, "text": "y", "anchor": ""}, {"id": "c" * 12, "text": "z", "anchor": "warm"}, {"id": "d" * 12, "anchor": 5}]})
+    assert [s.anchor for s in p.scenes] == [None, "", "warm", None]
+    assert [s["anchor"] for s in projects.Project.from_dict(p.to_dict()).to_dict()["scenes"]] == [None, "", "warm", None]

@@ -1,6 +1,6 @@
 // The Project tab: what the whole project makes.
 import { composer as c } from "../../composer/composer.js";
-import { DRIVEN, isVideoClip, segments, snapFrames } from "../../shell/scenes.js";
+import { anchorOf, DRIVEN, isVideoClip, segments, snapFrames } from "../../shell/scenes.js";
 import { gridOf, offersLength } from "../../shell/frame_grid.js";
 import { card } from "./scene.js";
 import { projectVideoInput } from "./videoinput.js";
@@ -39,7 +39,7 @@ function splitPreview(p, api) {
     out.set([c.hint.default({ text: "Working…" })]);
     try {
       const open = p.project, roots = open.scenes.filter((s) => !s.excluded && !(s.cut_offset_frames > 0) && !(s.source && s.source.type === "video"));
-      const lines = await Promise.all(roots.map(async (s, i) => ({ n: open.scenes.indexOf(s) + 1, text: (await api.expandPrompt({ text: s.text || "", anchor: open.anchor, postfix: open.postfix, postfix_enabled: open.postfix_enabled, variables: open.variables })).text })));
+      const lines = await Promise.all(roots.map(async (s, i) => ({ n: open.scenes.indexOf(s) + 1, text: (await api.expandPrompt({ text: s.text || "", anchor: anchorOf(s, open), postfix: open.postfix, postfix_enabled: open.postfix_enabled, variables: open.variables })).text })));
       out.set(lines.length ? lines.map((l) => c.field.default({ label: `S${l.n}`, control: c.text.sm({ text: l.text || "(empty)" }) })) : [c.hint.default({ text: "No scenes to preview." })]);
     } catch (err) { out.set([c.hint.default({ text: `Could not build the preview: ${err.message}` })]); }
   };

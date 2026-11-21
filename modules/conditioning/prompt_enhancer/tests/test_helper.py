@@ -203,3 +203,17 @@ def test_calls_are_counted_so_a_missing_call_can_be_seen():
     assert acts.calls == 0
     acts({"name": "find_settings", "args": {"query": "x"}})
     assert acts.calls == 1
+
+
+def test_a_scene_prefix_is_a_valid_change_on_its_own():
+    acts = helper.Actions(2, lambda ev: None, wait=1)
+    assert acts({"name": "edit_scene", "args": {"scene": 1}}).startswith("Error")
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    live = helper.Actions(2, on_event, wait=2)
+    assert live({"name": "edit_scene", "args": {"scene": 1, "prefix": "", "reason": "r"}}).startswith("Allowed")
+    assert "(none)" in seen[0]["summary"]
+    assert live({"name": "edit_scene", "args": {"scene": 2, "project_prefix": True, "reason": "r"}}).startswith("Allowed")

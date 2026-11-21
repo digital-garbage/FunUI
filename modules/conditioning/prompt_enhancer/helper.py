@@ -16,7 +16,7 @@ ALIASES = {"prefix": "anchor", "main_prompt": "anchor", "negative_prompt": "nega
 EXTRA = ("run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\n"
-               "Use edit_scene to change one scene's prompt or length, add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
+               "Use edit_scene to change one scene's prompt, length or own prefix (a scene may have its own prefix instead of the project anchor; the sheet shows it), add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give a scene the same reference pictures and aspect ratio source as another scene (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
                "The Story (the user may call it the global prompt) is every scene prompt in order as one text, with the cut word written between scenes; rewrite it with set_story (the whole new text, scenes separated by the cut word on a line of its own). Every part of the Story between two cut words is a separate prompt: its own scene, made as its own clip at its own time, so it must stand on its own and never needs to be handled together with the others. The global prompt (what the user calls the Story as a whole) must not contain detailed descriptions of each shot: it holds only what the whole video shares, such as style, setting, characters and mood, and the detail of one shot belongs in that scene's own prompt. Change only the scenes the user means, one at a time with edit_scene, and use set_story only when the user asks for the whole Story to be rewritten. Do not merge scenes, move details between them or make them agree with each other unless asked. You can also run things for the user: the actions of the app (Generate, render, undo and so on) are listed in the project; start one with run_action, naming scenes first when the action works on picked scenes (Generate selected). run_action only starts the action and does not wait for it to finish; never start Generate unless the user asked for it. Cuts: the Story is cut into scenes at the cut words (the first one is written between scenes, change them with set_cut_words); a scene can also be cut in two on the timeline with cut_scene, and the halves stay one generated clip (the project says which scenes belong to one clip). "
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
@@ -31,7 +31,7 @@ def tools() -> list:
     reason = {"type": "string", "description": "Why, in one sentence."}
     text = {"type": "string", "description": "The whole prompt text."}
     seconds = {"type": "number", "description": "The length in seconds."}
-    return [fn("edit_scene", "Change the prompt and/or the length of one scene.", {"scene": scene, "text": text, "seconds": seconds, "reason": reason}, ["scene", "reason"]),
+    return [fn("edit_scene", "Change the prompt, the length and/or the prefix of one scene. A scene can have its own prefix instead of the project anchor.", {"scene": scene, "text": text, "seconds": seconds, "prefix": {"type": "string", "description": "The scene's own prefix, put in front of its prompt instead of the project anchor. An empty text means no prefix at all for this scene."}, "project_prefix": {"type": "boolean", "description": "true: the scene goes back to using the project anchor."}, "reason": reason}, ["scene", "reason"]),
             fn("add_scene", "Add a new scene after another one (the last when after is left out).", {"text": text, "after": {"type": "integer", "description": "The scene number to add it after."}, "reason": reason}, ["text", "reason"]),
             fn("copy_reference", "Give a scene the same reference pictures and aspect ratio source picture as another scene.", {"scene": scene, "from_scene": {"type": "integer", "description": "The scene number to copy them from."}, "reason": reason}, ["scene", "from_scene", "reason"]),
             fn("set_project_text", "Set the project's anchor (= prefix), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
@@ -55,7 +55,7 @@ def tools() -> list:
 def describe(name, args) -> str:
     """One plain line for the Allow card."""
     if name == "edit_scene":
-        parts = ([f"change the prompt to: {str(args.get('text')).strip()}"] if isinstance(args.get("text"), str) and args["text"].strip() else []) + ([f"set the length to {args['seconds']} seconds"] if isinstance(args.get("seconds"), (int, float)) else [])
+        parts = ([f"change the prompt to: {str(args.get('text')).strip()}"] if isinstance(args.get("text"), str) and args["text"].strip() else []) + ([f"set the length to {args['seconds']} seconds"] if isinstance(args.get("seconds"), (int, float)) else []) + ([f"set its own prefix to: {args['prefix'].strip() or '(none)'}"] if isinstance(args.get("prefix"), str) else []) + (["use the project prefix again"] if args.get("project_prefix") is True else [])
         return f"Scene {args.get('scene')}: " + " and ".join(parts)
     if name == "add_scene":
         return f"Add a scene after scene {args['after']}: {str(args.get('text')).strip()}" if isinstance(args.get("after"), int) else f"Add a scene at the end: {str(args.get('text')).strip()}"
@@ -270,8 +270,11 @@ class Actions:
             if not isinstance(args.get("scene"), int) or not 1 <= args["scene"] <= self.scenes:
                 return f"Error: scene must be a number from 1 to {self.scenes}."
             text, secs = args.get("text"), args.get("seconds")
-            if (not isinstance(text, str) or not text.strip()) and not num(secs):
-                return "Error: give a new text, a length in seconds, or both."
+            pre = args.get("prefix")
+            if (not isinstance(text, str) or not text.strip()) and not num(secs) and not isinstance(pre, str) and args.get("project_prefix") is not True:
+                return "Error: give a new text, a length in seconds, a prefix, or project_prefix."
+            if isinstance(pre, str) and len(pre) > MAX_TEXT:
+                return f"Error: the prefix is longer than {MAX_TEXT} characters."
             if isinstance(text, str) and len(text) > MAX_TEXT:
                 return f"Error: the text is longer than {MAX_TEXT} characters."
         elif name == "add_scene":

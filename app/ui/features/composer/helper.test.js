@@ -116,3 +116,14 @@ test("run_action picks the named scenes, starts the app's action without waiting
   assert.deepEqual(ran, ["go"]);
   assert.equal(applyAction({ project }, { tool: "run_action", args: { action: "hidden" } }, null, null, app), "that action is not available now");
 });
+
+test("a scene can get its own prefix and go back to the project's", () => {
+  const p = make();
+  applyAction(p, { tool: "edit_scene", args: { scene: 2, prefix: " warm light " } });
+  assert.equal(p.project.scenes[1].anchor, "warm light");
+  assert.match(sheetOf(p.project), /Scene 2 .*own prefix: warm light/);
+  applyAction(p, { tool: "edit_scene", args: { scene: 2, prefix: "" } });
+  assert.equal(p.project.scenes[1].anchor, "");                       // no prefix at all for this scene
+  applyAction(p, { tool: "edit_scene", args: { scene: 2, project_prefix: true } });
+  assert.equal("anchor" in p.project.scenes[1], false);
+});

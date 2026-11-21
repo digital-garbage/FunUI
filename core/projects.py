@@ -191,6 +191,8 @@ class Scene:
     #: timeline decision and a regenerate is a new scene.
     length: int | None = None
     rating: str = ""
+    #: This scene's own prefix. None: the project's anchor goes in front of the prompt; any text, even an empty one, replaces the anchor for this scene.
+    anchor: str | None = None
     #: {text, at}: the scene text when it was rated (what the rating is about, even after a rewrite) and when (ms).
     rated: dict = field(default_factory=dict)
     #: A media library id, picked to size this scene's generation -- not
@@ -268,6 +270,7 @@ class Scene:
             text=_str(d.get("text")),
             result=result if isinstance(result, str) else None,
             length=_whole(d.get("length")),
+            anchor=_str(d.get("anchor")) if isinstance(d.get("anchor"), str) else None,
             rating=_str(rating, "", MAX_RATING),
             rated=_blob(d.get("rated"), dict),
             source_image=source_image if media.is_id(source_image) else None,

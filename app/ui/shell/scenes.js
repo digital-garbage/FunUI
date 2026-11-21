@@ -31,6 +31,9 @@ export function snapFrames(n, mode = "round", grid = LTX_GRID) {
 }
 
 // "project" follows the project; a trimmed scene (timeline/custom) owns its number.
+/** The text put in front of a scene's prompt: its own prefix when it has one (even an empty one), else the project's anchor. */
+export const anchorOf = (sc, p) => (sc && typeof sc.anchor === "string" ? sc.anchor : (p && p.anchor) || "");
+
 export function effFrames(sc, p) {
   if (!sc || (sc.frames_mode || "project") === "project") return p.num_frames_per_scene || 97;
   return sc.frames != null ? sc.frames : p.num_frames_per_scene || 97;

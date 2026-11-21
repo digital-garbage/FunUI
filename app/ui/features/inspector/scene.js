@@ -44,7 +44,9 @@ export function sceneRows(p, app) {
     ...(sc.removed_from_plan ? [c.banner.info({ text: "Removed from plan — its generated clip stays on the timeline.", action: { label: "Restore to plan", onClick: () => p.edit((pr) => restoreToPlan(pr, sc.id)) } })] : []),
     ...(cuts ? [c.hint.default({ text: "This scene has editorial cuts — Generate regens the whole uncut scene." })] : []),
     ...(isSubclip(sc) ? [c.hint.default({ text: "This is a cut: its prompt and source belong to the first part." })] : [card(
-      c.field.default({ label: "Prompt", control: c.textarea.md({ label: "Prompt", value: sc.text || "", rows: 4, onInput: (v) => p.setText(sc.id, v) }) }))]),
+      c.field.default({ label: "Prompt", control: c.textarea.md({ label: "Prompt", value: sc.text || "", rows: 4, onInput: (v) => p.setText(sc.id, v) }) }),
+      c.toggle.default({ label: "Own prefix", hint: "Put this text in front of this scene's prompt instead of the project's anchor. Empty: no prefix for this scene.", checked: typeof sc.anchor === "string", onChange: (v) => p.setScene(sc.id, "anchor", v ? (open.anchor || "") : null) }),
+      ...(typeof sc.anchor === "string" ? [c.textarea.md({ label: "Prefix of this scene", value: sc.anchor, rows: 2, onInput: (v) => p.setScene(sc.id, "anchor", v) })] : []))]),
     c.label.section({ text: "Pictures" }),
     card(mediaField(app, p, sc, { label: "Aspect ratio source", hint: "The scene's picture. Its shape sets the aspect ratio; the project's Width and Height set the size.",
       key: "source_image", multiple: false, kinds: ["image", "video"], empty: "— choose aspect ratio source —" }),

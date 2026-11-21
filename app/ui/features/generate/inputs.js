@@ -3,7 +3,7 @@
 import { MAX_REFERENCES, referenceNumbers, sceneReferences, wireReferences, routeFor } from "../../shell/reference_wiring.js";
 import { kinds, sounds } from "../../shell/bin.js";
 import { NOT_RATED, RATING_PREFIX, nameOf } from "../rating/choices.js";
-import { DRIVEN } from "../../shell/scenes.js";
+import { anchorOf, DRIVEN } from "../../shell/scenes.js";
 import { activeVideoInput, videoInputJson } from "../../shell/video_input.js";
 
 export const rolesAt = (slots, at) => (slots || []).flatMap((s) => (s.roles || []).filter((r) => r.at === at).map((role) => ({ slot: s, role })));
@@ -159,7 +159,7 @@ export async function buildInputs({ project, scene, slots, expand, nodeInfo, fra
     const text = scene.text || "";
     // The enhancer's "only my own text" mode needs to know where the global prefix and postfix sit in the finished prompt.
     const own = (slots || []).filter((s) => s.node === "FunUIEnhancePrompt" && ((raw[s.id] || {}).scope ?? (s.inputs || {}).scope) === "own");
-    const body = await expand({ text, anchor: [...prefix, project.anchor].filter((x) => x && String(x).trim()).join(" "), postfix: project.postfix, postfix_enabled: project.postfix_enabled, variables: project.variables, ...(own.length ? { parts: true } : {}) })
+    const body = await expand({ text, anchor: [...prefix, anchorOf(scene, project)].filter((x) => x && String(x).trim()).join(" "), postfix: project.postfix, postfix_enabled: project.postfix_enabled, variables: project.variables, ...(own.length ? { parts: true } : {}) })
       .catch(() => null);         // a failing prompt-craft feature must not block the run: send what was typed
     put(prompt.slot, prompt.role.input, body && typeof body.text === "string" ? body.text : text);
     if (!(body && typeof body.text === "string")) failedExpand = true;

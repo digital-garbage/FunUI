@@ -1,7 +1,7 @@
 // Build: a scene drafted from your own shortcuts, those in scenes you liked first. Rating renders is what teaches it.
 import { composer as c } from "../../composer/composer.js";
 import { compose, likelier } from "../../shell/habits.js";
-import { genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
+import { anchorOf, genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 
 export function build(app, own) {
   const p = app.project;
@@ -22,7 +22,7 @@ export function build(app, own) {
     const mine = ++asked, sc = target && p.scenes.find((s) => s.id === target);
     const prefix = (app.promptPrefix || []).flatMap((f) => { try { return f(sc, p.project); } catch { return []; } });
     try {
-      const r = await app.api.expandPrompt({ text: draft.value, anchor: [...prefix, p.anchor].filter((x) => x && String(x).trim()).join(" "), postfix: p.postfix, postfix_enabled: p.postfixEnabled, variables: p.variables });
+      const r = await app.api.expandPrompt({ text: draft.value, anchor: [...prefix, sc ? anchorOf(sc, p.project) : p.anchor].filter((x) => x && String(x).trim()).join(" "), postfix: p.postfix, postfix_enabled: p.postfixEnabled, variables: p.variables });
       if (alive && mine === asked) full.setText(r.text || "");
     } catch (err) { if (alive && mine === asked) full.setText(`Could not build the full prompt: ${err.message}`); }
   }

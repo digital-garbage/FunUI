@@ -26,7 +26,7 @@ const presetsLine = (list) => (list.length ? `\nPipeline starting points (apply_
 /** The project as the model reads it: one line per scene, numbered from 1, with its length and prompt. */
 export function sheetOf(project) {
   if (!project) return "";
-  const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
+  const fps = Number(project.frame_rate) || 25, units = (project.scenes || []).map(genUnitId), lines = (project.scenes || []).map((s, i) => `Scene ${i + 1} (${(effFrames(s, project) / effFps(s, project)).toFixed(2)} s${s.excluded ? ", left out" : ""}${refsOf(s)}${typeof s.anchor === "string" ? `, own prefix: ${s.anchor.trim() || "(none)"}` : ""}${units.filter((u) => u === units[i]).length > 1 ? `, one clip with scenes ${units.map((u, j) => (u === units[i] ? j + 1 : 0)).filter(Boolean).join(" and ")}` : ""}): ${(s.text || "").trim() || "(empty)"}`);
   const vars = (project.variables || []).map((v) => `$${v.name} = ${String(v.value).slice(0, 200)}`);
   return [`Anchor (also called prefix, put in front of every scene prompt): ${(project.anchor || "").trim() || "(empty)"}`, `Postfix (${project.postfix_enabled === false ? "switched off" : "on"}): ${(project.postfix || "").trim() || "(empty)"}`, `Negative prompt: ${(project.negative || "").trim() || "(empty)"}`,
     `Variables: ${vars.length ? "" : "(none)"}`, ...vars, `Default clip length: ${((project.num_frames_per_scene || 97) / fps).toFixed(2)} seconds at ${fps} fps.`, ...lines].join("\n");
@@ -60,6 +60,8 @@ export function applyAction(project, ev, ps, api, app) {
     project.edit((pr) => {
       const sc = pr.scenes[at];
       if (typeof a.text === "string" && a.text.trim()) sc.text = a.text.trim();
+      if (typeof a.prefix === "string") sc.anchor = a.prefix.trim();
+      else if (a.project_prefix === true) delete sc.anchor;
       if (typeof a.seconds === "number" && a.seconds > 0) { sc.frames = secs(pr, sc, a.seconds); sc.frames_mode = "custom"; }
       return true;
     });

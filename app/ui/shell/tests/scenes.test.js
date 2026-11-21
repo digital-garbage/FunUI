@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { seconds, planSeconds, snapFrames, segments, orderedScenes, totalSeconds, clock, genUnitId, LTX_GRID } from "../scenes.js";
+import { seconds, planSeconds, snapFrames, segments, orderedScenes, totalSeconds, clock, genUnitId, anchorOf, LTX_GRID } from "../scenes.js";
 
 const P = { num_frames_per_scene: 97, frame_rate: 25, scenes: [{ id: "a" }, { id: "b" }, { id: "c", gap_after_sec: 1 }], scene_renders: {} };
 
@@ -41,4 +41,13 @@ test("a gen unit is its own id unless a cut says otherwise", () => {
   assert.equal(genUnitId({ id: "b", gen_unit_id: "a" }), "a");
   assert.equal(clock(125), "02:05");
   assert.deepEqual(LTX_GRID, { step: 8, base: 1, fps: null });
+});
+
+test("a scene's own prefix replaces the project's anchor, even an empty one", () => {
+  const p = { anchor: "film still" };
+  assert.equal(anchorOf({ id: "a" }, p), "film still");
+  assert.equal(anchorOf({ id: "a", anchor: null }, p), "film still");
+  assert.equal(anchorOf({ id: "a", anchor: "" }, p), "");
+  assert.equal(anchorOf({ id: "a", anchor: "warm" }, p), "warm");
+  assert.equal(anchorOf(null, p), "film still");
 });
