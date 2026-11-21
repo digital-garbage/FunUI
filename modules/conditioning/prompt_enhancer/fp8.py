@@ -118,4 +118,9 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu"):
     for name, p in list(model.named_parameters()) + list(model.named_buffers()):
         if p.device.type == "meta":
             raise ValueError(f"{name} was not filled from {weights_file}")
+    try:                                                      # the stop tokens and sampling defaults the model's authors set
+        from transformers import GenerationConfig
+        model.generation_config = GenerationConfig.from_pretrained(base_dir)
+    except Exception:                                         # noqa: BLE001 -- a base without one keeps the config's own
+        pass
     return model.to(device).eval()

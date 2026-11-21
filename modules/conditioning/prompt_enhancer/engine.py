@@ -192,7 +192,7 @@ def models_dir():
 def local_dir(source):
     """A folder given as it is; a Hugging Face id ("owner/name") as its folder under the models directory."""
     source = str(source or "").strip()
-    return source if os.path.isdir(source) else os.path.join(models_dir(), source.replace("/", "__"))
+    return source if os.path.isdir(source) else os.path.join(models_dir(), re.split(r"::|@", source)[0].replace("/", "__"))
 
 
 def _folder_size(path):
@@ -226,23 +226,45 @@ class Engine:
                 "downloaded": size, "total": self.total_bytes}
 
     def _fetch(self, source):
-        """The folder holding the model: the given folder, or the Hugging Face repo downloaded (once) into the models directory."""
+        """-> (folder, weights file or ""): the given folder, or the Hugging Face repo downloaded (once) into the models directory.
+        A repo that has no config.json but a ComfyUI-style single weights file (one fp8 file) comes with its base model's config instead:
+        `owner/name` finds the file and the base by itself, `owner/name::folder/file.safetensors@owner/base` names them."""
         if os.path.isdir(source):
-            return source
-        if not re.fullmatch(r"[\w.\-]+/[\w.\-]+", source):
+            return source, ""
+        match = re.fullmatch(r"([\w.\-]+/[\w.\-]+)(?:::([^@]+))?(?:@([\w.\-]+/[\w.\-]+))?", source)
+        if not match:
             raise ValueError(f"'{source}' is neither a folder nor a Hugging Face id like owner/name")
-        target = local_dir(source)
-        if os.path.exists(os.path.join(target, "config.json")) and os.path.exists(os.path.join(target, ".complete")):
-            return target
-        from huggingface_hub import HfApi, snapshot_download
-        try:
-            self.total_bytes = sum(s.size or 0 for s in HfApi().model_info(source, files_metadata=True).siblings if s.rfilename.endswith((".safetensors", ".json")))
-        except Exception:                                           # noqa: BLE001 -- the size is only for the progress bar
-            self.total_bytes = 0
-        self.phase, self.message = "downloading", f"downloading {source}"
-        snapshot_download(source, local_dir=target, allow_patterns=REPO_FILES)
-        open(os.path.join(target, ".complete"), "w").close()
-        return target
+        repo, wanted, base = match.groups()
+        target = local_dir(repo)
+        if os.path.exists(os.path.join(target, ".complete")):
+            return self._cached(target)
+        from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+        info = HfApi().model_info(repo, files_metadata=True)
+        files = {s.rfilename: s.size or 0 for s in info.siblings}
+        single = wanted or ("" if "config.json" in files else next((f for f in files if f.endswith(".safetensors")), ""))
+        if single not in files and single:
+            raise ValueError(f"{repo} has no file {single}")
+        self.total_bytes = sum(size for name, size in files.items() if name.endswith((".safetensors", ".json")) and (not single or name == single))
+        self.phase, self.message = "downloading", f"downloading {repo}"
+        if not single:
+            snapshot_download(repo, local_dir=target, allow_patterns=REPO_FILES)
+            open(os.path.join(target, ".complete"), "w").close()
+            return target, ""
+        base = base or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:quantized:")), "") or next((t.split(":")[-1] for t in info.tags if t.startswith("base_model:") and t.count(":") == 1), "")
+        if not base:
+            raise ValueError(f"{repo} holds only a weights file, and no base model is named for its config: write {repo}::{single}@owner/base-model")
+        os.makedirs(target, exist_ok=True)
+        hf_hub_download(repo, single, local_dir=target)
+        snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"], ignore_patterns=["*.safetensors.index.json"])
+        with open(os.path.join(target, ".complete"), "w") as f:
+            f.write(single)
+        return self._cached(target)
+
+    @staticmethod
+    def _cached(target):
+        """(folder, weights file) of a finished download: a weights file written in `.complete` means config and tokenizer are in `base/`."""
+        marker = open(os.path.join(target, ".complete")).read().strip()
+        return (os.path.join(target, "base"), os.path.join(target, marker)) if marker else (target, "")
 
     def load(self, source):
         """Make `source` the loaded model (a no-op when it already is). Blocks; raises with the reason."""
@@ -255,20 +277,24 @@ class Engine:
             self.model = self.tok = None
             self.source, self.done_bytes = source, 0
             try:
-                folder = self._fetch(source)
+                folder, weights = self._fetch(source)
                 self.phase, self.message = "loading", f"loading {source}"
                 import torch
                 from transformers import AutoTokenizer
                 cuda = torch.cuda.is_available()
                 self.tok = AutoTokenizer.from_pretrained(folder)
-                for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
-                    try:
-                        self.model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
-                        break
-                    except (ValueError, KeyError, AttributeError) as exc:
-                        failure = exc
+                if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
+                    from . import fp8
+                    self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu")
                 else:
-                    raise failure
+                    for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
+                        try:
+                            self.model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
+                            break
+                        except (ValueError, KeyError, AttributeError) as exc:
+                            failure = exc
+                    else:
+                        raise failure
                 self.device = "cuda" if cuda else "cpu"
                 self.phase, self.message = "ready", f"{source} on {self.device}"
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller

@@ -12,3 +12,7 @@ gguf
 
 # spaCy (Automatic camera and focus) and nvidia-vfx (NVIDIA RTX Super Resolution) are add-ons:
 # installed on the next start after they are switched on in Settings ▸ Modules (core/addons.py).
+
+# The prompt enhancer's own engine builds a model without memory behind it before filling it from a
+# single-file fp8 checkpoint. Pure python; ComfyUI installs already carry it with transformers.
+accelerate

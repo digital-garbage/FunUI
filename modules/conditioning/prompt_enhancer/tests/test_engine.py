@@ -131,3 +131,47 @@ def test_the_rewrite_can_come_from_the_engine_and_a_missing_model_hands_the_prom
     assert out.args[0]                                                                   # whatever the tiny model wrote, a prompt comes out
     missing = nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="not/a model", max_length=10)
     assert missing.args[0] == "a fox" and "could not load the engine model" in nodes.RUNS[-1]["status"]
+
+
+# --- a single-file fp8 checkpoint ----------------------------------------------
+
+def test_a_scaled_fp8_file_runs_like_the_same_weights_widened(tmp_path):
+    import torch
+    from safetensors.torch import save_file
+    from transformers import Gemma4ForCausalLM, Gemma4TextConfig
+    from modules.conditioning.prompt_enhancer import fp8
+    torch.manual_seed(1)
+    cfg = Gemma4TextConfig(vocab_size=64, hidden_size=32, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, head_dim=16, global_head_dim=16,
+                           intermediate_size=64, hidden_size_per_layer_input=8, layer_types=["sliding_attention", "full_attention"], sliding_window=16,
+                           max_position_embeddings=256, num_kv_shared_layers=0, pad_token_id=0, bos_token_id=1, eos_token_id=2)
+    cfg.save_pretrained(tmp_path)
+    reference = Gemma4ForCausalLM(cfg).eval().to(torch.bfloat16)
+    tensors = {}
+    for name, value in reference.state_dict().items():
+        if name == "lm_head.weight":
+            continue
+        big = value.ndim == 2 and ("mlp" in name or "embed_tokens" in name)
+        if big:
+            scale = value.abs().max().float() / 400
+            packed = (value.float() / scale).to(torch.float8_e4m3fn)
+            tensors[name] = packed
+            tensors[name[:-len("weight")] + "weight_scale"] = scale.reshape(())
+            tensors[name[:-len("weight")] + "comfy_quant"] = torch.tensor(list(b'{"format": "float8_e4m3fn"}'), dtype=torch.uint8)
+            value.copy_((packed.float() * scale).to(torch.bfloat16))          # the reference holds what the file means
+        else:
+            tensors[name] = value
+    save_file(tensors, str(tmp_path / "w.safetensors"))
+    assert fp8.is_scaled_fp8(tmp_path / "w.safetensors")
+    model = fp8.build(tmp_path, tmp_path / "w.safetensors")
+    ids = torch.tensor([[1, 5, 9, 12, 7]])
+    with torch.inference_mode():
+        got, want = model(ids).logits.float(), reference(ids).logits.float()
+    assert torch.allclose(got, want, atol=0.05, rtol=0.05)
+    assert next(m for m in model.modules() if isinstance(m, fp8.FP8Linear)).weight.dtype == torch.float8_e4m3fn      # still fp8 in memory
+
+
+def test_an_engine_source_may_name_a_file_and_a_base():
+    import re
+    pattern = r"([\w.\-]+/[\w.\-]+)(?:::([^@]+))?(?:@([\w.\-]+/[\w.\-]+))?"
+    assert re.fullmatch(pattern, "a/b::x/y.safetensors@c/d").groups() == ("a/b", "x/y.safetensors", "c/d")
+    assert eng.local_dir("a/b::f.safetensors@c/d") == eng.local_dir("a/b")
