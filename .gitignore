@@ -41,6 +41,7 @@ app/playwright-report/
 
 # Taste keys: what your ratings taught, per rental
 /taste/
+/enhancer_history.json
 /block_map/
 /run_meter/
 /block_map.enabled

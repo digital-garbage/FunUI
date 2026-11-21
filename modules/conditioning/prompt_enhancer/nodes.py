@@ -8,15 +8,15 @@ import time
 from comfy_api.latest import io
 
 from ..._core import log
-from . import enhance as en
+from . import enhance as en, history
 from .engine import ENGINE, EngineClip
 
-#: The last runs' rewrites, newest last: what the Composer's readout shows. In
-#: memory on purpose -- it is the last run's answer, not state to keep.
-RUNS = collections.deque(maxlen=20)
-#: "Send everything into chat": the earlier turns {request, reply} of each conversation, in memory only (a restart starts them over).
+#: The runs' rewrites and chat messages, newest last: what the Composer's tabs show. Kept in history.py's file, so a restart keeps them.
+RUNS = collections.deque(maxlen=history.MAX_RUNS)
+#: "Send everything into chat": the earlier turns {request, reply} of each conversation, kept in the same file.
 CONVOS = collections.OrderedDict()
 MAX_CONVOS = 20
+history.load(RUNS, CONVOS, en.CONVO_KEEP)
 
 
 _MARKUP = re.compile(r"\([^()]*:\s*[\d.]+\)|\[[^\]]*\|[^\]]*\]|⟦[^⟧]*⟧")
@@ -146,7 +146,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
 
 
-_LAST_CHAT_ID = [0]
+_LAST_CHAT_ID = [max([int(r.get("chat_id") or 0) for r in RUNS] or [0])]       # after a restart the numbers go on above the saved ones
 
 
 def chat_id() -> int:
@@ -158,6 +158,7 @@ def chat_id() -> int:
 def _log(entry):
     """Keep a run for the Chat and Enhance tabs, with its chat id."""
     RUNS.append({**entry, "chat_id": chat_id()})
+    history.save(RUNS, CONVOS)
 
 
 def _prompt_id():

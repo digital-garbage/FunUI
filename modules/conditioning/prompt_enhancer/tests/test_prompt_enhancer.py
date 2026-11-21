@@ -849,3 +849,28 @@ def test_the_aspect_ratio_macro_says_the_target_shape_or_that_it_is_not_known():
     assert "ASPECT_RATIO" in e.MACROS
     assert e.macro_values(aspect="16:9 landscape (1920 x 1080)")["ASPECT_RATIO"] == "16:9 landscape (1920 x 1080)"
     assert e.macro_values()["ASPECT_RATIO"] == "(not known)"
+
+
+def test_the_chat_history_and_the_models_memory_survive_a_restart(tmp_path):
+    import collections
+    from .. import history
+    runs = collections.deque([{"prompt_id": "chat-1", "kind": "chat", "conversation": "p:0", "chat_id": 41, "asked": "hi", "answered": "hello", "ok": True, "x" * 3: "y" * 30000}], maxlen=5)
+    convos = collections.OrderedDict({"p:0": {"summary": "a fox", "turns": collections.deque([{"request": "hi", "reply": "hello", "kind": "chat"}], maxlen=4), "seen": {"a", "b"}}})
+    history.save(runs, convos)
+    back_runs, back_convos = collections.deque(maxlen=history.MAX_RUNS), collections.OrderedDict()
+    history.load(back_runs, back_convos, 4)
+    assert back_runs[0]["answered"] == "hello" and back_runs[0]["chat_id"] == 41
+    assert len(back_runs[0]["xxx"]) == history.TEXT                                    # an enormous field is cut, the message stays
+    assert back_convos["p:0"]["summary"] == "a fox" and list(back_convos["p:0"]["turns"])[0]["reply"] == "hello"
+    assert back_convos["p:0"]["turns"].maxlen == 4 and back_convos["p:0"]["seen"] == {"a", "b"}
+    history.FILE.write_text("{not json")
+    empty = collections.deque()
+    history.load(empty, collections.OrderedDict(), 4)                                  # a broken file starts empty, no error
+    assert not empty
+    history.FILE.unlink()
+    history.load(empty, collections.OrderedDict(), 4)                                  # no file: nothing to load
+
+
+def test_a_message_is_kept_for_the_tab_beyond_the_old_twenty_runs():
+    from .. import history, nodes
+    assert history.MAX_RUNS >= 500 and nodes.RUNS.maxlen == history.MAX_RUNS
