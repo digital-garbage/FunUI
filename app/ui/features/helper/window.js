@@ -9,6 +9,7 @@ import { engineOf, scrollParent } from "../../shell/chatkit.js";
 import { clampBlocks } from "../../shell/blocks.js";
 
 const NODE = "FunUIEnhancePrompt";
+const PHRASES = ["Pondering", "Mulling it over", "Reading the project", "Weighing the options", "Working it out", "Sketching a plan", "Thinking it through", "Checking the scenes"];
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said, for as long as the page is open
 let draft = "";
 
@@ -197,13 +198,21 @@ export function openHelper(app, origin) {
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const turns = () => log.get(p.project.id) || [];
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
+  let tick = 0;
+  // The model's thinking stays folded: a line with a changing phrase and the time since the request began, opened by a click.
+  const thoughtOf = (x, working) => {
+    if (!x.thinking && !(working && !x.reply && !x.t1)) return [];
+    const live = !x.t1, secs = Math.max(0, Math.round(((x.t1 || Date.now()) - x.t0) / 1000));
+    const label = live ? `${PHRASES[(x.seed + Math.floor(secs / 7)) % PHRASES.length]}… ${secs}s` : `Thought for ${secs}s`;
+    return [c.collapsible.default({ label, open: x.open, onToggle: (v) => { x.open = v; }, body: c.text.sm({ text: x.thinking || "Nothing written yet." }) })];
+  };
   let follow = true, pin = true;          // the view follows the answer down, unless the person scrolled up to read
   const paint = () => {
     const sc = scrollParent(history.node);
     follow = pin || !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
     pin = false;
     const t = turns();
-    history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...(x.thinking ? [c.bubble.model({ text: x.thinking, who: "Helper (thinking)" })] : []), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
+    history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
     send.setLabel ? send.setLabel(busy ? "Working…" : "Ask helper") : null;
     if (send.setDisabled) send.setDisabled(busy);
@@ -213,8 +222,9 @@ export function openHelper(app, origin) {
     const message = draft.trim(), inp = inputs(), eng = engineOf(inp);
     if (!message || busy) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
-    const turn = { you: message, thinking: "", reply: "", status: "", done: [] };
+    const turn = { you: message, thinking: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length) };
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; pin = true; paint();
+    tick = setInterval(paint, 1000);                    // the clock beside the thinking line
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
@@ -234,7 +244,7 @@ export function openHelper(app, origin) {
       if (r && !r.ok) throw new Error(r.status || "the helper could not answer");
       if (r && r.reply) turn.reply = r.reply;
     } catch (e) { turn.reply = `No reply: ${(e && e.message) || e}`; }
-    busy = false; paint();
+    turn.t1 = Date.now(); busy = false; clearInterval(tick); tick = 0; paint();
   }
   win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [send] });
   paint();

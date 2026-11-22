@@ -20,6 +20,9 @@ test("the Helper window opens in the middle, sends the project sheet, asks Allow
     for (let i = 0; i < 50 && document.querySelectorAll(".cx-modal").length < 2; i++) await new Promise((r) => setTimeout(r, 10));
     const card = [...document.querySelectorAll(".cx-modal")].pop();
     assert.match(modal.textContent, /scene 1 needs a sitting dog/);       // the helper's thinking shows in its own window
+    const fold = modal.querySelector("details.cx-collapsible");
+    assert.ok(fold && !fold.open, "the thinking is folded until it is clicked");
+    assert.match(fold.querySelector("summary").textContent, /\d+s$/);                       // a phrase and the seconds since the request began
     assert.match(card.textContent, /a dog sits/);
     [...card.querySelectorAll("button")].find((b) => b.textContent === "Allow").click();
     for (let i = 0; i < 50 && !decided.length; i++) await new Promise((r) => setTimeout(r, 10));
