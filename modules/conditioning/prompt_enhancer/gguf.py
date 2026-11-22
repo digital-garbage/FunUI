@@ -256,6 +256,8 @@ class Backend:
         arch = str((getattr(self.llm, "metadata", None) or {}).get("general.architecture", "")).lower()
         if any(k in arch for k in ("qwen35", "qwen3next", "qwen3_5", "mamba", "rwkv", "jamba", "lfm2", "granitehybrid", "falcon-h1", "nemotron_h", "plamo2", "minimax")):
             return False
+        if any(k.endswith(".attention.sliding_window") and str(v) not in ("", "0") for k, v in (getattr(self.llm, "metadata", None) or {}).items()):
+            return False                                            # a sliding-window model keeps only the newest window per layer, so it starts from empty instead of trimming
         try:
             return bool(llama_cpp.llama_memory_can_shift(llama_cpp.llama_get_memory(self.llm._ctx.ctx)))
         except Exception:                                           # noqa: BLE001
@@ -405,7 +407,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
         gpu = bool(llama_cpp.llama_supports_gpu_offload())
     except Exception:                                               # noqa: BLE001

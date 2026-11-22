@@ -931,3 +931,10 @@ def test_the_gguf_model_is_loaded_with_llama_cpps_own_batch_sizes(monkeypatch, t
     monkeypatch.setattr(gguf, "find_projector", lambda path: "")
     gguf.load(str(tmp_path / "m.gguf"), cuda=True)
     assert "n_batch" not in seen and "n_ubatch" not in seen
+
+
+def test_a_sliding_window_model_starts_from_empty_instead_of_trimming():
+    from modules.conditioning.prompt_enhancer import gguf
+    b = gguf.Backend.__new__(gguf.Backend)
+    b.llm = type("L", (), {"metadata": {"general.architecture": "gemma4", "gemma4.attention.sliding_window": "1024"}})()
+    assert b.can_trim() is False
