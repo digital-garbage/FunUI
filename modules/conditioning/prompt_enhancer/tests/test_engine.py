@@ -874,3 +874,28 @@ def test_a_model_change_waits_for_the_request_that_is_writing(tiny):
             break
         time.sleep(0.02)
     assert done and tiny.model is None
+
+
+def test_the_reported_speed_counts_the_writing_only_not_the_time_to_read_the_prompt():
+    import time
+    from .. import engine as eng
+
+    class Slow(_FakeGGUF):
+        def text_stream(self, text, *, stats=None, **kw):
+            time.sleep(0.3)                                        # reading a long prompt
+            for i, piece in enumerate(["A ", "fox ", "runs", "."]):
+                if stats is not None:
+                    stats["prompt"], stats["steps"] = 900, i + 1
+                    stats["last"] = time.time()
+                    if i == 0:
+                        stats["first"] = stats["last"]
+                time.sleep(0.05)
+                yield piece
+            if stats is not None:
+                stats["tokens"], stats["cached"] = 4, 0
+    e = eng.Engine()
+    e.model = e.tok = Slow()
+    e.source, e.phase = "x.gguf", "ready"
+    end = list(e.stream([{"role": "user", "content": "hi"}]))[-1]
+    assert end["kind"] == "end" and end["read_seconds"] >= 0.25
+    assert end["tps"] > 10                                         # 3 tokens over about 0.15 s, not 4 over 0.5 s

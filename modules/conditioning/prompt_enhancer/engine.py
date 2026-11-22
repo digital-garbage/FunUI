@@ -853,8 +853,12 @@ class Engine:
             if kind in ("thinking", "answer"):
                 yield {"kind": kind, "text": part}
         took = max(time.time() - started, 1e-6)
-        _say(f"engine: wrote {stats['tokens']} tokens in {took:.1f}s ({stats['tokens'] / took:.1f} tokens/s, llama.cpp)")
-        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(stats["tokens"] / took, 2), "cached": 0}
+        # The speed is the writing alone: the time to read a long prompt (a cleared memory after a change of prompt, a picture) is not the model's speed.
+        read = max(stats.get("first", started) - started, 0.0)
+        writing = stats.get("last", 0) - stats.get("first", 0)
+        tps = (stats["tokens"] - 1) / writing if stats["tokens"] > 1 and writing > 0 else stats["tokens"] / took
+        _say(f"engine: read {stats['prompt']} prompt tokens in {read:.1f}s, wrote {stats['tokens']} tokens at {tps:.1f} tokens/s (llama.cpp)")
+        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(tps, 2), "cached": 0, "read_seconds": round(read, 2)}
 
     @staticmethod
     def _pieces(streamer, split, calls, dialect):

@@ -299,6 +299,9 @@ class Backend:
                     count += 1
                     if stats is not None:
                         stats["steps"] = count
+                        stats["last"] = time.time()
+                        if count == 1:
+                            stats["first"] = stats["last"]           # the prompt has been read by now: speed is counted from here
                     piece = decoder.decode(llm.detokenize([token], special=True))
                     if piece:
                         sent = True
@@ -350,8 +353,14 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
-    say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s")
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, n_batch=2048, n_ubatch=1024 if cuda else 512, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=True)
+    try:
+        gpu = bool(llama_cpp.llama_supports_gpu_offload())
+    except Exception:                                               # noqa: BLE001
+        gpu = False
+    if cuda and not gpu:
+        say("engine: this llama.cpp build has no graphics-card support, so the model runs on the processor (several times slower); reinstall llama-cpp-python from the CUDA wheel index")
+    say(f"engine: llama.cpp loaded {os.path.basename(str(path))}" + (f" with {os.path.basename(projector)}" if projector else "") + f" in {time.time() - started:.0f}s" + (", on the graphics card" if gpu else ", on the processor"))
     backend = Backend(llm, str(path))
     backend.projector, backend.handler = projector, handler
     return backend
