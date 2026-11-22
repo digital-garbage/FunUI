@@ -973,3 +973,8 @@ def test_a_model_that_cannot_trim_resumes_from_a_copy_kept_at_the_last_turn():
     feed, fresh = b._resume(second, b.llm.tokenize(second.encode()))
     assert ("restore", len(base)) in log and fresh is False
     assert len(feed) == len(turn) and ("eval", len(second) - len(base) - len(turn)) in log   # the new middle was read, then only the last turn is left
+
+
+def test_the_reference_intro_forbids_writing_names_and_triggers():
+    from modules.conditioning.prompt_enhancer import enhance
+    assert "never write one in your answer" in enhance.REFERENCE_INTRO

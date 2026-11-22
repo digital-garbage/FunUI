@@ -73,7 +73,8 @@ The message has labelled parts: ORIGINAL PROMPT (what the user wrote), YOUR LATE
 Output only the revised prompt, nothing else."""
 
 REFERENCE_INTRO = ("Reference entries. Use an entry only where the prompt "
-                   "calls for it, in your own words; ignore the rest.")
+                   "calls for it, in your own words; ignore the rest. The names, labels and trigger words of the entries are for you "
+                   "to tell them apart only: never write one in your answer, and never write the words \"shortcut\" or \"reference\".")
 
 CONVO_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The message shows EARLIER IN THIS CONVERSATION (each earlier request and your answer, oldest first) and then the NEW REQUEST.
