@@ -293,5 +293,5 @@ def test_the_helper_reads_and_changes_the_enhancers_system_prompts_through_the_s
     assert a({"name": "read_prompt", "args": {"field": "chat_prompt"}}) == "Answer briefly."
     out = a({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "Answer briefly for a [[ASPECT_RATIO]] clip.", "reason": "asked"}})
     assert out.startswith("Allowed") and heard[0]["kind"] == "edit_request" and heard[0]["field"] == "chat_prompt"
-    assert "[[ASPECT_RATIO]]" in helper.rules_note({"chat_prompt": "x"})
+    assert "[[ASPECT_RATIO]]" in helper.rules_note({"chat_prompt": "x"}) and "main rewrite instructions" in helper.rules_note({"chat_prompt": "x"})
     assert helper.Actions(2, on_event)({"name": "edit_prompt", "args": {}}).startswith("Error")

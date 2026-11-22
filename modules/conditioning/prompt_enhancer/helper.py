@@ -35,7 +35,7 @@ def rules_note(given) -> str:
     from . import enhance
     macros = ", ".join(f"[[{k}]]" for k in enhance.MACROS)
     return ("\n\nThe enhancer's own system prompts (rules) can be read with read_prompt and changed with edit_prompt, which gives the whole new text: read the rule first, change only what was asked and keep the rest word for word. "
-            "The user sees the change and may refuse it. The rules are:\n" + rules.sheet(given) + "\nA rule may use these macros, which the app fills in for each request: " + macros + ".")
+            "The user sees the change and may refuse it. When the user says \"the system prompt\" without naming one, they mean the main rewrite instructions (instructions); reference_intro only says how shortcut and lorebook entries are introduced, so change it only when the user is talking about that. In the app the rules are named: instructions = Rewrite instructions, marks_prompt = Markup rule, fixed_prompt = Fixed text around it, reference_intro = Reference intro, chat_prompt = Chat answers, notes_prompt = Notes rule, compact_prompt = Conversation notes. The rules are:\n" + rules.sheet(given) + "\nA rule may use these macros, which the app fills in for each request: " + macros + ".")
 
 
 def _tools() -> list:
