@@ -2,7 +2,7 @@
 // Only this file and the kit reach the page, so what a feature may do there is this short list.
 export function createDom(doc = document) {
   const win = doc.defaultView;
-  const field = /^(input|textarea)$/i;
+  const field = /^(input|textarea|select)$/i;      // a select counts: redrawing it closes its open list
   const on = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); return () => target.removeEventListener(type, fn, opts); };
   const link = (href, download) => Object.assign(doc.createElement("a"), { href, download }).click();
   return {

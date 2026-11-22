@@ -22,6 +22,13 @@ test("typingIn is true only for a text field inside the node that has the caret"
   assert.equal(dom.holdsFocus(a), false);
 });
 
+test("an open dropdown counts as typing, so a background redraw leaves its list open", () => {
+  document.body.innerHTML = `<div id="a"><select id="s"><option>x</option></select></div>`;
+  const dom = createDom(), a = document.getElementById("a");
+  document.getElementById("s").focus();
+  assert.equal(dom.typingIn(a), true);
+});
+
 test("listeners come back with their own off switch", () => {
   const dom = createDom(); let n = 0;
   const off = dom.onPage("pointerdown", () => { n += 1; });

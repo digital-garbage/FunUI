@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A dropdown stays open while the Composer refreshes in the background.** The Enhance tab redrew itself every time the engine reported progress (for example while the chat was being answered), which closed an open list; a list being used now holds the redraw back like a text field does.
 - **The newest request is labelled "NEW REQUEST:" when earlier turns are sent as real turns.** A model could mistake an earlier request in its history for the current one; the last turn now says plainly that it is the one to answer.
 - **Recurrent and sliding-window GGUF models reuse the conversation start too.** Qwen3.5 and Gemma cannot drop the end of their memory, so every chat or Helper turn used to read the whole prompt again. A copy of the memory is now kept at the start of the last turn, and the next request of the same conversation continues from it (about four times less waiting on a long prompt in a test).
 - **Sliding-window GGUF models (Gemma) write faster on long prompts.** The memory no longer keeps a full-size copy for the sliding layers, which slowed every token as the prompt grew; such models read their prompt again from empty when it changes.
