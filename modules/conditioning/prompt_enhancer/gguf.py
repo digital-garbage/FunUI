@@ -263,6 +263,62 @@ class Backend:
         except Exception:                                           # noqa: BLE001
             return True
 
+    TURN_OPENERS = ("<|im_start|>", "<start_of_turn>", "<|turn>", "<|start_header_id|>")
+    KEPT_SNAPSHOTS = 3
+
+    def _snapshot(self, ids):
+        """Keep the model's memory after `ids` (just the used part of it: a copy of the whole window would be far too big)."""
+        import ctypes
+        import llama_cpp
+        llm = self.llm
+        ctx = llm._ctx.ctx
+        size = int(llama_cpp.llama_state_get_size(ctx))
+        buf = (ctypes.c_uint8 * size)()
+        used = int(llama_cpp.llama_state_get_data(ctx, buf, size))
+        snaps = self.__dict__.setdefault("snapshots", [])
+        snaps[:] = [s for s in snaps if s[0] != tuple(ids)]
+        snaps.append((tuple(ids), bytes(buf[:used])))
+        del snaps[:-self.KEPT_SNAPSHOTS]
+
+    def _restore(self, ids, data):
+        import ctypes
+        import llama_cpp
+        llm = self.llm
+        buf = (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
+        if int(llama_cpp.llama_state_set_data(llm._ctx.ctx, buf, len(data))) != len(data):
+            raise RuntimeError("could not restore the saved memory")
+        llm.input_ids[:len(ids)] = ids
+        llm.n_tokens = len(ids)
+        llm._requires_eval = True
+
+    def _resume(self, text, tokens):
+        """-> (the tokens still to read, whether to start from empty) for a model whose memory cannot drop its newest part (recurrent, hybrid, sliding window).
+        Such a model cannot simply reuse the start of the last prompt, because the answer it wrote now sits at the end of its memory; so a copy of the memory
+        is kept at the start of each prompt's last turn, which the next prompt of the same conversation begins with."""
+        llm = self.llm
+        cached = llm.input_ids[:llm.n_tokens].tolist() if llm.n_tokens else []
+        live = len(cached) if cached and cached == tokens[:len(cached)] and len(cached) < len(tokens) else 0
+        best = max((s for s in self.__dict__.get("snapshots", []) if len(s[0]) < len(tokens) and list(s[0]) == tokens[:len(s[0])]), key=lambda s: len(s[0]), default=None)
+        if best is not None and len(best[0]) > live:
+            self._restore(best[0], best[1])
+            position = len(best[0])
+        elif live:
+            position = live
+        else:
+            llm.reset()
+            llm._ctx.kv_cache_clear()
+            position = 0
+        mark = max((text.rfind(m) for m in self.TURN_OPENERS), default=-1)
+        if mark > 0:
+            ahead = llm.tokenize(text[:mark].encode("utf-8"), add_bos=False, special=True)
+            if position < len(ahead) < len(tokens) and tokens[:len(ahead)] == ahead:
+                if not position and llm.n_tokens:
+                    llm.reset()
+                llm.eval(tokens[position:len(ahead)])
+                self._snapshot(ahead)
+                position = len(ahead)
+        return (tokens[position:], False) if position else (tokens, True)
+
     def text_stream(self, text, *, max_new_tokens, temperature, top_p, top_k, min_p, repetition_penalty, presence_penalty, seed, greedy,
                     stops=(), cancel=None, stats=None, picture=None):
         """Yield the model's text as it forms (control tokens left in, as the engine's splitter expects). Reuses the start of the last prompt."""
@@ -287,15 +343,13 @@ class Backend:
         max_new_tokens = min(int(max_new_tokens) or window, window - len(tokens) - 8)           # what is left of the window after the request
         sampling = dict(top_k=int(top_k), top_p=float(top_p), min_p=float(min_p), temp=0.0 if greedy or float(temperature) <= 0 else float(temperature),
                         repeat_penalty=float(repetition_penalty), presence_penalty=float(presence_penalty))
+        feed, fresh = tokens, True
         if not picture and not self.can_trim():
-            cached = llm.input_ids[:llm.n_tokens].tolist() if llm.n_tokens else []
-            if cached != tokens[:len(cached)] or len(cached) >= len(tokens):                       # a recurrent or hybrid model cannot drop the end of its memory: it starts from empty instead of reusing a partial prefix
-                llm.reset()
-                llm._ctx.kv_cache_clear()
+            feed, fresh = self._resume(text, tokens)
         sent = False
         for attempt in (0, 1):
             try:
-                for token in llm.generate(tokens, reset=True, **sampling):
+                for token in llm.generate(feed, reset=fresh, **sampling):
                     if token in end or (cancel is not None and cancel.is_set()):
                         break
                     count += 1
@@ -319,6 +373,7 @@ class Backend:
                 llm.reset()
                 llm._ctx.kv_cache_clear()
                 tokens = self.read_picture(text, picture) if picture else tokens
+                feed, fresh = tokens, True
         tail = decoder.decode(b"", final=True)
         if tail:
             yield tail

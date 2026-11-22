@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Recurrent and sliding-window GGUF models reuse the conversation start too.** Qwen3.5 and Gemma cannot drop the end of their memory, so every chat or Helper turn used to read the whole prompt again. A copy of the memory is now kept at the start of the last turn, and the next request of the same conversation continues from it (about four times less waiting on a long prompt in a test).
 - **Sliding-window GGUF models (Gemma) write faster on long prompts.** The memory no longer keeps a full-size copy for the sliding layers, which slowed every token as the prompt grew; such models read their prompt again from empty when it changes.
 - **A crash inside llama.cpp now leaves a trace.** What llama.cpp says natively is kept in `models/funui_llm/llama_native.log`, and when the next load finds that the last ComfyUI session ended abruptly with llama.cpp loaded, the Log shows its last lines.
 - **The tokens-per-second figure of GGUF models counts the writing only.** Before, the time to read the prompt was inside it, which could halve the number on a long prompt (the Helper's, a cleared memory). The Log now also says how long the prompt took to read, whether llama.cpp runs on the graphics card, and warns when a card is present but the installed llama.cpp build cannot use it.

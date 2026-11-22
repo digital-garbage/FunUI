@@ -938,3 +938,38 @@ def test_a_sliding_window_model_starts_from_empty_instead_of_trimming():
     b = gguf.Backend.__new__(gguf.Backend)
     b.llm = type("L", (), {"metadata": {"general.architecture": "gemma4", "gemma4.attention.sliding_window": "1024"}})()
     assert b.can_trim() is False
+
+
+def test_a_model_that_cannot_trim_resumes_from_a_copy_kept_at_the_last_turn():
+    import numpy as np
+    from modules.conditioning.prompt_enhancer import gguf
+    log = []
+
+    class Llm:
+        n_tokens = 0
+        input_ids = np.zeros(400, dtype=int)
+        _ctx = type("C", (), {"kv_cache_clear": lambda self: log.append("clear")})()
+        def reset(self): self.n_tokens = 0; log.append("reset")                       # noqa: E704
+        def tokenize(self, raw, add_bos=False, special=True): return [c % 90 + 1 for c in raw]  # noqa: E704
+        def eval(self, toks):
+            log.append(("eval", len(toks)))
+            self.input_ids[self.n_tokens:self.n_tokens + len(toks)] = toks
+            self.n_tokens += len(toks)
+    b = gguf.Backend.__new__(gguf.Backend)
+    b.llm = Llm()
+    b._snapshot = lambda ids: b.__dict__.setdefault("snapshots", []).append(tuple(ids))
+    b._restore = lambda ids, data: (log.append(("restore", len(ids))), setattr(b.llm, "n_tokens", len(ids)))
+    turn = "<|im_start|>assistant\n"
+    base = "<|im_start|>system\nabc<|im_end|>\n<|im_start|>user\nhi<|im_end|>\n"
+    first = base + turn
+    feed, fresh = b._resume(first, b.llm.tokenize(first.encode()))
+    assert (len(feed), fresh) == (len(turn), False)                      # all but the last turn was read and kept
+    assert len(b.snapshots[0]) == len(base)
+    b.llm.n_tokens = len(first) + 5                                      # the answer it wrote sits at the end of its memory now
+    b._snapshot = lambda ids: None
+    b.snapshots = [(tuple(b.llm.tokenize(base.encode())), b"x")]
+    log.clear()
+    second = base + turn + "ok<|im_end|>\n<|im_start|>user\nmore<|im_end|>\n" + turn
+    feed, fresh = b._resume(second, b.llm.tokenize(second.encode()))
+    assert ("restore", len(base)) in log and fresh is False
+    assert len(feed) == len(turn) and ("eval", len(second) - len(base) - len(turn)) in log   # the new middle was read, then only the last turn is left
