@@ -140,3 +140,14 @@ test("pinned references show in the sheet, share_reference gives every scene the
   applyAction(p, { tool: "copy_reference", args: { scene: 2, from_scene: 3 } }, null, null, { selection: { pick: (id) => picked.push(id) } });
   assert.deepEqual(picked, ["b"]);
 });
+
+test("a scene the helper adds gets the first scene's references and aspect source", () => {
+  const p = make();
+  p.project.scenes[0].references = ["m1abcdef", "m3abcdef"]; p.project.scenes[0].source_image = "m2abcdef";
+  applyAction(p, { tool: "add_scene", args: { text: "a cat" } });
+  const added = p.project.scenes[p.project.scenes.length - 1];
+  assert.deepEqual(added.references, ["m1abcdef", "m3abcdef"]);
+  assert.equal(added.source_image, "m2abcdef");
+  added.references.push("x");
+  assert.deepEqual(p.project.scenes[0].references, ["m1abcdef", "m3abcdef"]);       // a copy, not the same list
+});

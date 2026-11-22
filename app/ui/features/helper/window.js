@@ -72,6 +72,11 @@ export function applyAction(project, ev, ps, api, app) {
     project.edit((pr) => {
       const sc = addScene(pr);
       sc.text = String(a.text || "").trim();
+      const first = pr.scenes[0];
+      if (first && first !== sc) {                       // a new scene starts with the first scene's references and aspect source, as the person would give it
+        if ((first.references || []).length) sc.references = [...first.references];
+        if (first.source_image && !sc.source_image) sc.source_image = first.source_image;
+      }
       const after = Number.isInteger(a.after) ? a.after : pr.scenes.length - 1;
       pr.scenes.splice(pr.scenes.indexOf(sc), 1);
       pr.scenes.splice(Math.min(Math.max(after, 0), pr.scenes.length), 0, sc);
