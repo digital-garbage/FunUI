@@ -339,13 +339,64 @@ class Cancel(threading.Event):
         return super().is_set() or (self.interruptible and comfy_interrupted())
 
 
+class Turns:
+    """The queue in front of the model: whoever asks first is served first, one at a time (a rewrite, a chat answer, a Helper round, and the loading or
+    unloading of the model itself). `take` hands out a place; `wait` blocks until it is that place's turn; `release` gives it up, also when it never got to run."""
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.issued = self.serving = 0
+        self.gone = set()
+        self.label = ""                                                # what the one being served is doing
+
+    def take(self) -> tuple:
+        """-> (a place in the queue, how many are ahead of it, the one being served)."""
+        with self.cond:
+            place = self.issued
+            self.issued += 1
+            return place, place - self.serving, self.label
+
+    def wait(self, place, label=""):
+        with self.cond:
+            while self.serving != place:
+                self.cond.wait()
+            self.label = label
+
+    def release(self, place):
+        with self.cond:
+            self.gone.add(place)
+            while self.serving in self.gone:
+                self.gone.discard(self.serving)
+                self.serving += 1
+                self.label = ""
+            self.cond.notify_all()
+
+    def waiting(self) -> int:
+        with self.cond:
+            return self.issued - self.serving
+
+    def exclusive(self, label=""):
+        """`with turns.exclusive(): ...` waits for its turn like a request does (a model change must not happen under a request that is writing)."""
+        import contextlib
+
+        @contextlib.contextmanager
+        def held():
+            place = self.take()[0]
+            try:
+                self.wait(place, label)
+                yield
+            finally:
+                self.release(place)
+        return held()
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
     def __init__(self):
         self.lock = threading.Lock()           # loading and unloading
         self.dl_lock, self._dl_worker = threading.Lock(), None          # downloading alone
-        self.turn = threading.Lock()           # one generation at a time
+        self.turns = Turns()                   # one request at a time, first come first served
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
         self._dir = ""                         # the folder a download goes into
@@ -473,6 +524,12 @@ class Engine:
         precision = precision if precision in ("auto", "fp8", "bf16") else "auto"
         if not source:
             raise ValueError("no engine model is set")
+        if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
+            return
+        with self.turns.exclusive("loading the model"):          # a request that is writing finishes first; the others wait behind the load
+            return self._load(source, precision)
+
+    def _load(self, source, precision):
         with self.lock:
             if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
                 return
@@ -630,7 +687,7 @@ class Engine:
             shutil.rmtree(path)
 
     def unload(self):
-        with self.lock:
+        with self.turns.exclusive("unloading the model"), self.lock:
             self.model = self.tok = self._snap = None
             self.phase, self.message = "idle", ""
             try:
@@ -649,8 +706,15 @@ class Engine:
         """One request at a time on the model, independent of ComfyUI: a chat sent while a rewrite runs waits its turn, and neither touches the generation's own memory use."""
         if options.get("thinking") and int(options.get("max_new_tokens") or 0) > 0:                      # the reasoning has its own room: the length setting is for what is written after it
             options["max_new_tokens"] = int(options.get("max_new_tokens") or 400) + THINK_BUDGET
-        with self.turn:
+        place, ahead, doing = self.turns.take()
+        try:
+            if ahead:                                                  # the model is busy: say so instead of looking stuck
+                yield {"kind": "status", "text": f"waiting for the model: {ahead} request{'s' if ahead > 1 else ''} ahead" + (f" ({doing})" if doing else "")}
+            self.turns.wait(place, str(options.get("label") or "writing"))
+            options.pop("label", None)
             yield from self._stream(messages, **options)
+        finally:
+            self.turns.release(place)
 
     def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
                repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, image=None, interruptible=False):
@@ -892,7 +956,7 @@ class EngineClip:
                 round_calls, said = [], ""
                 for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite"):
+                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite", label="a rewrite" if self.live == "rewrite" else "a chat answer"):
                     if ev["kind"] == "thinking":
                         thought += ev["text"]
                     elif ev["kind"] == "answer":

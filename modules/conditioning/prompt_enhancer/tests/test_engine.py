@@ -201,7 +201,8 @@ def test_two_requests_at_once_take_turns_on_the_engine(tiny):
 
     def ask(tag):
         for e in tiny.stream([{"role": "user", "content": "a b"}], max_new_tokens=6, greedy=True):
-            order.append(tag)
+            if not (e["kind"] == "status" and "waiting for the model" in e["text"]):          # the one that waits says so first
+                order.append(tag)
     t1, t2 = threading.Thread(target=ask, args=("x",)), threading.Thread(target=ask, args=("y",))
     t1.start(); t2.start(); t1.join(); t2.join()
     flat = "".join(order)
@@ -301,8 +302,7 @@ def test_a_reader_that_goes_away_stops_the_writing_before_the_next_request(tiny)
     next(gen)
     gen.close()
     assert not [t for t in threading.enumerate() if t.name == "funui-engine-generate" and t.is_alive()]
-    assert tiny.turn.acquire(blocking=False)                              # the turn was given back
-    tiny.turn.release()
+    assert tiny.turns.waiting() == 0                                      # the turn was given back
 
 
 def test_a_model_with_biases_loads_from_an_fp8_file_in_any_order(tmp_path):
@@ -819,3 +819,58 @@ def test_a_chat_that_starts_during_a_rewrite_neither_takes_over_nor_ends_the_rew
     assert now["kind"] == "rewrite" and not now["done"] and now["answer"] == "the rewrite goes on" and now["thinking"] == "hmm "
     live.feed({"kind": "end", "tps": 7.0}, rewrite)
     assert live.read()["done"] and live.read()["tps"] == 7.0
+
+
+def test_requests_for_the_model_are_served_first_come_first_served_and_say_they_wait():
+    import threading
+    turns = eng.Turns()
+    first, ahead, _ = turns.take()
+    assert ahead == 0
+    turns.wait(first, "a rewrite")
+    second, ahead2, doing = turns.take()
+    third, ahead3, _ = turns.take()
+    assert (ahead2, ahead3, doing) == (1, 2, "a rewrite")
+    order = []
+
+    def go(place, name):
+        turns.wait(place, name)
+        order.append(name)
+        turns.release(place)
+    threads = [threading.Thread(target=go, args=(third, "third")), threading.Thread(target=go, args=(second, "second"))]
+    [t.start() for t in threads]
+    import time
+    time.sleep(0.05)
+    assert order == []                                    # both wait for the first
+    turns.release(first)
+    [t.join(2) for t in threads]
+    assert order == ["second", "third"] and turns.waiting() == 0
+
+
+def test_a_request_that_gives_up_before_its_turn_does_not_block_the_ones_behind_it():
+    turns = eng.Turns()
+    a, _, _ = turns.take()
+    b, _, _ = turns.take()
+    c, _, _ = turns.take()
+    turns.wait(a)
+    turns.release(b)                                      # the page went away while b was queued
+    turns.release(a)
+    turns.wait(c)                                         # c is next, not stuck behind b
+    turns.release(c)
+    assert turns.waiting() == 0
+
+
+def test_a_model_change_waits_for_the_request_that_is_writing(tiny):
+    import threading
+    import time
+    place, _, _ = tiny.turns.take()
+    tiny.turns.wait(place, "a rewrite")
+    done = []
+    threading.Thread(target=lambda: (tiny.unload(), done.append(1)), daemon=True).start()
+    time.sleep(0.1)
+    assert not done                                       # the model stays while the rewrite writes
+    tiny.turns.release(place)
+    for _ in range(50):
+        if done:
+            break
+        time.sleep(0.02)
+    assert done and tiny.model is None
