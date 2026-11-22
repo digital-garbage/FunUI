@@ -126,8 +126,8 @@ define("panel", "zone", panel("zone"));
 // Without it the shell reaches for the document to make a div of its own, and a
 // div the shell made is a div the shell has to lay out -- which is the one thing
 // that is supposed to live only here.
-define("region", "stack", ({ children = [], gap = "md", label, fill = false, sticky = false } = {}) => {
-  const node = el("div", { cls: ["cx-stack", `cx-stack-${gap}`, fill ? "cx-stack-fill" : null, sticky ? "cx-stack-sticky" : null],
+define("region", "stack", ({ children = [], gap = "md", label, fill = false, sticky = false, scroll = false } = {}) => {
+  const node = el("div", { cls: ["cx-stack", `cx-stack-${gap}`, fill ? "cx-stack-fill" : null, sticky ? "cx-stack-sticky" : null, scroll ? "cx-stack-scroll" : null],
     attrs: { "aria-label": label } });
   const set = (next = []) => {
     // A redraw replaces the field under the caret (an arrow press commits, and the panel redraws): the caret moves to
@@ -242,7 +242,7 @@ define("list", "rows", ({ items = [], reorder = false, onRemove, onAdd, onReorde
   return { node, redraw: draw, destroy: () => node.remove() };
 });
 
-for (const kind of ["underline", "dock"]) {
+for (const kind of ["underline", "dock", "folder"]) {
   define("tabs", kind, ({ tabs = [], value, onChange, label } = {}) => {
     let current = value ?? tabs[0]?.value;
     const node = el("div", { cls: ["cx-tabs", `cx-tabs-${kind}`], attrs: { role: "tablist", "aria-label": label } });

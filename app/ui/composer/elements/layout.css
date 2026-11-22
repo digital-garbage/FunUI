@@ -190,6 +190,14 @@
   padding: var(--sp-3) 0; border-bottom: var(--bw-2) solid transparent; margin-bottom: -1px;
 }
 .cx-tabs-underline .cx-tab.cx-on { color: var(--text); border-bottom-color: var(--accent); }
+/* Folder tabs: each one a raised tab with rounded top corners, the open one joined to the sheet under the row. */
+.cx-tabs-folder { gap: var(--sp-1); border-bottom: var(--bw) solid var(--line); flex-wrap: wrap; }
+.cx-tabs-folder .cx-tab {
+  padding: var(--sp-3) var(--sp-6); margin-bottom: -1px;
+  border: var(--bw) solid var(--line); border-bottom-color: var(--line);
+  border-radius: var(--r-3) var(--r-3) 0 0; background: var(--elev-2); font-size: var(--fs-6);
+}
+.cx-tabs-folder .cx-tab.cx-on { color: var(--text); background: var(--elev-3); border-bottom-color: var(--elev-3); border-top-color: var(--accent); }
 .cx-tabs-dock .cx-tab {
   height: var(--ctl-h-md); padding: 0 var(--ctl-pad-x-md);
   border: var(--bw) solid var(--line); border-radius: var(--r-3);
@@ -419,6 +427,8 @@
    definite height nothing inside can scroll: the whole page scrolls instead,
    and a bar meant to hold the bottom scrolls away with it. */
 .cx-stack-fill { flex: 1 1 auto; min-block-size: 0; }
+/* The part of a filled stack that scrolls while its siblings (a row of tabs) stay where they are. */
+.cx-stack-scroll { flex: 1 1 auto; min-block-size: 0; overflow: auto; }
 /* A split inside a stack is what stretches. The rows around it -- a toolbar, a
    banner, an action bar -- are each their own height. */
 .cx-stack > .cx-split { flex: 1 1 auto; min-block-size: 0; }

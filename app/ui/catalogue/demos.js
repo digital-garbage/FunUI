@@ -195,6 +195,9 @@ export const DEMOS = {
   "tabs.underline": { value: "compose", tabs: [
     { value: "compose", label: "Compose" }, { value: "shortcuts", label: "Shortcuts" }, { value: "files", label: "Files" },
   ] },
+  "tabs.folder": { value: "compose", tabs: [
+    { value: "compose", label: "Compose" }, { value: "shortcuts", label: "Shortcuts" }, { value: "files", label: "Files" },
+  ] },
   "tabs.dock": { value: "assets", tabs: [
     { value: "assets", label: "Assets" }, { value: "preview", label: "Preview" }, { value: "props", label: "Properties" },
   ] },

@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Composer's tabs are real tabs and stay pinned.** They look like folder tabs joined to the sheet, and only the sheet under them scrolls, on every tab (the Global prompt and Build tabs used to cut their content off without scrolling). New kit pieces: `tabs.folder` and a `scroll` option for `region.stack`.
 - **A picture-reading model is now shown several pictures at once.** Prompt enhancer: the first four picture references of a scene go to a GGUF model with its projector file (before, only the first). Enhance nodes get `image_2` to `image_4` inputs for them.
 - **The chat and rewrite system prompts now say that earlier turns are history.** The model is told that earlier requests, answers and (for the Helper) tool results are already done: it answers only the newest message and trusts the project as shown now.
 - **The Helper no longer reports a failure when it made a change and then said nothing.** The window now says it is done, instead of "the model returned nothing".
