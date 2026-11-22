@@ -150,7 +150,7 @@ test("the rules the model may edit are the person's own text, else the built-in 
 test("a proposed change to a system prompt opens a diff and waits for Allow or Disallow", async () => {
   setupDom();
   try {
-    const { askEdit } = await import("./editrequest.js");
+    const { askEdit } = await import("../../shell/editrequest.js");
     for (const [label, want] of [["Allow", true], ["Disallow", false]]) {
       const answer = askEdit({ field: "chat_prompt", old: "Be kind. Answer in one line.", new: "Be kind. Answer in two lines.", reason: "the user wants longer answers" });
       const modal = document.querySelector(".cx-modal");

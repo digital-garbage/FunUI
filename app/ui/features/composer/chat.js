@@ -1,11 +1,11 @@
 // Chat: comment on the enhancer's last rewrite. The next Generate rewrites again with every comment still applying; Reset starts over.
 // The comments are the project's own (editor_settings.enhance_chat); a generate hook hands them to the enhancer node for the prompt they were about.
-import { engineOf, scrollParent } from "../../shell/chatkit.js";
+import { engineOf, rulesOf as rulesIn, scrollParent } from "../../shell/chatkit.js";
 import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 import { RATING_PREFIX } from "../rating/choices.js";
 import { sizes } from "../../shell/bin.js";
-import { askEdit, RULE_LABELS } from "./editrequest.js";
+import { askEdit } from "../../shell/editrequest.js";
 
 
 const NODE = "FunUIEnhancePrompt";
@@ -64,12 +64,8 @@ export function applyNotes(text, add = [], drop = []) {
 }
 
 
-/** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
-export async function rulesOf(app, inp) {
-  const d = (await app.api.enhancerDefaults().catch(() => null)) || {}, style = inp.style || "default";
-  const built = { ...(d.prompts || {}), instructions: (d.styles || {})[style] || d.instructions || "", reference_intro: d.reference_intro || "", rating_prefix: RATING_PREFIX };
-  return Object.fromEntries(Object.keys(RULE_LABELS).map((k) => [k, String(inp[k] || built[k] || "")]).filter(([, v]) => v));
-}
+/** Every rule the model may edit, as the text in force now (see shell/chatkit.js); the built-in rating line opening is the Rating feature's. */
+export const rulesOf = (app, inp) => rulesIn(app, inp, RATING_PREFIX);
 
 /** The prompt a comment is about: the picked scene's own text, as typed. */
 function typedOf(app) {

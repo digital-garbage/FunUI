@@ -655,8 +655,8 @@ def test_a_helper_that_only_talks_about_a_change_is_told_once_to_call_the_tool(t
     out = nodes.chat_reply("h:1", "merge the scenes", engine_model="tiny", max_length=8, do_sample=False, on_event=lambda e: None, helper={"sheet": "x", "scenes": 2})
     assert [a[0] for a in asked] == ["merge the scenes", helper.NUDGE]
     assert asked[1][1] == ["I will use the `set_story` tool to merge the scenes."]        # it sees what it wrote
-    assert out["reply"] == "Merged."
-    assert [t["reply"] for t in nodes.CONVOS["h:1"]["turns"]] == ["Merged."]                # the conversation keeps the final answer only
+    assert out["reply"].startswith("Merged.") and "Nothing was changed" in out["reply"]          # no call came, and the answer says so
+    assert [t["reply"] for t in nodes.CONVOS["h:1"]["turns"]] == [out["reply"]]                # the conversation keeps the final answer only
 
 
 def test_naming_one_part_of_a_split_gguf_model_downloads_every_part(monkeypatch, tmp_path):

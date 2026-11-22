@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper can read and change the enhancer's system prompts**, with the same before-and-after Allow as in the Chat tab, and knows the macros they can use (such as the aspect ratio). When a request ends without any tool call, its answer now says that nothing was changed instead of reading as done.
 - **The Helper's thinking is folded by default.** While the model works the window shows one line with a changing phrase and the seconds since the request began; a click opens the thinking as plain text, and afterwards it reads "Thought for 12s".
 - **A scene the Helper adds starts with the first scene's references and aspect source**, so nobody has to attach them by hand.
 - **The Composer's tabs are real tabs and stay pinned.** They look like folder tabs joined to the sheet, and only the sheet under them scrolls, on every tab (the Global prompt and Build tabs used to cut their content off without scrolling). New kit pieces: `tabs.folder` and a `scroll` option for `region.stack`.

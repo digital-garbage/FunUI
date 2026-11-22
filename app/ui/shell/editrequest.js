@@ -1,5 +1,5 @@
 // The model proposes a change to one of its own system prompts: show the change as a before/after diff and ask.
-import { composer as c } from "../../composer/composer.js";
+import { composer as c } from "../composer/composer.js";
 import { lineDiff } from "./diff.js";
 
 /** The names the person knows each rule by (the Enhance tab's labels). */

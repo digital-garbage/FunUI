@@ -110,9 +110,9 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             if helper and on_event:                                  # the helper acts on the project: each call is asked of the person
                 from . import engine as eng, helper as hp
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
-                actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or ())
+                actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or (), rules_given=helper.get("rules") or None)
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
-                    clip.tools, clip.handler = hp.tools(), actions
+                    clip.tools, clip.handler = hp.tools(bool(helper.get("rules"))), actions
                 else:                                                # no tool calls: it writes TOOL blocks in its answer and the app runs them
                     text_mode = True
             elif self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
@@ -139,7 +139,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule() if text_mode else "") if helper else ""
+    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule(bool(helper.get("rules"))) if text_mode else "") + (__import__(__package__ + ".helper", fromlist=["x"]).rules_note(helper.get("rules")) if helper and helper.get("rules") else "") if helper else ""
     ask = lambda text: en.converse(clip, text, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     reply, status, add, drop, thought = ask(message)
@@ -162,8 +162,10 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
             if not clip.handler.calls and (not nudged or hp.announced(reply)):
                 # the model has tool calls on paper but does not use them: it is asked again in text mode, writing TOOL blocks that the app runs
                 clip.tools, text_mode, actions = None, True, clip.handler
-                hp_rule += hp.text_rule()
+                hp_rule += hp.text_rule(bool(helper.get("rules")))
                 reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
+    if helper and reply and actions is not None and not getattr(actions, "calls", 0) and not str(message).strip().endswith("?"):
+        reply += "\n\n(Nothing was changed: the model did not call a tool.)"          # a request that ended with no call must not read as done
     if helper and not reply and actions is not None and getattr(actions, "calls", 0):          # it acted and then said nothing: that is not a failure
         reply, status = "Done. The changes it asked for were handled above.", "ok"
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call

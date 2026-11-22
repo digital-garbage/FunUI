@@ -277,3 +277,21 @@ def test_a_qwen_style_xml_call_and_a_loose_json_call_are_both_read():
     got = engine._json_call("<function=edit_scene>\n<parameter=scene>\n1\n</parameter>\n<parameter=text>\na face, close-up\n</parameter>\n</function>")
     assert got == {"name": "edit_scene", "args": {"scene": 1, "text": "a face, close-up"}}
     assert engine._json_call("{'name': 'set_story', 'arguments': {'text': 'a \"b\" c'}}")["args"]["text"] == 'a "b" c'
+
+
+def test_the_helper_reads_and_changes_the_enhancers_system_prompts_through_the_same_allow(monkeypatch):
+    import threading
+    from .. import helper, rules
+    heard = []
+
+    def on_event(ev):
+        heard.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    a = helper.Actions(2, on_event, rules_given={"chat_prompt": "Answer briefly."})
+    names = [t["function"]["name"] for t in helper.tools(True)]
+    assert "edit_prompt" in names and "read_prompt" in names and "edit_prompt" not in [t["function"]["name"] for t in helper.tools()]
+    assert a({"name": "read_prompt", "args": {"field": "chat_prompt"}}) == "Answer briefly."
+    out = a({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "Answer briefly for a [[ASPECT_RATIO]] clip.", "reason": "asked"}})
+    assert out.startswith("Allowed") and heard[0]["kind"] == "edit_request" and heard[0]["field"] == "chat_prompt"
+    assert "[[ASPECT_RATIO]]" in helper.rules_note({"chat_prompt": "x"})
+    assert helper.Actions(2, on_event)({"name": "edit_prompt", "args": {}}).startswith("Error")

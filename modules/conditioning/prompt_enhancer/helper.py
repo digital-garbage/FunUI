@@ -25,7 +25,20 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
-def tools() -> list:
+def tools(with_rules=False) -> list:
+    """The helper's tools; with the enhancer's own system prompts (rules) handed over, also read_prompt and edit_prompt."""
+    return _tools() + (rules.tools() if with_rules else [])
+
+
+def rules_note(given) -> str:
+    """Tells the helper which system prompts of the enhancer it may read and change, and which macros they can use."""
+    from . import enhance
+    macros = ", ".join(f"[[{k}]]" for k in enhance.MACROS)
+    return ("\n\nThe enhancer's own system prompts (rules) can be read with read_prompt and changed with edit_prompt, which gives the whole new text: read the rule first, change only what was asked and keep the rest word for word. "
+            "The user sees the change and may refuse it. The rules are:\n" + rules.sheet(given) + "\nA rule may use these macros, which the app fills in for each request: " + macros + ".")
+
+
+def _tools() -> list:
     def fn(name, description, props, required):
         return {"type": "function", "function": {"name": name, "description": description, "parameters": {"type": "object", "properties": props, "required": required}}}
     scene = {"type": "integer", "description": "The scene number, from 1."}
@@ -98,8 +111,9 @@ def describe(name, args) -> str:
 class Actions:
     """Answers the model's tool calls for one helper request. `scenes`: how many scenes the project has."""
 
-    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=()):
+    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=(), rules_given=None):
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
+        self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
         self.actions = {str(x["id"]): x for x in actions if isinstance(x, dict) and x.get("id")}
@@ -250,6 +264,8 @@ class Actions:
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
         self.calls += 1
+        if name in ("read_prompt", "edit_prompt"):
+            return self.editor(call) if self.editor else "Error: the enhancer's system prompts are not available."
         if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:
             return f"Error: there is no tool called '{name}'."
         num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 600        # noqa: E731
@@ -349,10 +365,10 @@ def announced(reply) -> bool:
 _TOOL_BLOCK = re.compile(r"(?<![A-Z_])TOOL[ \t]*:[ \t]*([A-Za-z_]+)[ \t]*\n(.*?)(?:\n?[ \t]*END_TOOL|\Z)", re.S)
 
 
-def text_rule() -> str:
+def text_rule(with_rules=False) -> str:
     """How a model without tool calls makes its changes: it writes TOOL blocks, the app runs them and answers with the results."""
     lines = []
-    for t in tools():
+    for t in tools(with_rules):
         f = t["function"]
         props = ", ".join(f["parameters"]["properties"])
         lines.append(f"- {f['name']}({props}): {f['description']}")

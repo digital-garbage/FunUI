@@ -5,7 +5,8 @@ import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js"
 import { addScene, split } from "../../shell/edits.js";
 import { applyStory, shownStory } from "../../shell/story.js";
 import { MAX_REFERENCES, sceneReferences } from "../../shell/reference_wiring.js";
-import { engineOf, scrollParent } from "../../shell/chatkit.js";
+import { engineOf, rulesOf, scrollParent } from "../../shell/chatkit.js";
+import { askEdit } from "../../shell/editrequest.js";
 import { clampBlocks } from "../../shell/blocks.js";
 
 const NODE = "FunUIEnhancePrompt";
@@ -228,10 +229,17 @@ export function openHelper(app, origin) {
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
+        else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
+          const yes = await askEdit(ev), sl = slot();
+          if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
+          turn.done.push(yes ? `Saved the system prompt: ${ev.field}` : `Refused: change to ${ev.field}`);
+          paint();
+          await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
+        })();
         else if (ev.kind === "action_request") (async () => {
           const yes = await askAction(ev);
           if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);

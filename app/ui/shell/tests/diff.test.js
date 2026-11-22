@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lineDiff, pieces } from "./diff.js";
+import { lineDiff, pieces } from "../diff.js";
 
 test("a changed sentence shows as one removed and one added line, the rest stays", () => {
   const before = "Be kind. Answer in one line. Never rhyme.", after = "Be kind. Answer in two lines. Never rhyme.";
