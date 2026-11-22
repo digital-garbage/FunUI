@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A crash inside llama.cpp now leaves a trace.** What llama.cpp says natively is kept in `models/funui_llm/llama_native.log`, and when the next load finds that the last ComfyUI session ended abruptly with llama.cpp loaded, the Log shows its last lines.
 - **The tokens-per-second figure of GGUF models counts the writing only.** Before, the time to read the prompt was inside it, which could halve the number on a long prompt (the Helper's, a cleared memory). The Log now also says how long the prompt took to read, whether llama.cpp runs on the graphics card, and warns when a card is present but the installed llama.cpp build cannot use it. Bigger prompt batches speed up reading long prompts.
 - **The Helper knows which system prompt is which.** "The system prompt" now means the main rewrite instructions unless another one is named, and it is told the names the app shows for each rule.
 - **One proper queue in front of the Enhance model.** Rewrites, Chat answers and Helper requests are served first come, first served, and one that has to wait says so ("waiting for the model: 1 request ahead"). Loading or unloading the model now waits for the request that is writing instead of pulling the model out from under it, and a request whose page went away no longer holds up the ones behind it.

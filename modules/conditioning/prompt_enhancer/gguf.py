@@ -340,10 +340,62 @@ def projector_handler(llama_cpp, projector, name=""):
     return getattr(fmt, family, fmt.MTMDChatHandler)(clip_model_path=projector, verbose=False)
 
 
+_KEEP = []                                                          # the callback must stay referenced, or ctypes frees it under llama.cpp
+
+
+def watch_native(llama_cpp, say):
+    """Keep what llama.cpp says natively (it is silent otherwise) in a small file, and a marker for as long as this process lives. A marker left behind by
+    a process that is gone means it ended abruptly (a crash inside llama.cpp or the graphics driver): the next load reports the last lines it wrote."""
+    from . import engine
+    folder = engine.models_dir()
+    try:
+        os.makedirs(folder, exist_ok=True)
+    except OSError:
+        return
+    tail, marker = os.path.join(folder, "llama_native.log"), os.path.join(folder, ".llama_running")
+    try:
+        old = int(open(marker).read().strip() or 0)
+    except (OSError, ValueError):
+        old = 0
+    if old and old != os.getpid():
+        try:
+            os.kill(old, 0)
+            alive = True
+        except OSError:
+            alive = False
+        if not alive:
+            try:
+                lines = [x.strip() for x in open(tail, errors="replace").read().splitlines() if x.strip()][-6:]
+            except OSError:
+                lines = []
+            say("engine: the last ComfyUI session ended abruptly while llama.cpp was loaded" + (("; its last lines: " + " | ".join(x[:160] for x in lines)) if lines else ""))
+    if not _KEEP:
+        try:
+            with open(marker, "w") as f:
+                f.write(str(os.getpid()))
+            import atexit
+            atexit.register(lambda: os.path.exists(marker) and os.remove(marker))
+            if os.path.exists(tail) and os.path.getsize(tail) > 200_000:
+                open(tail, "w").close()
+            out = open(tail, "a", buffering=1)
+
+            def log(level, text, _user):
+                try:
+                    out.write((text or b"").decode("utf-8", "replace"))
+                except (OSError, ValueError):
+                    pass
+            callback = llama_cpp.llama_log_callback(log)
+            llama_cpp.llama_log_set(callback, None)
+            _KEEP.append(callback)
+        except Exception:                                           # noqa: BLE001 -- diagnostics must never stop a load
+            pass
+
+
 def load(path, *, cuda, context=0, say=lambda text: None):
     """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it).
     A projector file beside it is loaded too, so the model can see pictures."""
     llama_cpp = ensure_llama(say)
+    watch_native(llama_cpp, say)
     started = time.time()
     say(f"loading {os.path.basename(str(path))} into memory")
     projector, handler = find_projector(path), None

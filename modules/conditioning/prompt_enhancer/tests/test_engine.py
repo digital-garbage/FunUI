@@ -899,3 +899,21 @@ def test_the_reported_speed_counts_the_writing_only_not_the_time_to_read_the_pro
     end = list(e.stream([{"role": "user", "content": "hi"}]))[-1]
     assert end["kind"] == "end" and end["read_seconds"] >= 0.25
     assert end["tps"] > 10                                         # 3 tokens over about 0.15 s, not 4 over 0.5 s
+
+
+def test_a_session_that_ended_abruptly_with_llama_cpp_loaded_is_reported_with_its_last_native_lines(monkeypatch, tmp_path):
+    import os
+    import types
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(gguf, "_KEEP", [])
+    (tmp_path / ".llama_running").write_text("999999")                      # a process that is gone
+    (tmp_path / "llama_native.log").write_text("load ok\nGGML_ASSERT(found) failed\n")
+    hooked = []
+    fake = types.SimpleNamespace(llama_log_callback=lambda f: f, llama_log_set=lambda cb, data: hooked.append(cb))
+    said = []
+    gguf.watch_native(fake, said.append)
+    assert said and "ended abruptly" in said[0] and "GGML_ASSERT(found) failed" in said[0]
+    assert (tmp_path / ".llama_running").read_text() == str(os.getpid())    # this process now holds the marker
+    hooked[0](2, b"ggml_cuda_init: found 1 CUDA devices\n", None)
+    assert "found 1 CUDA devices" in (tmp_path / "llama_native.log").read_text()
