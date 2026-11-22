@@ -1,6 +1,6 @@
 // What sits around the Story box: saved templates (the scenes), the project's $variables list, and the shortcut picker.
 import { composer as c } from "../../composer/composer.js";
-import { applyStory, storyRoots } from "./story.js";
+import { applyStory, storyRoots } from "../../shell/story.js";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const NONE = "__none__";

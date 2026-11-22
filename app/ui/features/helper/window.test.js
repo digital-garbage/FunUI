@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setupDom, teardownDom } from "../../composer/tests/_dom.js";
-import { openHelper } from "./helper.js";
+import { openHelper } from "./window.js";
 // Its own file: a modal keeps the document it first opened in.
 
 test("the Helper window opens in the middle, sends the project sheet, asks Allow for a change and applies it", async () => {

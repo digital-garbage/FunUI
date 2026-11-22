@@ -3,10 +3,10 @@
 import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, snapFrames } from "../../shell/scenes.js";
 import { addScene, split } from "../../shell/edits.js";
-import { applyStory, shownStory } from "./story.js";
+import { applyStory, shownStory } from "../../shell/story.js";
 import { MAX_REFERENCES, sceneReferences } from "../../shell/reference_wiring.js";
-import { engineOf, scrollParent } from "./chat.js";
-import { clampBlocks } from "../settings/field.js";
+import { engineOf, scrollParent } from "../../shell/chatkit.js";
+import { clampBlocks } from "../../shell/blocks.js";
 
 const NODE = "FunUIEnhancePrompt";
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said, for as long as the page is open

@@ -1,24 +1,12 @@
 // One control for one module setting ({type, min, max, step, options, ui, hint, unit, default, when}). Engine settings
 // and anything else that edits the module-values tree draw their rows through here.
 import { composer as c } from "../../composer/composer.js";
+import { clampBlocks } from "../../shell/blocks.js";
+
+export { clampBlocks };
 
 /** A `when` clause names sibling settings on the same module that must hold a value for the row to show. */
 export const whenSatisfied = (values, id, when) => !when || Object.entries(when).every(([k, v]) => (Array.isArray(v) ? v : [v]).includes((values[id] || {})[k]));
-
-/** A block list ("2-10,29-46") held to a model's blocks 0..count-1: entries past the end are cut, a range is shortened, an entry wholly past the end is dropped. */
-export function clampBlocks(text, count) {
-  if (!Number.isInteger(count) || count < 1) return text;
-  const last = count - 1, out = [];
-  for (const part of String(text || "").split(",").map((x) => x.trim()).filter(Boolean)) {
-    const m = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(part);
-    if (!m) { out.push(part); continue; }             // not a number or range: left for the module to say
-    const lo = Number(m[1]), hi = m[2] === undefined ? lo : Number(m[2]);
-    const a = Math.min(lo, hi), b = Math.min(Math.max(lo, hi), last);
-    if (a > last) continue;
-    out.push(a === b ? String(a) : `${a}-${b}`);
-  }
-  return out.join(",");
-}
 
 export function settingRow(id, name, spec, values, onChange, blocks = null) {
   const label = spec.label || name;

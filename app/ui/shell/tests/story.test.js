@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyStory, clash, joinStory, match, shownStory, storyRoots } from "./story.js";
+import { applyStory, clash, joinStory, match, shownStory, storyRoots } from "../story.js";
 
 const proj = () => ({ scenes: [{ id: "a", text: "one" }, { id: "b", text: "two" }, { id: "v", text: "", source: { type: "video", media_ref: "m" } }, { id: "c", text: "three" }], scene_renders: {}, scene_ghosts: [] });
 const texts = (p) => p.scenes.map((s) => `${s.id}:${s.text}`);

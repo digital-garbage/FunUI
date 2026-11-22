@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyAction, sheetOf } from "./helper.js";
+import { applyAction, sheetOf } from "./window.js";
 
 const make = () => {
   const project = { frame_rate: 24, num_frames_per_scene: 97, scenes: [{ id: "a", text: "a dog runs" }, { id: "b", text: "it stops" }] };
@@ -31,7 +31,7 @@ test("allowed changes edit the prompt and length, add a scene after another, and
   assert.equal(applyAction(p, { tool: "edit_scene", args: { scene: 9, text: "x" } }), "no such scene");
 });
 
-import { catalogOf } from "./helper.js";
+import { catalogOf } from "./window.js";
 
 test("the catalog lists the settings of the active modules with their value now, and set_setting writes through the pipeline", () => {
   const set = [];
@@ -61,7 +61,7 @@ test("prefix, postfix, variables and shortcuts: the sheet shows them and allowed
   assert.deepEqual(calls, [["save", { name: "sunset", triggers: ["sunset"], replacements: ["golden light"], enabled: true, category: "", sub_category: "" }, "sunset"], ["delete", "old"]]);
 });
 
-import { inputsOf } from "./helper.js";
+import { inputsOf } from "./window.js";
 
 test("pipeline inputs are listed with their choices, set together in one save, and a preset replaces the pipeline", async () => {
   const saved = [], restored = [], prefs = {};

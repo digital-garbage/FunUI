@@ -1,7 +1,7 @@
 // The Story: every generated scene's prompt as one box, a marker word between scenes. Pure half (applyStory) here;
 // the box itself is in index.js. Scene.text stays the truth; the story is a second way to edit it.
-import { removeScene } from "../../shell/edits.js";
-import { genUnitId, isGenerative, isSubclip } from "../../shell/scenes.js";
+import { removeScene } from "./edits.js";
+import { genUnitId, isGenerative, isSubclip } from "./scenes.js";
 
 const norm = (t) => String(t || "").replace(/\s+/g, " ").trim();
 const newId = () => "c" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);

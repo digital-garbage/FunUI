@@ -1,5 +1,6 @@
 // Chat: comment on the enhancer's last rewrite. The next Generate rewrites again with every comment still applying; Reset starts over.
 // The comments are the project's own (editor_settings.enhance_chat); a generate hook hands them to the enhancer node for the prompt they were about.
+import { engineOf, scrollParent } from "../../shell/chatkit.js";
 import { composer as c } from "../../composer/composer.js";
 import { effFps, effFrames, genUnitId, isGenerative, unitRoot } from "../../shell/scenes.js";
 import { RATING_PREFIX } from "../rating/choices.js";
@@ -62,8 +63,6 @@ export function applyNotes(text, add = [], drop = []) {
   return kept.join("\n");
 }
 
-/** The engine model a chat runs on: the one set, or the file picked from ComfyUI's list (an older project's saved encoder runs the same way). */
-export const engineOf = (inp) => inp.use_comfy === true ? "" : String(inp.engine_model || "").trim() || (inp.encoder_file ? `comfy:${inp.encoder_file}` : "");
 
 /** Every rule the model may edit, as the text in force now: the person's own, else the built-in one. */
 export async function rulesOf(app, inp) {
@@ -97,12 +96,7 @@ export function addComment(app, text, last, tail = last) {
   return true;
 }
 
-/** The nearest ancestor that scrolls (the Composer window's body). */
-export function scrollParent(node) {
-  if (typeof getComputedStyle !== "function") return null;
-  for (let n = node.parentElement; n; n = n.parentElement) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") return n; }
-  return null;
-}
+export { engineOf, scrollParent };
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });

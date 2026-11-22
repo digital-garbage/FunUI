@@ -1,12 +1,11 @@
 // ◆ Composer: the floating "prompt craft" window. Opens from the timeline header; its tabs are the ones v4 had.
 import { composer as c } from "../../composer/composer.js";
-import { applyStory, clash, joinStory, shownStory } from "./story.js";
+import { applyStory, clash, joinStory, shownStory } from "../../shell/story.js";
 import { shortcuts } from "./shortcuts.js";
 import { cuts } from "./cuts.js";
 import { enhance } from "./enhance.js";
 import { build } from "./build.js";
 import { chat, chatHook } from "./chat.js";
-import { openHelper } from "./helper.js";
 import { files } from "./files.js";
 import { pickShortcut, templatesBar, variablesPanel } from "./storytools.js";
 
@@ -58,7 +57,6 @@ export const story = (app, own) => {
   ] });
 };
 
-const RISK = "Use at your own risk. The Helper can change almost anything in FunUI: scenes, prompts, variables, shortcuts, settings, model files and the whole pipeline. How exactly a change matches what you asked depends heavily on the model you chose, and nobody can promise that it follows instructions correctly. Read every change before you press Allow. Changes to shortcuts and to the pipeline are not covered by Undo.";
 
 // Tabs whose backend module may be missing.
 const TAB_MODULE = { enhance: "conditioning_prompt_enhancer", chat: "conditioning_prompt_enhancer" };
@@ -82,25 +80,15 @@ export default {
         onClose: () => { cleanup(); win = null; } });
     };
     const button = c.button.sm({ label: "◆ Composer", tone: "neutral", onClick: () => (win ? win.close() : open()) });
-    // The helper changes the project itself, so it stays off until the person turns it on (Settings > Editor), with a warning.
-    const helper = c.button.sm({ label: "✦ Helper", tone: "neutral", title: "Ask the model to change the project", onClick: () => { if (app.hasModule && !app.hasModule("conditioning_prompt_enhancer")) c.toast.warn({ text: "The helper needs the prompt enhancer module." }); else openHelper(app, helper); } });
-    const showHelper = () => { helper.node.hidden = app.project.pref("helper", false) !== true; };
-    // The row reads: Helper first, then whatever other features added, then Sampler, then Composer last at the right edge, whichever feature added its button later.
+    // The row reads: whatever other features added, then Sampler, then Composer last at the right edge, whichever feature added its button later.
     const settle = () => {
       const sampler = host.querySelector('[data-row="sampler"]');
-      if (host.firstElementChild !== helper.node) host.prepend(helper.node);
       const tail = sampler ? [sampler, button.node] : [button.node];
       if (!tail.every((n, i) => host.children[host.children.length - tail.length + i] === n)) host.append(...tail);
     };
     settle();
     const keepLast = typeof MutationObserver === "function" ? new MutationObserver(settle) : null;
     if (keepLast) keepLast.observe(host, { childList: true });
-    showHelper();
-    const offHelper = app.on(showHelper);
-    app.editorSettings.push(() => c.region.stack({ gap: "sm", children: [
-      c.toggle.default({ label: "Helper", hint: "A button that opens a window where the model can change scenes, their length and the clip length when you ask. You allow each change first.",
-        checked: app.project.pref("helper", false) === true, onChange: async (v) => { if (v && !(await c.modal.dialogue({ title: "Switch on the Helper?", message: RISK, tone: "danger", confirmLabel: "I understand, switch it on" }).result)) { app.project.setPref("helper", false); showHelper(); return; } app.project.setPref("helper", v); showHelper(); } }),
-      c.banner.warn({ text: RISK })] }));
     app.inputHooks.push(chatHook);          // last, so a setup that failed above leaves nothing behind
     // A run that summarised the conversation says so, whether or not the Composer is open.
     let phase = null, told = new Set();
@@ -113,6 +101,6 @@ export default {
           if (hit.length) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised for the enhancer." });
         }).catch(() => {});
     }) : () => {};
-    return () => { offRun(); offHelper(); if (keepLast) keepLast.disconnect(); cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
+    return () => { offRun(); if (keepLast) keepLast.disconnect(); cleanup(); app.inputHooks.splice(app.inputHooks.indexOf(chatHook) >>> 0, 1); };
   },
 };
