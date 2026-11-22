@@ -917,3 +917,17 @@ def test_a_session_that_ended_abruptly_with_llama_cpp_loaded_is_reported_with_it
     assert (tmp_path / ".llama_running").read_text() == str(os.getpid())    # this process now holds the marker
     hooked[0](2, b"ggml_cuda_init: found 1 CUDA devices\n", None)
     assert "found 1 CUDA devices" in (tmp_path / "llama_native.log").read_text()
+
+
+def test_the_gguf_model_is_loaded_with_llama_cpps_own_batch_sizes(monkeypatch, tmp_path):
+    """A picture is decoded in one piece that must fit the micro-batch: larger batch sizes than the default made llama.cpp abort the whole ComfyUI process on a rewrite with a picture."""
+    import types
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    seen = {}
+    fake = types.SimpleNamespace(Llama=lambda **kw: seen.update(kw) or types.SimpleNamespace(), llama_supports_gpu_offload=lambda: True,
+                                 llama_log_callback=lambda f: f, llama_log_set=lambda *a: None)
+    monkeypatch.setattr(gguf, "ensure_llama", lambda say=None: fake)
+    monkeypatch.setattr(gguf, "find_projector", lambda path: "")
+    gguf.load(str(tmp_path / "m.gguf"), cuda=True)
+    assert "n_batch" not in seen and "n_ubatch" not in seen
