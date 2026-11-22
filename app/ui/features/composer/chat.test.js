@@ -206,3 +206,31 @@ test("the target aspect ratio comes from the scene's aspect ratio source picture
   assert.deepEqual(r.inputs, { e: { aspect_ratio: "9:16 portrait (1080 x 1920)" } });
   sizes.clear();
 });
+
+test("an answer that ends while the next message is being typed still lands in the view", async () => {
+  const { setupDom: up, teardownDom: down } = await import("../../composer/tests/_dom.js");
+  up();
+  try {
+    const { chat } = await import("./chat.js");
+    const project = { id: "p", scenes: [{ id: "a", text: "x" }] };
+    let runs = [], release;
+    const gate = new Promise((r) => { release = r; });
+    const app = { project: { project, pref: (k, d) => d, setPref() {} }, pipeline: { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { to_chat: true, engine_model: "a/b::q.gguf" } }], subscribe: () => () => {} },
+      on: () => () => {}, lastRun: { n: 0 }, selection: { focus: "a" }, dom: { typingIn: (node, only) => { const a = document.activeElement; return !!a && node.contains(a) && (!only || a.tagName === only); }, onPage: () => () => {}, onWindow: () => () => {} },
+      api: { enhancerRuns: async () => ({ runs }), enhancerLive: async () => ({}), enhancerDefaults: async () => ({}),
+        enhancerChatStream: async (body, on) => { on({ kind: "thinking", text: "hm" }); on({ kind: "answer", text: "Understood. I will" }); await gate; runs = [{ prompt_id: "r1", kind: "chat", conversation: "p:0", ok: true, asked: "go", answered: "Understood. I will do the whole thing.", chat_id: 1 }]; return { ok: true, reply: "Understood. I will do the whole thing." }; } } };
+    const page = chat(app, () => {});
+    document.body.append(page.node);
+    await new Promise((r) => setTimeout(r, 30));
+    const last = () => [...page.node.querySelectorAll("textarea")].pop();        // the Message box comes after the Notes box
+    last().value = "go"; last().dispatchEvent(new window.Event("input", { bubbles: true }));
+    [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Send").click();
+    for (let i = 0; i < 50 && !page.node.textContent.includes("Understood. I will"); i++) await new Promise((r) => setTimeout(r, 20));
+    last().focus(); last().value = "and then"; last().dispatchEvent(new window.Event("input", { bubbles: true }));       // typing the next message while the answer is still forming
+    release();
+    for (let i = 0; i < 100 && !page.node.textContent.includes("the whole thing"); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.match(page.node.textContent, /Understood\. I will do the whole thing\./);
+    assert.equal(last().value, "and then");
+    assert.equal(document.activeElement, last());                                       // and the caret is back in the message being typed
+  } finally { down(); }
+});

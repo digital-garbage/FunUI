@@ -96,7 +96,7 @@ export { engineOf, scrollParent };
 
 export function chat(app, own) {
   const p = app.project, page = c.region.stack({ gap: "sm" });
-  let last = null, all = [], live = null, writing = null, tick = 0, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
+  let refocus = false, last = null, all = [], live = null, writing = null, tick = 0, replying = false, stick = true, alive = true, key = "", draft = "", runs = app.lastRun.n;
   own(() => { alive = false; clearTimeout(tick); });
   const rounds = () => { const r = p.pref("enhance_chat", []); return Array.isArray(r) ? r : []; };
   const first = firstOf;
@@ -184,17 +184,18 @@ export function chat(app, own) {
         if (r && r.compacted) c.toast.warn({ text: "The conversation was getting long: the earlier turns were summarised." });
         if (r && ((r.remember || []).length || (r.forget || []).length)) p.setPref("enhance_notes", applyNotes(p.pref("enhance_notes", ""), r.remember, r.forget));
       } catch (e) { draft = message; c.toast.warn({ text: `No reply: ${(e && e.message) || e}` }); }
-      replying = false; stick = true; look(); draw(true);
+      refocus = app.dom.typingIn(page.node, "TEXTAREA"); replying = false; stick = true; look(true);        // forced: a person typing the next message must still see this answer arrive
     };
     page.set([c.label.section({ text: "Chat" }), c.hint.default({ text: "Send gets an answer now. Comment is kept and goes with the next prompt as part of one message. With \"Send everything into chat\" on (Enhance tab), every request and answer shows here. Reset starts over." }),
       c.region.stack({ gap: "sm", children: bubbles }), notesBox, box,
       c.toolbar.default({ items: [c.button.sm({ label: replying ? "Replying…" : "Send", tone: "primary", disabled: !canChat || replying, title: canChat ? "Send a message and get an answer now" : "Needs \"Send everything into chat\" and an Encoder of its own in the Enhance tab", onClick: say }), c.button.sm({ label: "Comment", title: "Kept for the next Generate: it goes with that prompt as part of one message", onClick: comment })], trailing: [c.button.sm({ label: "Refresh", tone: "ghost", title: "Reload the conversation from the enhancer", onClick: () => { stick = true; look().then(() => draw(true)); } }), c.button.sm({ label: "Top ^", tone: "ghost", title: "Back to the start of the conversation", onClick: () => scrollTo(false) }), c.button.sm({ label: "Reset", tone: "ghost", disabled: !list.length && !convo.length, onClick: () => { p.setPref("enhance_chat", []); p.setPref("enhance_chat_epoch", (Number(p.pref("enhance_chat_epoch", 0)) || 0) + 1); draw(true); } })] })]);
+    if (refocus) { refocus = false; const t = box.node.tagName === "TEXTAREA" ? box.node : box.node.querySelector("textarea"); if (t) { t.focus(); if (t.setSelectionRange) t.setSelectionRange(t.value.length, t.value.length); } }        // the caret returns to the message being typed
   }
-  const look = () => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
+  const look = (force) => app.api.enhancerRuns().then((r) => { learnClock(r); all = r.runs || []; last = all.filter((x) => x.kind !== "chat").slice(-1)[0] || null; draw(force); if (stick) { stick = false; later(() => scrollTo(true)); } }).catch(() => {});
   // The engine's own writing is not in ComfyUI's log or queue, so the tab asks for it while it is open.
   const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
     const was = writing, now = r && r.id && !r.done ? r : null;
-    if (JSON.stringify(now) !== JSON.stringify(was)) { writing = now; if (alive && !app.dom.typingIn(page.node)) { if (was && !now) { stick = true; look(); } else draw(true); } }
+    if (JSON.stringify(now) !== JSON.stringify(was)) { writing = now; if (alive && !app.dom.typingIn(page.node)) { if (was && !now) { stick = true; look(); } else draw(true); } else if (alive && was && !now) { refocus = true; look(true); } }       // a finished rewrite shows even while the next message is being typed
   }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2000); if (tick && tick.unref) tick.unref(); } });
   watch();
   own(app.on((what) => { if (what === "open" || app.lastRun.n !== runs) { runs = app.lastRun.n; look(); } else draw(); }));

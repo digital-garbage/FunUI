@@ -806,3 +806,16 @@ def test_several_pictures_each_get_a_placeholder_and_a_bitmap():
     np = __import__("numpy")
     frames = [np.zeros((1, 4, 4, 3)), np.ones((2, 4, 4, 3))]
     assert len(gguf.Backend.pngs(frames)) == 2 and len(gguf.Backend.pngs(frames[0])) == 1
+
+
+def test_a_chat_that_starts_during_a_rewrite_neither_takes_over_nor_ends_the_rewrites_live_view():
+    live = eng.Live()
+    rewrite = live.start("rewrite", "a prompt")
+    live.feed({"kind": "thinking", "text": "hmm "}, rewrite)
+    chat = live.start("chat", "a question")                      # asked while the rewrite is still writing
+    live.feed({"kind": "answer", "text": "the rewrite goes on"}, rewrite)
+    live.feed({"kind": "end", "tps": 5.0}, chat)                  # the chat's own end must not end the rewrite
+    now = live.read()
+    assert now["kind"] == "rewrite" and not now["done"] and now["answer"] == "the rewrite goes on" and now["thinking"] == "hmm "
+    live.feed({"kind": "end", "tps": 7.0}, rewrite)
+    assert live.read()["done"] and live.read()["tps"] == 7.0

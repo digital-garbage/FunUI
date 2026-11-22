@@ -815,21 +815,26 @@ ENGINE = Engine()
 
 class Live:
     """What the engine is writing right now, for the Enhance and Chat tabs to show while a rewrite runs inside a generation (the page cannot hear it
-    any other way: that run belongs to ComfyUI's queue). One run at a time; the last one stays until the next starts."""
+    any other way: that run belongs to ComfyUI's queue). Every run keeps its own record, so a chat asked while a rewrite is still writing cannot
+    take over or end the rewrite's view; the tabs read the latest rewrite, which stays until the next one starts."""
 
     def __init__(self):
         self.lock = threading.Lock()
         self.seq = 0
-        self.run = {}
+        self.runs = {}
 
     def start(self, kind, label=""):
+        """-> the run's id, which feed and finish are given so that each event lands in its own run."""
         with self.lock:
             self.seq += 1
-            self.run = {"id": self.seq, "kind": kind, "label": label, "thinking": "", "answer": "", "status": "", "done": False, "tps": 0.0}
+            self.runs[self.seq] = {"id": self.seq, "kind": kind, "label": label, "thinking": "", "answer": "", "status": "", "done": False, "tps": 0.0}
+            for old in sorted(self.runs)[:-8]:
+                self.runs.pop(old)
+            return self.seq
 
-    def feed(self, ev):
+    def feed(self, ev, rid=None):
         with self.lock:
-            run = self.run
+            run = self.runs.get(rid if rid is not None else self.seq)
             if not run or run["done"]:
                 return
             kind = ev.get("kind")
@@ -840,14 +845,17 @@ class Live:
             elif kind == "end":
                 run.update(done=True, tps=ev.get("tps", 0.0), status="")
 
-    def finish(self, status=""):
+    def finish(self, status="", rid=None):
         with self.lock:
-            if self.run and not self.run["done"]:
-                self.run.update(done=True, status=status)
+            run = self.runs.get(rid if rid is not None else self.seq)
+            if run and not run["done"]:
+                run.update(done=True, status=status)
 
     def read(self):
+        """The latest rewrite (what the tabs show); {} before any."""
         with self.lock:
-            return dict(self.run)
+            rewrites = [r for r in self.runs.values() if r["kind"] == "rewrite"]
+            return dict(max(rewrites, key=lambda r: r["id"])) if rewrites else {}
 
 
 LIVE = Live()
@@ -878,7 +886,7 @@ class EngineClip:
         started, thought, answer, speed = time.time(), "", "", ""
         self.calls = []
         if self.live:
-            LIVE.start(self.live, str(user)[:80])
+            rid = LIVE.start(self.live, str(user)[:80])
         try:
             for step in range(self.MAX_TOOL_ROUNDS + 1):
                 round_calls, said = [], ""
@@ -894,7 +902,7 @@ class EngineClip:
                         round_calls = ev["calls"]
                         speed = f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
                     if self.live and not (ev["kind"] == "end" and ev.get("calls") and self.handler):          # a round that ends in a tool call is not the end
-                        LIVE.feed(ev)
+                        LIVE.feed(ev, rid)
                     if self.on_event:
                         self.on_event(ev)
                 self.calls += round_calls
@@ -913,10 +921,10 @@ class EngineClip:
                 answer += "\n\n" if answer.strip() else ""
         except Exception as exc:                                    # noqa: BLE001 -- the enhancer hands the original prompt on and says why
             if self.live:
-                LIVE.finish(f"failed: {exc}")
+                LIVE.finish(f"failed: {exc}", rid)
             return "", f"generation failed: {exc}"
         if self.live:
-            LIVE.finish()
+            LIVE.finish(rid=rid)
         raw = (f"<think>{thought}</think>" if thought.strip() else "") + answer
         note = "; the picture was not sent (this model reads text only)" if image is not None and not self.engine.sees() else ""
         return raw, f"generated {len(answer)} chars in {time.time() - started:.1f}s on {self.engine.device} (engine){speed}{note}"
