@@ -737,6 +737,7 @@ def test_every_switch_that_is_on_reaches_the_model(comfyui, monkeypatch):
     assert "A fox runs through snow." in system and "more rain please" in system and "keep it short" in system and "Rating: 4/5 stars" in system
     assert "more rain please" in user and "Rating: 4/5 stars" in user and rounds and rounds[0][1] == "A fox runs through snow."
     assert "a fox in rain" in nodes.RUNS[-1]["sent"] and "more rain please" in nodes.RUNS[-1]["sent"] and "EARLIER TURN 1" in nodes.RUNS[-1]["sent"]
+    assert "USER:\nNEW REQUEST:\n" in nodes.RUNS[-1]["sent"]
 
 
 def test_in_own_text_mode_the_model_is_told_what_the_fixed_prefix_and_postfix_say(comfyui, monkeypatch):

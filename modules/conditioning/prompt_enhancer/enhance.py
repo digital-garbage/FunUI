@@ -96,7 +96,7 @@ COMPACT_AT = 0.8             # compact once a request would fill this share of t
 DEFAULT_WINDOW = 32768       # the working window when the model does not say or reports more, and nothing is set
 CONVO_KEEP = 200             # turns a compacting conversation holds in memory
 CONVO_NATIVE_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
-The earlier turns are above; the last message is the new request.
+The earlier turns are above; the last message, which starts with NEW REQUEST:, is the new request.
 - Rewrite only the new request, and keep the characters, setting, style and tone the earlier turns established unless the new request changes them.
 - The last message is always the prompt to rewrite, even when it repeats an earlier request word for word (it is another scene): write a fresh rewrite for it, and never say that no new prompt was given.
 - Everything above the last message is history: it was already asked and answered. Never answer it again, never treat an earlier request or answer as the current one, and rewrite only the last message now.
@@ -553,6 +553,8 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
         rounds = tuple((str(t["request"]).strip()[:CONVO_CHARS], str(t["reply"]).strip()[:CONVO_CHARS]) for t in list(convo.get("turns") or [])[-int(convo.get("keep") or CONVO_TURNS):]
                        if isinstance(t, dict) and str(t.get("request") or "").strip() and str(t.get("reply") or "").strip())
         system += "\n\n" + pick(prompts, "turns_prompt")
+        if rounds:
+            user = "NEW REQUEST:\n" + user                                  # the label marks the last turn as the one to answer, whatever the earlier turns asked
         if str(convo.get("summary") or "").strip():
             system += "\n\nSUMMARY OF THE CONVERSATION SO FAR:\n" + str(convo["summary"]).strip()
     elif history:
