@@ -234,6 +234,7 @@ export function openHelper(app, origin) {
   const history = c.region.stack({ gap: "sm" });
   const pinned = c.region.stack({ gap: "xs", sticky: true, children: [] });          // the checklist of the latest request, kept in view and updated as it goes
   pinned.node.hidden = true;
+  let planOpen = true;
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
@@ -254,9 +255,11 @@ export function openHelper(app, origin) {
   // while the answer streamed in): redraws wait until the pointer is up.
   let held = false, dirty = false, heldTimer = 0;
   const release = () => { clearTimeout(heldTimer); setTimeout(() => { held = false; if (dirty) { dirty = false; paint(); } }, 0); };
-  history.node.addEventListener("pointerdown", () => { held = true; clearTimeout(heldTimer); heldTimer = setTimeout(release, 1500); });
-  history.node.addEventListener("pointerup", release);
-  history.node.addEventListener("pointercancel", release);
+  for (const node of [history.node, pinned.node]) {
+    node.addEventListener("pointerdown", () => { held = true; clearTimeout(heldTimer); heldTimer = setTimeout(release, 1500); });
+    node.addEventListener("pointerup", release);
+    node.addEventListener("pointercancel", release);
+  }
   // The stream makes news for every few tokens and a redraw rebuilds the whole history: left unchecked the page spent its time drawing and the input box
   // stopped answering. A redraw happens at most about eight times a second (`now` forces it: a new request, the end of a turn).
   let lastPaint = 0, paintTimer = 0;
@@ -278,8 +281,9 @@ export function openHelper(app, origin) {
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
     const withPlan = [...t].reverse().find((x) => x.plan && x.plan.length), items = withPlan ? withPlan.plan : [], left = items.filter((i) => i.state === "open").length;
     pinned.node.hidden = !items.length;
-    pinned.set(items.length ? [c.label.section({ text: `Checklist: ${items.length - left} of ${items.length} done` }), ...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
-      ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] : []);
+    pinned.set(items.length ? [c.card.default({ gap: "sm", children: [c.collapsible.default({ label: `Checklist: ${items.length - left} of ${items.length} done`, open: planOpen, onToggle: (v) => { planOpen = v; },
+      body: c.region.stack({ gap: "xs", children: [...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
+        ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] }) })] })] : []);
     send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
     if (stopper.setDisabled) stopper.setDisabled(!busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });
