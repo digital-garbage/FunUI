@@ -1140,3 +1140,27 @@ def test_thinking_that_ends_in_a_tool_call_or_never_ends_stays_thinking():
     assert cut == {"thinking": "reasoning that runs out of room"}
     qwen = _split("think-tags", ["<think>plan", "</think>Done."])
     assert qwen == {"thinking": "plan", "answer": "Done."}
+
+
+def test_a_gemma_call_is_read_however_the_model_quotes_its_texts():
+    from modules.conditioning.prompt_enhancer import engine as eng
+    Q = '<|"|>'
+    want = {"name": "edit_shortcuts", "args": {"changes": [{"name": "Arms up (hands high)", "new_name": "Pose, arms up"}], "reason": "r"}}
+    for text in (f'call:edit_shortcuts{{changes:[{{name:{Q}Arms up (hands high){Q},new_name:{Q}Pose, arms up{Q}}}],reason:{Q}r{Q}}}',      # the format's own quotes
+                 'call:edit_shortcuts{changes:[{name:"Arms up (hands high)",new_name:"Pose, arms up"}],reason:"r"}',                        # plain double quotes
+                 "call:edit_shortcuts{changes:[{name:'Arms up (hands high)',new_name:'Pose, arms up'}],reason:'r'}",                        # single quotes
+                 'call:edit_shortcuts{changes:[{name:Arms up (hands high),new_name:Pose, arms up}],reason:r}'):                              # no quotes at all
+        assert eng.parse_call(text) == want, text
+    assert eng.parse_call('call:plan{items:[set a, set b (x), "set c"]}')["args"] == {"items": ["set a", "set b (x)", "set c"]}
+    assert eng.parse_call('call:edit_scene{scene:2,seconds:5.5,text:a dog runs, fast,reason:r}')["args"] == {"scene": 2, "seconds": 5.5, "text": "a dog runs, fast", "reason": "r"}
+
+
+def test_a_call_that_cannot_be_read_is_answered_with_an_error_not_dropped():
+    from modules.conditioning.prompt_enhancer import engine as eng, helper
+    d = next(x for x in eng.DIALECTS if x.name == "gemma4")
+    calls = []
+    got = list(eng.Engine._pieces(["<|tool_call>call:edit_shortcuts{changes:[{name:<|\"|>broken", "<tool_call|>"], eng.Splitter(d), calls, d))
+    assert calls and calls[0]["name"] == "edit_shortcuts" and calls[0]["unreadable"].startswith("call:edit_shortcuts") and got[0]["kind"] == "call"
+    acts = helper.Actions(1, lambda e: None, wait=1)
+    told = acts(calls[0])
+    assert told.startswith("Error: the call to edit_shortcuts could not be read") and acts.changes == 0 and acts.calls == 1

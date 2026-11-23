@@ -174,9 +174,22 @@ def parse_call(text):
         while pos < len(src) and src[pos] in " \n\t\r":
             pos += 1
 
-    def value():
+    def value(ctx="obj"):
         nonlocal pos
         skip()
+        if src[pos] in "\"'":                                  # a text in plain quotes, as models trained on JSON write it
+            q, i, buf = src[pos], pos + 1, []
+            while i < len(src) and src[i] != q:
+                if src[i] == "\\" and i + 1 < len(src):
+                    i += 1
+                    buf.append({"n": "\n", "t": "\t"}.get(src[i], src[i]))
+                else:
+                    buf.append(src[i])
+                i += 1
+            if i >= len(src):
+                raise ValueError("a quote was not closed")
+            pos = i + 1
+            return "".join(buf)
         if src.startswith(QUOTE, pos):
             end = src.index(QUOTE, pos + len(QUOTE))
             out = src[pos + len(QUOTE):end]
@@ -196,7 +209,7 @@ def parse_call(text):
                 if src[pos] != ":":
                     raise ValueError("a colon was expected")
                 pos += 1
-                out[key] = value()
+                out[key] = value("obj")
                 skip()
                 if src[pos] == ",":
                     pos += 1
@@ -208,11 +221,15 @@ def parse_call(text):
                 if src[pos] == "]":
                     pos += 1
                     return out
-                out.append(value())
+                out.append(value("list"))
                 skip()
                 if src[pos] == ",":
                     pos += 1
-        word = re.match(r"[^,}\]\s]+", src[pos:]).group(0)
+        # a text written without its quotes may hold spaces, brackets and commas: it runs to the next argument's name or to the closing bracket
+        end = re.compile(r"(.*?)(?=\s*,\s*[\w.\-]+\s*:|\s*[}\]]|\s*$)" if ctx == "obj" else r"(.*?)(?=\s*[,\]]|\s*$)", re.S)
+        word = end.match(src, pos).group(1)
+        if not word:
+            raise ValueError("a value was expected")
         pos += len(word)
         if word in ("true", "false"):
             return word == "true"
@@ -874,6 +891,9 @@ class Engine:
                     call_text += part
                 elif kind == "call_end":
                     parsed = dialect.parse(call_text) if dialect.parse else None
+                    if not parsed and call_text.strip():        # not read: the model is told so (as the call's own answer) instead of the call vanishing
+                        named = re.search(r"([\w.\-]+)", call_text.replace("call:", " ", 1))
+                        parsed = {"name": named.group(1) if named else "unknown", "args": {}, "unreadable": call_text.strip()[:300]}
                     call_text = ""
                     if parsed:
                         calls.append(parsed)

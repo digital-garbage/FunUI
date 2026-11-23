@@ -468,6 +468,9 @@ class Actions:
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
         self.calls += 1
+        if call.get("unreadable"):
+            return ("Error: the call to " + str(name) + " could not be read, so nothing happened. Write it again with each text argument between the quote marks the format uses, "
+                    "lists in [ ] and objects in { }, and with every argument the tool needs. What you wrote starts: " + str(call["unreadable"])[:160])
         if name not in READS:
             self.changes += 1
         if name in ("plan", "check_item"):
