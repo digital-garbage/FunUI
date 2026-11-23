@@ -7,8 +7,8 @@ export const RULE_LABELS = { instructions: "Rewrite instructions", marks_prompt:
   conversation_prompt: "Conversation, plain encoders", turns_prompt: "Conversation, Gemma 4", revision_prompt: "Comments", rating_prefix: "Rating line opening",
   chat_prompt: "Chat answers", notes_prompt: "Notes rule", compact_prompt: "Conversation notes", edit_prompt: "Editing its own rules" };
 
-/** Ask whether a change to a system prompt is allowed. `request`: { field, old, new, reason }. -> Promise<boolean>; closing the window means no. */
-export function askEdit(request) {
+/** Ask whether a change to a system prompt is allowed. `request`: { field, old, new, reason }. -> Promise<boolean>; closing the window means no; `signal` (an AbortSignal) closes it as a no. */
+export function askEdit(request, signal) {
   const rows = lineDiff(request.old, request.new).filter((r) => r.text !== "" || r.t !== " ");
   const lines = rows.map((r) => `${r.t === " " ? "  " : `${r.t} `}${r.text}`), tones = rows.map((r) => (r.t === "+" ? "add" : r.t === "-" ? "del" : null));
   const view = c.code.block({ text: "", label: "Changes to the system prompt" });
@@ -21,5 +21,6 @@ export function askEdit(request) {
     const win = c.modal.generic({ title: "Allow changes to system prompt?", subtitle: `${label}${request.reason ? `: ${request.reason}` : ""}`, size: "lg", closeOnOutside: false, closeOnEsc: false,
       body: c.region.stack({ gap: "sm", children: [c.hint.default({ text: `Prompt: ${label}. Lines with - are removed, lines with + are added.` }), view] }), actions: [no, yes],
       onClose: () => { if (!settled) { settled = true; resolve(false); } } });
+    if (signal) { if (signal.aborted) done(false); else signal.addEventListener("abort", () => done(false)); }          // the request was stopped: the question goes away as a no
   });
 }

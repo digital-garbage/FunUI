@@ -3,6 +3,7 @@
 import collections
 import json
 import re
+import threading
 import time
 
 from comfy_api.latest import io
@@ -90,7 +91,7 @@ def _pictures(*images):
     return got[0] if len(got) == 1 else (got or None)
 
 
-def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
+def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing, editor, text_mode, actions = False, None, False, None
@@ -140,7 +141,12 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
     hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule(bool(helper.get("rules"))) if text_mode else "") + (__import__(__package__ + ".helper", fromlist=["x"]).rules_note(helper.get("rules")) if helper and helper.get("rules") else "") if helper else ""
-    ask = lambda text: en.converse(clip, text, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
+    def ask(text):
+        stop.check()
+        out = _ask(text)
+        stop.check()                                                  # the writing was cut short by the Stop: what it wrote so far is not an answer
+        return out
+    _ask = lambda text: en.converse(clip, text, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep}, notes=notes, prompts=prompts, macros=macros, system_extra=hp_rule if helper else (en.pick(prompts, "edit_prompt") if clip.tools else en.EDIT_TEXT_RULE) if editing else "",
                                            max_length=max_length, thinking=thinking, **sampling)
     reply, status, add, drop, thought = ask(message)
     if helper and text_mode and actions is not None:
@@ -204,6 +210,68 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
     while len(CONVOS) > MAX_CONVOS:
         CONVOS.popitem(last=False)
     return {"ok": ok, "reply": reply, "status": status + note, "remember": add, "forget": drop, "compacted": did}
+
+
+class Interrupted(Exception):
+    """The person stopped the helper, or sent a new message while it was still working."""
+
+
+class Stop(threading.Event):
+    """One helper request's stop flag, and the proposals it is waiting on (they are declined when it stops)."""
+
+    def __init__(self):
+        super().__init__()
+        self.pending, self.done = set(), False
+
+    def check(self):
+        if self.is_set():
+            raise Interrupted()
+
+    def interrupt(self):
+        self.set()
+        from . import rules
+        for pid in list(self.pending):
+            rules.decide(pid, False)
+
+
+STOPS, LOCKS = {}, {}
+
+
+def stop_chat(conversation) -> bool:
+    """Stop what the helper is doing for this conversation. -> whether a request was running."""
+    stop = STOPS.get(str(conversation or "").strip())
+    if stop is None or stop.done:
+        return False
+    stop.interrupt()
+    return True
+
+
+def chat_reply(conversation, message, *, on_event=None, **kw):
+    """One chat or helper request. A new request of a conversation that is still working stops that one first and then runs, so the model
+    reads what it was asked before and the new message together; the stopped request stays in the conversation as unanswered."""
+    from . import engine as eng
+    key = str(conversation or "").strip()
+    if not key:
+        return _chat_reply(conversation, message, stop=Stop(), on_event=on_event, **kw)
+    stop_chat(key)
+    with LOCKS.setdefault(key, threading.Lock()):
+        stop = STOPS[key] = Stop()
+
+        def tap(ev):
+            if ev.get("kind") in ("action_request", "edit_request") and ev.get("id"):
+                stop.pending.add(ev["id"])
+            if on_event:
+                on_event(ev)
+        eng.ASKING.stop = stop
+        try:
+            return _chat_reply(conversation, message, stop=stop, on_event=tap if on_event else None, **kw)
+        except Interrupted:
+            state = CONVOS.setdefault(key, {"summary": "", "turns": collections.deque(maxlen=en.CONVO_KEEP), "seen": set()})
+            state["turns"].append({"request": str(message).strip(), "reply": "(the user stopped this request before it was answered)", "kind": "chat"})
+            return {"ok": False, "reply": "", "status": "stopped", "stopped": True, "remember": [], "forget": [], "compacted": False}
+        finally:
+            eng.ASKING.stop = None
+            stop.done = True
 
 
 def _chat_memory(helper, notes) -> str:
@@ -304,6 +372,12 @@ class FunUIEnhancePrompt(io.ComfyNode):
                              tooltip="0 = a fresh rewrite every run. Any other number repeats the same rewrite."),
                 io.Boolean.Input("thinking", default=False, optional=True,
                                  tooltip="Let a thinking model reason first. Its reasoning eats the token budget."),
+                io.Boolean.Input("thinking_comments", default=True, optional=True,
+                                 tooltip="Enable thinking on a rewrite that has comments to follow. Off: such a rewrite does not think."),
+                io.Boolean.Input("thinking_chat", default=True, optional=True,
+                                 tooltip="Enable thinking on messages of the Chat tab."),
+                io.Boolean.Input("thinking_helper", default=True, optional=True,
+                                 tooltip="Enable thinking in the Helper."),
                 # Text, not a list: a file that has gone must not stop a run where Enhance is off. The Enhance panel offers the files.
                 io.String.Input("encoder_file", default="", optional=True,
                                 tooltip="A text encoder file just for rewriting (Gemma, Qwen...). Empty uses the model's own encoder."),
@@ -371,7 +445,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
-                presence_penalty=0.0, seed=0, thinking=False, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
+                presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
         if not enabled:
@@ -461,7 +535,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,
             note=note_text, notes=notes, prompts=prompts, macros=macros, refine=refine_passes,
             history=history, convo={"summary": state["summary"], "turns": list(state["turns"]), "keep": keep} if state else None,
-            seed=seed, image=_pictures(image, image_2, image_3, image_4) if use_image else None, thinking=thinking, max_length=max_length,
+            seed=seed, image=_pictures(image, image_2, image_3, image_4) if use_image else None, thinking=(bool(thinking_comments) if fresh or any(isinstance(r, dict) and str(r.get("comment") or "").strip() for r in rounds) else bool(thinking)), max_length=max_length,
             temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
             repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
             do_sample=not greedy)

@@ -1037,3 +1037,42 @@ def test_the_tools_shown_follow_the_request_and_all_come_back_when_it_names_none
     assert "set_variable" not in names(hp.intent("update the system prompt"))
     assert names(hp.intent("do it")) == names(None)
     assert hp.wants_change("Soo.. will you correct them?", "I will remove the mention.") and not hp.wants_change("Soo.. will you correct them?", "Yes it is fine.")
+
+
+def test_the_stop_button_ends_a_working_request_and_a_new_message_interrupts_and_follows_it(monkeypatch, tiny, comfyui):
+    import threading
+    from modules.conditioning.prompt_enhancer import nodes
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "plain chat", raising=False)
+    nodes.CONVOS.clear()
+    started, release, seen = threading.Event(), threading.Event(), []
+
+    def fake(clip, text, **kw):
+        seen.append((text, [t["request"] + " => " + t["reply"] for t in kw["convo"]["turns"]]))
+        if len(seen) == 1:
+            started.set()
+            release.wait(5)                                              # the first request is still writing
+        return "ok", "ok", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", fake)
+    results = {}
+    first = threading.Thread(target=lambda: results.setdefault("a", nodes.chat_reply("h:s", "first", engine_model="tiny", max_length=8, do_sample=False)))
+    first.start()
+    assert started.wait(5)
+    assert nodes.stop_chat("h:s") is True
+    release.set()
+    first.join(5)
+    assert results["a"]["stopped"] and not results["a"]["ok"]
+    assert [t["request"] for t in nodes.CONVOS["h:s"]["turns"]] == ["first"] and "stopped" in nodes.CONVOS["h:s"]["turns"][0]["reply"]
+    assert nodes.stop_chat("h:s") is False                               # nothing is running now
+    # a new message while one is still working: that one is stopped, and the new one reads it together with the new message
+    seen.clear()
+    started.clear(), release.clear()
+    second = threading.Thread(target=lambda: results.setdefault("b", nodes.chat_reply("h:s", "second", engine_model="tiny", max_length=8, do_sample=False)))
+    second.start()
+    assert started.wait(5)
+    third = threading.Thread(target=lambda: results.setdefault("c", nodes.chat_reply("h:s", "third", engine_model="tiny", max_length=8, do_sample=False)))
+    third.start()
+    release.set()
+    second.join(5), third.join(5)
+    assert results["b"]["stopped"] and results["c"]["ok"]
+    assert any("second => (the user stopped" in t for t in seen[-1][1])

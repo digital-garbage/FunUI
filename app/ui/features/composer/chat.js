@@ -163,7 +163,7 @@ export function chat(app, own) {
       const message = draft.trim();
       if (!message || replying) return;
       replying = true; draft = ""; draw(true);
-      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "use_comfy", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
+      const pick = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length", "compact", "context_tokens", "thinking", "thinking_chat", "greedy", "seed", "encoder_file", "encoder_family", "engine_model", "use_comfy", "self_edit", "precision", "prefix_cache", "lookup_tokens", "chat_prompt", "notes_prompt", "compact_prompt", "edit_prompt"];
       try {
         const body = { conversation: ck, message, comments: list.map((x) => x.comment), notes: String(p.pref("enhance_notes", "") || ""), video_length: unitLength(p.project, shown()), aspect_ratio: aspectOf(p.project, shown()), ...Object.fromEntries(pick.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), ...(eng ? { engine_model: eng } : {}) };
         if (eng && inp.self_edit) body.rules = await rulesOf(app, inp);      // the rules the model may read and propose changes to

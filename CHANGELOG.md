@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper has a Stop button, and a new message interrupts it.** Stop ends the writing and declines any change still waiting for Allow. A message sent while it works stops that work and is read together with the stopped request, which stays in the conversation as unanswered.
+- **Three thinking switches: "Enable thinking in Helper", "Enable thinking on comments" and "Enable thinking on chat messages"** (Composer > Enhance, all on by default). A rewrite with nothing to follow uses the plain Thinking switch, so it can skip reasoning and save time.
 - **Layout modes no longer turn the explorer off on half-precision models.** The packed-tensor unpack step turned a plain bf16 attention input into float32, which failed the first step and made the explorer quarantine itself.
 - **Layout modes use less memory and accept packed (MXFP8) tensors.** The push now works in place instead of making several full-size copies on the first step, which could push the model out of the card, and a packed attention input is unpacked first.
 - **The Helper is pushed into acting.** When a request asks for a change and the answer only talked about it, or only looked at a rule, the Helper runs one more round that names the fitting tools; a follow-up such as "will you correct them?" after an announcement counts as that request. It also lists only the tools that fit the request (all of them when the words name none), and no longer says "Done" after only looking something up.

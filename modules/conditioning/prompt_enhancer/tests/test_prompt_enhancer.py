@@ -451,7 +451,7 @@ def test_the_readout_routes_are_provided_and_answer():
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/download", "/m/engine/unload", "/m/engine/files", "/m/engine/live", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/download", "/m/engine/unload", "/m/engine/files", "/m/engine/live", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision", "/m/chat_stop"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():
@@ -875,3 +875,20 @@ def test_the_chat_history_and_the_models_memory_survive_a_restart(tmp_path):
 def test_a_message_is_kept_for_the_tab_beyond_the_old_twenty_runs():
     from .. import history, nodes
     assert history.MAX_RUNS >= 500 and nodes.RUNS.maxlen == history.MAX_RUNS
+
+
+def test_thinking_follows_the_comments_switch_when_there_is_something_to_follow_and_the_plain_one_otherwise(node, monkeypatch):
+    import json
+    seen = []
+    real = node.en.enhance
+
+    def spy(clip, text, **kw):
+        seen.append(kw.get("thinking"))
+        return real(clip, text, **kw)
+    monkeypatch.setattr(node.en, "enhance", spy)
+    node.CONVOS.clear()
+    comment = json.dumps([{"id": "a", "comment": "warmer", "original": "x"}])
+    node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=True, thinking_comments=False)
+    node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=False, thinking_comments=True, chat=comment)
+    node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=True, thinking_comments=False, chat=comment)
+    assert seen == [True, True, False]

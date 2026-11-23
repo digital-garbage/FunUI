@@ -328,15 +328,19 @@ def comfy_interrupted() -> bool:
         return False
 
 
+ASKING = threading.local()                    # `.stop`: the flag of the Helper request the current thread is serving, if any
+
+
 class Cancel(threading.Event):
     """A request's stop flag. With `interruptible`, ComfyUI's own interrupt (the Stop button) sets it too: used for a rewrite that runs inside a generation."""
 
-    def __init__(self, interruptible=False):
+    def __init__(self, interruptible=False, also=None):
         super().__init__()
         self.interruptible = interruptible
+        self.also = also                          # another flag that stops it too: the Helper's own Stop, for the request this thread is serving
 
     def is_set(self):
-        return super().is_set() or (self.interruptible and comfy_interrupted())
+        return super().is_set() or (self.interruptible and comfy_interrupted()) or (self.also is not None and self.also.is_set())
 
 
 class Turns:
@@ -746,7 +750,7 @@ class Engine:
         me = self
         streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=False, timeout=600)
         seen = {}
-        cancel = self.cancel = Cancel(interruptible)         # this request's own stop flag, made once it has the turn
+        cancel = self.cancel = Cancel(interruptible, getattr(ASKING, "stop", None))         # this request's own stop flag, made once it has the turn
 
         class Stop(StoppingCriteria):
             def __call__(self, input_ids, scores, **kw):
@@ -834,7 +838,7 @@ class Engine:
         self.activity = {"stage": "reading the prompt", "tokens": 0, "prompt": 0, "started": time.time()}
         yield {"kind": "status", "text": "reading the prompt"}
         stats, calls, started = {"tokens": 0, "cached": 0, "steps": 0, "prompt": 0}, [], time.time()
-        cancel = self.cancel = Cancel(interruptible)
+        cancel = self.cancel = Cancel(interruptible, getattr(ASKING, "stop", None))
         me = self
 
         def chunks():

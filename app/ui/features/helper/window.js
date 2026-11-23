@@ -176,27 +176,29 @@ export function applyAction(project, ev, ps, api, app) {
 }
 
 /** Ask whether the helper may make a change. `ev`: { summary, reason }. -> Promise<boolean>; closing the window means no. */
-export function askAction(ev) {
+export function askAction(ev, signal) {
   return new Promise((resolve) => {
     let settled = false;
     const done = (yes) => { if (settled) return; settled = true; win.close("answered"); resolve(yes); };
     const no = c.button.md({ label: "Disallow", tone: "ghost", onClick: () => done(false) }), yes = c.button.md({ label: "Allow", tone: "primary", onClick: () => done(true) });
     const win = c.modal.generic({ title: "Allow the helper to change the project?", subtitle: ev.reason || "", size: "md", closeOnOutside: false, closeOnEsc: false,
       body: c.region.stack({ gap: "sm", children: [c.text.sm({ text: ev.summary })] }), actions: [no, yes], onClose: () => { if (!settled) { settled = true; resolve(false); } } });
+    if (signal) { if (signal.aborted) done(false); else signal.addEventListener("abort", () => done(false)); }          // the request was stopped: the question goes away as a no
   });
 }
 
-const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "max_length", "context_tokens", "thinking", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"];
+const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "max_length", "context_tokens", "thinking", "thinking_helper", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"];
 
 /** The Helper window: a message box in the middle of the screen. The model's own settings are the Enhance tab's. -> the window. */
 export function openHelper(app, origin) {
   const p = app.project;
   if (!p.project) { c.toast.warn({ text: "Open a project first." }); return null; }
-  let busy = false, win = null;
+  let busy = false, win = null, active = 0;
   const slot = () => ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inputs = () => (slot() || {}).inputs || {};
   const history = c.region.stack({ gap: "sm" });
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
+  const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
   const turns = () => log.get(p.project.id) || [];
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   let tick = 0;
@@ -215,17 +217,23 @@ export function openHelper(app, origin) {
     const t = turns();
     history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
-    send.setLabel ? send.setLabel(busy ? "Working…" : "Ask helper") : null;
-    if (send.setDisabled) send.setDisabled(busy);
+    send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
+    if (stopper.setDisabled) stopper.setDisabled(!busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });
   };
+  const stopTurn = (t) => { t.stopped = true; t.abort.abort(); };
+  function stopAll() {
+    turns().filter((t) => !t.t1).forEach(stopTurn);
+    Promise.resolve(app.api.enhancerChatStop ? app.api.enhancerChatStop(`helper:${p.project.id}`) : null).catch(() => {});
+  }
   async function ask() {
     const message = draft.trim(), inp = inputs(), eng = engineOf(inp);
-    if (!message || busy) return;
+    if (!message) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
-    const turn = { you: message, thinking: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length) };
-    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); busy = true; pin = true; paint();
-    tick = setInterval(paint, 1000);                    // the clock beside the thinking line
+    const turn = { you: message, thinking: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
+    turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
+    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint();
+    if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
@@ -234,14 +242,14 @@ export function openHelper(app, origin) {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
-          const yes = await askEdit(ev), sl = slot();
+          const yes = !turn.stopped && (await askEdit(ev, turn.abort.signal)) && !turn.stopped, sl = slot();
           if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
           turn.done.push(yes ? `Saved the system prompt: ${ev.field}` : `Refused: change to ${ev.field}`);
           paint();
           await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
         })();
         else if (ev.kind === "action_request") (async () => {
-          const yes = await askAction(ev);
+          const yes = !turn.stopped && (await askAction(ev, turn.abort.signal)) && !turn.stopped;
           if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);
           turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api, app) : `Refused: ${ev.summary}`);
           paint();
@@ -249,12 +257,15 @@ export function openHelper(app, origin) {
         })();
         paint();
       });
-      if (r && !r.ok) throw new Error(r.status || "the helper could not answer");
-      if (r && r.reply) turn.reply = r.reply;
-    } catch (e) { turn.reply = `No reply: ${(e && e.message) || e}`; }
-    turn.t1 = Date.now(); busy = false; clearInterval(tick); tick = 0; paint();
+      if (r && r.stopped) { turn.reply = ""; turn.status = "Stopped."; }
+      else {
+        if (r && !r.ok) throw new Error(r.status || "the helper could not answer");
+        if (r && r.reply) turn.reply = r.reply;
+      }
+    } catch (e) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(e && e.message) || e}`; }
+    turn.t1 = Date.now(); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint();
   }
-  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [send] });
+  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [stopper, send] });
   paint();
   return win;
 }

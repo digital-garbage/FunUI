@@ -113,6 +113,8 @@ export const api = {
   enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),
   /** The chat answer as it forms: `onEvent` hears {kind: status | thinking | answer | call} pieces; resolves the final result. */
   enhancerChatStream: (body, onEvent) => streamEvents("/api/m/conditioning_prompt_enhancer/chat_stream", body, onEvent),
+  /** Stop what the helper is doing for a conversation (the stream of that request ends with a "stopped" result). */
+  enhancerChatStop: (conversation) => call("POST", "/api/m/conditioning_prompt_enhancer/chat_stop", { conversation }),
   /** The person's answer to a rule change the model proposed. */
   enhancerEditDecision: (id, allow) => call("POST", "/api/m/conditioning_prompt_enhancer/edit_decision", { id, allow: !!allow }),
   rateTaste: (promptId, rating, axis) => call("POST", "/api/m/taste/rate", { prompt_id: promptId, rating, axis: axis || null }),

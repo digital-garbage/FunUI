@@ -63,7 +63,7 @@ def routes(table, base, web):
         return dict(rules=rules, self_edit=body.get("self_edit") is True, notes=str(body.get("notes") or ""), video_length=str(body.get("video_length") or "")[:200], aspect_ratio=str(body.get("aspect_ratio") or "")[:200], encoder_file=str(body.get("encoder_file") or ""), engine_model=str(body.get("engine_model") or "").strip(), speed=speed_of(body), use_comfy=body.get("use_comfy") is True,
                     encoder_family=str(body.get("encoder_family") or "stable_diffusion"), prompts={k: body.get(k) for k in enhance.PROMPT_FIELDS},
                     comments=[str(x) for x in (body.get("comments") or []) if isinstance(x, str)], compact=body.get("compact") is not False,
-                    helper=({"sheet": str((body.get("helper") or {}).get("sheet") or "")[:12000], "scenes": int((body.get("helper") or {}).get("scenes") or 0), "actions": [x for x in ((body.get("helper") or {}).get("actions") or [])[:100] if isinstance(x, dict)], "chat": str((body.get("helper") or {}).get("chat") or "")[:200], "rules": {str(k): str(v)[:8000] for k, v in list((((body.get("helper") or {}).get("rules")) or {}).items())[:40] if isinstance(v, str)} if isinstance((body.get("helper") or {}).get("rules"), dict) else {}, "inputs": [x for x in ((body.get("helper") or {}).get("inputs") or [])[:4000] if isinstance(x, dict)], "presets": [x for x in ((body.get("helper") or {}).get("presets") or [])[:100] if isinstance(x, dict)], "variables": [str(x)[:40] for x in ((body.get("helper") or {}).get("variables") or [])[:300]], "shortcuts": [x for x in ((body.get("helper") or {}).get("shortcuts") or [])[:3000] if isinstance(x, dict)], "settings": [x for x in ((body.get("helper") or {}).get("settings") or [])[:3000] if isinstance(x, dict)]} if isinstance(body.get("helper"), dict) else None), context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=body.get("thinking") is True, **sampling)
+                    helper=({"sheet": str((body.get("helper") or {}).get("sheet") or "")[:12000], "scenes": int((body.get("helper") or {}).get("scenes") or 0), "actions": [x for x in ((body.get("helper") or {}).get("actions") or [])[:100] if isinstance(x, dict)], "chat": str((body.get("helper") or {}).get("chat") or "")[:200], "rules": {str(k): str(v)[:8000] for k, v in list((((body.get("helper") or {}).get("rules")) or {}).items())[:40] if isinstance(v, str)} if isinstance((body.get("helper") or {}).get("rules"), dict) else {}, "inputs": [x for x in ((body.get("helper") or {}).get("inputs") or [])[:4000] if isinstance(x, dict)], "presets": [x for x in ((body.get("helper") or {}).get("presets") or [])[:100] if isinstance(x, dict)], "variables": [str(x)[:40] for x in ((body.get("helper") or {}).get("variables") or [])[:300]], "shortcuts": [x for x in ((body.get("helper") or {}).get("shortcuts") or [])[:3000] if isinstance(x, dict)], "settings": [x for x in ((body.get("helper") or {}).get("settings") or [])[:3000] if isinstance(x, dict)]} if isinstance(body.get("helper"), dict) else None), context_tokens=int(body.get("context_tokens") or 0), max_length=int(body.get("max_length") or 0), thinking=(body.get("thinking_helper") if isinstance(body.get("helper"), dict) else body.get("thinking_chat")) is not False, **sampling)
 
     async def chat_body(req):
         try:
@@ -143,6 +143,18 @@ def routes(table, base, web):
             raise
         await resp.write_eof()
         return resp
+
+    @table.post(base + "/chat_stop")
+    async def _chat_stop(req):
+        """Stop what the helper is doing for a conversation: {"conversation"}. The stream of that request ends with a "stopped" result."""
+        from . import nodes
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not str(body.get("conversation") or "").strip():
+            return web.json_response({"ok": False}, status=400)
+        return web.json_response({"ok": nodes.stop_chat(body["conversation"])})
 
     @table.post(base + "/edit_decision")
     async def _edit_decision(req):
