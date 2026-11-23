@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A bulk shortcut rename no longer fails because some of its names were already renamed.** The Helper reads the shortcut library fresh at the start of every request and keeps it current after each change you allow. A rename in a batch whose shortcut is already renamed (earlier in the request, or already carrying the new name) is now skipped and reported as done, instead of failing the whole batch with "no shortcut called".
 - **The Helper is told plainly what a shortcut's name is and what its triggers are.** The rule and the shortcut tools now say a shortcut has a name (its label), triggers (the words that fire it) and replacements, that renaming means only new_name, and that triggers must not be touched to rename.
 - **The Helper is told plainly what a shortcut's name is and what its triggers are.** The rule and the shortcut tools now say a shortcut has a name (its label), triggers (the words that fire it) and replacements, that renaming means only new_name, and that triggers must not be touched to rename.
 - **The Helper's system prompt is shorter and lists every tool.** It now starts with a one-line list of all the tools (built from the tools themselves, so it never goes stale), keeps only the facts about how a project works, and adds a worked example plus two plain rules: never say a change worked before the tool confirms it, and never repeat a call that failed twice. The checklist tool is described as needed for every change.

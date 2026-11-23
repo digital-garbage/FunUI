@@ -220,6 +220,7 @@ class Actions:
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
         self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
+        self.renamed = {}                                  # old name -> new name of the shortcuts renamed in this request, so a repeat is told it is done
         self.changes = 0                                   # calls that change something: looking a rule or setting up is not one
         self.plan, self.plan_changes = [], 0               # the checklist the model wrote for a long request, and how many changes were made when it did
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
@@ -443,6 +444,19 @@ class Actions:
                 return "Error: changes is a list of one to 20 items (send long jobs as several calls), each with the shortcut's name."
             ok = lambda v: isinstance(v, list) and v and all(isinstance(x, str) and x.strip() and len(x) <= 500 for x in v)        # noqa: E731
             known, taken, out = dict(self.shortcuts), set(), []
+            def finished(c):                    # a rename whose target already stands (the old name is gone, or it already is the new name)
+                own, new = self.shortcut_named(c.get("name")), c.get("new_name")
+                if not isinstance(new, str) or c.get("delete") is True:
+                    return own is None and self._norm(c.get("name")) in {self._norm(k) for k in self.renamed}
+                if own is None:
+                    return self._norm(c.get("name")) in {self._norm(k) for k in self.renamed} or self.shortcut_named(new) is not None
+                return own == new.strip() and not any(k in c for k in ("triggers", "replacements", "category"))
+            done = [c for c in changes if finished(c)]
+            if done:                                                                              # renamed earlier: skip them instead of failing the whole batch
+                changes = [c for c in changes if not any(c is d for d in done)]
+                args["skipped"] = [str(c.get("name")) for c in done]
+                if not changes:
+                    return "Error: nothing to do, these shortcuts are already renamed: " + "; ".join(f"'{n}'" for n in args["skipped"][:10]) + ". Do not repeat them: check them off and go on with the next ones."
             lost = [str(c.get("name") or "") for c in changes if self.shortcut_named(c.get("name")) is None]
             if lost:
                 more = f" (and {len(lost) - 5} more)" if len(lost) > 5 else ""
@@ -597,11 +611,13 @@ class Actions:
             elif name == "edit_shortcuts":
                 for c in args["changes"]:
                     cur = self.shortcuts.pop(c["name"], None)
+                    if c.get("new_name") and cur is not None:
+                        self.renamed[c["name"]] = c["new_name"]
                     if c.get("delete") or cur is None:
                         continue
                     new = {**cur, **{k: v for k, v in c.items() if k not in ("name", "new_name")}, "name": c.get("new_name") or c["name"]}
                     self.shortcuts[new["name"]] = new
-            return "Allowed: the change is made in the project."
+            return "Allowed: the change is made in the project." + (" Skipped, already renamed earlier: " + "; ".join(args["skipped"][:10]) + "." if args.get("skipped") else "")
         return ("Disallowed by the user. Nothing was changed. Ask yourself why: compare this change with what the user asked and with the project as it is, and find what you got wrong "
                 "(the wrong scene, a value too far, more than was asked). Then propose one corrected change that fixes it, or, if you cannot tell, ask the user one short question. Never propose the same change again.")
 

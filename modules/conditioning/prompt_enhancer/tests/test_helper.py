@@ -488,3 +488,21 @@ def test_shortcut_name_and_triggers_are_told_apart():
     text = helper.HELPER_RULE + str(helper.tools())
     assert "NAME (its label in the library)" in text and "never remove or change triggers to rename" in text
     assert "Renaming is done only with this" in text
+
+
+def test_a_shortcut_renamed_earlier_is_skipped_not_a_failure():
+    seen = []
+
+    def on_event(ev):
+        if ev.get("kind") == "doing":
+            return
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    acts = helper.Actions(1, on_event, wait=2, shortcuts=[{"name": n, "triggers": [n], "replacements": ["x"]} for n in ("a", "b", "c")])
+    first = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": "a", "new_name": "A"}, {"name": "b", "new_name": "B"}], "reason": "r"}})
+    assert first.startswith("Allowed")
+    again = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": "a", "new_name": "A"}, {"name": "c", "new_name": "C"}], "reason": "r"}})
+    assert again.startswith("Allowed") and "Skipped, already renamed earlier: a" in again
+    assert [c["name"] for c in seen[-1]["args"]["changes"]] == ["c"] if "args" in seen[-1] else True
+    only = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": "a", "new_name": "A"}], "reason": "r"}})
+    assert only.startswith("Error: nothing to do") and "already renamed" in only
