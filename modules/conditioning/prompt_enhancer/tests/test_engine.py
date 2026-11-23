@@ -1164,3 +1164,58 @@ def test_a_call_that_cannot_be_read_is_answered_with_an_error_not_dropped():
     acts = helper.Actions(1, lambda e: None, wait=1)
     told = acts(calls[0])
     assert told.startswith("Error: the call to edit_shortcuts could not be read") and acts.changes == 0 and acts.calls == 1
+
+
+def _llama_that_writes(tokens):
+    class Llm:
+        n_tokens = 0
+
+        def n_ctx(self): return 4096
+        def token_eos(self): return 2
+        def tokenize(self, raw, add_bos=False, special=True): return [5, 6, 7] if len(raw) > 3 else [9]
+        def detokenize(self, ids, special=False): return b"x"
+        def set_seed(self, s): pass
+        def reset(self): pass
+
+        class _ctx:
+            @staticmethod
+            def kv_cache_clear(): pass
+
+        def generate(self, feed, **k):
+            yield from tokens
+    return Llm()
+
+
+def test_an_empty_round_says_why_it_wrote_nothing():
+    from .. import gguf
+
+    class Cancelled:
+        def is_set(self): return True
+    args = dict(max_new_tokens=5, temperature=0.5, top_p=1, top_k=1, min_p=0, repetition_penalty=1, presence_penalty=0, seed=0, greedy=False)
+    stats = {}
+    assert "".join(gguf.Backend(_llama_that_writes([2]), "x.gguf").text_stream("hello there", stats=stats, **args)) == "" and stats["why"] == "the model ended its turn at once"
+    stats = {}
+    assert "".join(gguf.Backend(_llama_that_writes([11, 11]), "x.gguf").text_stream("hello there", stats=stats, cancel=Cancelled(), **args)) == ""
+    assert stats["why"].startswith("cancelled")
+    stats = {}
+    assert "".join(gguf.Backend(_llama_that_writes([11, 2]), "x.gguf").text_stream("hello there", stats=stats, **args)) == "x" and not stats.get("why")
+
+
+def test_an_answer_that_is_empty_because_the_model_ended_its_turn_at_once_is_asked_again():
+    from .. import engine as eng
+    seeds = []
+
+    class Engine:
+        cancel = None
+        device = "cpu"
+        def sees(self): return False
+        def stream(self, messages, **kw):
+            seeds.append(kw["seed"])
+            if len(seeds) == 1:
+                yield {"kind": "end", "calls": [], "tokens": 0, "seconds": 0, "tps": 0, "cached": 0, "why": "the model ended its turn at once"}
+            else:
+                yield {"kind": "answer", "text": "Here."}
+                yield {"kind": "end", "calls": [], "tokens": 2, "seconds": 1, "tps": 2, "cached": 0, "why": ""}
+    clip = eng.EngineClip(Engine())
+    raw, status = clip.run("sys", "hi", seed=5)
+    assert raw == "Here." and seeds == [5, 5 + 7919]

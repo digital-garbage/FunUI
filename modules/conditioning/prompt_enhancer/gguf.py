@@ -351,6 +351,8 @@ class Backend:
             try:
                 for token in llm.generate(feed, reset=fresh, **sampling):
                     if token in end or (cancel is not None and cancel.is_set()):
+                        if stats is not None:
+                            stats["why"] = "cancelled (stopped, or the page that asked went away)" if cancel is not None and cancel.is_set() else ("the model ended its turn at once" if not count else "")
                         break
                     count += 1
                     if stats is not None:

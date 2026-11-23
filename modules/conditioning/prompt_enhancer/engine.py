@@ -878,8 +878,8 @@ class Engine:
         read = max(stats.get("first", started) - started, 0.0)
         writing = stats.get("last", 0) - stats.get("first", 0)
         tps = (stats["tokens"] - 1) / writing if stats["tokens"] > 1 and writing > 0 else stats["tokens"] / took
-        _say(f"engine: read {stats['prompt']} prompt tokens in {read:.1f}s, wrote {stats['tokens']} tokens at {tps:.1f} tokens/s (llama.cpp)")
-        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(tps, 2), "cached": 0, "read_seconds": round(read, 2)}
+        _say(f"engine: read {stats['prompt']} prompt tokens in {read:.1f}s, wrote {stats['tokens']} tokens at {tps:.1f} tokens/s (llama.cpp)" + (f"; {stats['why']}" if stats.get("why") and not stats["tokens"] else ""))
+        yield {"kind": "end", "calls": calls, "tokens": stats["tokens"], "seconds": round(took, 2), "tps": round(tps, 2), "cached": 0, "read_seconds": round(read, 2), "why": stats.get("why", "")}
 
     @staticmethod
     def _pieces(streamer, split, calls, dialect):
@@ -980,8 +980,9 @@ class EngineClip:
         if self.live:
             rid = LIVE.start(self.live, str(user)[:80])
         try:
+            empties = 0
             for step in range(self.MAX_TOOL_ROUNDS + 1):
-                round_calls, said = [], ""
+                round_calls, said, why = [], "", ""
                 for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
                                              seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite", label="a rewrite" if self.live == "rewrite" else "a chat answer"):
@@ -991,13 +992,17 @@ class EngineClip:
                         answer += ev["text"]
                         said += ev["text"]
                     elif ev["kind"] == "end":
-                        round_calls = ev["calls"]
+                        round_calls, why = ev["calls"], ev.get("why", "")
                         speed = f"; {ev['tps']} tokens/s" + (f", {ev['cached']} prompt tokens reused" if ev.get("cached") else "")
                     if self.live and not (ev["kind"] == "end" and ev.get("calls") and self.handler):          # a round that ends in a tool call is not the end
                         LIVE.feed(ev, rid)
                     if self.on_event:
                         self.on_event(ev)
                 self.calls += round_calls
+                if not round_calls and not said.strip() and why.startswith("the model ended its turn at once") and empties < 2 and step < self.MAX_TOOL_ROUNDS:
+                    empties += 1                                        # an empty answer (the model's first token was its end-of-turn): asked again with another seed
+                    seed = (seed or 0) + 7919
+                    continue
                 if not (round_calls and self.handler and step < self.MAX_TOOL_ROUNDS):
                     break
                 ids = [f"call{step}_{i}" for i in range(len(round_calls))]

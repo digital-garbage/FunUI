@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **An empty model answer is no longer left empty.** When the model's very first token is its end-of-turn, the same round is asked again with another seed (up to twice), and the engine log now says why a round wrote nothing (the model ended its turn at once, or it was cancelled by a Stop or by the page going away).
 - **A Helper request keeps running when the page is refreshed or loses its connection, and the Helper window follows it again.** The request now runs on the server; opening the Helper after a refresh shows what it has written so far and carries on live, including any Allow question still waiting. A dropped connection is followed again by itself instead of ending with "The answer stopped before it finished".
 - **The Helper keeps its checklist pinned at the top and updates it as items are checked**, and the working line names what it is doing, for example "Editing shortcuts… 10s" or "Reading prompts… 10s", or "Waiting for your answer".
 - **The Helper window no longer slows the page down while the model writes.** Redraws are spaced out to about eight a second and only the turn that is still working is drawn again; before, every streamed piece rebuilt the whole history, which could freeze the page and its buttons.
