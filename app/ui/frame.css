@@ -42,8 +42,8 @@
 :root.fp-peek .fp-main { position: relative; padding-block-end: calc(var(--peek-h, var(--peek-fallback)) + var(--pgap)); }
 :root.fp-peek .fp-main > :nth-child(2) { position: absolute; inset-inline: 0; bottom: 0; block-size: auto; min-block-size: 0; z-index: 20; overflow: hidden; }
 :root.fp-peek .fp-main > :nth-child(2) .cx-panel-body { display: none; }
-:root.fp-peek.fp-peek-open .fp-main > :nth-child(2) { block-size: var(--timeline-h); overflow: visible; }
-:root.fp-peek.fp-peek-open .fp-main > :nth-child(2) .cx-panel-body { display: block; }
+:root.fp-peek.fp-peek-open .fp-main > :nth-child(2) { block-size: auto; max-block-size: var(--timeline-h); overflow: visible; }   /* as tall as its lanes need, no empty space under them */
+:root.fp-peek.fp-peek-open .fp-main > :nth-child(2) .cx-panel-body { display: flex; }
 .fp-peek-strip { display: none; }
 :root.fp-peek .fp-peek-strip { display: flex; align-items: center; justify-content: center; block-size: var(--strip-h); flex: none; font-size: var(--fs-6); color: var(--faint); user-select: none; }
 :root.fp-peek .fp-peek-strip:hover { color: var(--text); }
