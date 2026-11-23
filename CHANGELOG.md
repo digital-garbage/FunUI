@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A Helper request keeps running when the page is refreshed or loses its connection, and the Helper window follows it again.** The request now runs on the server; opening the Helper after a refresh shows what it has written so far and carries on live, including any Allow question still waiting. A dropped connection is followed again by itself instead of ending with "The answer stopped before it finished".
+- **The Helper keeps its checklist pinned at the top and updates it as items are checked**, and the working line names what it is doing, for example "Editing shortcuts… 10s" or "Reading prompts… 10s", or "Waiting for your answer".
 - **The Helper window no longer slows the page down while the model writes.** Redraws are spaced out to about eight a second and only the turn that is still working is drawn again; before, every streamed piece rebuilt the whole history, which could freeze the page and its buttons.
 - **A tool call the model wrote in a slightly different format now works.** Gemma texts in plain double or single quotes, or with no quotes (with spaces, brackets or commas in a shortcut name), are read. A call that still cannot be read is answered with an error telling the model so, instead of silently vanishing, which left the Helper in a loop with nothing happening.
 - **The Helper's thinking line opens and closes reliably while it works.** The window no longer redraws between a click's press and release.

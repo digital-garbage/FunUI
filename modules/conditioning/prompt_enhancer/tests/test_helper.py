@@ -7,7 +7,7 @@ def run(call, scenes=2, answer=None):
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         if answer is not None:
             threading.Timer(0.01, lambda: rules.decide(ev["id"], answer)).start()
     return helper.Actions(scenes, on_event, wait=2)(call), seen
@@ -62,7 +62,7 @@ def test_allowed_setting_change_carries_the_typed_value():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     out = helper.Actions(1, on_event, wait=2, settings=SETTINGS)({"name": "set_setting", "args": {"module": "sampling_attention_bandit", "setting": "enabled", "value": "true", "reason": "r"}})
     assert out.startswith("Allowed") and seen[0]["args"]["value"] is True
@@ -79,7 +79,7 @@ def test_project_text_variables_and_shortcuts_are_checked_before_asking():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     live = helper.Actions(1, on_event, wait=2, variables=["dog"], shortcuts=[{"name": "sunset", "triggers": ["sunset"], "replacements": ["x"]}])
     assert live({"name": "save_shortcut", "args": {"name": "sunset", "triggers": ["sunset"], "replacements": ["y"], "reason": "r"}}).startswith("Allowed")
@@ -103,7 +103,7 @@ def test_pipeline_inputs_are_looked_up_checked_and_changed_under_one_question():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     live = helper.Actions(1, on_event, wait=2, inputs=INPUTS, presets=[{"id": "fast", "title": "H3 fast"}])
     assert live({"name": "set_node_inputs", "args": {"changes": [{"slot": "s1", "input": "steps", "value": "5"}, {"slot": "L", "input": "unet_name", "value": "h3.safetensors"}], "reason": "r"}}).startswith("Allowed")
@@ -132,7 +132,7 @@ def test_cuts_are_checked_and_counted():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     live = helper.Actions(1, on_event, wait=2)
     assert live({"name": "cut_scene", "args": {"scene": 1, "at_seconds": 2, "reason": "r"}}).startswith("Allowed")
@@ -145,7 +145,7 @@ def test_prefix_means_the_anchor_and_the_postfix_switch_takes_on_off():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     acts = helper.Actions(1, on_event, wait=2)
     for name in ("prefix", "Anchor"):
@@ -163,7 +163,7 @@ def test_set_story_takes_the_whole_text():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(2, on_event, wait=2)({"name": "set_story", "args": {"text": "a\nqcut\nb", "reason": "r"}}).startswith("Allowed")
     assert "Rewrite the global prompt" in seen[0]["summary"]
@@ -181,7 +181,7 @@ def test_run_action_is_checked_against_the_offered_actions():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(3, on_event, wait=2, actions=acts)({"name": "run_action", "args": {"action": "generate-selected", "scenes": [2, 3], "reason": "r"}}).startswith("Allowed")
     assert seen[0]["summary"] == "Run: Generate selected on scenes 2, 3"
@@ -211,7 +211,7 @@ def test_a_scene_prefix_is_a_valid_change_on_its_own():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     live = helper.Actions(2, on_event, wait=2)
     assert live({"name": "edit_scene", "args": {"scene": 1, "prefix": "", "reason": "r"}}).startswith("Allowed")
@@ -229,7 +229,7 @@ def test_share_reference_names_a_real_scene():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     assert helper.Actions(2, on_event, wait=2)({"name": "share_reference", "args": {"from_scene": 1, "reason": "r"}}).startswith("Allowed")
     assert "every scene" in seen[0]["summary"]
@@ -285,7 +285,7 @@ def test_the_helper_reads_and_changes_the_enhancers_system_prompts_through_the_s
     heard = []
 
     def on_event(ev):
-        heard.append(ev)
+        heard.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     a = helper.Actions(2, on_event, rules_given={"chat_prompt": "Answer briefly."})
     names = [t["function"]["name"] for t in helper.tools(True)]
@@ -306,7 +306,7 @@ def test_many_shortcuts_are_changed_renamed_and_deleted_under_one_question():
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     live = helper.Actions(1, on_event, wait=2, shortcuts=lib)
     out = live({"name": "edit_shortcuts", "args": {"reason": "r", "changes": [{"name": "a", "new_name": "alpha"}, {"name": "b", "replacements": ["new two"], "category": "k"}, {"name": "c", "delete": True}]}})
@@ -336,7 +336,7 @@ def test_a_shortcut_name_copied_with_other_case_spacing_or_a_lookalike_is_still_
     seen = []
 
     def on_event(ev):
-        seen.append(ev)
+        seen.append(ev) if ev.get("kind") != "doing" else None
         threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
     acts = helper.Actions(1, on_event, wait=2, shortcuts=lib)
     out = acts({"name": "edit_shortcuts", "args": {"reason": "r", "changes": [{"name": " rain walk ", "new_name": "Walk in rain"}, {"name": "sun set", "delete": True}, {"name": "Café", "category": "k"}]}})

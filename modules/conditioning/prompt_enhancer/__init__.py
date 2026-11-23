@@ -104,8 +104,14 @@ def routes(table, base, web):
         if body is None or body.get("use_comfy") is True or not str(body.get("engine_model") or "").strip():
             return web.json_response({"ok": False, "reply": "", "status": "a conversation, a message and an engine model are needed"}, status=400)
         args = chat_args(body)
+        from . import jobs
         loop, queue = asyncio.get_running_loop(), asyncio.Queue()
-        push = lambda ev: loop.call_soon_threadsafe(queue.put_nowait, ev)       # noqa: E731
+        job = jobs.start(body["conversation"], body["message"]) if isinstance(body.get("helper"), dict) else None     # a helper request outlives the page that asked it
+        if job is not None:
+            job.attach(loop, queue)
+            push = job.push
+        else:
+            push = lambda ev: loop.call_soon_threadsafe(queue.put_nowait, ev)       # noqa: E731
 
         def work():
             try:
@@ -127,8 +133,11 @@ def routes(table, base, web):
                     done.set()
             except Exception as exc:                                # noqa: BLE001 -- the stream must end with a result
                 result = {"ok": False, "reply": "", "status": str(exc)}
-            push({"kind": "result", "result": result})
-            push(None)
+            if job is not None:
+                job.finish(result)
+            else:
+                push({"kind": "result", "result": result})
+                push(None)
         loop.run_in_executor(None, work)
         resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         await resp.prepare(req)
@@ -138,9 +147,57 @@ def routes(table, base, web):
                 if ev is None:
                     break
                 await resp.write(b"data: " + json.dumps(ev).encode() + b"\n\n")
-        except (ConnectionResetError, asyncio.CancelledError):
+                if job is not None and ev.get("kind") == "result":
+                    job.seen = True
+        except (ConnectionResetError, asyncio.CancelledError) as gone:
+            if job is not None:
+                job.detach(loop, queue)                              # the helper goes on without the page; the next page attaches to it
+                if isinstance(gone, ConnectionResetError):
+                    return resp                                      # not an error: the page left
+                raise
             eng.ENGINE.cancel.set()                                  # the page went away: stop writing
             raise
+        await resp.write_eof()
+        return resp
+
+    @table.get(base + "/chat_attach")
+    async def _chat_attach(req):
+        """Follow a helper request that is still running (or finished while no page was looking): `?conversation=`. Server-sent events, the same as chat_stream,
+        starting with {"kind": "begin", "message", "seconds"} and everything written so far. {"running": false} when there is nothing to follow."""
+        import asyncio
+        import json
+        from . import jobs
+        job = jobs.waiting(req.rel_url.query.get("conversation"))
+        if job is None:
+            return web.json_response({"running": False})
+        loop, queue = asyncio.get_running_loop(), asyncio.Queue()
+        backlog = job.attach(loop, queue)
+        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        await resp.prepare(req)
+        send = lambda ev: resp.write(b"data: " + json.dumps(ev).encode() + b"\n\n")      # noqa: E731
+        try:
+            await send({"kind": "begin", "message": job.message, "seconds": int(time.time() - job.started)})
+            for ev in backlog:
+                await send(ev)
+                if ev.get("kind") == "result":
+                    job.seen = True
+            while not job.done or not queue.empty():
+                try:
+                    ev = await asyncio.wait_for(queue.get(), 30)
+                except asyncio.TimeoutError:
+                    await resp.write(b": waiting\n\n")
+                    continue
+                if ev is None:
+                    break
+                await send(ev)
+                if ev.get("kind") == "result":
+                    job.seen = True
+        except (ConnectionResetError, asyncio.CancelledError) as gone:
+            job.detach(loop, queue)
+            if isinstance(gone, ConnectionResetError):
+                return resp
+            raise
+        job.detach(loop, queue)
         await resp.write_eof()
         return resp
 

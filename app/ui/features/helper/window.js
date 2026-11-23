@@ -11,19 +11,25 @@ import { clampBlocks } from "../../shell/blocks.js";
 
 const NODE = "FunUIEnhancePrompt";
 const PHRASES = ["Pondering", "Mulling it over", "Reading the project", "Weighing the options", "Working it out", "Sketching a plan", "Thinking it through", "Checking the scenes"];
+const DOING = { read_prompt: "Reading prompts", edit_prompt: "Editing prompts", find_shortcuts: "Finding shortcuts", save_shortcut: "Editing shortcuts", edit_shortcuts: "Editing shortcuts", remove_shortcut: "Editing shortcuts",
+  find_settings: "Finding a setting", set_setting: "Changing a setting", find_node_inputs: "Finding a pipeline input", set_node_inputs: "Changing the pipeline", apply_preset: "Switching the pipeline",
+  edit_scene: "Editing a scene", add_scene: "Adding a scene", copy_reference: "Copying references", share_reference: "Sharing references", set_clip_length: "Setting the clip length", set_story: "Rewriting the global prompt",
+  cut_scene: "Cutting a scene", set_cut_words: "Setting the cut words", set_project_text: "Editing project text", set_variable: "Editing variables", remove_variable: "Editing variables", run_action: "Running an action",
+  plan: "Writing the checklist", check_item: "Checking the list" };
+const MARK = { done: "✓", skipped: "✕", open: "○" };
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said; finished turns are also kept in this browser, so a refresh does not lose them
 const PAINT_MS = 120, KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
 const cut = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
 function saved(id) {
   try {
     const list = JSON.parse(localStorage.getItem(LOGKEY(id)) || "[]");
-    return (Array.isArray(list) ? list : []).filter((x) => x && typeof x.you === "string").map((x) => ({ you: x.you, thinking: cut(x.thinking, 20000), live: "", reply: cut(x.reply, 20000), status: cut(x.status, 300), done: [], t0: Number(x.t0) || 0, t1: Number(x.t1) || 1, open: false, seed: Number(x.seed) || 0, stopped: false, abort: new AbortController() }));
+    return (Array.isArray(list) ? list : []).filter((x) => x && typeof x.you === "string").map((x) => ({ you: x.you, thinking: cut(x.thinking, 20000), live: "", reply: cut(x.reply, 20000), status: cut(x.status, 300), done: [], plan: Array.isArray(x.plan) ? x.plan.slice(0, 60).map((i) => ({ text: cut(i && i.text, 300), state: cut(i && i.state, 10), note: cut(i && i.note, 200) })) : null, t0: Number(x.t0) || 0, t1: Number(x.t1) || 1, open: false, seed: Number(x.seed) || 0, stopped: false, abort: new AbortController() }));
   } catch { return []; }          // storage blocked: the history lasts until the page is closed
 }
 function remember(id, list) {
   try {
     if (!list.length) localStorage.removeItem(LOGKEY(id));
-    else localStorage.setItem(LOGKEY(id), JSON.stringify(list.filter((t) => t.t1).slice(-KEEP).map((t) => ({ you: t.you, thinking: t.thinking, reply: t.reply, status: t.status, t0: t.t0, t1: t.t1, seed: t.seed }))));
+    else localStorage.setItem(LOGKEY(id), JSON.stringify(list.filter((t) => t.t1).slice(-KEEP).map((t) => ({ you: t.you, thinking: t.thinking, reply: t.reply, status: t.status, plan: t.plan || null, t0: t.t0, t1: t.t1, seed: t.seed }))));
   } catch { /* lasts until the page is closed */ }
 }
 let draft = "";
@@ -226,6 +232,8 @@ export function openHelper(app, origin) {
   let busy = false, win = null, active = 0;
   const slot = () => ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inputs = () => (slot() || {}).inputs || {};
   const history = c.region.stack({ gap: "sm" });
+  const pinned = c.region.stack({ gap: "xs", sticky: true, children: [] });          // the checklist of the latest request, kept in view and updated as it goes
+  pinned.node.hidden = true;
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
@@ -237,7 +245,8 @@ export function openHelper(app, origin) {
   const thoughtOf = (x, working) => {
     if (!x.thinking && !x.live && !(working && !x.reply && !x.t1)) return [];
     const live = !x.t1, secs = Math.max(0, Math.round(((x.t1 || Date.now()) - x.t0) / 1000));
-    const label = live ? `${PHRASES[(x.seed + Math.floor(secs / 7)) % PHRASES.length]}… ${secs}s` : `Thought for ${secs}s`;
+    const doing = x.waiting ? "Waiting for your answer" : x.doing ? DOING[x.doing] || "Working" : "";
+    const label = live ? `${doing || PHRASES[(x.seed + Math.floor(secs / 7)) % PHRASES.length]}… ${secs}s` : `Thought for ${secs}s`;
     return [c.collapsible.default({ label, open: x.open, onToggle: (v) => { x.open = v; }, body: c.text.sm({ text: [x.thinking, x.live && `Written so far (not the answer):\n${x.live}`].filter(Boolean).join("\n\n") || "Nothing written yet." }) })];
   };
   let follow = true, pin = true;          // the view follows the answer down, unless the person scrolled up to read
@@ -267,6 +276,10 @@ export function openHelper(app, origin) {
     const kept = (x) => { if (!x.t1) return draw(x); const key = `${x.reply.length}|${x.status}|${x.done.length}|${x.thinking.length}`; if (!x.kept || x.kept.key !== key) x.kept = { key, els: draw(x) }; return x.kept.els; };
     history.set(t.length ? t.flatMap(kept)
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
+    const withPlan = [...t].reverse().find((x) => x.plan && x.plan.length), items = withPlan ? withPlan.plan : [], left = items.filter((i) => i.state === "open").length;
+    pinned.node.hidden = !items.length;
+    pinned.set(items.length ? [c.label.section({ text: `Checklist: ${items.length - left} of ${items.length} done` }), ...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
+      ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] : []);
     send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
     if (stopper.setDisabled) stopper.setDisabled(!busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });
@@ -288,34 +301,72 @@ export function openHelper(app, origin) {
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
     const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), max_length: Number(inp.helper_max_length) || 0, engine_model: eng };
-    try {
-      const r = await app.api.enhancerChatStream(body, (ev) => {
-        if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
-        else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
-          const yes = !turn.stopped && (await askEdit(ev, turn.abort.signal)) && !turn.stopped, sl = slot();
-          if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
-          turn.done.push(yes ? `Saved the system prompt: ${ev.field}` : `Refused: change to ${ev.field}`);
-          paint();
-          await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
-        })();
-        else if (ev.kind === "action_request") (async () => {
-          const yes = !turn.stopped && (await askAction(ev, turn.abort.signal)) && !turn.stopped;
-          if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);
-          turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api, app) : `Refused: ${ev.summary}`);
-          paint();
-          await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
-        })();
-        paint();
-      });
-      if (r && r.stopped) { turn.reply = ""; turn.status = "Stopped."; }
-      else {
-        if (r && !r.ok) throw new Error(r.status || "the helper could not answer");
-        if (r && r.reply) turn.reply = r.reply;
-      }
-    } catch (e) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(e && e.message) || e}`; }
-    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
+    let r = null, err = null;
+    try { r = await app.api.enhancerChatStream(body, hear(turn, presets)); } catch (e) { err = e; }
+    if (err && !turn.stopped && !err.status) return resume(turn, presets);          // the connection dropped, not the helper: follow it again
+    settle(turn, r, err);
   }
-  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [clear, stopper, send] });
+  // the page lost the stream (a refresh, a dropped connection, the server restarting) but the helper may still be working: follow it again, the writing so far is sent again
+  async function resume(turn, presets, tries = 0) {
+    turn.status = "Reconnecting…"; turn.thinking = ""; turn.live = ""; paint();
+    let r = null, err = null;
+    try { r = await app.api.enhancerChatAttach(`helper:${p.project.id}`, (ev) => { if (ev.kind !== "begin") hear(turn, presets)(ev); }); } catch (e) { err = e; }
+    if (!err && r === null) err = new Error("the helper stopped when the connection was lost (the server may have restarted)");
+    else if (err && !turn.stopped && !err.status && tries < 5) { await new Promise((ok) => setTimeout(ok, 1000 * (tries + 1))); return resume(turn, presets, tries + 1); }
+    settle(turn, r, err);
+  }
+  // what a request tells the page, for the turn that shows it: the writing so far, and each question that waits for Allow
+  const hear = (turn, presets) => (ev) => {
+      if (ev.kind === "plan") turn.plan = ev.items; else if (ev.kind === "doing") turn.doing = ev.tool || ""; else if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
+      else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
+        turn.waiting = true; paint();
+        const yes = !turn.stopped && (await askEdit(ev, turn.abort.signal)) && !turn.stopped, sl = slot();
+        turn.waiting = false;
+        if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
+        turn.done.push(yes ? `Saved the system prompt: ${ev.field}` : `Refused: change to ${ev.field}`);
+        paint();
+        await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
+      })();
+      else if (ev.kind === "action_request") (async () => {
+        turn.waiting = true; paint();
+        const yes = !turn.stopped && (await askAction(ev, turn.abort.signal)) && !turn.stopped;
+        turn.waiting = false;
+        if (ev.tool === "apply_preset") ev.preset = presets.find((x) => x.id === ev.args.preset);
+        turn.done.push(yes ? await applyAction(p, ev, app.pipeline, app.api, app) : `Refused: ${ev.summary}`);
+        paint();
+        await app.api.enhancerEditDecision(ev.id, yes).catch(() => {});
+      })();
+      paint();
+  };
+  // the end of a turn: the answer, a stop, or what went wrong
+  const settle = (turn, r, err) => {
+    if (!err && r && r.stopped) { turn.reply = ""; turn.status = "Stopped."; }
+    else if (!err && r && !r.ok) err = new Error(r.status || "the helper could not answer");
+    else if (!err && r && r.reply) turn.reply = r.reply;
+    if (err) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(err && err.message) || err}`; }
+    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
+  };
+  // after a refresh the helper may still be working on the server: follow it, so its writing and its questions show again
+  async function attach() {
+    if (!app.api.enhancerChatAttach || turns().some((t) => !t.t1)) return;
+    let turn = null, heard = null;
+    const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []);
+    let r = null, err = null;
+    try {
+      r = await app.api.enhancerChatAttach(`helper:${p.project.id}`, (ev) => {
+        if (ev.kind === "begin") {
+          turn = { you: String(ev.message || ""), thinking: "", live: "", reply: "", status: "", done: [], t0: Date.now() - (Number(ev.seconds) || 0) * 1000, t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
+          log.set(p.project.id, [...turns(), turn]); active += 1; busy = true; pin = true;
+          if (!tick) tick = setInterval(paint, 1000);
+          heard = hear(turn, presets);
+          paint(true);
+        } else if (turn) heard(ev);
+      });
+    } catch (e) { err = e; }
+    if (turn) settle(turn, r, err);
+  }
+  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [pinned, history, box] }), actions: [clear, stopper, send] });
   paint();
+  attach();
   return win;
 }

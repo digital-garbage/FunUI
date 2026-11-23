@@ -213,6 +213,7 @@ class Actions:
             self.plan = [{"text": x.strip()[:300], "state": "open", "note": ""} for x in items]
             self.plan_changes = 0                          # any change made in this request counts, whether it came before the list or after
             self.on_event({"kind": "status", "text": f"Checklist: 0 of {len(self.plan)} done"})
+            self.show_plan()
             return f"Checklist saved with {len(self.plan)} items. Do them in order: make the change for an item, then call check_item for it. You may answer the user only when every item is checked."
         if not self.plan:
             return "Error: there is no checklist yet. Call plan first."
@@ -234,7 +235,12 @@ class Actions:
         self.plan[n - 1].update(state=state, note=result[:200])
         left = self.open_items()
         self.on_event({"kind": "status", "text": f"Checklist: {len(self.plan) - len(left)} of {len(self.plan)} done"})
+        self.show_plan()
         return f"Item {n} marked {state}. " + (f"Still open: {', '.join(str(i) for i in left[:20])}." if left else "Every item is checked: now tell the user in one or two sentences what was done and what could not be.")
+
+    def show_plan(self):
+        """The checklist as it stands, for the page to keep pinned."""
+        self.on_event({"kind": "plan", "items": [{"text": x["text"], "state": x["state"], "note": x["note"]} for x in self.plan]})
 
     def plan_note(self) -> str:
         left = self.open_items()
@@ -466,6 +472,14 @@ class Actions:
         return (None, v.strip()) if isinstance(v, str) and len(v) <= 2000 else ("Error: this setting takes text of at most 2000 characters.", None)
 
     def __call__(self, call) -> str:
+        """Answer one tool call; the page hears which tool is at work (kind "doing") until it is done."""
+        self.on_event({"kind": "doing", "tool": str(call.get("name") or "")})
+        try:
+            return self._call(call)
+        finally:
+            self.on_event({"kind": "doing", "tool": ""})
+
+    def _call(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
         self.calls += 1
         if call.get("unreadable"):

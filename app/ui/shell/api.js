@@ -11,7 +11,8 @@ function why(res, payload) {
 
 /** POST and read server-sent events ("data: {json}" blocks) as they arrive; resolves the {kind: "result"} event's result. */
 export async function streamEvents(path, body, onEvent) {
-  const res = await fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(BASE + path, body === undefined ? { method: "GET" } : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (body === undefined && res.ok && /json/.test(res.headers.get("content-type") || "")) return null;          // nothing to follow
   if (!res.ok || !res.body) {
     const payload = await res.json().catch(() => null);
     throw Object.assign(new Error(why(res, payload)), { status: res.status });
@@ -113,6 +114,8 @@ export const api = {
   enhancerEngineUnload: () => call("POST", "/api/m/conditioning_prompt_enhancer/engine/unload", {}),
   /** The chat answer as it forms: `onEvent` hears {kind: status | thinking | answer | call} pieces; resolves the final result. */
   enhancerChatStream: (body, onEvent) => streamEvents("/api/m/conditioning_prompt_enhancer/chat_stream", body, onEvent),
+  /** Follow the helper request of a conversation that is still running, after the page was refreshed: `onEvent` hears {kind: begin, ...} and then everything written so far and after; resolves its result, or null when nothing runs. */
+  enhancerChatAttach: (conversation, onEvent) => streamEvents(`/api/m/conditioning_prompt_enhancer/chat_attach?conversation=${encodeURIComponent(conversation)}`, undefined, onEvent),
   /** Stop what the helper is doing for a conversation (the stream of that request ends with a "stopped" result). */
   enhancerChatStop: (conversation) => call("POST", "/api/m/conditioning_prompt_enhancer/chat_stop", { conversation }),
   /** The person's answer to a rule change the model proposed. */
