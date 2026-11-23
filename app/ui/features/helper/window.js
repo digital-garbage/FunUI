@@ -298,6 +298,7 @@ export function openHelper(app, origin) {
     if (!message) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, thinking: "", live: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
+    turns().forEach((t) => { t.open = false; t.kept = null; });            // a new message never leaves a thought open
     turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint(true);
     if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
@@ -348,7 +349,7 @@ export function openHelper(app, origin) {
     else if (!err && r && !r.ok) err = new Error(r.status || "the helper could not answer");
     else if (!err && r && r.reply) turn.reply = r.reply;
     if (err) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(err && err.message) || err}`; }
-    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
+    turn.open = false; turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
   };
   // after a refresh the helper may still be working on the server: follow it, so its writing and its questions show again
   async function attach() {
