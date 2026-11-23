@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Shortcuts tab keeps its place and fills the Composer window.** Saving, deleting or importing a shortcut no longer jumps the list back to the top, the search field stays pinned while the list scrolls, and the list is as long as the Composer window allows instead of a small fixed box.
 - **The Helper's checklist sits under its own message instead of being pinned at the top.** Each request keeps its own checklist: open and updating while the request works, folded once it is finished, and kept in the history.
 - **A long bulk shortcut job no longer stalls after the first batch.** After each allowed shortcut edit the tool answer says how many shortcuts were changed in this request, how many have not been touched yet, and names the next 20, so the model can send the next batch straight away.
 - **Optional Helper comments in the chat.** A new switch "Helper comments in the chat" (Settings > Editor, under the Helper switch, off by default) shows what the Helper writes between its actions as grey lines in the chat, instead of only inside its thinking line.

@@ -183,7 +183,7 @@ define("textarea", "md", ({ value = "", rows = 4, autoGrow = false, fold = false
  */
 const FILTER_ICON_TONES = new Set(["accent", "danger", "warn", "good", "neutral"]);
 
-define("filterList", "md", ({ items = [], value, onChange, placeholder = "Search", empty = "Nothing matches", query = "" } = {}) => {
+define("filterList", "md", ({ items = [], value, onChange, placeholder = "Search", empty = "Nothing matches", query = "", pinned = false } = {}) => {
   let selected = value;
   const search = el("input", { cls: ["cx-input", "cx-input-sm", "cx-search", "cx-focusable"],
     attrs: { type: "search", placeholder } });
@@ -236,7 +236,7 @@ define("filterList", "md", ({ items = [], value, onChange, placeholder = "Search
   search.addEventListener("input", draw);
   draw();
 
-  const node = el("div", { cls: "cx-filter", children: [search, list] });
+  const node = el("div", { cls: ["cx-filter", pinned ? "cx-filter-pinned" : null], children: [search, list] });
   return {
     node,
     get value() { return selected; },

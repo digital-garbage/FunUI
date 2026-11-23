@@ -51,6 +51,8 @@
    node-add picker (pipeline_window.js) is the one place that already has an
    outer search; this hides filterList's own for exactly that container. */
 .cx-node-picker-results .cx-filter > .cx-search { display: none; }
+.cx-filter-pinned > .cx-search { position: sticky; inset-block-start: 0; z-index: 1; }       /* the search stays in view while a long list scrolls under it */
+.cx-filter-pinned .cx-filter-list { max-height: none; }       /* ...and the list is as long as it is: the window around it scrolls, not a small box */
 .cx-filter-list {
   display: flex; flex-direction: column; gap: 1px;
   max-height: var(--textarea-max-h); overflow-y: auto; overflow-x: hidden;

@@ -132,6 +132,40 @@ async function helperChecklist(page, note, shot) {
   await page.waitForTimeout(200);
 }
 
+// The Shortcuts tab of the Composer: the list is as long as the window allows, the search stays pinned while it scrolls, and a save leaves the scroll where it was.
+async function shortcutsTab(page, note) {
+  const lib = { shortcuts: Array.from({ length: 80 }, (_, i) => ({ name: `Shortcut ${String(i).padStart(2, "0")}`, triggers: [`t${i}`], replacements: ["x"], enabled: true, category: i < 40 ? "A" : "B", sub_category: "" })) };
+  await page.route("**/api/shortcuts", (route) => route.fulfill({ json: lib }));
+  await page.getByRole("button", { name: /Composer/ }).first().click({ timeout: 2000 }).catch(() => note("the Composer button cannot be pressed"));
+  await page.waitForTimeout(400);
+  await page.getByRole("tab", { name: "Shortcuts" }).click({ timeout: 2000 }).catch(() => note("the Shortcuts tab cannot be opened"));
+  await page.waitForTimeout(400);
+  const info = () => page.evaluate(() => {
+    const s = document.querySelector(".cx-search[placeholder='Search shortcuts']");
+    if (!s) return null;
+    let sc = null;
+    for (let n = s.parentElement; n; n = n.parentElement) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") { sc = n; break; } }
+    const list = s.parentElement.querySelector(".cx-filter-list").getBoundingClientRect();
+    return sc ? { top: sc.scrollTop, search: Math.round(s.getBoundingClientRect().top - sc.getBoundingClientRect().top), listHeight: list.height, scrollable: sc.scrollHeight > sc.clientHeight, scrollerHeight: sc.clientHeight } : null;
+  });
+  const first = await info();
+  if (!first) { note("the shortcut search is not shown"); return; }
+  if (first.scrollable && first.listHeight < first.scrollerHeight * 0.9 && first.listHeight < 400) note(`the shortcut list is a small fixed box (${Math.round(first.listHeight)}px)`);
+  await page.evaluate(() => { const s = document.querySelector(".cx-search[placeholder='Search shortcuts']"); for (let n = s.parentElement; n; n = n.parentElement) { const o = getComputedStyle(n).overflowY; if (o === "auto" || o === "scroll") { n.scrollTop = 500; break; } } });
+  await page.waitForTimeout(200);
+  const scrolled = await info();
+  if (scrolled.top > 0 && scrolled.search > 2) note(`the shortcut search is not pinned (${scrolled.search}px from the top after scrolling)`);
+  await page.getByText("Shortcut 30").first().click({ timeout: 2000 }).catch(() => note("a shortcut cannot be opened"));
+  await page.waitForTimeout(300);
+  const mid = await info();
+  await page.locator(".cx-modal-foot button", { hasText: "Save" }).click({ timeout: 2000 }).catch(() => note("a shortcut cannot be saved"));
+  await page.waitForTimeout(500);
+  const after = await info();
+  if (mid && after && Math.abs(after.top - mid.top) > 2) note(`the shortcut list jumps after a save (${mid.top} to ${after.top})`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+}
+
 const { server, url } = await start(0);
 const problems = [];
 let ran = 0;
@@ -159,6 +193,7 @@ for (const name of wanted) {
     main.header.forEach((m) => note(m));
     if (!running) await autoHide(page, note);
     if (!running) await helperChecklist(page, note, process.env.FUNUI_SHOTS ? `${process.env.FUNUI_SHOTS}/helper-${name}-${w}x${h}.png` : "");
+    if (!running) await shortcutsTab(page, note);
     for (const [label, text] of WINDOWS) {
       await page.getByText(text).first().click({ timeout: 1500 }).catch(() => note(`${label} cannot be opened`));
       await page.waitForTimeout(500);
