@@ -173,7 +173,8 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
     if helper and actions is not None and not getattr(actions, "changes", 0):
         hp = __import__(__package__ + ".helper", fromlist=["x"])
         before = list(state["turns"])[-1] if state["turns"] else {}
-        if hp.wants_change(message, before.get("reply", "")):
+        cut_short = str(before.get("reply", "")).startswith("(the user stopped")     # a new message that interrupted a change request is the next part of it
+        if hp.wants_change(message, before.get("reply", "")) or (cut_short and hp.wants_change(before.get("request", ""))) or (hp.announced(reply) and not str(message).strip().endswith("?")):
             # the request asked for something to be done and every try ended without a change (an answer in words, or only a look at a rule): one more round that names the fitting tools
             note = hp.force_note(message, bool(helper.get("rules")), f"{before.get('request', '')} {before.get('reply', '')}")
             if not text_mode:

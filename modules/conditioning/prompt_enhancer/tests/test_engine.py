@@ -1101,3 +1101,12 @@ def test_entries_can_be_sent_without_their_names():
     bare = en.reference("rain", [group], names=False)
     assert "Rain" in named and "[Shortcut]" in named
     assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "always rewrite" in bare and "name" not in bare.split("It pours")[0].lower()
+
+
+def test_a_message_that_interrupted_a_change_request_is_forced_into_the_change_too(monkeypatch, tiny, comfyui):
+    before = {"request": "Please correct the rules so they do not mention 2.5D", "reply": "(the user stopped this request before it was answered)", "kind": "chat"}
+
+    def behave(text):
+        return (_EDIT if ("nothing was changed" in text or "Still nothing" in text or "have not read" in text) else "Understood, noted."), "ok", [], [], ""
+    out, proposals = _rule_chat(monkeypatch, tiny, behave, message="Also no 3D look.", before=before)
+    assert proposals == ["Write prompts in the requested style."]

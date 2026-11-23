@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A Helper message that interrupts a change request now carries it on.** When the new message only adds to the stopped request ("Also no 3D look.") and the model answers in words, the Helper now makes the call as well. The same goes for any answer that announces a change without making it.
 - **The Helper can edit, rename and delete many shortcuts in one go.** A new batch tool (edit_shortcuts) takes up to 60 changes and asks once for the whole batch; the question lists every change. Looking shortcuts up now returns up to 40 matches.
 - The built-in intro above shortcut and lore entries is reworded: they are a dictionary used only as reference, never output verbatim, and their names never trigger scenes and are not written out. The version used while "Name shortcuts to the model" is off says the same without mentioning names.
 - **"Name shortcuts to the model" switch** in the Enhance settings. Off, the model gets only the text of each shortcut or lore entry, never its name, so it has nothing to write into the prompt. On by default.
