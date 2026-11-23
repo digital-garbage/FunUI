@@ -281,9 +281,9 @@ export function openHelper(app, origin) {
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
     const withPlan = [...t].reverse().find((x) => x.plan && x.plan.length), items = withPlan ? withPlan.plan : [], left = items.filter((i) => i.state === "open").length;
     pinned.node.hidden = !items.length;
-    pinned.set(items.length ? [c.card.default({ gap: "sm", children: [c.collapsible.default({ label: `Checklist: ${items.length - left} of ${items.length} done`, open: planOpen, onToggle: (v) => { planOpen = v; },
+    pinned.set(items.length ? [c.collapsible.default({ label: `Checklist: ${items.length - left} of ${items.length} done`, open: planOpen, onToggle: (v) => { planOpen = v; },
       body: c.region.stack({ gap: "xs", children: [...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
-        ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] }) })] })] : []);
+        ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] }) })] : []);
     send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
     if (stopper.setDisabled) stopper.setDisabled(!busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });

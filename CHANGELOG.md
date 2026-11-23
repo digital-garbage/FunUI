@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper's pinned checklist is a plain fold again, without a box around it.** The extra card and the darker band behind it are gone; a pinned strip inside a window now takes the window's own colour.
 - **The Helper's reminders now come from the app, not from you.** Every reminder the app sends the model (the checklist, "call the tool now", tool results) is marked as an app note, and the Helper's system prompt says such notes are not user messages, so the model no longer believes you wrote them.
 - **The Helper no longer sees the Chat tab conversation.** It can read it only through a new read_chat_log tool, and only when you explicitly ask it to look at that chat log.
 - **Clear in the Helper now forgets the conversation on the server too**, not only in the window: its saved turns and its finished request are dropped, and anything still running is stopped. The history still survives a refresh until you press Clear.
