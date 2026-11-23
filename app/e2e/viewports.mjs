@@ -64,6 +64,32 @@ async function walkTour(page, note) {
   if (!seen.length || seen.some((n, i) => n !== i + 1) || seen.length < 5) note(`the tour skipped a step or did not run (saw ${seen.join(",") || "nothing"})`);
 }
 
+// Auto-hide: with the pointer resting on the strip the timeline opens, and it must hold its lanes with no empty space under them or past them.
+async function autoHide(page, note) {
+  await page.getByRole("button", { name: "Auto-hide", exact: true }).click();
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(300);
+  const strip = await page.locator(".fp-peek-strip").boundingBox();
+  if (!strip) return note("auto-hide shows no strip");
+  await page.mouse.move(strip.x + strip.width / 2, strip.y + strip.height / 2);
+  await page.waitForTimeout(700);
+  const gap = await page.evaluate(() => {
+    const z = document.querySelector(".fp-main > :nth-child(2)"), nle = z && z.querySelector(".cx-nle"), stage = nle && nle.querySelector(".cx-nle-stage");
+    if (!document.documentElement.classList.contains("fp-peek-open") || !nle || !stage) return null;
+    const q = (e) => e.getBoundingClientRect();
+    return { below: Math.round(q(z).bottom - q(stage).bottom), inside: Math.round(nle.clientHeight - stage.offsetHeight), top: Math.round(q(z).top) };
+  });
+  if (!gap) note("auto-hide did not open the timeline when the pointer rested on its strip");
+  else {
+    if (gap.below > 24) note(`auto-hide: ${gap.below}px of empty space under the last lane when hovered`);
+    if (gap.inside > 6) note(`auto-hide: ${gap.inside}px of empty space inside the timeline when hovered`);
+    if (gap.top < 0) note("auto-hide: the opened timeline runs off the top of the window");
+  }
+  await page.mouse.move(2, 2);
+  await page.getByRole("button", { name: "Auto-hide", exact: true }).click();
+  await page.waitForTimeout(200);
+}
+
 const { server, url } = await start(0);
 const problems = [];
 let ran = 0;
@@ -89,6 +115,7 @@ for (const name of wanted) {
     main.lanes.forEach((m) => note(m));
     main.slack.forEach((m) => note(m));
     main.header.forEach((m) => note(m));
+    if (!running) await autoHide(page, note);
     for (const [label, text] of WINDOWS) {
       await page.getByText(text).first().click({ timeout: 1500 }).catch(() => note(`${label} cannot be opened`));
       await page.waitForTimeout(500);
