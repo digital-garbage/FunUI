@@ -96,9 +96,9 @@ SETTINGS = {
         "when": {"enabled": True},
     },
     "layout_blocks": {
-        "type": "text", "model_blocks": True, "default": "2-6",
+        "type": "text", "model_blocks": True, "default": "3-45",
         "label": "Layout blocks",
-        "hint": "The few early blocks the layout push goes into, e.g. 2-6.",
+        "hint": "The blocks the layout push goes into, e.g. 3-45.",
         "when": {"enabled": True, "layout": True},
     },
     "layout_steps": {
