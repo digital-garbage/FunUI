@@ -106,7 +106,6 @@ export function enhance(app, own) {
       toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
       toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models).", "self_edit", false, off(chat, engineSet)),
       toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
-      toggle("Name shortcuts to the model", "Off: the model gets only the text of each shortcut or lore entry, never its name, so it cannot write one into the prompt.", "name_entries", true, off()),
       c.label.section({ text: "Speed" }),
       field("Precision", c.select.md({ label: "Precision", value: val("precision", "auto"), disabled: off(engineSet), options: [{ value: "auto", label: "Automatic" }, { value: "bf16", label: "bf16 (fastest, double memory)" }, { value: "fp8", label: "fp8 (smallest)" }] , onChange: (x) => set("precision", x) }), "How a single fp8 model file is run. Automatic widens it to bf16 once when the graphics card has room, which makes every word faster; on the processor it stays fp8. Applies the next time the model loads."),
       toggle("Reuse the unchanged start of a request", "The start of a request that did not change since the last one (the rules, the conversation) is not read again, only the new part is.", "prefix_cache", true, off(engineSet)),
@@ -132,6 +131,7 @@ export function enhance(app, own) {
           c.hint.default({ text: "Nothing to show yet gives \"(nothing yet: none was given so far)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) })] }) }),
       c.label.section({ text: "Reference" }),
       field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, disabled: off(), value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
+      toggle("Name shortcuts to the model", "Off: the model gets only the text of each shortcut or lore entry, never its name, so it cannot write one into the prompt.", "name_entries", true, off()),
       ...readout(),
     ]);
   }
