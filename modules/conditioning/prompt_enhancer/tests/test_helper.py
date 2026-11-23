@@ -468,3 +468,17 @@ def test_even_one_change_is_made_from_a_checklist_the_model_is_asked_for(monkeyp
     out = nodes.chat_reply("h:one", "set the variable a to 1", engine_model="tiny", max_length=8, on_event=on_event, helper={"sheet": "x", "scenes": 1})
     assert done == ["set_variable"] and any("checklist" in t.lower() and "even a single one" in t for t in seen)
     assert "Not finished" not in out["reply"]
+
+
+def test_a_text_written_again_and_again_is_seen_as_a_loop():
+    from .. import gguf
+    unit = 'call:edit_shortcuts{changes:[{name:"a"}]} '
+    assert gguf.looping("start " + unit * 5)
+    assert not gguf.looping("call:edit_shortcuts{changes:[{name:" + "".join(f'"s{i}",' for i in range(80)) + "]}")
+    assert not gguf.looping("a short answer")
+
+
+def test_long_shortcut_batches_are_refused_so_the_model_sends_several_calls():
+    acts = helper.Actions(1, lambda ev: None, shortcuts=[{"name": f"s{i}", "triggers": [f"t{i}"], "replacements": ["x"]} for i in range(30)])
+    out = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": f"s{i}", "new_name": f"n{i}"} for i in range(21)]}})
+    assert "one to 20" in out

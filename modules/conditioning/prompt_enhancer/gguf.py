@@ -143,6 +143,15 @@ def ensure_llama(say=lambda text: None):
     raise RuntimeError(f"llama-cpp-python could not be loaded ({problem[:300]}). Install it by hand: pip install llama-cpp-python --extra-index-url {index}")
 
 
+def looping(text, window=1200) -> bool:
+    """Whether the end of a text is one piece of 12 to 300 characters written again and again (a small model stuck in a loop)."""
+    tail = str(text)[-window:]
+    for k in range(12, 301):
+        if len(tail) >= 4 * k and tail[-k:] == tail[-2 * k:-k] == tail[-3 * k:-2 * k] == tail[-4 * k:-3 * k]:
+            return True
+    return False
+
+
 class Backend:
     """A loaded GGUF model. Stands in for both the model and the tokenizer of the engine (`chat_template` and `eos` are read from the file)."""
 
@@ -346,7 +355,7 @@ class Backend:
         feed, fresh = tokens, True
         if not picture and not self.can_trim():
             feed, fresh = self._resume(text, tokens)
-        sent = False
+        sent, written = False, ""
         for attempt in (0, 1):
             try:
                 for token in llm.generate(feed, reset=fresh, **sampling):
@@ -363,7 +372,12 @@ class Backend:
                     piece = decoder.decode(llm.detokenize([token], special=True))
                     if piece:
                         sent = True
+                        written = (written + piece)[-1500:]
                         yield piece
+                        if count % 24 == 0 and count >= 96 and looping(written):         # it only repeats itself now: end it instead of filling the window
+                            if stats is not None:
+                                stats["why"] = "it repeated the same text again and again, so it was stopped"
+                            break
                     if count >= max_new_tokens or count + len(tokens) >= window - 1:
                         break
                 break
