@@ -323,6 +323,8 @@ def layout_push(x, mode, size):
     to try again, not a draw per seed."""
     if not mode or not size:
         return x
+    if hasattr(x, "dequantize"):                 # a packed tensor (MXFP8 and the like): the push works on plain numbers
+        x = x.dequantize()
     d = x.shape[-1]
     key = (mode, d, x.device, x.dtype)
     if key not in _PUSHES:
@@ -332,8 +334,8 @@ def layout_push(x, mode, size):
         _PUSHES[key] = (a.to(x.device, x.dtype), b.to(x.device, x.dtype))
     a, b = _PUSHES[key]
     delta = (x @ a) @ b
-    length = torch.linalg.vector_norm(delta, dtype=torch.float32).clamp_min(1e-6)
-    return x + delta * (size * torch.linalg.vector_norm(x, dtype=torch.float32) / length).to(x.dtype)
+    delta.mul_((size * torch.linalg.vector_norm(x) / torch.linalg.vector_norm(delta).clamp_min(1e-6)).to(x.dtype))        # in place and without float copies: one extra tensor the size of `x`, not five, because a first step that needs more memory than ComfyUI planned for pushes models out of the card
+    return delta.add_(x)
 
 
 def followed(factors, options, index, blocks):

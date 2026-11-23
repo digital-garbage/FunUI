@@ -426,6 +426,17 @@ def test_a_layout_push_is_the_same_every_time_for_a_mode_and_a_set_share_of_the_
     assert torch.allclose(four.reshape(2, 40, 32), a, atol=1e-5)
 
 
+def test_a_packed_tensor_is_pushed_as_plain_numbers():
+    from modules.sampling.attention_bandit import layout_push
+
+    class Packed(torch.Tensor):
+        def dequantize(self):
+            return torch.Tensor(self).clone()
+    plain = torch.randn(1, 8, 16)
+    out = layout_push(plain.as_subclass(Packed), 2, 0.1)
+    assert type(out) is torch.Tensor and torch.allclose(out, layout_push(plain, 2, 0.1), atol=1e-5)
+
+
 def test_layout_modes_push_the_first_step_only_and_a_rating_teaches_the_mode(tiny_h3, monkeypatch):
     from modules.sampling import attention_bandit as m
     from modules.system.taste import store
