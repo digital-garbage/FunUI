@@ -324,11 +324,9 @@ def compact(clip, summary, turns, prompts=None, macros=None, **sampling):
     """-> new notes text of the old notes plus these turns, or "" when the model could not write them."""
     cut = lambda x: str(x).strip()[:CONVO_CHARS]      # noqa: E731
     text = (f"EARLIER NOTES:\n{summary}\n\n" if summary else "") + "TRANSCRIPT:\n" + "\n\n".join(compact_turn(t, cut) for t in turns) + "\n\n" + COMPACT_ASK
-    # A repetition penalty would punish the notes for using the words they are about. Gemma 4 thinks first, with Google's own sampling.
+    # A repetition penalty would punish the notes for using the words they are about. The notes never think: reasoning is only for the Helper, comments and chat messages.
     plain = {"max_length": COMPACT_TOKENS, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
-    gemma = {"max_length": COMPACT_THINK_TOKENS, "do_sample": True, "thinking": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05,
-             "repetition_penalty": 1.0, "presence_penalty": 0.0, "seed": 0}
-    raw, _ = generate(clip, expand_macros(pick(prompts, "compact_prompt"), macros), text, **{**sampling, **(gemma if native_turns(clip) else plain), "image": None})
+    raw, _ = generate(clip, expand_macros(pick(prompts, "compact_prompt"), macros), text, **{**sampling, **plain, "image": None})
     return clean(raw)
 
 

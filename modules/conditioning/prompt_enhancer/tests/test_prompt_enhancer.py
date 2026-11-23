@@ -633,13 +633,11 @@ def test_the_note_taker_sees_comments_ratings_and_answers_labelled_and_is_not_pe
     assert seen["kw"]["repetition_penalty"] == 1.0 and seen["kw"]["do_sample"] is False
 
 
-def test_gemma4_writes_the_notes_thinking_with_its_own_sampling_and_other_encoders_plainly():
-    gemma = FakeClip("<think>x</think>SCENES: a fox."); gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
+def test_the_conversation_notes_never_think_on_any_encoder():
+    gemma = FakeClip("SCENES: a fox."); gemma.tokenizer = type("Gemma4SDTokenizer", (Gemma4_Tokenizer,), {})()
     turn = {"request": "a fox", "reply": "A red fox."}
     assert en().compact(gemma, "", [turn]) == "SCENES: a fox."
-    assert gemma.seen["thinking"] is True
-    assert {k: gemma.seen["gen"][k] for k in ("do_sample", "temperature", "top_p", "top_k", "min_p", "repetition_penalty", "presence_penalty", "max_length")} == {
-        "do_sample": True, "temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.05, "repetition_penalty": 1.0, "presence_penalty": 0.0, "max_length": en().COMPACT_THINK_TOKENS}
+    assert gemma.seen["thinking"] is False
     plain = FakeClip("SCENES: a fox.")
     en().compact(plain, "", [turn])
     assert plain.seen["gen"]["do_sample"] is False and plain.seen["gen"]["repetition_penalty"] == 1.0 and plain.seen["gen"]["max_length"] == en().COMPACT_TOKENS
@@ -891,4 +889,5 @@ def test_thinking_follows_the_comments_switch_when_there_is_something_to_follow_
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=True, thinking_comments=False)
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=False, thinking_comments=True, chat=comment)
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=True, thinking_comments=False, chat=comment)
-    assert seen == [True, True, False]
+    node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=False, thinking_comments=True)        # the main switch off, nothing to follow: no thinking
+    assert seen == [True, True, False, False]
