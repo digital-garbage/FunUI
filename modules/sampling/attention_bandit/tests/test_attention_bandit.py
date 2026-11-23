@@ -444,6 +444,16 @@ def test_layout_modes_push_the_first_step_only_and_a_rating_teaches_the_mode(tin
     assert table[0][3] == [1.0, 0.0]
 
 
+def test_layout_steps_choose_which_steps_are_pushed(tiny_h3, monkeypatch):
+    from modules.sampling import attention_bandit as m
+    base_later = tiny_h3.run()                                           # the tiny schedule's second step
+    patched, _ = _load(tiny_h3, mode="manual", layout=True, layout_blocks="0-1", layout_steps="2", blocks="2-3")
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [3 if len(table[0]) == m.MODES + 1 else 1] * len(table))
+    assert not torch.equal(_run(_outer(patched), lambda: tiny_h3.run(patched))[0], base_later[0]), "step 2 was not pushed"
+    base_first = tiny_h3.run(sigma=1.0)
+    assert torch.equal(_run(_outer(patched), lambda: tiny_h3.run(patched, sigma=1.0))[0], base_first[0]), "step 1 was pushed"
+
+
 def test_layout_modes_are_off_by_default_and_store_nothing(tiny_h3, monkeypatch):
     from modules.system.taste import store
     patched, status = _load(tiny_h3, mode="manual", range=0.4, blocks="0-3")

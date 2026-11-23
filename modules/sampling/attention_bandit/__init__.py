@@ -101,6 +101,12 @@ SETTINGS = {
         "hint": "The few early blocks the layout push goes into, e.g. 2-6.",
         "when": {"enabled": True, "layout": True},
     },
+    "layout_steps": {
+        "type": "text", "default": "1",
+        "label": "Layout steps",
+        "hint": "Step numbers from 1, e.g. 1 or 1-2. The first step decides the layout; later ones push less usefully.",
+        "when": {"enabled": True, "layout": True},
+    },
     "layout_size": {
         "type": "float", "default": 0.1, "min": 0.02, "max": 0.3, "step": 0.01,
         "label": "Layout push", "ui": "slider",
@@ -435,7 +441,11 @@ def install(patcher, values, key):
     layout_blocks, layout_problems = dit_hooks.parse_blocks(values.get("layout_blocks"), dit_hooks.block_count(patcher)) if layout else ([], [])
     for problem in layout_problems:
         _say(f"ignored layout block {problem}")
-    layout = layout and bool(layout_blocks)
+    layout_steps, bad_steps = dit_hooks.parse_blocks(values.get("layout_steps", "1"), 100000) if layout else ([], [])
+    for problem in bad_steps:
+        _say(f"ignored layout step entry: {problem}")
+    layout_steps = {i - 1 for i in layout_steps if i >= 1}
+    layout = layout and bool(layout_blocks) and bool(layout_steps)
     blocks, problems = dit_hooks.parse_blocks(values.get("blocks"), dit_hooks.block_count(patcher))
     for problem in problems:
         _say(f"ignored {problem}")
@@ -478,7 +488,7 @@ def install(patcher, values, key):
     def layout_for(index):
         def scoped(args, extra):
             where = dit_hooks.current_step(args.get("transformer_options"))
-            if not live["mode"] or where is None or where[0] != 0:          # the first step only: that is where the layout is decided
+            if not live["mode"] or where is None or where[0] not in layout_steps:          # by default the first step only: that is where the layout is decided
                 return extra["original_block"](args)
             to = dict(args.get("transformer_options") or {})
             to[_LAYOUT] = live["mode"]
@@ -565,15 +575,15 @@ def install(patcher, values, key):
             describe(groups, arms, spread),
             describe(groups, tarms, PROMPT_SCALE * spread, ("weaker", "stronger"), "prompt ") if focus else "",
             describe([[n] for n in REGIONS], rarms, spread, what="clip regions ", blocks=False) if regions else "") if x)
-        pushed = f"layout mode {mode} of {MODES} ({layout_size:g}x, first step, blocks {ranges(layout_blocks)})" if mode else ""
+        pushed = f"layout mode {mode} of {MODES} ({layout_size:g}x, steps {ranges(sorted(i + 1 for i in layout_steps))}, blocks {ranges(layout_blocks)})" if mode else ""
         log.once(f"{ID}:run", log.INFO, "FunUI Attention explorer",
                  f"key {taste.key!r}, {tally(rows)}, {known}, {how}: {'; '.join(x for x in (changes, pushed) if x) or 'no change this run'}")
         out = executor(*args, **kwargs)
         wanted = bool(changes)
         if mode and live["layout_hits"]:
-            log.once(f"{ID}:layout", log.INFO, "FunUI Attention explorer", f"layout mode {mode} pushed the query, key and value of {live['layout_hits']} attention calls on the first step")
+            log.once(f"{ID}:layout", log.INFO, "FunUI Attention explorer", f"layout mode {mode} pushed the query, key and value of {live['layout_hits']} attention calls")
         if mode and not live["layout_hits"]:
-            _say("the layout push changed nothing this run: no attention call reached its blocks on the first step "
+            _say("the layout push changed nothing this run: no attention call reached its blocks on those steps "
                  "(this sampler may not name its steps).", log.WARNING)
         if wanted and not live["scaled"]:
             _say("changed nothing this run: no attention call reached the changed blocks "

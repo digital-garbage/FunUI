@@ -4,7 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
-- **Attention explorer can try layout modes (off by default).** A few fixed small pushes on the attention input of early blocks, on the first step only, picked and learned from your ratings. Idea after CosPert.
+- **Attention explorer can try layout modes (off by default).** A few fixed small pushes on the attention input of chosen blocks, on the steps you name (the first by default), picked and learned from your ratings. Idea after CosPert.
 - **The enhancer no longer writes shortcut names, labels or trigger words into the prompt.** The reference entries now say that those are only for telling the entries apart.
 - **A dropdown stays open while the Composer refreshes in the background.** The Enhance tab redrew itself every time the engine reported progress (for example while the chat was being answered), which closed an open list; a list being used now holds the redraw back like a text field does.
 - **The newest request is labelled "NEW REQUEST:" when earlier turns are sent as real turns.** A model could mistake an earlier request in its history for the current one; the last turn now says plainly that it is the one to answer.
