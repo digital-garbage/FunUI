@@ -29,6 +29,32 @@ from comfy_api.latest import io
 from ..._core import chain as chain_mod, dit_hooks, log, patching, registry as registry_mod, run as run_mod, sysinfo
 from ..._core import control as control_mod, relations as relations_mod, schema as schema_mod, traits as traits_mod
 
+def guard_sa_solver() -> bool:
+    """SA-Solver's coefficient table calls lgamma, which PyTorch compiles for the GPU on first use; where the CUDA runtime compiler is incomplete
+    (libnvrtc-builtins missing) that fails the whole generation. The table is a few numbers, so it is then made on the CPU instead. -> whether the guard went in."""
+    try:
+        from comfy.k_diffusion import sa_solver
+    except Exception:                                               # noqa: BLE001 -- a ComfyUI without SA-Solver has nothing to guard
+        return False
+    orig = sa_solver.compute_exponential_coeffs
+    if getattr(orig, "_funui_guard", False):
+        return True
+
+    def safe(s, t, solver_order, tau_t):
+        try:
+            return orig(s, t, solver_order, tau_t)
+        except RuntimeError as exc:
+            if "nvrtc" not in str(exc).lower():
+                raise
+            log.warning("sampler", "the GPU could not compile lgamma (CUDA runtime compiler incomplete); SA-Solver's coefficients are made on the CPU")
+            return orig(s.cpu(), t.cpu(), solver_order, tau_t).to(s.device)
+    safe._funui_guard = True
+    sa_solver.compute_exponential_coeffs = safe
+    return True
+
+
+guard_sa_solver()
+
 # The hook points this sampler offers. A modifier asking for anything else is
 # absent and said, rather than half-running.
 ACCEPTS = ("latent",)

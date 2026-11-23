@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A generation error no longer floods the screen or vanishes.** The message is cut to its start and its end (the cause is usually at the end), stays on screen until you press Close, and the full text stays in ComfyUI's log.
+- **SA-Solver no longer fails a generation when the GPU's CUDA runtime compiler is incomplete.** Its small coefficient table needs a function PyTorch compiles for the GPU on first use; if that compile fails (libnvrtc-builtins missing), the table is made on the CPU instead and the log says so.
 - **The Shortcuts tab keeps its place and fills the Composer window.** Saving, deleting or importing a shortcut no longer jumps the list back to the top, the search field stays pinned while the list scrolls, and the list is as long as the Composer window allows instead of a small fixed box.
 - **The Helper's checklist sits under its own message instead of being pinned at the top.** Each request keeps its own checklist: open and updating while the request works, folded once it is finished, and kept in the history.
 - **A long bulk shortcut job no longer stalls after the first batch.** After each allowed shortcut edit the tool answer says how many shortcuts were changed in this request, how many have not been touched yet, and names the next 20, so the model can send the next batch straight away.

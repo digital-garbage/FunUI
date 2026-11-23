@@ -8,6 +8,7 @@ import { buildInputs, rolesAt } from "./inputs.js";
 import { offer } from "../../shell/actions.js";
 import { names } from "../../shell/bin.js";
 import { showCompare } from "./compare.js";
+import { brief } from "./brief.js";
 
 const MAX_TAKES = 24;
 const expand = (body) => fetch("/fun/api/prompt/expand", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -24,6 +25,7 @@ export default {
   setup({ host, app }) {
     const p = app.project, g = app.generate;
     let said = false;
+    const fail = (text) => { said = true; let t = null; t = c.toast.warn({ text: brief(text), duration: 0, action: c.button.sm({ label: "Close", tone: "ghost", onClick: () => t.destroy() }) }); };       // a failure stays until it is closed
     const tell = (text) => { if (!text) return; said = true; c.toast.warn({ text }); };       // no words, no toast: an empty one read as a message gone missing
     let current = 0;                                    // the scene being queued: a refusal said meanwhile names it
     g.on("say", (t) => tell(t && (current ? `Scene ${current}: ${t}` : t))); g.on("warn", tell);
@@ -157,7 +159,7 @@ export default {
           const images = g.run.state.images;
           if (end !== g.DONE) {                         // ComfyUI's own words: which node, and why
             const e = g.run.state.error;
-            tell(e && e.message ? `Generation failed${e.node ? ` in ${e.node}` : ""}: ${e.message}` : "Generation failed. The log has ComfyUI's message.");
+            fail(e && e.message ? `Generation failed${e.node ? ` in ${e.node}` : ""}: ${e.message}` : "Generation failed. The log has ComfyUI's message.");
             break;
           }
           if (!images.length) { tell("ComfyUI finished without a result. Try again."); break; }
