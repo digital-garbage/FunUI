@@ -25,7 +25,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut, and many at once (edits, renames, deletes) with edit_shortcuts; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
-               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. A request that needs more than three separate changes (many shortcuts, every scene, a long list) is done from a checklist: first call plan with one item per change, or per batch of up to 60 changes, then do the items in order and call check_item for each one when its change is made. The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
+               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. Every request for a change is done from a checklist, even a single change: first call plan with one item per change, or per batch of up to 60 changes (one item for one change), then do the items in order and call check_item for each one when its change is made. The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
 GROUPS = {"scenes": ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "share_reference"),
@@ -76,6 +76,10 @@ def tools(with_rules=False, only=None) -> list:
 
 
 FORCE_AGAIN = "Still nothing was changed. Call the tool that makes the change now, with all its arguments, and write nothing else."
+
+
+PLAN_NOTE = ("Every change is done from a checklist, even a single one. Call plan now with one item per change (one item if there is only one; a batch of up to 60 changes may be one item). "
+             "Then do the items, calling check_item for each one when its change is made. If a change was already made, plan it and check it. Write nothing else.")
 
 
 def force_note(message, with_rules=False, context="") -> str:
@@ -207,7 +211,7 @@ class Actions:
             if not isinstance(items, list) or not 1 <= len(items) <= 60 or not all(isinstance(x, str) and x.strip() for x in items):
                 return "Error: items is a list of one to 60 texts, one per change or batch of changes."
             self.plan = [{"text": x.strip()[:300], "state": "open", "note": ""} for x in items]
-            self.plan_changes = self.changes
+            self.plan_changes = 0                          # any change made in this request counts, whether it came before the list or after
             self.on_event({"kind": "status", "text": f"Checklist: 0 of {len(self.plan)} done"})
             return f"Checklist saved with {len(self.plan)} items. Do them in order: make the change for an item, then call check_item for it. You may answer the user only when every item is checked."
         if not self.plan:

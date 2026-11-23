@@ -170,6 +170,25 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
                 clip.tools, text_mode, actions = None, True, clip.handler
                 hp_rule += hp.text_rule(bool(helper.get("rules")))
                 reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
+    if helper and actions is not None and not getattr(actions, "plan", None):
+        hp = __import__(__package__ + ".helper", fromlist=["x"])
+        before = list(state["turns"])[-1] if state["turns"] else {}
+        cut_short = str(before.get("reply", "")).startswith("(the user stopped")
+        if (hp.wants_change(message, before.get("reply", "")) or (cut_short and hp.wants_change(before.get("request", ""))) or (hp.announced(reply) and not str(message).strip().endswith("?"))):
+            # a request for a change is done from a checklist at all times, even one change: the model is asked for the list if it did not write one
+            if not text_mode:
+                clip.tools = hp.tools(bool(helper.get("rules")))
+            state["turns"].append({"request": str(message).strip(), "reply": reply or "(no answer)", "kind": "chat"})
+            try:
+                for _ in range(2):
+                    got = ask(hp.PLAN_NOTE)
+                    if text_mode:
+                        got = hp.run_text_calls(ask, actions, hp.PLAN_NOTE, state, got)
+                    if actions.plan:
+                        reply, status, add, drop, thought = got[0] or reply, got[1], add + got[2], drop + got[3], got[4]
+                        break
+            finally:
+                state["turns"].pop()
     if helper and actions is not None and not getattr(actions, "changes", 0):
         hp = __import__(__package__ + ".helper", fromlist=["x"])
         before = list(state["turns"])[-1] if state["turns"] else {}
