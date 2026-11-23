@@ -1110,3 +1110,32 @@ def test_a_message_that_interrupted_a_change_request_is_forced_into_the_change_t
         return (_EDIT if ("nothing was changed" in text or "Still nothing" in text or "have not read" in text) else "Understood, noted."), "ok", [], [], ""
     out, proposals = _rule_chat(monkeypatch, tiny, behave, message="Also no 3D look.", before=before)
     assert proposals == ["Write prompts in the requested style."]
+
+
+def _split(dialect, chunks, **kw):
+    from modules.conditioning.prompt_enhancer import engine as eng
+    sp = eng.Splitter(next(d for d in eng.DIALECTS if d.name == dialect), **kw)
+    got = []
+    for ch in chunks:
+        got += sp.feed(ch)
+    got += sp.feed("", final=True)
+    out = {}
+    for kind, text in got:
+        out[kind] = out.get(kind, "") + text
+    return out
+
+
+def test_gemma_thinking_never_reaches_the_answer_however_the_text_is_cut_up():
+    whole = "<|channel>thought\nThe user wants a longer scene.<channel|>Scene 1 is longer now."
+    for size in (1, 2, 3, 7, len(whole)):
+        out = _split("gemma4", [whole[i:i + size] for i in range(0, len(whole), size)])
+        assert out == {"thinking": "The user wants a longer scene.", "answer": "Scene 1 is longer now."}, size
+
+
+def test_thinking_that_ends_in_a_tool_call_or_never_ends_stays_thinking():
+    out = _split("gemma4", ["<|channel>thought\nI should edit scene 1.", "<|tool_call>call:edit_scene{scene:1}<tool_call|>"])
+    assert out["thinking"] == "I should edit scene 1." and "answer" not in out and out["call"] == "call:edit_scene{scene:1}"
+    cut = _split("gemma4", ["<|channel>thought\nreasoning that runs out of room"])           # the token budget ended it: no answer, and no thinking written as one
+    assert cut == {"thinking": "reasoning that runs out of room"}
+    qwen = _split("think-tags", ["<think>plan", "</think>Done."])
+    assert qwen == {"thinking": "plan", "answer": "Done."}
