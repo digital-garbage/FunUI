@@ -6,7 +6,9 @@ Disallow, and the answer (the same route as a rule change) goes back to the mode
 """
 
 import json
+import difflib
 import re
+import unicodedata
 import threading
 
 from . import rules
@@ -236,6 +238,30 @@ class Actions:
         change["value"], change["now"] = v, spec.get("now")
         return None
 
+    @staticmethod
+    def _norm(name) -> str:
+        return " ".join(unicodedata.normalize("NFKC", str(name or "")).casefold().replace("\u200b", "").split())
+
+    def shortcut_named(self, name):
+        """-> the library's own spelling of a shortcut name the model wrote, or None. The model copies names from a lookup and may change the case, the spacing or a
+        look-alike character; a name that is only different in those ways, or a name the lookup cut off that has one match, is still that shortcut."""
+        name = str(name or "")
+        if name in self.shortcuts:
+            return name
+        bare = lambda n: self._norm(re.sub(r"\s*[\(\[（][^()\[\]（）]*[\)\]）]\s*$", "", str(n or "")))        # noqa: E731 -- a name followed by a description in brackets
+        for flat in (self._norm, bare):                       # first the name as written, then with a bracketed note taken off either side
+            key = flat(name)
+            same = [n for n in self.shortcuts if flat(n) == key]
+            if len(same) == 1 and key:
+                return same[0]
+        key = bare(name)
+        near = [n for n in self.shortcuts if key and bare(n).startswith(key)]
+        return near[0] if len(near) == 1 else None
+
+    def unknown_shortcut(self, name) -> str:
+        close = difflib.get_close_matches(str(name or ""), list(self.shortcuts), n=5, cutoff=0.5)
+        return f"Error: there is no shortcut called '{name}'." + (f" Did you mean: {'; '.join(close)}?" if close else " Call find_shortcuts to see the names.")
+
     def find_shortcut(self, query, offset=0) -> str:
         """A page of the matches, with how many there are and where to go on, so a request for all of them is not cut short unnoticed. An empty query lists them all."""
         q = str(query or "").lower()
@@ -313,7 +339,10 @@ class Actions:
             ok = lambda v: isinstance(v, list) and v and all(isinstance(x, str) and x.strip() and len(x) <= 500 for x in v)        # noqa: E731
             if not text(args.get("name"), 80) or not args["name"].strip() or not ok(args.get("triggers")) or not ok(args.get("replacements")):
                 return "Error: a shortcut needs a name, at least one trigger and at least one replacement."
-            args["existing"] = args["name"] in self.shortcuts
+            own = self.shortcut_named(args["name"])
+            args["existing"] = own is not None
+            if own:
+                args["name"] = own
             return None
         if name == "edit_shortcuts":
             changes = args.get("changes")
@@ -321,10 +350,12 @@ class Actions:
                 return "Error: changes is a list of one to 60 items, each with the shortcut's name."
             ok = lambda v: isinstance(v, list) and v and all(isinstance(x, str) and x.strip() and len(x) <= 500 for x in v)        # noqa: E731
             known, taken, out = dict(self.shortcuts), set(), []
+            lost = [str(c.get("name") or "") for c in changes if self.shortcut_named(c.get("name")) is None]
+            if lost:
+                more = f" (and {len(lost) - 5} more)" if len(lost) > 5 else ""
+                return "Error: " + " ".join(self.unknown_shortcut(n)[len("Error: "):] for n in lost[:5]) + more + " Nothing was changed."
             for c in changes:
-                old = str(c.get("name") or "")
-                if old not in known:
-                    return f"Error: there is no shortcut called '{old}'. Call find_shortcuts to see the names."
+                old = self.shortcut_named(c.get("name"))
                 if old in taken:
                     return f"Error: '{old}' appears twice in changes."
                 taken.add(old)
@@ -352,7 +383,11 @@ class Actions:
                 out.append(item)
             args["changes"] = out
             return None
-        return None if args.get("name") in self.shortcuts else f"Error: there is no shortcut called '{args.get('name')}'."        # remove_shortcut
+        own = self.shortcut_named(args.get("name"))        # remove_shortcut
+        if own is None:
+            return self.unknown_shortcut(args.get("name"))
+        args["name"] = own
+        return None
 
     def check(self, args):
         """-> (the setting, the value as it will be saved) or an error text."""

@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper has its own "Max tokens in Helper" setting, unlimited by default**, so the rewrite's limit no longer cuts its answers short.
+- **The Helper finds a shortcut even when it writes the name a little differently**: other case or spacing, a look-alike character, or a description in brackets after the name. A name it still cannot find comes back with the closest names, and a batch names every missing one at once and changes nothing.
 - **The Helper keeps its conversation across a page refresh, with a Clear button.** The last 30 exchanges are kept in this browser for each project; Clear forgets them.
 - **Text a model writes along the way no longer shows up as a Helper message.** Only its final answer is a message; anything written before or between tool calls sits in the folded thinking line.
 - **Shortcut lookup in the Helper says how many there are and pages on.** It reports "N of the library's M shortcuts match, showing a to b" and how to get the next page, an empty search lists them all, and words in quotes are searched as an exact phrase, so a request for all shortcuts is not cut short unnoticed.

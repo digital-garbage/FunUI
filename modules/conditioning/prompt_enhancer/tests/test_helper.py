@@ -329,3 +329,28 @@ def test_shortcut_lookup_finds_an_exact_phrase_in_quotes():
     acts = helper.Actions(1, lambda ev: None, wait=1, shortcuts=[{"name": "a", "triggers": ["x"], "replacements": ["slow dolly in"]}, {"name": "b", "triggers": ["y"], "replacements": ["in slow dolly"]}])
     found = acts({"name": "find_shortcuts", "args": {"query": '"dolly in"'}})
     assert found.startswith("1 of the library's 2") and "a:" in found and "b:" not in found
+
+
+def test_a_shortcut_name_copied_with_other_case_spacing_or_a_lookalike_is_still_found():
+    lib = [{"name": "Rain Walk", "triggers": ["rw"], "replacements": ["x"]}, {"name": "Sun  Set", "triggers": ["ss"], "replacements": ["y"]}, {"name": "Café", "triggers": ["c"], "replacements": ["z"]}]
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    acts = helper.Actions(1, on_event, wait=2, shortcuts=lib)
+    out = acts({"name": "edit_shortcuts", "args": {"reason": "r", "changes": [{"name": " rain walk ", "new_name": "Walk in rain"}, {"name": "sun set", "delete": True}, {"name": "Café", "category": "k"}]}})
+    assert out.startswith("Allowed"), out
+    assert [c["name"] for c in seen[0]["args"]["changes"]] == ["Rain Walk", "Sun  Set", "Café"]          # the library's own spelling goes on
+    assert set(acts.shortcuts) == {"Walk in rain", "Café"}
+    lost = acts({"name": "edit_shortcuts", "args": {"reason": "r", "changes": [{"name": "Walk in rai", "delete": True}, {"name": "nope", "delete": True}]}})
+    assert lost.startswith("Error") and "'nope'" in lost and "Nothing was changed" in lost and len(seen) == 1
+    assert acts({"name": "remove_shortcut", "args": {"name": "walk IN rain", "reason": "r"}}).startswith("Allowed") and "Walk in rain" not in acts.shortcuts
+
+
+def test_a_shortcut_name_followed_by_a_description_in_brackets_is_still_found():
+    lib = [{"name": "Arms up", "triggers": ["au"], "replacements": ["x"]}, {"name": "Squat (low)", "triggers": ["sq"], "replacements": ["y"]}]
+    acts = helper.Actions(1, lambda ev: None, wait=1, shortcuts=lib)
+    assert acts.shortcut_named("Arms up (hands over the head)") == "Arms up"
+    assert acts.shortcut_named("Squat") == "Squat (low)" and acts.shortcut_named("Squat (deep)") == "Squat (low)"
+    assert acts.shortcut_named("Jump (high)") is None
