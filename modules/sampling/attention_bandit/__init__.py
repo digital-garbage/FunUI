@@ -570,6 +570,8 @@ def install(patcher, values, key):
                  f"key {taste.key!r}, {tally(rows)}, {known}, {how}: {'; '.join(x for x in (changes, pushed) if x) or 'no change this run'}")
         out = executor(*args, **kwargs)
         wanted = bool(changes)
+        if mode and live["layout_hits"]:
+            log.once(f"{ID}:layout", log.INFO, "FunUI Attention explorer", f"layout mode {mode} pushed the query, key and value of {live['layout_hits']} attention calls on the first step")
         if mode and not live["layout_hits"]:
             _say("the layout push changed nothing this run: no attention call reached its blocks on the first step "
                  "(this sampler may not name its steps).", log.WARNING)
