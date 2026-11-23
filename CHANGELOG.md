@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper keeps its conversation across a page refresh, with a Clear button.** The last 30 exchanges are kept in this browser for each project; Clear forgets them.
+- **Text a model writes along the way no longer shows up as a Helper message.** Only its final answer is a message; anything written before or between tool calls sits in the folded thinking line.
 - **Shortcut lookup in the Helper says how many there are and pages on.** It reports "N of the library's M shortcuts match, showing a to b" and how to get the next page, an empty search lists them all, and words in quotes are searched as an exact phrase, so a request for all shortcuts is not cut short unnoticed.
 - **A Helper message that interrupts a change request now carries it on.** When the new message only adds to the stopped request ("Also no 3D look.") and the model answers in words, the Helper now makes the call as well. The same goes for any answer that announces a change without making it.
 - **The Helper can edit, rename and delete many shortcuts in one go.** A new batch tool (edit_shortcuts) takes up to 60 changes and asks once for the whole batch; the question lists every change. Looking shortcuts up now returns up to 40 matches.

@@ -11,7 +11,21 @@ import { clampBlocks } from "../../shell/blocks.js";
 
 const NODE = "FunUIEnhancePrompt";
 const PHRASES = ["Pondering", "Mulling it over", "Reading the project", "Weighing the options", "Working it out", "Sketching a plan", "Thinking it through", "Checking the scenes"];
-const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said, for as long as the page is open
+const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said; finished turns are also kept in this browser, so a refresh does not lose them
+const KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
+const cut = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+function saved(id) {
+  try {
+    const list = JSON.parse(localStorage.getItem(LOGKEY(id)) || "[]");
+    return (Array.isArray(list) ? list : []).filter((x) => x && typeof x.you === "string").map((x) => ({ you: x.you, thinking: cut(x.thinking, 20000), live: "", reply: cut(x.reply, 20000), status: cut(x.status, 300), done: [], t0: Number(x.t0) || 0, t1: Number(x.t1) || 1, open: false, seed: Number(x.seed) || 0, stopped: false, abort: new AbortController() }));
+  } catch { return []; }          // storage blocked: the history lasts until the page is closed
+}
+function remember(id, list) {
+  try {
+    if (!list.length) localStorage.removeItem(LOGKEY(id));
+    else localStorage.setItem(LOGKEY(id), JSON.stringify(list.filter((t) => t.t1).slice(-KEEP).map((t) => ({ you: t.you, thinking: t.thinking, reply: t.reply, status: t.status, t0: t.t0, t1: t.t1, seed: t.seed }))));
+  } catch { /* lasts until the page is closed */ }
+}
 let draft = "";
 
 /** The pictures a scene works from, as ids the model can compare: ", references: ab12 cd34, aspect source: ef56". */
@@ -215,15 +229,16 @@ export function openHelper(app, origin) {
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
-  const turns = () => log.get(p.project.id) || [];
+  const turns = () => { if (!log.has(p.project.id)) log.set(p.project.id, saved(p.project.id)); return log.get(p.project.id); };
+  const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); paint(); } });
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   let tick = 0;
   // The model's thinking stays folded: a line with a changing phrase and the time since the request began, opened by a click.
   const thoughtOf = (x, working) => {
-    if (!x.thinking && !(working && !x.reply && !x.t1)) return [];
+    if (!x.thinking && !x.live && !(working && !x.reply && !x.t1)) return [];
     const live = !x.t1, secs = Math.max(0, Math.round(((x.t1 || Date.now()) - x.t0) / 1000));
     const label = live ? `${PHRASES[(x.seed + Math.floor(secs / 7)) % PHRASES.length]}… ${secs}s` : `Thought for ${secs}s`;
-    return [c.collapsible.default({ label, open: x.open, onToggle: (v) => { x.open = v; }, body: c.text.sm({ text: x.thinking || "Nothing written yet." }) })];
+    return [c.collapsible.default({ label, open: x.open, onToggle: (v) => { x.open = v; }, body: c.text.sm({ text: [x.thinking, x.live && `Written so far (not the answer):\n${x.live}`].filter(Boolean).join("\n\n") || "Nothing written yet." }) })];
   };
   let follow = true, pin = true;          // the view follows the answer down, unless the person scrolled up to read
   const paint = () => {
@@ -246,7 +261,7 @@ export function openHelper(app, origin) {
     const message = draft.trim(), inp = inputs(), eng = engineOf(inp);
     if (!message) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
-    const turn = { you: message, thinking: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
+    const turn = { you: message, thinking: "", live: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
     turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint();
     if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
@@ -256,7 +271,7 @@ export function openHelper(app, origin) {
     const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
-        if (ev.kind === "answer") turn.reply += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
+        if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
         else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
           const yes = !turn.stopped && (await askEdit(ev, turn.abort.signal)) && !turn.stopped, sl = slot();
           if (yes && sl && app.pipeline) await app.pipeline.save({ inputs: { [sl.id]: { [ev.field]: ev.new } } });
@@ -279,9 +294,9 @@ export function openHelper(app, origin) {
         if (r && r.reply) turn.reply = r.reply;
       }
     } catch (e) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(e && e.message) || e}`; }
-    turn.t1 = Date.now(); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint();
+    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint();
   }
-  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [stopper, send] });
+  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [clear, stopper, send] });
   paint();
   return win;
 }
