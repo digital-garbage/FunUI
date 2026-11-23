@@ -47,7 +47,9 @@ def guard_sa_solver() -> bool:
             if "nvrtc" not in str(exc).lower():
                 raise
             log.warning("sampler", "the GPU could not compile lgamma (CUDA runtime compiler incomplete); SA-Solver's coefficients are made on the CPU")
-            return orig(s.cpu(), t.cpu(), solver_order, tau_t).to(s.device)
+            wide = torch.float64 if s.dtype == torch.float64 else torch.float32       # half types are not worked in on the CPU
+            out = orig(s.detach().to("cpu", wide), t.detach().to("cpu", wide), solver_order, tau_t)
+            return out.to(device=s.device, dtype=s.dtype)                          # back to what the caller's tensors are
     safe._funui_guard = True
     sa_solver.compute_exponential_coeffs = safe
     return True
