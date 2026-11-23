@@ -105,7 +105,7 @@ def _tools() -> list:
             fn("set_project_text", "Set the project's anchor (= prefix), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
             fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
-            fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
+            fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all, and words in quotes are searched as an exact phrase. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("edit_shortcuts", "Change, rename or delete many shortcuts at once; the user allows the whole batch with one answer. Each change names an existing shortcut. Leave out what stays as it is.",
                {"changes": {"type": "array", "description": "Up to 60 changes; for more, call again with the next ones.", "items": {"type": "object", "properties": {"name": {"type": "string", "description": "The shortcut's current name."}, "new_name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "category": {"type": "string"}, "delete": {"type": "boolean"}}, "required": ["name"]}}, "reason": reason}, ["changes", "reason"]),
@@ -238,9 +238,11 @@ class Actions:
 
     def find_shortcut(self, query, offset=0) -> str:
         """A page of the matches, with how many there are and where to go on, so a request for all of them is not cut short unnoticed. An empty query lists them all."""
-        words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
+        q = str(query or "").lower()
+        phrases = [p.strip() for p in re.findall(r'"([^"]+)"', q) if p.strip()]       # "in quotes": that exact run of text, anywhere in a shortcut
+        words = [w for w in re.findall(r"[a-z0-9]+", re.sub(r'"[^"]*"', " ", q)) if len(w) > 1]
         total = len(self.shortcuts)
-        hits = [x for x in self.shortcuts.values() if all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
+        hits = [x for x in self.shortcuts.values() if all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in [*words, *phrases])]
         if not hits:
             return f"No shortcut matches. The library has {total} shortcut(s)."
         start = offset if isinstance(offset, int) and not isinstance(offset, bool) and offset > 0 else 0

@@ -323,3 +323,9 @@ def test_shortcut_lookup_says_how_many_there_are_and_pages_on():
     last = acts({"name": "find_shortcuts", "args": {"query": "", "offset": 80}})
     assert "showing 81 to 100" in last and "That is all of them." in last
     assert "library has 100" in acts({"name": "find_shortcuts", "args": {"query": "zzz"}})
+
+
+def test_shortcut_lookup_finds_an_exact_phrase_in_quotes():
+    acts = helper.Actions(1, lambda ev: None, wait=1, shortcuts=[{"name": "a", "triggers": ["x"], "replacements": ["slow dolly in"]}, {"name": "b", "triggers": ["y"], "replacements": ["in slow dolly"]}])
+    found = acts({"name": "find_shortcuts", "args": {"query": '"dolly in"'}})
+    assert found.startswith("1 of the library's 2") and "a:" in found and "b:" not in found
