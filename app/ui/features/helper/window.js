@@ -241,7 +241,15 @@ export function openHelper(app, origin) {
     return [c.collapsible.default({ label, open: x.open, onToggle: (v) => { x.open = v; }, body: c.text.sm({ text: [x.thinking, x.live && `Written so far (not the answer):\n${x.live}`].filter(Boolean).join("\n\n") || "Nothing written yet." }) })];
   };
   let follow = true, pin = true;          // the view follows the answer down, unless the person scrolled up to read
+  // A redraw between the press and the release of a click replaces the thing pressed and the click is lost (the thinking line would not open or close
+  // while the answer streamed in): redraws wait until the pointer is up.
+  let held = false, dirty = false, heldTimer = 0;
+  const release = () => { clearTimeout(heldTimer); setTimeout(() => { held = false; if (dirty) { dirty = false; paint(); } }, 0); };
+  history.node.addEventListener("pointerdown", () => { held = true; clearTimeout(heldTimer); heldTimer = setTimeout(release, 1500); });
+  history.node.addEventListener("pointerup", release);
+  history.node.addEventListener("pointercancel", release);
   const paint = () => {
+    if (held) { dirty = true; return; }
     const sc = scrollParent(history.node);
     follow = pin || !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
     pin = false;
