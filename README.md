@@ -141,7 +141,8 @@ I express my deepest gratitude to everyone who inspired FunUI, helped with its d
 - xAI and Grok Build;
 - Team Cursor and Composer model;
 - DeepSeek team and model;
-- Google and Gemini model;
+- Google and Gemini model; Google's Gemma 4 prompt-format documentation shaped how the Helper talks to its model;
+- The Cline project: its openly published agent prompt (Apache-2.0) inspired the Helper's tool-use rules; no text was copied;
 - Lightricks and the LTX-Video model; FunUI's identity-transfer phase tag is a port of `ltx_core` (Apache-2.0);
 - [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) — the LTX nodes used by the LTX pipeline presets;
 - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) — utility nodes used by the H3 pipeline presets;
