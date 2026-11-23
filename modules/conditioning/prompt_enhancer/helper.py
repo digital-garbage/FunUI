@@ -12,6 +12,7 @@ import threading
 from . import rules
 
 MAX_TEXT = 4000
+FIND_PAGE = 40
 TEXTS = {"anchor": "the anchor", "postfix": "the postfix", "negative": "the negative prompt", "postfix_enabled": "the postfix switch"}
 ALIASES = {"prefix": "anchor", "main_prompt": "anchor", "negative_prompt": "negative", "postfix_on": "postfix_enabled", "postfix_switch": "postfix_enabled"}
 EXTRA = ("share_reference", "run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut", "edit_shortcuts")
@@ -104,10 +105,10 @@ def _tools() -> list:
             fn("set_project_text", "Set the project's anchor (= prefix), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
             fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
-            fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
+            fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("edit_shortcuts", "Change, rename or delete many shortcuts at once; the user allows the whole batch with one answer. Each change names an existing shortcut. Leave out what stays as it is.",
-               {"changes": {"type": "array", "description": "Up to 60 changes.", "items": {"type": "object", "properties": {"name": {"type": "string", "description": "The shortcut's current name."}, "new_name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "category": {"type": "string"}, "delete": {"type": "boolean"}}, "required": ["name"]}}, "reason": reason}, ["changes", "reason"]),
+               {"changes": {"type": "array", "description": "Up to 60 changes; for more, call again with the next ones.", "items": {"type": "object", "properties": {"name": {"type": "string", "description": "The shortcut's current name."}, "new_name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "category": {"type": "string"}, "delete": {"type": "boolean"}}, "required": ["name"]}}, "reason": reason}, ["changes", "reason"]),
             fn("remove_shortcut", "Delete a shortcut of the library.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("share_reference", "Give every scene the same reference pictures as one scene (what the media bin calls adding a reference to all scenes).", {"from_scene": {"type": "integer", "description": "The scene number to take the references from."}, "reason": reason}, ["from_scene", "reason"]),
             fn("run_action", "Start one of the app's actions (listed in the project), such as generating or rendering. Optionally pick scenes first.", {"action": {"type": "string", "description": "The id of the action."}, "scenes": {"type": "array", "items": {"type": "integer"}, "description": "Scene numbers to pick first, for actions that work on the picked scenes."}, "reason": reason}, ["action", "reason"]),
@@ -235,10 +236,21 @@ class Actions:
         change["value"], change["now"] = v, spec.get("now")
         return None
 
-    def find_shortcut(self, query) -> str:
+    def find_shortcut(self, query, offset=0) -> str:
+        """A page of the matches, with how many there are and where to go on, so a request for all of them is not cut short unnoticed. An empty query lists them all."""
         words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
-        hits = [x for x in self.shortcuts.values() if words and all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
-        return "\n".join(f"{x['name']}: {', '.join(x.get('triggers') or [])} -> {' | '.join(x.get('replacements') or [])}{'' if x.get('enabled', True) else ' (off)'}" for x in hits[:40]) or "No shortcut matches."
+        total = len(self.shortcuts)
+        hits = [x for x in self.shortcuts.values() if all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
+        if not hits:
+            return f"No shortcut matches. The library has {total} shortcut(s)."
+        start = offset if isinstance(offset, int) and not isinstance(offset, bool) and offset > 0 else 0
+        page = hits[start:start + FIND_PAGE]
+        if not page:
+            return f"{len(hits)} shortcut(s) match, so offset {start} is past the end."
+        rows = "\n".join(f"{x['name']}: {', '.join(x.get('triggers') or [])} -> {' | '.join(x.get('replacements') or [])}{'' if x.get('enabled', True) else ' (off)'}" for x in page)
+        end = start + len(page)
+        head = f"{len(hits)} of the library's {total} shortcut(s) match; showing {start + 1} to {end}."
+        return head + (f" That is not all of them: call find_shortcuts again with offset {end} for the next {min(FIND_PAGE, len(hits) - end)}, until you have seen all {len(hits)}." if end < len(hits) else " That is all of them.") + "\n" + rows
 
     def extra(self, name, args):
         """-> an error text, or None when the call is valid (args may gain fields the page needs)."""
@@ -377,7 +389,7 @@ class Actions:
         if name == "find_settings":
             return self.find(args.get("query"))
         if name == "find_shortcuts":
-            return self.find_shortcut(args.get("query"))
+            return self.find_shortcut(args.get("query"), args.get("offset"))
         if name == "find_node_inputs":
             return self.find_input(args.get("query"))
         if name in EXTRA:

@@ -313,3 +313,13 @@ def test_many_shortcuts_are_changed_renamed_and_deleted_under_one_question():
     assert out.startswith("Allowed") and len(seen) == 1                       # one question for the whole batch
     assert "rename to alpha" in seen[0]["summary"] and "delete c" in seen[0]["summary"]
     assert set(live.shortcuts) == {"alpha", "b"} and live.shortcuts["alpha"]["triggers"] == ["aa"] and live.shortcuts["b"]["replacements"] == ["new two"]
+
+
+def test_shortcut_lookup_says_how_many_there_are_and_pages_on():
+    lib = [{"name": f"s{i}", "triggers": [f"t{i}"], "replacements": ["x"]} for i in range(100)]
+    acts = helper.Actions(1, lambda ev: None, wait=1, shortcuts=lib)
+    first = acts({"name": "find_shortcuts", "args": {"query": ""}})
+    assert first.startswith("100 of the library's 100 shortcut(s) match; showing 1 to 40.") and "offset 40" in first and "s39:" in first and "s40:" not in first
+    last = acts({"name": "find_shortcuts", "args": {"query": "", "offset": 80}})
+    assert "showing 81 to 100" in last and "That is all of them." in last
+    assert "library has 100" in acts({"name": "find_shortcuts", "args": {"query": "zzz"}})
