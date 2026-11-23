@@ -16,6 +16,20 @@ const DOING = { read_prompt: "Reading prompts", edit_prompt: "Editing prompts", 
   edit_scene: "Editing a scene", add_scene: "Adding a scene", copy_reference: "Copying references", share_reference: "Sharing references", set_clip_length: "Setting the clip length", set_story: "Rewriting the global prompt",
   cut_scene: "Cutting a scene", set_cut_words: "Setting the cut words", set_project_text: "Editing project text", set_variable: "Editing variables", remove_variable: "Editing variables", run_action: "Running an action",
   plan: "Writing the checklist", read_chat_log: "Reading the chat log", check_item: "Checking the list" };
+/** The change lines of one turn with the shortcut ones added up ("Changed 20 shortcuts", "Changed 1 shortcut", ... become one "Changed 33 shortcuts"). */
+export function tally(lines) {
+  const out = [];
+  let sum = 0, at = -1;
+  for (const l of lines) {
+    const m = /^Changed (\d+) shortcuts?$/.exec(l);
+    if (!m) { out.push(l); continue; }
+    sum += Number(m[1]);
+    if (at < 0) { at = out.length; out.push(""); }
+  }
+  if (at >= 0) out[at] = `Changed ${sum} shortcut${sum === 1 ? "" : "s"}`;
+  return out;
+}
+
 const MARK = { done: "✓", skipped: "✕", open: "○" };
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said; finished turns are also kept in this browser, so a refresh does not lose them
 const PAINT_MS = 120, KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
@@ -275,7 +289,7 @@ export function openHelper(app, origin) {
     pin = false;
     const t = turns();
     // a finished turn is drawn once and its elements are kept: only the turn that is still working is built again
-    const draw = (x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })];
+    const draw = (x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...tally(x.done).map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })];
     const kept = (x) => { if (!x.t1) return draw(x); const key = `${x.reply.length}|${x.status}|${x.done.length}|${x.thinking.length}`; if (!x.kept || x.kept.key !== key) x.kept = { key, els: draw(x) }; return x.kept.els; };
     history.set(t.length ? t.flatMap(kept)
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
