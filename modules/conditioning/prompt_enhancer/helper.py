@@ -25,9 +25,57 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
-def tools(with_rules=False) -> list:
-    """The helper's tools; with the enhancer's own system prompts (rules) handed over, also read_prompt and edit_prompt."""
-    return _tools() + (rules.tools() if with_rules else [])
+GROUPS = {"scenes": ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "share_reference"),
+          "text": ("set_project_text",),
+          "variables": ("set_variable", "remove_variable"),
+          "shortcuts": ("find_shortcuts", "save_shortcut", "remove_shortcut"),
+          "settings": ("find_settings", "set_setting", "find_node_inputs", "set_node_inputs", "apply_preset", "run_action"),
+          "rules": ("read_prompt", "edit_prompt")}
+_WORDS = {"scenes": r"scene|shot|clip|second|length|story|cut|picture|image|reference|aspect|frame|prompt",
+          "text": r"anchor|prefix|postfix|negative|prompt",
+          "variables": r"variable|\$\w",
+          "shortcuts": r"shortcut",
+          "settings": r"setting|node|preset|run\b|generate|sampler|steps?\b|seed|resolution|width|height|fps|lora",
+          "rules": r"system prompt|rules?\b|instruction|reference_intro|macro|\[\[|enhancer|prompts? (?:for|of) the (?:model|enhancer)"}
+_CHANGE = re.compile(r"\b(change|update|edit|make|set|add|remove|delete|rewrite|replace|fix|apply|put|turn|switch|inherit|use|let|tell|teach|rename|shorten|lengthen|extend|copy|run|save|create|merge|split|correct|adjust|modify|improve|tweak|reword|rephrase|include|exclude|ensure|stop|avoid|drop|enable|disable|increase|decrease|reduce|raise|lower)\b", re.I)
+
+
+READS = ("read_prompt", "find_settings", "find_shortcuts", "find_node_inputs")
+_CALLBACK = re.compile(r"didn'?t|did not|not (?:done|changed|call)|nothing (?:changed|happened)|call the tool|do it|go ahead|correct (?:it|them)|fix (?:it|them)|so\b.*\?", re.I)
+
+
+def intent(message) -> set:
+    """Which kinds of tool a request is about, from its words: scenes, text, variables, shortcuts, settings, rules. Empty when it names none of them."""
+    text = str(message or "").lower()
+    return {g for g, words in _WORDS.items() if re.search(words, text)}
+
+
+def wants_change(message, last_reply="") -> bool:
+    """A request that asks for something to be done (not a question), so an answer without a change has failed it. A follow-up such as "will you correct them?"
+    or "you didn't call the tool" counts when the helper's last answer only announced a change."""
+    text = str(message or "").strip()
+    if not text:
+        return False
+    if announced(last_reply) and _CALLBACK.search(text):
+        return True
+    return not text.endswith("?") and bool(_CHANGE.search(text))
+
+
+def tools(with_rules=False, only=None) -> list:
+    """The helper's tools; with the enhancer's own system prompts (rules) handed over, also read_prompt and edit_prompt. `only` (kinds from intent) keeps just
+    the tools of those kinds, so the model sees the ones that fit the request; empty or None keeps all."""
+    every = _tools() + (rules.tools() if with_rules else [])
+    if not only:
+        return every
+    keep = {n for g in only for n in GROUPS.get(g, ())}
+    return [t for t in every if t["function"]["name"] in keep or not any(t["function"]["name"] in names for names in GROUPS.values())]
+
+
+def force_note(message, with_rules=False, context="") -> str:
+    """The reminder for a request that asked for a change and got none: which tools fit, and that one must be called now."""
+    names = ", ".join(t["function"]["name"] for t in tools(with_rules, intent(f"{message} {context}")))
+    return ("The user asked for a change and nothing was changed, because you did not call a tool. Call the fitting tool now, with the full arguments"
+            + (f" (the tools that fit: {names})" if names else "") + ", and write nothing else.")
 
 
 def rules_note(given) -> str:
@@ -115,6 +163,7 @@ class Actions:
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
         self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
+        self.changes = 0                                   # calls that change something: looking a rule or setting up is not one
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
         self.actions = {str(x["id"]): x for x in actions if isinstance(x, dict) and x.get("id")}
         self.presets = {str(x["id"]): x for x in presets if isinstance(x, dict) and x.get("id")}
@@ -264,6 +313,8 @@ class Actions:
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
         self.calls += 1
+        if name not in READS:
+            self.changes += 1
         if name in ("read_prompt", "edit_prompt"):
             return self.editor(call) if self.editor else "Error: the enhancer's system prompts are not available."
         if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:

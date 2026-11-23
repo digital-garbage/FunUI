@@ -309,8 +309,8 @@ def test_gemma4_gets_the_conversation_as_real_turns_and_other_encoders_a_flat_bl
     first = run(gemma, "fox")
     assert not first.startswith("<|turn>") and gemma.seen["skip_template"] is False        # nothing earlier yet: the encoder's own template
     second = run(gemma, "owl")
-    assert second.startswith("<|turn>system\n") and second.endswith("<|turn>user\nowl<turn|>\n<|turn>model\n<|channel>thought\n<channel|>")
-    assert "<|turn>user\nfox<turn|>\n<|turn>model\nA fox runs.<turn|>\n<|turn>user\nowl<turn|>" in second and "EARLIER IN THIS CONVERSATION" not in second
+    assert second.startswith("<|turn>system\n") and second.endswith("<|turn>user\nNEW REQUEST:\nowl<turn|>\n<|turn>model\n<|channel>thought\n<channel|>")
+    assert "<|turn>user\nfox<turn|>\n<|turn>model\nA fox runs.<turn|>\n<|turn>user\nNEW REQUEST:\nowl<turn|>" in second and "EARLIER IN THIS CONVERSATION" not in second
     assert gemma.seen["skip_template"] is True
     plain = FakeClip("A fox runs.")
     flat = run(plain, "bat")

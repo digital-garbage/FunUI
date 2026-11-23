@@ -112,7 +112,7 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
                 actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or (), rules_given=helper.get("rules") or None)
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
-                    clip.tools, clip.handler = hp.tools(bool(helper.get("rules"))), actions
+                    clip.tools, clip.handler = hp.tools(bool(helper.get("rules")), hp.intent(message)), actions
                 else:                                                # no tool calls: it writes TOOL blocks in its answer and the app runs them
                     text_mode = True
             elif self_edit and rules and on_event:                     # the model may read and propose changes to its own rules, each one asked of the person
@@ -164,10 +164,29 @@ def chat_reply(conversation, message, *, notes="", prompts=None, comments=(), en
                 clip.tools, text_mode, actions = None, True, clip.handler
                 hp_rule += hp.text_rule(bool(helper.get("rules")))
                 reply, status, add, drop, thought = hp.run_text_calls(ask, actions, message, state, ask(message))
-    if helper and reply and actions is not None and not getattr(actions, "calls", 0) and not str(message).strip().endswith("?"):
+    if helper and actions is not None and not getattr(actions, "changes", 0):
+        hp = __import__(__package__ + ".helper", fromlist=["x"])
+        before = list(state["turns"])[-1] if state["turns"] else {}
+        if hp.wants_change(message, before.get("reply", "")):
+            # the request asked for something to be done and every try ended without a change (an answer in words, or only a look at a rule): one more round that names the fitting tools
+            note = hp.force_note(message, bool(helper.get("rules")), f"{before.get('request', '')} {before.get('reply', '')}")
+            if not text_mode:
+                clip.tools = hp.tools(bool(helper.get("rules")))
+            state["turns"].append({"request": str(message).strip(), "reply": reply or "(no answer)", "kind": "chat"})
+            try:
+                forced = ask(note)
+                if text_mode:
+                    forced = hp.run_text_calls(ask, actions, note, state, forced)
+            finally:
+                state["turns"].pop()
+            if actions.changes:
+                reply, status, add, drop, thought = forced[0] or "Done.", forced[1], add + forced[2], drop + forced[3], forced[4]
+    if helper and reply and actions is not None and not getattr(actions, "changes", 0) and not str(message).strip().endswith("?") and (not getattr(actions, "calls", 0) or __import__(__package__ + ".helper", fromlist=["x"]).wants_change(message)):
         reply += "\n\n(Nothing was changed: the model did not call a tool.)"          # a request that ended with no call must not read as done
-    if helper and not reply and actions is not None and getattr(actions, "calls", 0):          # it acted and then said nothing: that is not a failure
+    if helper and not reply and actions is not None and getattr(actions, "changes", 0):          # it acted and then said nothing: that is not a failure
         reply, status = "Done. The changes it asked for were handled above.", "ok"
+    if helper and not reply and actions is not None and getattr(actions, "calls", 0) and not getattr(actions, "changes", 0):          # it only looked: say so instead of "nothing"
+        reply, status = "I looked, but changed nothing.", "ok"
     if editing and editor is not None and reply:                      # a change written into the answer (a model that does not call the tool): the same approval as a call
         from . import rules as rl
         reply, written = rl.parse_edits(reply)

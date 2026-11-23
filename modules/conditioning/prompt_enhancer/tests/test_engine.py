@@ -653,7 +653,7 @@ def test_a_helper_that_only_talks_about_a_change_is_told_once_to_call_the_tool(t
         return "Merged.", "ok", [], [], ""
     monkeypatch.setattr(nodes.en, "converse", fake)
     out = nodes.chat_reply("h:1", "merge the scenes", engine_model="tiny", max_length=8, do_sample=False, on_event=lambda e: None, helper={"sheet": "x", "scenes": 2})
-    assert [a[0] for a in asked] == ["merge the scenes", helper.NUDGE]
+    assert [a[0] for a in asked][:2] == ["merge the scenes", helper.NUDGE] and "nothing was changed" in asked[2][0]          # then one round that names the fitting tools
     assert asked[1][1] == ["I will use the `set_story` tool to merge the scenes."]        # it sees what it wrote
     assert out["reply"].startswith("Merged.") and "Nothing was changed" in out["reply"]          # no call came, and the answer says so
     assert [t["reply"] for t in nodes.CONVOS["h:1"]["turns"]] == [out["reply"]]                # the conversation keeps the final answer only
@@ -978,3 +978,62 @@ def test_a_model_that_cannot_trim_resumes_from_a_copy_kept_at_the_last_turn():
 def test_the_reference_intro_forbids_writing_names_and_triggers():
     from modules.conditioning.prompt_enhancer import enhance
     assert "never write one in your answer" in enhance.REFERENCE_INTRO
+
+
+def _rule_chat(monkeypatch, tiny, behave, message="Soo.. will you correct them?", before=None):
+    import threading
+    from modules.conditioning.prompt_enhancer import nodes, rules
+    monkeypatch.setattr(nodes, "ENGINE", tiny)
+    monkeypatch.setattr(tiny.tok, "chat_template", "plain chat", raising=False)
+    nodes.CONVOS.clear()
+    if before:
+        nodes.CONVOS["h:rules"] = {"summary": "", "turns": __import__("collections").deque([before], maxlen=8), "seen": set()}
+    proposals = []
+
+    def on_event(ev):
+        if ev["kind"] == "edit_request":
+            proposals.append(ev["new"])
+            threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    monkeypatch.setattr(nodes.en, "converse", lambda clip, text, **kw: behave(text))
+    out = nodes.chat_reply("h:rules", message, engine_model="tiny", max_length=8, do_sample=False, on_event=on_event,
+                           helper={"sheet": "x", "scenes": 1, "rules": {"instructions": "Write 2.5D illustration prompts."}})
+    return out, proposals
+
+
+_EDIT = 'TOOL: edit_prompt\n{"field": "instructions", "new_text": "Write prompts in the requested style.", "reason": "asked"}\nEND_TOOL'
+
+
+def test_a_request_answered_by_only_looking_at_a_rule_is_pushed_into_changing_it(monkeypatch, tiny, comfyui):
+    seen = []
+
+    def behave(text):
+        seen.append(text)
+        if "nothing was changed" in text:
+            return _EDIT, "ok", [], [], ""
+        return ('TOOL: read_prompt\n{"field": "instructions"}\nEND_TOOL' if len(seen) == 1 else ""), "ok", [], [], ""
+    out, proposals = _rule_chat(monkeypatch, tiny, behave, message="Please correct the rules so they do not mention 2.5D")
+    assert proposals == ["Write prompts in the requested style."] and out["ok"]
+    assert not out["reply"].startswith("Done. The changes it asked for were handled above") or proposals
+
+
+def test_a_follow_up_question_after_an_announcement_without_a_call_forces_the_call(monkeypatch, tiny, comfyui):
+    before = {"request": "Please correct the rules so they do not mention 2.5D", "reply": "I will remove the mention of 2.5D from the rules.", "kind": "chat"}
+
+    def behave(text):
+        return (_EDIT if "nothing was changed" in text else "Yes, I will."), "ok", [], [], ""
+    out, proposals = _rule_chat(monkeypatch, tiny, behave, before=before)
+    assert proposals == ["Write prompts in the requested style."]
+
+
+def test_a_plain_question_is_not_forced_into_a_change(monkeypatch, tiny, comfyui):
+    out, proposals = _rule_chat(monkeypatch, tiny, lambda text: ("It mentions 2.5D once.", "ok", [], [], ""), message="Does the rule mention 2.5D?")
+    assert proposals == [] and out["reply"] == "It mentions 2.5D once."
+
+
+def test_the_tools_shown_follow_the_request_and_all_come_back_when_it_names_none():
+    from modules.conditioning.prompt_enhancer import helper as hp
+    names = lambda only: {t["function"]["name"] for t in hp.tools(True, only)}          # noqa: E731
+    assert names(hp.intent("update the system prompt")) >= {"read_prompt", "edit_prompt"}
+    assert "set_variable" not in names(hp.intent("update the system prompt"))
+    assert names(hp.intent("do it")) == names(None)
+    assert hp.wants_change("Soo.. will you correct them?", "I will remove the mention.") and not hp.wants_change("Soo.. will you correct them?", "Yes it is fine.")
