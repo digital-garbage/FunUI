@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper's checklist sits under its own message instead of being pinned at the top.** Each request keeps its own checklist: open and updating while the request works, folded once it is finished, and kept in the history.
+- **A long bulk shortcut job no longer stalls after the first batch.** After each allowed shortcut edit the tool answer says how many shortcuts were changed in this request, how many have not been touched yet, and names the next 20, so the model can send the next batch straight away.
 - **Optional Helper comments in the chat.** A new switch "Helper comments in the chat" (Settings > Editor, under the Helper switch, off by default) shows what the Helper writes between its actions as grey lines in the chat, instead of only inside its thinking line.
 - **A model that gets stuck repeating itself gets a second chance.** When the engine cuts a round for repeating the same text, that round is thrown away and asked again (up to twice) with a new seed, with thinking off, and with an app note saying the last attempt got stuck and it should decide and call the tool at once.
 - **The Helper adds up its shortcut changes.** The many "Changed N shortcuts" lines of one request are shown as one running total.

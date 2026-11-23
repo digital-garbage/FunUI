@@ -506,3 +506,13 @@ def test_a_shortcut_renamed_earlier_is_skipped_not_a_failure():
     assert [c["name"] for c in seen[-1]["args"]["changes"]] == ["c"] if "args" in seen[-1] else True
     only = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": "a", "new_name": "A"}], "reason": "r"}})
     assert only.startswith("Error: nothing to do") and "already renamed" in only
+
+
+def test_a_bulk_edit_answer_says_how_many_are_left_and_names_the_next_ones():
+    def on_event(ev):
+        if ev.get("kind") != "doing":
+            threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    acts = helper.Actions(1, on_event, wait=2, shortcuts=[{"name": f"s{i}", "triggers": [f"t{i}"], "replacements": ["x"]} for i in range(30)])
+    out = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": f"s{i}", "new_name": f"n{i}"} for i in range(5)], "reason": "r"}})
+    assert out.startswith("Allowed") and "5 of 30 shortcuts have been changed" in out and "25 have not been touched yet" in out and "s5; s6" in out
+    assert "n0" not in out.split("The next ones:")[1]

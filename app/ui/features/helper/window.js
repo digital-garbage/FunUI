@@ -246,9 +246,6 @@ export function openHelper(app, origin) {
   let busy = false, win = null, active = 0;
   const slot = () => ((app.pipeline && app.pipeline.slots()) || []).find((x) => x.node === NODE), inputs = () => (slot() || {}).inputs || {};
   const history = c.region.stack({ gap: "sm" });
-  const pinned = c.region.stack({ gap: "xs", sticky: true, children: [] });          // the checklist of the latest request, kept in view and updated as it goes
-  pinned.node.hidden = true;
-  let planOpen = true;
   const box = c.textarea.md({ label: "Helper", rows: 3, value: draft, placeholder: "e.g. make scene 2 longer, or add a scene where the dog runs away", onInput: (v) => { draft = v; } });
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
@@ -256,6 +253,16 @@ export function openHelper(app, origin) {
   const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); Promise.resolve(app.api.enhancerChatClear ? app.api.enhancerChatClear(`helper:${p.project.id}`) : null).catch(() => {}); paint(true); } });
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   let tick = 0;
+  // The checklist of a request sits under its message: open while the request works, folded once it is finished, and it keeps the state it ended in.
+  const planKey = (x) => (x.plan || []).map((i) => i.state[0]).join("");
+  const planOf = (x) => {
+    const items = x.plan || [];
+    if (!items.length) return [];
+    const left = items.filter((i) => i.state === "open").length;
+    return [c.collapsible.default({ label: `Checklist: ${items.length - left} of ${items.length} done`, open: x.planOpen !== undefined ? x.planOpen : !x.t1, onToggle: (v) => { x.planOpen = v; },
+      body: c.region.stack({ gap: "xs", children: [...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
+        ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] }) })];
+  };
   // The model's thinking stays folded: a line with a changing phrase and the time since the request began, opened by a click.
   const thoughtOf = (x, working) => {
     if (!x.thinking && !x.live && !(working && !x.reply && !x.t1)) return [];
@@ -269,7 +276,7 @@ export function openHelper(app, origin) {
   // while the answer streamed in): redraws wait until the pointer is up.
   let held = false, dirty = false, heldTimer = 0;
   const release = () => { clearTimeout(heldTimer); setTimeout(() => { held = false; if (dirty) { dirty = false; paint(); } }, 0); };
-  for (const node of [history.node, pinned.node]) {
+  for (const node of [history.node]) {
     node.addEventListener("pointerdown", () => { held = true; clearTimeout(heldTimer); heldTimer = setTimeout(release, 1500); });
     node.addEventListener("pointerup", release);
     node.addEventListener("pointercancel", release);
@@ -289,15 +296,10 @@ export function openHelper(app, origin) {
     pin = false;
     const t = turns();
     // a finished turn is drawn once and its elements are kept: only the turn that is still working is built again
-    const draw = (x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...tally(x.done).map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })];
-    const kept = (x) => { if (!x.t1) return draw(x); const key = `${x.reply.length}|${x.status}|${x.done.length}|${x.thinking.length}`; if (!x.kept || x.kept.key !== key) x.kept = { key, els: draw(x) }; return x.kept.els; };
+    const draw = (x) => [c.bubble.you({ text: x.you, who: "You" }), ...planOf(x), ...thoughtOf(x, busy), ...tally(x.done).map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })];
+    const kept = (x) => { if (!x.t1) return draw(x); const key = `${x.reply.length}|${x.status}|${x.done.length}|${x.thinking.length}|${planKey(x)}`; if (!x.kept || x.kept.key !== key) x.kept = { key, els: draw(x) }; return x.kept.els; };
     history.set(t.length ? t.flatMap(kept)
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
-    const withPlan = [...t].reverse().find((x) => x.plan && x.plan.length), items = withPlan ? withPlan.plan : [], left = items.filter((i) => i.state === "open").length;
-    pinned.node.hidden = !items.length;
-    pinned.set(items.length ? [c.collapsible.default({ label: `Checklist: ${items.length - left} of ${items.length} done`, open: planOpen, onToggle: (v) => { planOpen = v; },
-      body: c.region.stack({ gap: "xs", children: [...items.slice(0, 20).map((i, n) => c.text.sm({ text: `${MARK[i.state] || "○"} ${n + 1}. ${i.text}${i.state === "skipped" && i.note ? ` (${i.note})` : ""}` })),
-        ...(items.length > 20 ? [c.hint.default({ text: `and ${items.length - 20} more` })] : [])] }) })] : []);
     send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
     if (stopper.setDisabled) stopper.setDisabled(!busy);
     if (follow) later(() => { const sc = scrollParent(history.node); if (sc) sc.scrollTop = sc.scrollHeight; });
@@ -312,7 +314,7 @@ export function openHelper(app, origin) {
     if (!message) return;
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, thinking: "", live: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
-    turns().forEach((t) => { t.open = false; t.kept = null; });            // a new message never leaves a thought open
+    turns().forEach((t) => { t.open = false; t.planOpen = false; t.kept = null; });            // a new message never leaves a thought open
     turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint(true);
     if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
@@ -384,7 +386,7 @@ export function openHelper(app, origin) {
     } catch (e) { err = e; }
     if (turn) settle(turn, r, err);
   }
-  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [pinned, history, box] }), actions: [clear, stopper, send] });
+  win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [clear, stopper, send] });
   paint();
   attach();
   return win;

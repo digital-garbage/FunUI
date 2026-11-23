@@ -94,30 +94,40 @@ async function autoHide(page, note) {
 async function helperChecklist(page, note, shot) {
   const items = [["set a", "done"], ["set b", "done"], ["set c", "open"], ["a longer step that needs a good deal more words than the others so the line has to wrap inside the card", "open"], ["set e", "skipped"], ["set f", "open"]]
     .map(([text, state]) => ({ text, state, note: state === "skipped" ? "does not exist" : "" }));
-  const events = [{ kind: "begin", message: "rename everything", seconds: 4 }, { kind: "plan", items }, { kind: "thinking", text: "working it out" }, { kind: "result", result: { ok: true, reply: "Done." } }];
+  const events = [{ kind: "begin", message: "rename everything", seconds: 4 }, { kind: "plan", items }, { kind: "thinking", text: "working it out" }, { kind: "answer", text: "I apologize for the earlier mistake, the names I used did not match; I will look them up once more and then rename every one of them with the exact spelling the library shows, in small batches." }, { kind: "doing", tool: "find_shortcuts" }, { kind: "answer", text: "Short note." }, { kind: "doing", tool: "edit_shortcuts" }, { kind: "result", result: { ok: true, reply: "Done." } }];
   await page.route("**/chat_attach**", (route) => route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") }));
   await page.getByRole("button", { name: /Helper/ }).first().click({ timeout: 2000 }).catch(() => note("the Helper button cannot be pressed"));
   await page.waitForTimeout(700);
   const got = await page.evaluate(() => {
-    const modal = document.querySelector(".cx-modal"), fold = modal && modal.querySelector(".cx-stack-sticky details.cx-collapsible"), card = fold;
+    const modal = document.querySelector(".cx-modal"), fold = modal && [...modal.querySelectorAll("details.cx-collapsible")].find((d) => d.textContent.startsWith("Checklist")), card = fold;
     if (!modal || !card || !fold) return null;
     const m = modal.getBoundingClientRect(), q = card.getBoundingClientRect(), cs = getComputedStyle(card.querySelector("summary")), boxed = !!fold.closest(".cx-fieldcard, .cx-card"), text = fold.querySelector(".cx-collapsible-body, :scope > :not(summary)");
     const pad = parseFloat(cs.paddingLeft), tx = text ? text.getBoundingClientRect() : null;
-    return { boxed, inside: q.left >= m.left - 1 && q.right <= m.right + 1 && q.top >= m.top - 1, pad, open: fold.open, gapLeft: tx ? tx.left - q.left : 0, wide: modal.scrollWidth > modal.clientWidth + 1 };
+    const lines = [...modal.querySelectorAll(".cx-hint")].filter((h) => /apologize|Short note/.test(h.textContent)).map((h) => { const r = h.getBoundingClientRect(); return { inside: r.left >= m.left - 1 && r.right <= m.right + 1, tall: r.height > 120, cut: h.scrollWidth > h.clientWidth + 1 }; });
+    const you = [...modal.querySelectorAll(".cx-bubble-you")].find((b) => b.textContent.includes("rename everything")), under = !!you && !!(you.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING) && fold.getBoundingClientRect().top >= you.getBoundingClientRect().bottom - 1;
+    return { lines, under, boxed, inside: q.left >= m.left - 1 && q.right <= m.right + 1 && q.top >= m.top - 1, pad, open: fold.open, gapLeft: tx ? tx.left - q.left : 0, wide: modal.scrollWidth > modal.clientWidth + 1 };
   });
   if (!got) { note("the Helper's checklist card is not shown"); return; }
+  if (got.lines.length !== 2) note(`the Helper's comment lines are not shown (${got.lines.length} of 2)`);
+  if (got.lines.some((l) => !l.inside || l.cut)) note("a Helper comment line sticks out of the window");
+  if (got.lines.some((l) => l.tall)) note("a Helper comment line is far too tall");
+  if (!got.under) note("the checklist is not under its message");
   if (got.boxed) note("the checklist sits in a second box instead of being a plain fold");
   if (!got.inside) note("the checklist card sticks out of the Helper window");
   if (got.pad < 8) note(`the checklist card has no room around its text (${got.pad}px)`);
-  if (!got.open) note("the checklist starts folded");
+  if (got.open) note("the checklist of a finished run is not folded");
   if (got.wide) note("the Helper window scrolls sideways");
+  const sum = page.locator(".cx-modal details.cx-collapsible", { hasText: /^Checklist/ }).locator("summary");
+  const isOpen = () => page.evaluate(() => [...document.querySelectorAll(".cx-modal details.cx-collapsible")].find((d) => d.textContent.startsWith("Checklist")).open);
+  await sum.click();
+  await page.waitForTimeout(150);
+  if (!(await isOpen())) note("the checklist does not open when clicked");
+  const high = await page.evaluate(() => { const d = [...document.querySelectorAll(".cx-modal details.cx-collapsible")].find((x) => x.textContent.startsWith("Checklist")).getBoundingClientRect(), m = document.querySelector(".cx-modal").getBoundingClientRect(); return d.right <= m.right + 1 && d.bottom <= innerHeight; });
+  if (!high) note("the opened checklist sticks out of the window");
   if (shot) await page.screenshot({ path: shot });
-  await page.locator(".cx-modal .cx-stack-sticky details.cx-collapsible summary").click();
+  await sum.click();
   await page.waitForTimeout(150);
-  if (await page.evaluate(() => document.querySelector(".cx-modal .cx-stack-sticky details.cx-collapsible").open)) note("the checklist does not fold when clicked");
-  await page.locator(".cx-modal .cx-stack-sticky details.cx-collapsible summary").click();
-  await page.waitForTimeout(150);
-  if (!(await page.evaluate(() => document.querySelector(".cx-modal .cx-stack-sticky details.cx-collapsible").open))) note("the checklist does not open again when clicked");
+  if (await isOpen()) note("the checklist does not fold when clicked");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(200);
 }

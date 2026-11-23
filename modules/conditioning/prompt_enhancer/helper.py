@@ -220,6 +220,7 @@ class Actions:
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
         self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
+        self.touched = set()                               # shortcuts changed in this request (by their name now)
         self.renamed = {}                                  # old name -> new name of the shortcuts renamed in this request, so a repeat is told it is done
         self.changes = 0                                   # calls that change something: looking a rule or setting up is not one
         self.plan, self.plan_changes = [], 0               # the checklist the model wrote for a long request, and how many changes were made when it did
@@ -617,7 +618,13 @@ class Actions:
                         continue
                     new = {**cur, **{k: v for k, v in c.items() if k not in ("name", "new_name")}, "name": c.get("new_name") or c["name"]}
                     self.shortcuts[new["name"]] = new
-            return "Allowed: the change is made in the project." + (" Skipped, already renamed earlier: " + "; ".join(args["skipped"][:10]) + "." if args.get("skipped") else "")
+                    self.touched.add(new["name"])
+            more = ""
+            if name == "edit_shortcuts":                                     # where a long job stands, with the next names to take, so the model goes on instead of stopping after a batch
+                left = [n for n in self.shortcuts if n not in self.touched]
+                more = (f" {len(self.touched)} of {len(self.shortcuts)} shortcuts have been changed in this request; {len(left)} have not been touched yet."
+                        + (f" The next ones: {'; '.join(left[:20])}. If the user asked for all of them, send the next batch now, then check the item." if left else ""))
+            return "Allowed: the change is made in the project." + (" Skipped, already renamed earlier: " + "; ".join(args["skipped"][:10]) + "." if args.get("skipped") else "") + more
         return ("Disallowed by the user. Nothing was changed. Ask yourself why: compare this change with what the user asked and with the project as it is, and find what you got wrong "
                 "(the wrong scene, a value too far, more than was asked). Then propose one corrected change that fixes it, or, if you cannot tell, ask the user one short question. Never propose the same change again.")
 
