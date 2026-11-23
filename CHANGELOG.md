@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- The built-in intro above shortcut and lore entries is reworded: they are a dictionary used only as reference, never output verbatim, and their names never trigger scenes and are not written out. The version used while "Name shortcuts to the model" is off says the same without mentioning names.
 - **"Name shortcuts to the model" switch** in the Enhance settings. Off, the model gets only the text of each shortcut or lore entry, never its name, so it has nothing to write into the prompt. On by default.
 - The auto-hide timeline opens only as tall as its lanes need, with no empty space under them.
 - The Helper no longer changes a rule it has not read. A rule edit sent blind is refused and answered with the rule's whole text, an edit that would cut most of a rule away is refused, and the rule name is accepted under other argument names (name, rule, prompt) and spellings. The forced round now repeats up to three times until the change is made.

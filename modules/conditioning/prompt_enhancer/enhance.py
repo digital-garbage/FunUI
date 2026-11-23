@@ -72,9 +72,10 @@ The message has labelled parts: ORIGINAL PROMPT (what the user wrote), YOUR LATE
 - The feedback is instructions to you, not prompt text: never quote it, mention it or append it.
 Output only the revised prompt, nothing else."""
 
-REFERENCE_INTRO = ("Reference entries. Use an entry only where the prompt "
-                   "calls for it, in your own words; ignore the rest. The names, labels and trigger words of the entries are for you "
-                   "to tell them apart only: never write one in your answer, and never write the words \"shortcut\" or \"reference\".")
+BARE_INTRO = ("Scene and action user dictionary. Use it only as reference to adapt your output to the user's request. "
+              "Do not output any dictionary entry verbatim, always rewrite.")
+REFERENCE_INTRO = (BARE_INTRO + "\nENTRY NAMES NEVER TRIGGER THEIR SCENES AUTOMATICALLY: DO NOT OUTPUT THEM, "
+                   "nor their labels or trigger words, nor the words \"shortcut\" or \"reference\".")
 
 CONVO_SYSTEM = """CONVERSATION: this is an ongoing chat, not a one-time request.
 The message shows EARLIER IN THIS CONVERSATION (each earlier request and your answer, oldest first) and then the NEW REQUEST.
@@ -202,10 +203,6 @@ def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
                         "whole": e.get("matchWholeWords") is not False,   # ST's default is whole words
                         "constant": bool(e.get("constant"))} for e in entries])
     return [g for g in groups if g]
-
-
-BARE_INTRO = ("Background material. Take from it only what the request calls for, rewritten in your own words as part of the prompt; "
-              "leave out the rest. It is never the prompt itself.")
 
 
 def reference(text, groups, intro="", names=True) -> str:

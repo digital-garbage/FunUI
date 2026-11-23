@@ -980,7 +980,7 @@ def test_a_model_that_cannot_trim_resumes_from_a_copy_kept_at_the_last_turn():
 
 def test_the_reference_intro_forbids_writing_names_and_triggers():
     from modules.conditioning.prompt_enhancer import enhance
-    assert "never write one in your answer" in enhance.REFERENCE_INTRO
+    assert "DO NOT OUTPUT THEM" in enhance.REFERENCE_INTRO
 
 
 def _rule_chat(monkeypatch, tiny, behave, message="Soo.. will you correct them?", before=None):
@@ -1100,4 +1100,4 @@ def test_entries_can_be_sent_without_their_names():
     named = en.reference("rain", [group])
     bare = en.reference("rain", [group], names=False)
     assert "Rain" in named and "[Shortcut]" in named
-    assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "Background material" in bare and "name" not in bare.split("It pours")[0].lower()
+    assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "always rewrite" in bare and "name" not in bare.split("It pours")[0].lower()
