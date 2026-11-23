@@ -14,12 +14,12 @@ from . import rules
 MAX_TEXT = 4000
 TEXTS = {"anchor": "the anchor", "postfix": "the postfix", "negative": "the negative prompt", "postfix_enabled": "the postfix switch"}
 ALIASES = {"prefix": "anchor", "main_prompt": "anchor", "negative_prompt": "negative", "postfix_on": "postfix_enabled", "postfix_switch": "postfix_enabled"}
-EXTRA = ("share_reference", "run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut")
+EXTRA = ("share_reference", "run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut", "edit_shortcuts")
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\nEarlier messages, answers and tool results in this chat are history: they already happened and are finished. Answer only the newest message, never redo an earlier change, and trust the project above over what the history says about it. "
                "Use edit_scene to change one scene's prompt, length or own prefix (a scene may have its own prefix instead of the project anchor; the sheet shows it), add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give one scene the same reference pictures and aspect ratio source as another scene, share_reference to give every scene the references of one scene (references pinned to the whole project already apply to every scene and are shown apart) (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
                "The global prompt is every scene prompt in order as one text, with the cut word written between scenes; rewrite it with set_story (the whole new text, scenes separated by the cut word on a line of its own). Every part of the Story between two cut words is a separate prompt: its own scene, made as its own clip at its own time, so it must stand on its own and never needs to be handled together with the others. The global prompt (the Composer's first tab) is a quick summary of the whole video, one short prompt per shot. Keep each shot short, a line or two with the main action and look, and never write detailed descriptions of each shot there; the detail comes later. In the global prompt write nothing but the scene prompts and the cut word between them: never labels or numbering such as [Shot 1] or Scene 2, and no headings. Change only the scenes the user means, one at a time with edit_scene, and use set_story only when the user asks for the whole Story to be rewritten. Do not merge scenes, move details between them or make them agree with each other unless asked. You can also run things for the user: the actions of the app (Generate, render, undo and so on) are listed in the project; start one with run_action, naming scenes first when the action works on picked scenes (Generate selected). run_action only starts the action and does not wait for it to finish; never start Generate unless the user asked for it. Cuts: the global prompt is cut into scenes at the cut words (the first one is written between scenes, change them with set_cut_words); a scene can also be cut in two on the timeline with cut_scene, and the halves stay one generated clip (the project says which scenes belong to one clip). "
-               "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut; a shortcut is shared by every project, so change one only when asked. "
+               "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut, and many at once (edits, renames, deletes) with edit_shortcuts; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
                "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
@@ -28,7 +28,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
 GROUPS = {"scenes": ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "share_reference"),
           "text": ("set_project_text",),
           "variables": ("set_variable", "remove_variable"),
-          "shortcuts": ("find_shortcuts", "save_shortcut", "remove_shortcut"),
+          "shortcuts": ("find_shortcuts", "save_shortcut", "remove_shortcut", "edit_shortcuts"),
           "settings": ("find_settings", "set_setting", "find_node_inputs", "set_node_inputs", "apply_preset", "run_action"),
           "rules": ("read_prompt", "edit_prompt")}
 _WORDS = {"scenes": r"scene|shot|clip|second|length|story|cut|picture|image|reference|aspect|frame|prompt",
@@ -106,6 +106,8 @@ def _tools() -> list:
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements.", {"query": {"type": "string"}}, ["query"]),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
+            fn("edit_shortcuts", "Change, rename or delete many shortcuts at once; the user allows the whole batch with one answer. Each change names an existing shortcut. Leave out what stays as it is.",
+               {"changes": {"type": "array", "description": "Up to 60 changes.", "items": {"type": "object", "properties": {"name": {"type": "string", "description": "The shortcut's current name."}, "new_name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "The whole new list."}, "category": {"type": "string"}, "delete": {"type": "boolean"}}, "required": ["name"]}}, "reason": reason}, ["changes", "reason"]),
             fn("remove_shortcut", "Delete a shortcut of the library.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("share_reference", "Give every scene the same reference pictures as one scene (what the media bin calls adding a reference to all scenes).", {"from_scene": {"type": "integer", "description": "The scene number to take the references from."}, "reason": reason}, ["from_scene", "reason"]),
             fn("run_action", "Start one of the app's actions (listed in the project), such as generating or rendering. Optionally pick scenes first.", {"action": {"type": "string", "description": "The id of the action."}, "scenes": {"type": "array", "items": {"type": "integer"}, "description": "Scene numbers to pick first, for actions that work on the picked scenes."}, "reason": reason}, ["action", "reason"]),
@@ -158,6 +160,16 @@ def describe(name, args) -> str:
         return f"Save shortcut {args.get('name')}: {', '.join(args.get('triggers') or [])} -> {' | '.join(args.get('replacements') or [])}"
     if name == "remove_shortcut":
         return f"Delete shortcut {args.get('name')}"
+    if name == "edit_shortcuts":
+        out = []
+        for c in args.get("changes") or []:
+            if c.get("delete"):
+                out.append(f"delete {c['name']}")
+                continue
+            what = [f"rename to {c['new_name']}"] if c.get("new_name") and c["new_name"] != c["name"] else []
+            what += [f"{k} {'; '.join(c[k]) if isinstance(c[k], list) else c[k]}" for k in ("triggers", "replacements", "category") if k in c]
+            out.append(f"{c['name']}: " + (", ".join(what) or "no change"))
+        return f"Change {len(out)} shortcut(s):\n" + "\n".join(out)
     return f"Set the default clip length to {args.get('seconds')} seconds"
 
 
@@ -226,7 +238,7 @@ class Actions:
     def find_shortcut(self, query) -> str:
         words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
         hits = [x for x in self.shortcuts.values() if words and all(w in (x["name"] + " " + " ".join(x.get("triggers") or []) + " " + " ".join(x.get("replacements") or [])).lower() for w in words)]
-        return "\n".join(f"{x['name']}: {', '.join(x.get('triggers') or [])} -> {' | '.join(x.get('replacements') or [])}{'' if x.get('enabled', True) else ' (off)'}" for x in hits[:15]) or "No shortcut matches."
+        return "\n".join(f"{x['name']}: {', '.join(x.get('triggers') or [])} -> {' | '.join(x.get('replacements') or [])}{'' if x.get('enabled', True) else ' (off)'}" for x in hits[:40]) or "No shortcut matches."
 
     def extra(self, name, args):
         """-> an error text, or None when the call is valid (args may gain fields the page needs)."""
@@ -288,6 +300,43 @@ class Actions:
             if not text(args.get("name"), 80) or not args["name"].strip() or not ok(args.get("triggers")) or not ok(args.get("replacements")):
                 return "Error: a shortcut needs a name, at least one trigger and at least one replacement."
             args["existing"] = args["name"] in self.shortcuts
+            return None
+        if name == "edit_shortcuts":
+            changes = args.get("changes")
+            if not isinstance(changes, list) or not 0 < len(changes) <= 60 or not all(isinstance(c, dict) for c in changes):
+                return "Error: changes is a list of one to 60 items, each with the shortcut's name."
+            ok = lambda v: isinstance(v, list) and v and all(isinstance(x, str) and x.strip() and len(x) <= 500 for x in v)        # noqa: E731
+            known, taken, out = dict(self.shortcuts), set(), []
+            for c in changes:
+                old = str(c.get("name") or "")
+                if old not in known:
+                    return f"Error: there is no shortcut called '{old}'. Call find_shortcuts to see the names."
+                if old in taken:
+                    return f"Error: '{old}' appears twice in changes."
+                taken.add(old)
+                item = {"name": old}
+                if c.get("delete") is True:
+                    out.append({**item, "delete": True})
+                    continue
+                for key in ("triggers", "replacements"):
+                    if key in c and not ok(c[key]):
+                        return f"Error: {key} of '{old}' must be a non-empty list of texts."
+                    if key in c:
+                        item[key] = [x.strip() for x in c[key]]
+                if "new_name" in c:
+                    new = c["new_name"]
+                    if not text(new, 80) or not new.strip():
+                        return f"Error: new_name of '{old}' must be text of at most 80 characters."
+                    clash = new.strip() != old and (new.strip() in known or new.strip() in {str(x.get('new_name') or '').strip() for x in out})
+                    if clash:
+                        return f"Error: a shortcut named '{new.strip()}' already exists."
+                    item["new_name"] = new.strip()
+                if "category" in c:
+                    item["category"] = str(c["category"] or "").strip()[:80]
+                if len(item) == 1:
+                    return f"Error: the change for '{old}' changes nothing."
+                out.append(item)
+            args["changes"] = out
             return None
         return None if args.get("name") in self.shortcuts else f"Error: there is no shortcut called '{args.get('name')}'."        # remove_shortcut
 
@@ -388,6 +437,13 @@ class Actions:
                 self.shortcuts[args["name"]] = args
             elif name == "remove_shortcut":
                 self.shortcuts.pop(args["name"], None)
+            elif name == "edit_shortcuts":
+                for c in args["changes"]:
+                    cur = self.shortcuts.pop(c["name"], None)
+                    if c.get("delete") or cur is None:
+                        continue
+                    new = {**cur, **{k: v for k, v in c.items() if k not in ("name", "new_name")}, "name": c.get("new_name") or c["name"]}
+                    self.shortcuts[new["name"]] = new
             return "Allowed: the change is made in the project."
         return ("Disallowed by the user. Nothing was changed. Ask yourself why: compare this change with what the user asked and with the project as it is, and find what you got wrong "
                 "(the wrong scene, a value too far, more than was asked). Then propose one corrected change that fixes it, or, if you cannot tell, ask the user one short question. Never propose the same change again.")
@@ -410,7 +466,7 @@ def node_line(x) -> str:
 
 NUDGE = "You described a change but did not call a tool, so nothing happened. Call the tool now, with the full arguments, and write nothing else."
 _TOOL_WORDS = re.compile(r"\b(" + "|".join(["edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "set_project_text", "set_variable", "remove_variable",
-                                              "save_shortcut", "remove_shortcut", "set_setting", "set_node_inputs", "apply_preset", "run_action"]) + r")\b|\bI (?:will|would|propose|suggest)\b", re.I)
+                                              "save_shortcut", "remove_shortcut", "edit_shortcuts", "set_setting", "set_node_inputs", "apply_preset", "run_action"]) + r")\b|\bI (?:will|would|propose|suggest)\b", re.I)
 
 
 def announced(reply) -> bool:

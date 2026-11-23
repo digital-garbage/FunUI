@@ -148,6 +148,22 @@ export function applyAction(project, ev, ps, api, app) {
     const done = ev.tool === "remove_shortcut" ? api.deleteShortcut(a.name) : api.saveShortcut({ name: a.name, triggers: a.triggers, replacements: a.replacements, enabled: true, category: a.category || "", sub_category: "" }, a.existing ? a.name : undefined);
     return Promise.resolve(done).then(() => (ev.tool === "remove_shortcut" ? `Deleted shortcut ${a.name}` : `Saved shortcut ${a.name}`), (e) => `Shortcut not saved: ${(e && e.message) || e}`);
   }
+  if (ev.tool === "edit_shortcuts" && api) {
+    return (async () => {
+      let did = 0;
+      const known = Object.fromEntries(((await Promise.resolve(api.shortcuts ? api.shortcuts() : null).catch(() => null) || {}).shortcuts || []).map((x) => [x.name, x]));
+      try {
+        for (const c of a.changes || []) {
+          if (c.delete) { await api.deleteShortcut(c.name); did += 1; continue; }
+          const cur = known[c.name] || {};
+          await api.saveShortcut({ name: c.new_name || c.name, triggers: c.triggers || cur.triggers || [], replacements: c.replacements || cur.replacements || [], enabled: cur.enabled !== false,
+            category: "category" in c ? c.category : cur.category || "", sub_category: cur.sub_category || "" }, c.name);
+          did += 1;
+        }
+      } catch (e) { return `Changed ${did} of ${(a.changes || []).length} shortcuts, then: ${(e && e.message) || e}`; }
+      return `Changed ${did} shortcut${did === 1 ? "" : "s"}`;
+    })();
+  }
   if (ev.tool === "set_node_inputs" && ps) {
     const inputs = {};
     for (const x of a.changes || []) (inputs[x.slot] ||= {})[x.input] = x.value;
@@ -234,7 +250,7 @@ export function openHelper(app, origin) {
     turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
     log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint();
     if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
-    const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled }))).catch(() => []);
+    const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled, category: x.category, sub_category: x.sub_category }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
     const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };

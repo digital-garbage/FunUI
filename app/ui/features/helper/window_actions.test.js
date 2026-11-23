@@ -151,3 +151,12 @@ test("a scene the helper adds gets the first scene's references and aspect sourc
   added.references.push("x");
   assert.deepEqual(p.project.scenes[0].references, ["m1abcdef", "m3abcdef"]);       // a copy, not the same list
 });
+
+test("a batch of shortcut changes renames, edits and deletes in order and keeps what it did not name", async () => {
+  const calls = [];
+  const api = { shortcuts: async () => ({ shortcuts: [{ name: "a", triggers: ["aa"], replacements: ["one"], enabled: false, category: "k", sub_category: "s" }] }),
+    saveShortcut: async (...x) => { calls.push(["save", ...x]); }, deleteShortcut: async (n) => { calls.push(["delete", n]); } };
+  const said = await applyAction({ project: { scenes: [] } }, { tool: "edit_shortcuts", args: { changes: [{ name: "a", new_name: "alpha" }, { name: "c", delete: true }] } }, null, api);
+  assert.equal(said, "Changed 2 shortcuts");
+  assert.deepEqual(calls, [["save", { name: "alpha", triggers: ["aa"], replacements: ["one"], enabled: false, category: "k", sub_category: "s" }, "a"], ["delete", "c"]]);
+});

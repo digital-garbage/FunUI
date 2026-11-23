@@ -295,3 +295,21 @@ def test_the_helper_reads_and_changes_the_enhancers_system_prompts_through_the_s
     assert out.startswith("Allowed") and heard[0]["kind"] == "edit_request" and heard[0]["field"] == "chat_prompt"
     assert "[[ASPECT_RATIO]]" in helper.rules_note({"chat_prompt": "x"}) and "main rewrite instructions" in helper.rules_note({"chat_prompt": "x"})
     assert helper.Actions(2, on_event)({"name": "edit_prompt", "args": {}}).startswith("Error")
+
+
+def test_many_shortcuts_are_changed_renamed_and_deleted_under_one_question():
+    lib = [{"name": "a", "triggers": ["aa"], "replacements": ["one"]}, {"name": "b", "triggers": ["bb"], "replacements": ["two"]}, {"name": "c", "triggers": ["cc"], "replacements": ["three"]}]
+    acts = helper.Actions(1, lambda ev: None, wait=1, shortcuts=lib)
+    for bad in ([], [{"name": "zz", "new_name": "q"}], [{"name": "a"}], [{"name": "a", "new_name": "b"}], [{"name": "a", "triggers": []}],
+                [{"name": "a", "category": "x"}, {"name": "a", "category": "y"}]):
+        assert acts({"name": "edit_shortcuts", "args": {"changes": bad, "reason": "r"}}).startswith("Error"), bad
+    seen = []
+
+    def on_event(ev):
+        seen.append(ev)
+        threading.Timer(0.01, lambda: rules.decide(ev["id"], True)).start()
+    live = helper.Actions(1, on_event, wait=2, shortcuts=lib)
+    out = live({"name": "edit_shortcuts", "args": {"reason": "r", "changes": [{"name": "a", "new_name": "alpha"}, {"name": "b", "replacements": ["new two"], "category": "k"}, {"name": "c", "delete": True}]}})
+    assert out.startswith("Allowed") and len(seen) == 1                       # one question for the whole batch
+    assert "rename to alpha" in seen[0]["summary"] and "delete c" in seen[0]["summary"]
+    assert set(live.shortcuts) == {"alpha", "b"} and live.shortcuts["alpha"]["triggers"] == ["aa"] and live.shortcuts["b"]["replacements"] == ["new two"]
