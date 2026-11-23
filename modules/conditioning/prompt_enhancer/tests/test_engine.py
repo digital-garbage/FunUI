@@ -1091,3 +1091,13 @@ def test_the_stop_button_ends_a_working_request_and_a_new_message_interrupts_and
     second.join(5), third.join(5)
     assert results["b"]["stopped"] and results["c"]["ok"]
     assert any("second => (the user stopped" in t for t in seen[-1][1])
+
+
+def test_entries_can_be_sent_without_their_names():
+    from modules.conditioning.prompt_enhancer import enhance as en
+    group = [{"block": "[Shortcut] Rain\nIt pours.", "bare": "It pours.", "words": ["rain"], "vocab": set()},
+             {"block": "[Lore] Castle\nOld stones.", "bare": "Old stones.", "keys": "castle"}]
+    named = en.reference("rain", [group])
+    bare = en.reference("rain", [group], names=False)
+    assert "Rain" in named and "[Shortcut]" in named
+    assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "Never write a name" in bare

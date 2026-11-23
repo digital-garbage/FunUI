@@ -158,7 +158,7 @@ def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
         lines = [f"[Shortcut] {sc.name}"]
         lines += reps if len(reps) == 1 else [f"Variant {i + 1}: {r}" for i, r in enumerate(reps)]
         # triggers are expanded away by now, so the content counts as a mention too
-        return {"block": "\n".join(lines), "words": [sc.name, *sc.triggers, *reps],
+        return {"block": "\n".join(lines), "bare": "\n".join(lines[1:]), "words": [sc.name, *sc.triggers, *reps],
                 "vocab": vocab(" ".join([sc.name, *reps]))}
 
     groups = []
@@ -197,14 +197,18 @@ def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
         entries = sorted((e for e in entries if isinstance(e, dict) and str(e.get("content") or "").strip()),
                          key=lambda e: e.get("insertion_order", e.get("order", 0)) or 0)
         groups.append([{"block": f"[Lore] {e.get('comment') or e.get('name') or 'entry'}\n"
-                                 f"{str(e['content']).strip()}",
+                                 f"{str(e['content']).strip()}", "bare": str(e["content"]).strip(),
                         "keys": e.get("keys", e.get("key", [])),
                         "whole": e.get("matchWholeWords") is not False,   # ST's default is whole words
                         "constant": bool(e.get("constant"))} for e in entries])
     return [g for g in groups if g]
 
 
-def reference(text, groups, intro="") -> str:
+BARE_INTRO = ("Reference entries. Use an entry only where the prompt calls for it, in your own words; ignore the rest. "
+              "Never write a name, label or trigger word of any entry in your answer.")
+
+
+def reference(text, groups, intro="", names=True) -> str:
     """Appended after the prompt the model rewrites. Per group: the entries the prompt
     mentions, or the whole group when it mentions none (the model may need what the
     prompt does not name). Shortcuts are mentioned by name, trigger, content or any
@@ -239,10 +243,10 @@ def reference(text, groups, intro="") -> str:
         hit = [e for e in group if mentioned(e)]
         if hit:
             hit = [e for e in group if e.get("constant") or e in hit]
-        blocks += [e["block"] for e in (hit or group)]
+        blocks += [e["block"] if names else e.get("bare", e["block"]) for e in (hit or group)]
     if not blocks:
         return ""
-    return "\n\n" + (str(intro or "").strip() or REFERENCE_INTRO) + "\n\n" + "\n\n".join(blocks)
+    return "\n\n" + (str(intro or "").strip() or (REFERENCE_INTRO if names else BARE_INTRO)) + "\n\n" + "\n\n".join(blocks)
 
 
 # --- chat --------------------------------------------------------------------

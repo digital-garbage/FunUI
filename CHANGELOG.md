@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **"Name shortcuts to the model" switch** in the Enhance settings. Off, the model gets only the text of each shortcut or lore entry, never its name, so it has nothing to write into the prompt. On by default.
 - The auto-hide timeline opens only as tall as its lanes need, with no empty space under them.
 - The Helper no longer changes a rule it has not read. A rule edit sent blind is refused and answered with the rule's whole text, an edit that would cut most of a rule away is refused, and the rule name is accepted under other argument names (name, rule, prompt) and spellings. The forced round now repeats up to three times until the change is made.
 - **The Helper has a Stop button, and a new message interrupts it.** Stop ends the writing and declines any change still waiting for Allow. A message sent while it works stops that work and is read together with the stopped request, which stays in the conversation as unanswered.

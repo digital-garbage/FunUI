@@ -398,6 +398,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="Paths to lorebook or shortcuts JSON files, one per line."),
                 io.String.Input("reference_intro", multiline=True, default="", optional=True,
                                 tooltip="The line above the reference entries. Empty uses the built-in one."),
+                io.Boolean.Input("name_entries", default=True, optional=True,
+                                 tooltip="Tell the model the name of each shortcut or lore entry. Off: it gets only their text, so it has no name to write into the prompt."),
                 io.String.Input("chat", multiline=True, default="", optional=True,
                                 tooltip="Your comments on earlier rewrites (Composer > Chat)."),
                 io.Combo.Input("style", options=list(en.STYLES), default="default", optional=True,
@@ -449,7 +451,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
-                lorebooks="", reference_intro="", chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
+                lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
@@ -499,7 +501,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if not isinstance(rounds, list):
             rounds = []
         key = str(conversation or "").strip() if to_chat else ""
-        reference_text = en.reference(body, groups, reference_intro)
+        reference_text = en.reference(body, groups, reference_intro, names=name_entries is not False)
         masked, marks = mask_markup(body)
         system = str(instructions or "").strip() or en.STYLES.get(style, en.SYSTEM_PROMPT)
         if marks:
