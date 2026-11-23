@@ -140,7 +140,7 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
     if did:
         macros = en.macro_values(state["turns"], state["summary"], comments, notes, "", "", message, rules=sheet, length=video_length, aspect=aspect_ratio)      # the shortened turns are in the notes now
     keep = en.CONVO_KEEP if compact else en.CONVO_TURNS
-    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule(bool(helper.get("rules"))) if text_mode else "") + (__import__(__package__ + ".helper", fromlist=["x"]).rules_note(helper.get("rules")) if helper and helper.get("rules") else "") if helper else ""
+    hp_rule = __import__(__package__ + ".helper", fromlist=["x"]).HELPER_RULE.replace("[[PROJECT_SHEET]]", str((helper or {}).get("sheet") or "(empty)") + _chat_memory(helper, notes)).replace("[[TOOL_LIST]]", __import__(__package__ + ".helper", fromlist=["x"]).tool_list(bool(helper.get("rules")))) + (__import__(__package__ + ".helper", fromlist=["x"]).text_rule(bool(helper.get("rules"))) if text_mode else "") + (__import__(__package__ + ".helper", fromlist=["x"]).rules_note(helper.get("rules")) if helper and helper.get("rules") else "") if helper else ""
     def ask(text):
         stop.check()
         out = _ask(text)

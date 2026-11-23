@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper's system prompt is shorter and lists every tool.** It now starts with a one-line list of all the tools (built from the tools themselves, so it never goes stale), keeps only the facts about how a project works, and adds a worked example plus two plain rules: never say a change worked before the tool confirms it, and never repeat a call that failed twice. The checklist tool is described as needed for every change.
 - **A model stuck repeating itself is stopped, and long shortcut batches are split.** The GGUF engine ends a round once the end of its text is the same piece written four times over (it said why in the log) instead of filling the window. The Helper's bulk shortcut edit now takes at most 20 changes per call and tells the model to send long jobs as several calls, because very long tool calls are where small models lose track.
 - **The Helper's pinned checklist is a plain fold again, without a box around it.** The extra card and the darker band behind it are gone; a pinned strip inside a window now takes the window's own colour.
 - **The Helper's reminders now come from the app, not from you.** Every reminder the app sends the model (the checklist, "call the tool now", tool results) is marked as an app note, and the Helper's system prompt says such notes are not user messages, so the model no longer believes you wrote them.
