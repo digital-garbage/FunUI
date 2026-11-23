@@ -980,10 +980,11 @@ class EngineClip:
         if self.live:
             rid = LIVE.start(self.live, str(user)[:80])
         try:
-            empties = 0
+            empties, loops, think = 0, 0, thinking
             for step in range(self.MAX_TOOL_ROUNDS + 1):
                 round_calls, said, why = [], "", ""
-                for ev in self.engine.stream(messages, thinking=thinking, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
+                before = (thought, answer)
+                for ev in self.engine.stream(messages, thinking=think, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
                                              seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite", label="a rewrite" if self.live == "rewrite" else "a chat answer"):
                     if ev["kind"] == "thinking":
@@ -1002,6 +1003,15 @@ class EngineClip:
                 if not round_calls and not said.strip() and why.startswith("the model ended its turn at once") and empties < 2 and step < self.MAX_TOOL_ROUNDS:
                     empties += 1                                        # an empty answer (the model's first token was its end-of-turn): asked again with another seed
                     seed = (seed or 0) + 7919
+                    continue
+                if why.startswith("it repeated the same text") and loops < 2 and step < self.MAX_TOOL_ROUNDS:
+                    loops += 1                                          # the model got stuck repeating itself: the round is thrown away and asked again, told so, with thinking off
+                    thought, answer = before
+                    seed, think = (seed or 0) + 104729, False
+                    from .helper import app_note
+                    last = dict(messages[-1])
+                    last["content"] = f"{last.get('content') or ''}\n\n" + app_note("Your last attempt got stuck repeating itself, so it was thrown away. Do not deliberate: decide, then call the tool (or answer) at once.")
+                    messages[-1] = last
                     continue
                 if not (round_calls and self.handler and step < self.MAX_TOOL_ROUNDS):
                     break

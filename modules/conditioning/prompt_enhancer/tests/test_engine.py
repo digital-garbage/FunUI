@@ -1219,3 +1219,26 @@ def test_an_answer_that_is_empty_because_the_model_ended_its_turn_at_once_is_ask
     clip = eng.EngineClip(Engine())
     raw, status = clip.run("sys", "hi", seed=5)
     assert raw == "Here." and seeds == [5, 5 + 7919]
+
+
+def test_a_round_that_looped_is_thrown_away_and_asked_again_with_a_note_and_without_thinking():
+    from .. import engine as eng
+    seen = []
+
+    class Engine:
+        cancel = None
+        device = "cpu"
+        def sees(self): return False
+        def stream(self, messages, **kw):
+            seen.append((kw["thinking"], kw["seed"], messages[-1]["content"]))
+            if len(seen) == 1:
+                yield {"kind": "thinking", "text": "Actually, I'll just do it. " * 5}
+                yield {"kind": "end", "calls": [], "tokens": 100, "seconds": 1, "tps": 9, "cached": 0, "why": "it repeated the same text again and again, so it was stopped"}
+            else:
+                yield {"kind": "answer", "text": "Done."}
+                yield {"kind": "end", "calls": [], "tokens": 2, "seconds": 1, "tps": 2, "cached": 0, "why": ""}
+    clip = eng.EngineClip(Engine())
+    raw, status = clip.run("sys", "rename them", thinking=True, seed=5)
+    assert raw == "Done." and "just do it" not in raw
+    assert seen[0][0] is True and seen[1][0] is False and seen[1][1] != 5
+    assert seen[1][2].startswith("rename them") and "APP NOTE" in seen[1][2] and "stuck repeating itself" in seen[1][2]

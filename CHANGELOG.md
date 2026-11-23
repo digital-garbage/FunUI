@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A model that gets stuck repeating itself gets a second chance.** When the engine cuts a round for repeating the same text, that round is thrown away and asked again (up to twice) with a new seed, with thinking off, and with an app note saying the last attempt got stuck and it should decide and call the tool at once.
 - **The Helper adds up its shortcut changes.** The many "Changed N shortcuts" lines of one request are shown as one running total.
 - **The Helper has its own temperature, 0.3 by default** (Composer > Enhance > Writing > "Helper temperature"). Tool calls need steady wording, so the Helper no longer uses the Enhance temperature, which can stay creative. The other Enhance sampling settings still apply to the Helper.
 - **Helper thoughts stay folded unless you open them.** A thought you opened folds again when its run finishes, and sending a new message folds every thought (finished turns were kept as drawn, so an opened one used to stay open).
