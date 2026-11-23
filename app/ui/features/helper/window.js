@@ -336,7 +336,7 @@ export function openHelper(app, origin) {
   }
   // what a request tells the page, for the turn that shows it: the writing so far, and each question that waits for Allow
   const hear = (turn, presets) => (ev) => {
-      if (ev.kind === "plan") turn.plan = ev.items; else if (ev.kind === "doing") turn.doing = ev.tool || ""; else if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
+      if (ev.kind === "plan") turn.plan = ev.items; else if (ev.kind === "doing") { turn.doing = ev.tool || ""; if (p.pref("helper_comments", false) === true && turn.live.trim()) { turn.done.push(turn.live.trim().slice(0, 400)); turn.live = ""; } } else if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;
       else if (ev.kind === "edit_request") (async () => {          // a change to one of the enhancer's own system prompts: the same Allow as in the Chat tab
         turn.waiting = true; paint();
         const yes = !turn.stopped && (await askEdit(ev, turn.abort.signal)) && !turn.stopped, sl = slot();

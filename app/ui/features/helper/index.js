@@ -21,6 +21,8 @@ export default {
           if (v && !(await c.modal.dialogue({ title: "Switch on the Helper?", message: RISK, tone: "danger", confirmLabel: "I understand, switch it on" }).result)) { app.project.setPref("helper", false); show(); return; }
           app.project.setPref("helper", v); show();
         } }),
+      c.toggle.default({ label: "Helper comments in the chat", hint: "Show what the Helper writes between its actions as grey lines in the chat, not only inside its thinking line.",
+        checked: app.project.pref("helper_comments", false) === true, onChange: (v) => { app.project.setPref("helper_comments", v); } }),
       c.banner.warn({ text: RISK })] });
     show();
     first();
