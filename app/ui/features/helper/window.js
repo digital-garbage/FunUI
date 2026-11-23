@@ -217,7 +217,7 @@ export function askAction(ev, signal) {
   });
 }
 
-const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "max_length", "context_tokens", "thinking", "thinking_helper", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"];
+const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "context_tokens", "thinking", "thinking_helper", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"];
 
 /** The Helper window: a message box in the middle of the screen. The model's own settings are the Enhance tab's. -> the window. */
 export function openHelper(app, origin) {
@@ -268,7 +268,7 @@ export function openHelper(app, origin) {
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled, category: x.category, sub_category: x.sub_category }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
     const cutWords = await Promise.resolve(app.api.storyMarkers ? app.api.storyMarkers() : null).then((r) => (r && r.markers) || []).catch(() => []);
-    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), engine_model: eng };
+    const body = { conversation: `helper:${p.project.id}`, message, notes: String(p.pref("enhance_notes", "") || ""), helper: { rules: await Promise.resolve().then(() => rulesOf(app, inp)).catch(() => ({})), chat: `${p.project.id}:${Number(p.pref("enhance_chat_epoch", 0)) || 0}`, sheet: sheetOf(p.project) + (cutWords.length ? `\nCut words of the global prompt: ${cutWords.join(", ")}` : "") + modulesLine(app.pipeline) + presetsLine(presets) + actionsLine(app), scenes: (p.project.scenes || []).length, settings: catalogOf(app.pipeline), variables: (p.project.variables || []).map((v) => v.name), shortcuts, actions: (app.actions || []).filter((x) => !x.when || x.when()).map((x) => ({ id: x.id, label: x.label })), inputs: nodeInputs, presets: presets.map((x) => ({ id: x.id, title: x.title })) }, ...Object.fromEntries(PICK.filter((k) => inp[k] !== undefined).map((k) => [k, inp[k]])), max_length: Number(inp.helper_max_length) || 0, engine_model: eng };
     try {
       const r = await app.api.enhancerChatStream(body, (ev) => {
         if (ev.kind === "answer") turn.live += ev.text; else if (ev.kind === "thinking") turn.thinking += ev.text; else if (ev.kind === "status") turn.status = ev.text;

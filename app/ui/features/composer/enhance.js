@@ -112,6 +112,7 @@ export function enhance(app, own) {
       num("Guess ahead (words)", val("lookup_tokens", 0), 0, 10, 1, "lookup_tokens", "The model may guess up to this many words from the prompt itself and check them in one step. Only helps when a rewrite mostly repeats the prompt, and costs time otherwise: off by default (0).", off(engineSet)),
       c.label.section({ text: "Writing" }),
       num("Max tokens", val("max_length", 0), 0, 4096, 8, "max_length", "The longest the rewrite may be. 0 means no limit: the model stops by itself, or when the context window is full.", off()),
+      num("Max tokens in Helper", val("helper_max_length", 0), 0, 16384, 8, "helper_max_length", "The most the Helper may write in one answer. 0 means no limit, which is the default; it has its own setting so the rewrite's limit does not cut it short.", off()),
       num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
       toggle("Thinking", "Let a thinking model reason first on a plain rewrite, with no comments. Its reasoning eats the token budget.", "thinking", false, off()),
       toggle("Enable thinking on comments", "A rewrite that has comments to follow reasons first. Off: it answers straight away and saves time.", "thinking_comments", true, off()),

@@ -62,7 +62,7 @@ FROZEN = {
     "FunUIEnhancePrompt": [
         "clip", "text", "enabled", "engine_model", "instructions", "chat_prompt", "notes_prompt", "compact_prompt", "revision_prompt", "conversation_prompt", "turns_prompt",
         "fixed_prompt", "use_comfy", "precision", "prefix_cache", "lookup_tokens", "refine_passes", "refine_prompt", "self_edit", "edit_prompt", "marks_prompt", "max_length", "greedy", "temperature", "top_p", "top_k", "min_p",
-        "repetition_penalty", "presence_penalty", "seed", "thinking", "thinking_comments", "thinking_chat", "thinking_helper", "encoder_file", "encoder_family", "image", "image_2", "image_3", "image_4", "use_image", "shortcuts", "lorebooks", "reference_intro", "name_entries", "chat",
+        "repetition_penalty", "presence_penalty", "seed", "thinking", "thinking_comments", "thinking_chat", "thinking_helper", "helper_max_length", "encoder_file", "encoder_family", "image", "image_2", "image_3", "image_4", "use_image", "shortcuts", "lorebooks", "reference_intro", "name_entries", "chat",
         "style", "scope", "last_frame", "to_chat", "conversation", "scene", "compact", "context_tokens", "pass_rating", "comment_button", "notes", "rating_prefix", "rating_line", "head", "tail", "video_length", "aspect_ratio",
     ],
     "FunUIApplyPromptMarkup": ["model", "clip", "positive", "latent", "markup"],
