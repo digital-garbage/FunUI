@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper works long requests from a checklist and may not stop early.** For a request with more than three changes it writes a numbered plan, does the items, and ticks each one (an item can only be ticked after a change was made, or closed with a reason). While items are open, the app sends the model back to them, up to 40 times, and stops only when every item is checked or it makes no headway three times in a row; then the answer says which items are still open. The progress shows as "Checklist: 3 of 10 done".
 - **The Helper has its own "Max tokens in Helper" setting, unlimited by default**, so the rewrite's limit no longer cuts its answers short.
 - **The Helper finds a shortcut even when it writes the name a little differently**: other case or spacing, a look-alike character, or a description in brackets after the name. A name it still cannot find comes back with the closest names, and a batch names every missing one at once and changes nothing.
 - **The Helper keeps its conversation across a page refresh, with a Clear button.** The last 30 exchanges are kept in this browser for each project; Clear forgets them.

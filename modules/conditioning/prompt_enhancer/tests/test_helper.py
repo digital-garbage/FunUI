@@ -354,3 +354,56 @@ def test_a_shortcut_name_followed_by_a_description_in_brackets_is_still_found():
     assert acts.shortcut_named("Arms up (hands over the head)") == "Arms up"
     assert acts.shortcut_named("Squat") == "Squat (low)" and acts.shortcut_named("Squat (deep)") == "Squat (low)"
     assert acts.shortcut_named("Jump (high)") is None
+
+
+def test_a_checklist_is_ticked_only_after_a_change_and_every_item_can_be_closed_with_a_reason():
+    acts = helper.Actions(1, lambda ev: None, wait=1)
+    assert acts({"name": "check_item", "args": {"item": 1, "result": "done"}}).startswith("Error: there is no checklist")
+    assert acts({"name": "plan", "args": {"items": []}}).startswith("Error")
+    assert acts({"name": "plan", "args": {"items": ["rename a", "rename b", "rename c"]}}).startswith("Checklist saved with 3 items")
+    assert acts.changes == 0 and acts.open_items() == [1, 2, 3]                 # writing the list is not a change
+    assert acts({"name": "check_item", "args": {"item": 1, "result": "done"}}).startswith("Error: no change was made")
+    assert acts({"name": "check_item", "args": {"item": 9, "result": "done"}}).startswith("Error: item is a number")
+    assert acts({"name": "check_item", "args": {"item": 3, "result": "cannot"}}).startswith("Error: say why")
+    assert "marked skipped" in acts({"name": "check_item", "args": {"item": 3, "result": "cannot: the shortcut does not exist"}})
+    acts.changes += 1                                                         # a change tool ran
+    assert "Still open: 2" in acts({"name": "check_item", "args": {"item": 1, "result": "done"}})
+    assert acts.open_items() == [2] and "2. rename b" in acts.plan_note() and "1 of 3" not in acts.plan_note()
+
+
+def test_the_model_is_sent_back_to_an_unfinished_checklist_until_every_item_is_checked(monkeypatch):
+    import threading
+    from modules.conditioning.prompt_enhancer import nodes, rules as rl
+
+    class Tiny:
+        tok = type("T", (), {"chat_template": "plain chat", "get_vocab": lambda self: {}})()
+        def load(self, *a, **k): return None
+    monkeypatch.setattr(nodes, "ENGINE", Tiny())
+    monkeypatch.setattr(nodes, "EngineClip", lambda *a, **k: type("C", (), {"tools": None, "handler": None})())
+    nodes.CONVOS.clear()
+    seen = []
+
+    def say(tool, **args):
+        import json
+        return f"TOOL: {tool}\n{json.dumps(args)}\nEND_TOOL"
+    script = iter([say("plan", items=["set $a", "set $b", "set $c"]) + "\n" + say("set_variable", name="a", value="1", reason="r") + "\n" + say("check_item", item=1, result="done"),
+                   "That is all.",                                               # it stops with two items open
+                   say("set_variable", name="b", value="2", reason="r") + "\n" + say("check_item", item=2, result="done"),
+                   "Item 2 is done.",
+                   say("check_item", item=3, result="cannot: $c is already set to the same value"),
+                   "Finished."])
+
+    def converse(clip, text, **kw):
+        seen.append(text)
+        return next(script, "Finished."), "ok", [], [], ""
+    monkeypatch.setattr(nodes.en, "converse", converse)
+    answered = []
+
+    def on_event(ev):
+        if ev.get("kind") == "action_request":
+            answered.append(ev["tool"])
+            threading.Timer(0.01, lambda: rl.decide(ev["id"], True)).start()
+    out = nodes.chat_reply("h:plan", "set three variables", engine_model="tiny", max_length=8, on_event=on_event, helper={"sheet": "x", "scenes": 1})
+    assert answered == ["set_variable", "set_variable"]
+    assert any("checklist is not finished" in t and "2. set $b" in t for t in seen) and any("1. " not in t.split("Still open:")[1] for t in seen if "Still open:" in t)
+    assert out["reply"] == "Finished." and "Not finished" not in out["reply"]

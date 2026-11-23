@@ -25,7 +25,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut, and many at once (edits, renames, deletes) with edit_shortcuts; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
-               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
+               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. A request that needs more than three separate changes (many shortcuts, every scene, a long list) is done from a checklist: first call plan with one item per change, or per batch of up to 60 changes, then do the items in order and call check_item for each one when its change is made. The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
 GROUPS = {"scenes": ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "share_reference"),
@@ -43,7 +43,8 @@ _WORDS = {"scenes": r"scene|shot|clip|second|length|story|cut|picture|image|refe
 _CHANGE = re.compile(r"\b(change|update|edit|make|set|add|remove|delete|rewrite|replace|fix|apply|put|turn|switch|inherit|use|let|tell|teach|rename|shorten|lengthen|extend|copy|run|save|create|merge|split|correct|adjust|modify|improve|tweak|reword|rephrase|include|exclude|ensure|stop|avoid|drop|enable|disable|increase|decrease|reduce|raise|lower)\b", re.I)
 
 
-READS = ("read_prompt", "find_settings", "find_shortcuts", "find_node_inputs")
+READS = ("read_prompt", "find_settings", "find_shortcuts", "find_node_inputs", "plan", "check_item")
+MAX_PLAN_ROUNDS = 40         # how many times the app sends the model back to an unfinished checklist
 _CALLBACK = re.compile(r"didn'?t|did not|not (?:done|changed|call)|nothing (?:changed|happened)|call the tool|do it|go ahead|correct (?:it|them)|fix (?:it|them)|so\b.*\?", re.I)
 
 
@@ -107,6 +108,8 @@ def _tools() -> list:
             fn("set_project_text", "Set the project's anchor (= prefix), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
             fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
+            fn("plan", "Write the checklist for a request that needs more than three separate changes: one item per change, or per batch of up to 60 changes. Call this first, before the changes.", {"items": {"type": "array", "items": {"type": "string"}, "description": "The steps, in the order they will be done."}}, ["items"]),
+            fn("check_item", "Tick one item of the checklist once its change was made, or say why it cannot be done.", {"item": {"type": "integer", "description": "The item's number, from 1."}, "result": {"type": "string", "description": "done, or 'cannot: ' and the reason."}}, ["item", "result"]),
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all, and words in quotes are searched as an exact phrase. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("edit_shortcuts", "Change, rename or delete many shortcuts at once; the user allows the whole batch with one answer. Each change names an existing shortcut. Leave out what stays as it is.",
@@ -184,12 +187,57 @@ class Actions:
         self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
         self.changes = 0                                   # calls that change something: looking a rule or setting up is not one
+        self.plan, self.plan_changes = [], 0               # the checklist the model wrote for a long request, and how many changes were made when it did
         self.inputs = {(x["slot"], x["name"]): x for x in inputs if isinstance(x, dict) and x.get("slot") and x.get("name")}
         self.actions = {str(x["id"]): x for x in actions if isinstance(x, dict) and x.get("id")}
         self.presets = {str(x["id"]): x for x in presets if isinstance(x, dict) and x.get("id")}
         self.variables = {str(v) for v in variables}
         self.shortcuts = {str(x["name"]): x for x in shortcuts if isinstance(x, dict) and x.get("name")}
         self.settings = {(x["module"], x["name"]): x for x in settings if isinstance(x, dict) and x.get("module") and x.get("name")}
+
+    def open_items(self) -> list:
+        return [i for i, x in enumerate(self.plan, 1) if x["state"] == "open"]
+
+    def planning(self, name, args) -> str:
+        """`plan` writes the checklist, `check_item` ticks an item. They change nothing in the project; the app holds the model to the list."""
+        if name == "plan":
+            items = args.get("items")
+            if isinstance(items, str):
+                items = [x.strip(" -*\t0123456789.)") for x in items.splitlines() if x.strip()]
+            if not isinstance(items, list) or not 1 <= len(items) <= 60 or not all(isinstance(x, str) and x.strip() for x in items):
+                return "Error: items is a list of one to 60 texts, one per change or batch of changes."
+            self.plan = [{"text": x.strip()[:300], "state": "open", "note": ""} for x in items]
+            self.plan_changes = self.changes
+            self.on_event({"kind": "status", "text": f"Checklist: 0 of {len(self.plan)} done"})
+            return f"Checklist saved with {len(self.plan)} items. Do them in order: make the change for an item, then call check_item for it. You may answer the user only when every item is checked."
+        if not self.plan:
+            return "Error: there is no checklist yet. Call plan first."
+        n, result = args.get("item"), str(args.get("result") or "").strip()
+        if isinstance(n, str) and n.strip().isdigit():
+            n = int(n)
+        if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= len(self.plan):
+            return f"Error: item is a number from 1 to {len(self.plan)}."
+        if not result:
+            return "Error: result is 'done', or 'cannot: ' and the reason."
+        if re.match(r"(?i)\s*(cannot|can't|skipped|refused|not possible)", result):
+            if len(result) < 12:
+                return "Error: say why it cannot be done, after 'cannot: '."
+            state = "skipped"
+        elif self.changes <= self.plan_changes:
+            return "Error: no change was made since the checklist was written, so nothing can be done yet. Make the change with its tool first, then check the item."
+        else:
+            state = "done"
+        self.plan[n - 1].update(state=state, note=result[:200])
+        left = self.open_items()
+        self.on_event({"kind": "status", "text": f"Checklist: {len(self.plan) - len(left)} of {len(self.plan)} done"})
+        return f"Item {n} marked {state}. " + (f"Still open: {', '.join(str(i) for i in left[:20])}." if left else "Every item is checked: now tell the user in one or two sentences what was done and what could not be.")
+
+    def plan_note(self) -> str:
+        left = self.open_items()
+        lines = "\n".join(f"{i}. {self.plan[i - 1]['text']}" for i in left[:12])
+        return (f"Your checklist is not finished: {len(self.plan) - len(left)} of {len(self.plan)} items are checked. Still open:\n{lines}\n"
+                "Do the next open item now: call the tool for it with all its arguments, then call check_item for it. If an item cannot be done, call check_item with result 'cannot: ' and the reason. "
+                "Do not write to the user until every item is checked.")
 
     def find(self, query) -> str:
         words = [w for w in re.findall(r"[a-z0-9]+", str(query or "").lower()) if len(w) > 1]
@@ -418,6 +466,8 @@ class Actions:
         self.calls += 1
         if name not in READS:
             self.changes += 1
+        if name in ("plan", "check_item"):
+            return self.planning(name, args)
         if name in ("read_prompt", "edit_prompt"):
             return self.editor(call) if self.editor else "Error: the enhancer's system prompts are not available."
         if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:

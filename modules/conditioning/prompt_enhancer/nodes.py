@@ -191,6 +191,34 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
                 state["turns"].pop()
             if actions.changes:
                 reply, status, add, drop, thought = forced[0] or "Done.", forced[1], add + forced[2], drop + forced[3], forced[4]
+    if helper and actions is not None and getattr(actions, "plan", None) and actions.open_items():
+        # a checklist the model wrote is not finished: it is sent back to the open items until every one is checked (or it keeps making no headway)
+        hp = __import__(__package__ + ".helper", fromlist=["x"])
+        idle = 0
+        for _ in range(hp.MAX_PLAN_ROUNDS):
+            todo = actions.open_items()
+            if not todo:
+                break
+            mark = (actions.calls, len(todo))
+            note = actions.plan_note()
+            if not text_mode:
+                clip.tools = hp.tools(bool(helper.get("rules")))
+            state["turns"].append({"request": str(message).strip(), "reply": reply or "(no answer)", "kind": "chat"})
+            try:
+                got = ask(note)
+                if text_mode:
+                    got = hp.run_text_calls(ask, actions, note, state, got)
+            finally:
+                state["turns"].pop()
+            reply, status, add, drop, thought = got[0] or reply, got[1], add + got[2], drop + got[3], got[4]
+            idle = idle + 1 if (actions.calls, len(actions.open_items())) == mark else 0
+            if idle >= 3:
+                break
+        left = actions.open_items()
+        if left:
+            reply = (reply or "").rstrip() + f"\n\n(Not finished: items {', '.join(str(i) for i in left[:20])} of {len(actions.plan)} on the checklist are still open.)"
+        elif not reply or reply == "Done.":
+            reply = f"Done: all {len(actions.plan)} checklist items are checked."
     if helper and reply and actions is not None and not getattr(actions, "changes", 0) and not str(message).strip().endswith("?") and (not getattr(actions, "calls", 0) or __import__(__package__ + ".helper", fromlist=["x"]).wants_change(message)):
         reply += "\n\n(Nothing was changed: the model did not call a tool.)"          # a request that ended with no call must not read as done
     if helper and not reply and actions is not None and getattr(actions, "changes", 0):          # it acted and then said nothing: that is not a failure
