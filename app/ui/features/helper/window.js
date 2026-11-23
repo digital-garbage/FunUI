@@ -12,7 +12,7 @@ import { clampBlocks } from "../../shell/blocks.js";
 const NODE = "FunUIEnhancePrompt";
 const PHRASES = ["Pondering", "Mulling it over", "Reading the project", "Weighing the options", "Working it out", "Sketching a plan", "Thinking it through", "Checking the scenes"];
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said; finished turns are also kept in this browser, so a refresh does not lose them
-const KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
+const PAINT_MS = 120, KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
 const cut = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
 function saved(id) {
   try {
@@ -230,7 +230,7 @@ export function openHelper(app, origin) {
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
   const turns = () => { if (!log.has(p.project.id)) log.set(p.project.id, saved(p.project.id)); return log.get(p.project.id); };
-  const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); paint(); } });
+  const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); paint(true); } });
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   let tick = 0;
   // The model's thinking stays folded: a line with a changing phrase and the time since the request began, opened by a click.
@@ -248,13 +248,24 @@ export function openHelper(app, origin) {
   history.node.addEventListener("pointerdown", () => { held = true; clearTimeout(heldTimer); heldTimer = setTimeout(release, 1500); });
   history.node.addEventListener("pointerup", release);
   history.node.addEventListener("pointercancel", release);
-  const paint = () => {
+  // The stream makes news for every few tokens and a redraw rebuilds the whole history: left unchecked the page spent its time drawing and the input box
+  // stopped answering. A redraw happens at most about eight times a second (`now` forces it: a new request, the end of a turn).
+  let lastPaint = 0, paintTimer = 0;
+  const paint = (now) => {
+    const wait = PAINT_MS - (Date.now() - lastPaint);
+    if (now === true || wait <= 0) { clearTimeout(paintTimer); paintTimer = 0; lastPaint = Date.now(); return paintNow(); }
+    if (!paintTimer) paintTimer = setTimeout(() => { paintTimer = 0; lastPaint = Date.now(); paintNow(); }, wait);
+  };
+  const paintNow = () => {
     if (held) { dirty = true; return; }
     const sc = scrollParent(history.node);
     follow = pin || !sc || sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
     pin = false;
     const t = turns();
-    history.set(t.length ? t.flatMap((x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })])
+    // a finished turn is drawn once and its elements are kept: only the turn that is still working is built again
+    const draw = (x) => [c.bubble.you({ text: x.you, who: "You" }), ...thoughtOf(x, busy), ...x.done.map((d) => c.hint.default({ text: d })), x.reply ? c.bubble.model({ text: x.reply, who: "Helper" }) : c.hint.default({ text: x.status || "The helper is working…" })];
+    const kept = (x) => { if (!x.t1) return draw(x); const key = `${x.reply.length}|${x.status}|${x.done.length}|${x.thinking.length}`; if (!x.kept || x.kept.key !== key) x.kept = { key, els: draw(x) }; return x.kept.els; };
+    history.set(t.length ? t.flatMap(kept)
       : [c.hint.default({ text: "Ask the helper to change the project. Every change is shown first and needs Allow. It uses the engine model set in Composer > Enhance." })]);
     send.setLabel ? send.setLabel(busy ? "Interrupt and ask" : "Ask helper") : null;       // a new message while it works stops that work and is read together with it
     if (stopper.setDisabled) stopper.setDisabled(!busy);
@@ -271,7 +282,7 @@ export function openHelper(app, origin) {
     if (!eng) { c.toast.warn({ text: "The helper needs an engine model: set one in Composer > Enhance." }); return; }
     const turn = { you: message, thinking: "", live: "", reply: "", status: "", done: [], t0: Date.now(), t1: 0, open: false, seed: Math.floor(Math.random() * PHRASES.length), stopped: false, abort: new AbortController() };
     turns().filter((t) => !t.t1).forEach(stopTurn);                        // new input stops what is still working; the server then reads the old message together with this one
-    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint();
+    log.set(p.project.id, [...turns(), turn]); draft = ""; box.setValue(""); active += 1; busy = true; pin = true; paint(true);
     if (!tick) tick = setInterval(paint, 1000);                    // the clock beside the thinking line
     const shortcuts = await Promise.resolve(app.api.shortcuts ? app.api.shortcuts() : null).then((r) => ((r && r.shortcuts) || []).map((x) => ({ name: x.name, triggers: x.triggers, replacements: x.replacements, enabled: x.enabled, category: x.category, sub_category: x.sub_category }))).catch(() => []);
     const presets = await Promise.resolve(app.api.pipelinePresets ? app.api.pipelinePresets() : null).then((r) => (r && r.presets) || []).catch(() => []), nodeInputs = await inputsOf(app).catch(() => []);
@@ -302,7 +313,7 @@ export function openHelper(app, origin) {
         if (r && r.reply) turn.reply = r.reply;
       }
     } catch (e) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(e && e.message) || e}`; }
-    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint();
+    turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
   }
   win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [clear, stopper, send] });
   paint();

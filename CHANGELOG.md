@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper window no longer slows the page down while the model writes.** Redraws are spaced out to about eight a second and only the turn that is still working is drawn again; before, every streamed piece rebuilt the whole history, which could freeze the page and its buttons.
 - **A tool call the model wrote in a slightly different format now works.** Gemma texts in plain double or single quotes, or with no quotes (with spaces, brackets or commas in a shortcut name), are read. A call that still cannot be read is answered with an error telling the model so, instead of silently vanishing, which left the Helper in a loop with nothing happening.
 - **The Helper's thinking line opens and closes reliably while it works.** The window no longer redraws between a click's press and release.
 - **The Helper works every change request from a checklist and may not stop early.** Even for one change it writes a numbered plan (the app asks for it if it did not), does the items, and ticks each one (an item can only be ticked after a change was made, or closed with a reason). While items are open, the app sends the model back to them, up to 40 times, and stops only when every item is checked or it makes no headway three times in a row; then the answer says which items are still open. The progress shows as "Checklist: 3 of 10 done".

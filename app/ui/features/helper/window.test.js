@@ -19,6 +19,7 @@ test("the Helper window opens in the middle, sends the project sheet, asks Allow
     [...modal.querySelectorAll("button")].find((b) => b.textContent === "Ask helper").click();
     for (let i = 0; i < 50 && document.querySelectorAll(".cx-modal").length < 2; i++) await new Promise((r) => setTimeout(r, 10));
     const card = [...document.querySelectorAll(".cx-modal")].pop();
+    for (let i = 0; i < 50 && !/scene 1 needs a sitting dog/.test(modal.textContent); i++) await new Promise((r) => setTimeout(r, 10));        // redraws are spaced out
     assert.match(modal.textContent, /scene 1 needs a sitting dog/);       // the helper's thinking shows in its own window
     const fold = modal.querySelector("details.cx-collapsible");
     assert.ok(fold && !fold.open, "the thinking is folded until it is clicked");
@@ -32,5 +33,6 @@ test("the Helper window opens in the middle, sends the project sheet, asks Allow
     for (let i = 0; i < 50 && !modal.textContent.includes("Done."); i++) await new Promise((r) => setTimeout(r, 10));
     assert.match(modal.textContent, /Done\./);
     assert.match(sent[0].helper.sheet, /Scene 1 .*a dog runs/);
+    await new Promise((r) => setTimeout(r, 200));            // a last spaced-out redraw is not left for after the window is gone
   } finally { teardownDom(); }
 });
