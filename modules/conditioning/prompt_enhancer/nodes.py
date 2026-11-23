@@ -447,6 +447,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Enable thinking in the Helper."),
                 io.Int.Input("helper_max_length", default=0, min=0, max=16384, step=8, optional=True,
                              tooltip="The most tokens the Helper may write in one answer. 0 means no limit."),
+                io.Float.Input("helper_temperature", default=0.3, min=0.0, max=2.0, step=0.05, optional=True,
+                               tooltip="The temperature the Helper writes with (its own, so Enhance can stay creative). Low is steadier for tool calls."),
                 # Text, not a list: a file that has gone must not stop a run where Enhance is off. The Enhance panel offers the files.
                 io.String.Input("encoder_file", default="", optional=True,
                                 tooltip="A text encoder file just for rewriting (Gemma, Qwen...). Empty uses the model's own encoder."),
@@ -516,7 +518,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
-                presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
+                presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
         if not enabled:
