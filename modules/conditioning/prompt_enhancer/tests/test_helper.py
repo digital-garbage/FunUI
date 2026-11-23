@@ -482,3 +482,9 @@ def test_long_shortcut_batches_are_refused_so_the_model_sends_several_calls():
     acts = helper.Actions(1, lambda ev: None, shortcuts=[{"name": f"s{i}", "triggers": [f"t{i}"], "replacements": ["x"]} for i in range(30)])
     out = acts({"name": "edit_shortcuts", "args": {"changes": [{"name": f"s{i}", "new_name": f"n{i}"} for i in range(21)]}})
     assert "one to 20" in out
+
+
+def test_shortcut_name_and_triggers_are_told_apart():
+    text = helper.HELPER_RULE + str(helper.tools())
+    assert "NAME (its label in the library)" in text and "never remove or change triggers to rename" in text
+    assert "Renaming is done only with this" in text
