@@ -21,6 +21,9 @@ Three more levers, all learned from the same ratings:
   shows up on that prompt first.
 - Clip regions: the picture's four time bands and the sound each draw their own sharper or
   looser setting, so a part you liked can stay while another changes.
+- Layout modes (off by default): a few fixed low-rank pushes on the attention input (query, key and value) of a few early blocks, on the first
+  step only, where a clip's layout is decided. Each run draws one mode (or none) from your ratings, so a layout you liked comes back and the
+  same seed does not mean the same layout once ratings change. The idea follows CosPert (arXiv 2611.22318), which perturbs the projection weights per seed.
 - Recipes: when this prompt has a combination you liked, it is reused, with some groups
   re-drawn so it keeps exploring.
 
@@ -86,6 +89,24 @@ SETTINGS = {
         "hint": "Off: only the picture's attention changes; the sound is left as the model makes it.",
         "when": {"enabled": True},
     },
+    "layout": {
+        "type": "bool", "default": False,
+        "label": "Layout modes",
+        "hint": "Also tries one of a few fixed layout pushes on the first step only; your ratings pick which stay.",
+        "when": {"enabled": True},
+    },
+    "layout_blocks": {
+        "type": "text", "model_blocks": True, "default": "2-6",
+        "label": "Layout blocks",
+        "hint": "The few early blocks the layout push goes into, e.g. 2-6.",
+        "when": {"enabled": True, "layout": True},
+    },
+    "layout_size": {
+        "type": "float", "default": 0.1, "min": 0.02, "max": 0.3, "step": 0.01,
+        "label": "Layout push", "ui": "slider",
+        "hint": "How strong the push is, as a share of the attention input it changes. Keep it small.",
+        "when": {"enabled": True, "layout": True},
+    },
     "blocks": {
         "type": "text", "model_blocks": True, "default": "2-10,29-46",
         "label": "Blocks",
@@ -99,6 +120,9 @@ GROUPS = 4
 # Each arm is a factor as 1 + size * ARMS[i]: lower, as is, higher.
 ARMS = (-1.0, 0.0, 1.0)
 STAY = 1                    # index of "as is"
+MODES = 8                   # fixed layout pushes; arm 0 is "no push"
+RANK = 4                    # each push is a low-rank change of the attention input
+LAYOUT_HEAD_START = 4.0     # "no push" starts ahead, so a fresh key stays close to the plain model
 STAY_HEAD_START = 2.0       # extra likes "as is" starts with, so a new key is stable
 NEW_HEAD_START = 4.0        # the same for prompt focus and clip regions, which change less often until they have data
 # A factor on the prompt's keys only is not the same size of change as a temperature: it moves the prompt's
@@ -156,10 +180,10 @@ def _same_signature(p, signature):
     return "sig" in p and [int(x) for x in p["sig"].tolist()] == signature
 
 
-def counts(rows, signature, n_groups, field="arms", weights=None):
+def counts(rows, signature, n_groups, field="arms", weights=None, n_arms=len(ARMS)):
     """[group][arm] -> [likes, dislikes] over the rated runs made with this block layout,
     each counting its weight (1 when none given)."""
-    table = [[[0.0, 0.0] for _ in ARMS] for _ in range(n_groups)]
+    table = [[[0.0, 0.0] for _ in range(n_arms)] for _ in range(n_groups)]
     for i, r in enumerate(rows):
         p = r["rows"]
         if field not in p or r["reward"] == 0 or not _same_signature(p, signature):
@@ -222,13 +246,13 @@ def describe(groups, picks, spread, words=("sharper", "looser"), what="", blocks
     return "; ".join(parts)
 
 
-def draw(table, rng=random, head=STAY_HEAD_START):
+def draw(table, rng=random, head=STAY_HEAD_START, stay=STAY):
     """One arm per group: the arm whose Beta draw (likes + 1, dislikes + 1) is highest."""
     picks = []
     for group in table:
-        best, best_theta = STAY, -1.0
+        best, best_theta = stay, -1.0
         for arm, (liked, disliked) in enumerate(group):
-            theta = rng.betavariate(liked + (head if arm == STAY else 0.0) + 1.0, disliked + 1.0)
+            theta = rng.betavariate(liked + (head if arm == stay else 0.0) + 1.0, disliked + 1.0)
             if theta > best_theta:
                 best, best_theta = arm, theta
         picks.append(best)
@@ -282,6 +306,28 @@ def make_plan(rows, cond, signature, n_groups, focus, manual_spread=None, region
     return {"arms": arms, "tarms": tarms, "rarms": rarms, "spread": spread, "recipe": recipe,
             "same": sum(1 for s in sims if s is not None and s >= SAME),
             "unknown": sum(1 for s in sims if s is None)}
+
+
+_PUSHES = {}
+
+
+def layout_push(x, mode, size):
+    """`x` plus a low-rank change that is always the same for this mode: a share `size` of its own length, whatever the model's scale.
+    Mode 0 is no push. The change is `(x A) B` with fixed random A, B (the same for a mode in every block), so a mode is a direction
+    to try again, not a draw per seed."""
+    if not mode or not size:
+        return x
+    d = x.shape[-1]
+    key = (mode, d, x.device, x.dtype)
+    if key not in _PUSHES:
+        gen = torch.Generator().manual_seed(7919 * mode + d)
+        a = torch.randn(d, RANK, generator=gen) / math.sqrt(d)
+        b = torch.randn(RANK, d, generator=gen)
+        _PUSHES[key] = (a.to(x.device, x.dtype), b.to(x.device, x.dtype))
+    a, b = _PUSHES[key]
+    delta = (x @ a) @ b
+    length = torch.linalg.vector_norm(delta, dtype=torch.float32).clamp_min(1e-6)
+    return x + delta * (size * torch.linalg.vector_norm(x, dtype=torch.float32) / length).to(x.dtype)
 
 
 def followed(factors, options, index, blocks):
@@ -369,6 +415,7 @@ def paired_regions(q, factors, video_width, sound_width):
 # Carried on the per-block copy of transformer_options, as Randomizer does, so an
 # attention call knows its block's factors without a shared flag.
 _SCOPE = "funui_attention_bandit"
+_LAYOUT = "funui_attention_bandit_layout"
 
 
 def install(patcher, values, key):
@@ -383,6 +430,12 @@ def install(patcher, values, key):
     focus = bool(values.get("prompt_focus", True))
     regions = bool(values.get("regions", True))
     sound = bool(values.get("sound", True))
+    layout = bool(values.get("layout", False))
+    layout_size = min(max(float(values.get("layout_size", 0.1)), 0.02), 0.3)
+    layout_blocks, layout_problems = dit_hooks.parse_blocks(values.get("layout_blocks"), dit_hooks.block_count(patcher)) if layout else ([], [])
+    for problem in layout_problems:
+        _say(f"ignored layout block {problem}")
+    layout = layout and bool(layout_blocks)
     blocks, problems = dit_hooks.parse_blocks(values.get("blocks"), dit_hooks.block_count(patcher))
     for problem in problems:
         _say(f"ignored {problem}")
@@ -392,7 +445,7 @@ def install(patcher, values, key):
     signature = [len(groups), blocks[0], blocks[-1]]
     live = {"factors": {}, "regions": [1.0] * len(REGIONS), "scaled": 0, "calls": 0,
             "text": 0, "text_wanted": False, "region_hits": 0, "region_wanted": False,
-            "spared": 0, "unsure": 0}
+            "spared": 0, "unsure": 0, "mode": 0, "layout_hits": 0}
 
     captured = taste.collect(patcher, key, KIND, keep=MAX_ROWS)
     dm = getattr(patcher.model, "diffusion_model", None)
@@ -422,10 +475,28 @@ def install(patcher, values, key):
     for index in blocks:
         dit_hooks.add_block_hook(patcher, key, index, scoped_for(index))
 
+    def layout_for(index):
+        def scoped(args, extra):
+            where = dit_hooks.current_step(args.get("transformer_options"))
+            if not live["mode"] or where is None or where[0] != 0:          # the first step only: that is where the layout is decided
+                return extra["original_block"](args)
+            to = dict(args.get("transformer_options") or {})
+            to[_LAYOUT] = live["mode"]
+            return extra["original_block"]({**args, "transformer_options": to})
+        return scoped
+
+    if layout:
+        for index in layout_blocks:
+            dit_hooks.add_block_hook(patcher, f"{key}.layout", index, layout_for(index))
+
     def override(func, q, k, v, *args, **kwargs):
         options = kwargs.get("transformer_options") or {}
         scope = options.get(_SCOPE)
         live["calls"] += 1
+        mode = options.get(_LAYOUT)
+        if mode:
+            q, k, v = (layout_push(t, mode, layout_size) for t in (q, k, v))
+            live["layout_hits"] += 1
         if scope is None:
             return func(q, k, v, *args, **kwargs)
         temperature, prompt = scope
@@ -465,6 +536,7 @@ def install(patcher, values, key):
     def run(executor, *args, **kwargs):
         rows = taste.rows(KIND)
         cond = _prompt_of(getattr(executor, "class_obj", None))
+        weighted = weights_of(rows, cond)[0]
         plan = make_plan(rows, cond, signature, len(groups), focus, manual_spread if manual else None, regions)
         arms, tarms, rarms, spread = plan["arms"], plan["tarms"], plan["rarms"], plan["spread"]
         tfac = [1.0 + PROMPT_SCALE * spread * ARMS[a] for a in tarms] if focus else [1.0] * len(groups)
@@ -475,6 +547,10 @@ def install(patcher, values, key):
                     region_wanted=any(f != 1.0 for f in rfac), text_wanted=any(t != 1.0 for t in tfac),
                     factors={b: (1.0 + spread * ARMS[a], tf)
                              for g, a, tf in zip(groups, arms, tfac) for b in g})
+        mode = draw(counts(rows, signature, 1, "larm", weighted, MODES + 1), head=LAYOUT_HEAD_START, stay=0)[0] if layout else 0
+        live.update(mode=mode, layout_hits=0)
+        if layout:
+            captured["larm"] = torch.tensor([mode])
         captured.update({"arms": torch.tensor(arms), "sig": torch.tensor(signature),
                          "spread": torch.tensor(float(spread))})
         if focus:
@@ -489,10 +565,14 @@ def install(patcher, values, key):
             describe(groups, arms, spread),
             describe(groups, tarms, PROMPT_SCALE * spread, ("weaker", "stronger"), "prompt ") if focus else "",
             describe([[n] for n in REGIONS], rarms, spread, what="clip regions ", blocks=False) if regions else "") if x)
+        pushed = f"layout mode {mode} of {MODES} ({layout_size:g}x, first step, blocks {ranges(layout_blocks)})" if mode else ""
         log.once(f"{ID}:run", log.INFO, "FunUI Attention explorer",
-                 f"key {taste.key!r}, {tally(rows)}, {known}, {how}: {changes or 'no change this run'}")
+                 f"key {taste.key!r}, {tally(rows)}, {known}, {how}: {'; '.join(x for x in (changes, pushed) if x) or 'no change this run'}")
         out = executor(*args, **kwargs)
         wanted = bool(changes)
+        if mode and not live["layout_hits"]:
+            _say("the layout push changed nothing this run: no attention call reached its blocks on the first step "
+                 "(this sampler may not name its steps).", log.WARNING)
         if wanted and not live["scaled"]:
             _say("changed nothing this run: no attention call reached the changed blocks "
                  f"({live['calls']} calls seen). Another feature may have replaced attention.", log.WARNING)
@@ -516,6 +596,7 @@ def install(patcher, values, key):
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.run", run)
     size = f"size {manual_spread:g}" if manual else "size learned from ratings"
     return (f"{len(groups)} depth groups over {len(blocks)} blocks, {size}"
+            + (f", layout modes on blocks {ranges(layout_blocks)}" if layout else "")
             + (", prompt focus on" if focus else "") + (", clip regions on" if regions else "") + ("" if sound else ", sound kept as is"))
 
 

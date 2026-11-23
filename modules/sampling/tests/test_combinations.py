@@ -24,7 +24,7 @@ SIGMAS = (1.0, 0.9, 0.7, 0.3, 0.0)
 
 FEATURES = {
     "reins": {"blocks": "2"},
-    "attention_bandit": {},
+    "attention_bandit": {"layout": True, "layout_blocks": "1-2"},
     "q_steer": {"blocks": "2"},
     "attention_temperature": {"temperature": 1.1},
     "stas": {"block": 1},

@@ -413,3 +413,41 @@ def test_a_block_map_can_never_turn_a_temperature_to_zero_or_negative():
     options = {"funui_block_map": measure.MapView(data), "sample_sigmas": torch.linspace(1, 0, 5), "sigmas": torch.tensor([0.5])}
     for size in (0.2, 0.35, 0.5, 0.9):
         assert min(followed((1.0 - size, 1.0 - size), options, 1, [1, 7])) >= 0.05
+
+
+def test_a_layout_push_is_the_same_every_time_for_a_mode_and_a_set_share_of_the_input():
+    from modules.sampling.attention_bandit import layout_push
+    x = torch.randn(2, 40, 32)
+    assert layout_push(x, 0, 0.1) is x
+    a, again, other = layout_push(x, 3, 0.1), layout_push(x, 3, 0.1), layout_push(x, 4, 0.1)
+    assert torch.equal(a, again) and not torch.equal(a, other)
+    assert abs(float((a - x).norm() / x.norm()) - 0.1) < 1e-3
+    four = layout_push(x.reshape(2, 4, 10, 32), 3, 0.1)                  # the same holds for rows already split into heads
+    assert torch.allclose(four.reshape(2, 40, 32), a, atol=1e-5)
+
+
+def test_layout_modes_push_the_first_step_only_and_a_rating_teaches_the_mode(tiny_h3, monkeypatch):
+    from modules.sampling import attention_bandit as m
+    from modules.system.taste import store
+    base_first, base_later = tiny_h3.run(sigma=1.0), tiny_h3.run()
+    patched, status = _load(tiny_h3, mode="manual", layout=True, layout_blocks="0-1", blocks="2-3")
+    assert "layout modes on blocks 0-1" in status
+    monkeypatch.setattr(m, "draw", lambda table, rng=random, **kw: [3 if len(table[0]) == m.MODES + 1 else 1] * len(table))
+    first = _run(_outer(patched), lambda: tiny_h3.run(patched, sigma=1.0))
+    assert not torch.equal(first[0], base_first[0]), "the layout push changed nothing on the first step"
+    later = _run(_outer(patched), lambda: tiny_h3.run(patched))
+    assert torch.equal(later[0], base_later[0]), "the layout push reached a later step"
+    assert store.rate("run-1", "liked")["recorded"] == ["attention_bandit"]
+    rows = store.load("fox", "attention_bandit")["rows"]
+    assert rows[0]["rows"]["larm"].tolist() == [3]
+    table = m.counts(rows, [int(x) for x in rows[0]["rows"]["sig"].tolist()], 1, "larm", None, m.MODES + 1)
+    assert table[0][3] == [1.0, 0.0]
+
+
+def test_layout_modes_are_off_by_default_and_store_nothing(tiny_h3, monkeypatch):
+    from modules.system.taste import store
+    patched, status = _load(tiny_h3, mode="manual", range=0.4, blocks="0-3")
+    assert "layout" not in status
+    _run(_outer(patched), lambda: tiny_h3.run(patched))
+    store.rate("run-1", "liked")
+    assert "larm" not in store.load("fox", "attention_bandit")["rows"][0]["rows"]
