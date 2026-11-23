@@ -1100,4 +1100,4 @@ def test_entries_can_be_sent_without_their_names():
     named = en.reference("rain", [group])
     bare = en.reference("rain", [group], names=False)
     assert "Rain" in named and "[Shortcut]" in named
-    assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "Never write a name" in bare
+    assert "It pours." in bare and "Rain" not in bare and "[Shortcut]" not in bare and "Background material" in bare and "name" not in bare.split("It pours")[0].lower()

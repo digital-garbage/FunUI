@@ -204,8 +204,8 @@ def sources(shortcut_names=None, paths=None, say=None) -> list[list[dict]]:
     return [g for g in groups if g]
 
 
-BARE_INTRO = ("Reference entries. Use an entry only where the prompt calls for it, in your own words; ignore the rest. "
-              "Never write a name, label or trigger word of any entry in your answer.")
+BARE_INTRO = ("Background material. Take from it only what the request calls for, rewritten in your own words as part of the prompt; "
+              "leave out the rest. It is never the prompt itself.")
 
 
 def reference(text, groups, intro="", names=True) -> str:
