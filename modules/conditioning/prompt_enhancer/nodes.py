@@ -180,9 +180,12 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
                 clip.tools = hp.tools(bool(helper.get("rules")))
             state["turns"].append({"request": str(message).strip(), "reply": reply or "(no answer)", "kind": "chat"})
             try:
-                forced = ask(note)
-                if text_mode:
-                    forced = hp.run_text_calls(ask, actions, note, state, forced)
+                for attempt in range(3):                              # a rule read first, or a call that was refused as incomplete, gets the next round
+                    forced = ask(note if not attempt else hp.FORCE_AGAIN)
+                    if text_mode:
+                        forced = hp.run_text_calls(ask, actions, note, state, forced)
+                    if actions.changes:
+                        break
             finally:
                 state["turns"].pop()
             if actions.changes:

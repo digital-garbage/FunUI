@@ -75,19 +75,44 @@ class Editor:
 
     def __init__(self, rules, on_event, wait=WAIT):
         self.rules, self.on_event, self.wait = dict(rules or {}), on_event, wait
+        self.read = set()                           # the rules this request has read: a rule is only changed after it was read
+
+    def _field(self, args) -> str:
+        """The rule a call names. Small models write the argument as name, rule or prompt, or give the bare name, or the name the page shows."""
+        for key in ("field", "name", "rule", "prompt", "id", "key", "value"):
+            if isinstance(args.get(key), str) and args[key].strip():
+                return self._rule_named(args[key])
+        singles = [v for v in args.values() if isinstance(v, str) and self._rule_named(v) in FIELDS]
+        return self._rule_named(singles[0]) if len(singles) == 1 else ""
+
+    @staticmethod
+    def _rule_named(text) -> str:
+        t = str(text or "").strip().lower().replace(" ", "_").replace("-", "_")
+        known = {"system_prompt": "instructions", "the_system_prompt": "instructions", "rewrite_instructions": "instructions", "main": "instructions", "rules": "instructions"}
+        t = known.get(t, t)
+        return t if t in FIELDS else (t + "_prompt" if t + "_prompt" in FIELDS else t)
 
     def __call__(self, call) -> str:
         name, args = call.get("name"), call.get("args") or {}
-        field = str(args.get("field") or "")
+        field = self._field(args)
         if field not in FIELDS or field not in self.rules:
-            return f"Error: there is no rule called '{field}'. The rules are: {', '.join(n for n in FIELDS if n in self.rules)}."
+            return (f"Error: there is no rule called '{field}'. Call {name} again with field set to one of these names:\n"
+                    + "\n".join(f"- {n}: {FIELDS[n]}" for n in FIELDS if n in self.rules))
         if name == "read_prompt":
+            self.read.add(field)
             return self.rules[field]
         if name != "edit_prompt":
             return f"Error: there is no tool called '{name}'."
-        new = args.get("new_text")
+        new = next((args[k] for k in ("new_text", "text", "new", "content", "value") if isinstance(args.get(k), str) and args[k].strip()), None)
         if not isinstance(new, str) or not new.strip():
             return "Error: new_text must be the whole new text of the rule."
+        if field not in self.read:
+            self.read.add(field)
+            return (f"Error: you have not read the rule '{field}' in this request, so the rest of it would be lost. This is its whole current text:\n\n{self.rules[field]}\n\n"
+                    "Call edit_prompt again with the whole new text: this text with only the asked change made and everything else word for word.")
+        if len(self.rules[field]) > 400 and len(new.strip()) < 0.5 * len(self.rules[field]):
+            return ("Error: the new text is much shorter than the rule, so most of it would be lost. Send the whole rule with only the asked change made "
+                    "and everything else word for word.")
         if len(new) > MAX_TEXT:
             return f"Error: the text is longer than {MAX_TEXT} characters."
         if new.strip() == self.rules[field].strip():

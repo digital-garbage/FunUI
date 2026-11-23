@@ -217,6 +217,7 @@ def test_a_rule_change_waits_for_the_person_and_the_model_is_told_the_answer():
     sent = []
     editor = rl.Editor({"chat_prompt": "Be chatty.", "notes_prompt": "Notes."}, sent.append, wait=5)
     assert editor({"name": "read_prompt", "args": {"field": "chat_prompt"}}) == "Be chatty."
+    assert editor({"name": "read_prompt", "args": {"name": "Chat prompt"}}) == "Be chatty."   # other argument names and spellings
     assert editor({"name": "read_prompt", "args": {"field": "nope"}}).startswith("Error: there is no rule called 'nope'")
     assert "already" in editor({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "Be chatty.", "reason": "x"}})
 
@@ -233,7 +234,9 @@ def test_a_rule_change_waits_for_the_person_and_the_model_is_told_the_answer():
         t.join()
         assert told.startswith(word)
     assert editor.rules["chat_prompt"] == "Be short."            # only the allowed change took hold
-    assert rl.Editor({"chat_prompt": "a"}, lambda e: None, wait=0.05)({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "b", "reason": "r"}}).startswith("No answer")
+    quick = rl.Editor({"chat_prompt": "a"}, lambda e: None, wait=0.05)
+    quick({"name": "read_prompt", "args": {"field": "chat_prompt"}})
+    assert quick({"name": "edit_prompt", "args": {"field": "chat_prompt", "new_text": "b", "reason": "r"}}).startswith("No answer")
     assert not rl.decide("edit-999", True)
 
 
@@ -1020,9 +1023,21 @@ def test_a_follow_up_question_after_an_announcement_without_a_call_forces_the_ca
     before = {"request": "Please correct the rules so they do not mention 2.5D", "reply": "I will remove the mention of 2.5D from the rules.", "kind": "chat"}
 
     def behave(text):
-        return (_EDIT if "nothing was changed" in text else "Yes, I will."), "ok", [], [], ""
+        return (_EDIT if ("nothing was changed" in text or "Still nothing" in text or "have not read" in text) else "Yes, I will."), "ok", [], [], ""
     out, proposals = _rule_chat(monkeypatch, tiny, behave, before=before)
     assert proposals == ["Write prompts in the requested style."]
+
+
+def test_a_rule_cannot_be_changed_blind_or_cut_down_to_a_fragment():
+    from modules.conditioning.prompt_enhancer import rules as rl
+    sent = []
+    long = "Rule line. " * 60
+    ed = rl.Editor({"instructions": long}, sent.append, wait=0.05)
+    told = ed({"name": "edit_prompt", "args": {"field": "instructions", "new_text": "Short.", "reason": "x"}})
+    assert told.startswith("Error") and long in told and not sent         # refused, and the model is handed the text
+    told = ed({"name": "edit_prompt", "args": {"field": "instructions", "new_text": "Short.", "reason": "x"}})
+    assert told.startswith("Error: the new text is much shorter") and not sent
+    assert ed({"name": "read_prompt", "args": {}}).startswith("Error") and "instructions" in ed({"name": "read_prompt", "args": {}})
 
 
 def test_a_plain_question_is_not_forced_into_a_change(monkeypatch, tiny, comfyui):

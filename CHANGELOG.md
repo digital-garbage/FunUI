@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- The Helper no longer changes a rule it has not read. A rule edit sent blind is refused and answered with the rule's whole text, an edit that would cut most of a rule away is refused, and the rule name is accepted under other argument names (name, rule, prompt) and spellings. The forced round now repeats up to three times until the change is made.
 - **The Helper has a Stop button, and a new message interrupts it.** Stop ends the writing and declines any change still waiting for Allow. A message sent while it works stops that work and is read together with the stopped request, which stays in the conversation as unanswered.
 - **Three thinking switches: "Enable thinking in Helper", "Enable thinking on comments" and "Enable thinking on chat messages"** (Composer > Enhance, all on by default). With the main Thinking switch off, only those three think (and Gemma still reasons when it writes the conversation notes). A rewrite with nothing to follow uses the plain Thinking switch, so it can skip reasoning and save time.
 - **Layout modes no longer turn the explorer off on half-precision models.** The packed-tensor unpack step turned a plain bf16 attention input into float32, which failed the first step and made the explorer quarantine itself.

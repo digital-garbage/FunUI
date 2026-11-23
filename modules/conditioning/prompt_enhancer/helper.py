@@ -71,11 +71,16 @@ def tools(with_rules=False, only=None) -> list:
     return [t for t in every if t["function"]["name"] in keep or not any(t["function"]["name"] in names for names in GROUPS.values())]
 
 
+FORCE_AGAIN = "Still nothing was changed. Call the tool that makes the change now, with all its arguments, and write nothing else."
+
+
 def force_note(message, with_rules=False, context="") -> str:
     """The reminder for a request that asked for a change and got none: which tools fit, and that one must be called now."""
     names = ", ".join(t["function"]["name"] for t in tools(with_rules, intent(f"{message} {context}")))
     return ("The user asked for a change and nothing was changed, because you did not call a tool. Call the fitting tool now, with the full arguments"
-            + (f" (the tools that fit: {names})" if names else "") + ", and write nothing else.")
+            + (f" (the tools that fit: {names})" if names else "") + ", and write nothing else."
+            + (" To change a rule: edit_prompt takes field (the rule's name, instructions for the main rewrite rule), new_text (the whole rule, with only the asked change made) and reason. "
+               "If you have not read the rule yet, the answer to edit_prompt shows it, so call edit_prompt directly." if "edit_prompt" in names else ""))
 
 
 def rules_note(given) -> str:
