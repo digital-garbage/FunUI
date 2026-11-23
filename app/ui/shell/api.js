@@ -118,6 +118,8 @@ export const api = {
   enhancerChatAttach: (conversation, onEvent) => streamEvents(`/api/m/conditioning_prompt_enhancer/chat_attach?conversation=${encodeURIComponent(conversation)}`, undefined, onEvent),
   /** Stop what the helper is doing for a conversation (the stream of that request ends with a "stopped" result). */
   enhancerChatStop: (conversation) => call("POST", "/api/m/conditioning_prompt_enhancer/chat_stop", { conversation }),
+  /** Forget a helper conversation on the server: its saved turns, its finished request, anything still running. */
+  enhancerChatClear: (conversation) => call("POST", "/api/m/conditioning_prompt_enhancer/chat_clear", { conversation }),
   /** The person's answer to a rule change the model proposed. */
   enhancerEditDecision: (id, allow) => call("POST", "/api/m/conditioning_prompt_enhancer/edit_decision", { id, allow: !!allow }),
   rateTaste: (promptId, rating, axis) => call("POST", "/api/m/taste/rate", { prompt_id: promptId, rating, axis: axis || null }),

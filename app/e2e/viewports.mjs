@@ -90,6 +90,37 @@ async function autoHide(page, note) {
   await page.waitForTimeout(200);
 }
 
+// The Helper's pinned checklist: a card inside the window with room around its text, that folds and opens, and stays inside the window.
+async function helperChecklist(page, note, shot) {
+  const items = [["set a", "done"], ["set b", "done"], ["set c", "open"], ["a longer step that needs a good deal more words than the others so the line has to wrap inside the card", "open"], ["set e", "skipped"], ["set f", "open"]]
+    .map(([text, state]) => ({ text, state, note: state === "skipped" ? "does not exist" : "" }));
+  const events = [{ kind: "begin", message: "rename everything", seconds: 4 }, { kind: "plan", items }, { kind: "thinking", text: "working it out" }, { kind: "result", result: { ok: true, reply: "Done." } }];
+  await page.route("**/chat_attach**", (route) => route.fulfill({ status: 200, headers: { "content-type": "text/event-stream" }, body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") }));
+  await page.getByRole("button", { name: /Helper/ }).first().click({ timeout: 2000 }).catch(() => note("the Helper button cannot be pressed"));
+  await page.waitForTimeout(700);
+  const got = await page.evaluate(() => {
+    const modal = document.querySelector(".cx-modal"), card = modal && modal.querySelector(".cx-fieldcard"), fold = card && card.querySelector("details");
+    if (!modal || !card || !fold) return null;
+    const m = modal.getBoundingClientRect(), q = card.getBoundingClientRect(), cs = getComputedStyle(card), text = fold.querySelector(".cx-collapsible-body, :scope > :not(summary)");
+    const pad = parseFloat(cs.paddingLeft), tx = text ? text.getBoundingClientRect() : null;
+    return { inside: q.left >= m.left - 1 && q.right <= m.right + 1 && q.top >= m.top - 1, pad, open: fold.open, gapLeft: tx ? tx.left - q.left : 0, wide: modal.scrollWidth > modal.clientWidth + 1 };
+  });
+  if (!got) { note("the Helper's checklist card is not shown"); return; }
+  if (!got.inside) note("the checklist card sticks out of the Helper window");
+  if (got.pad < 8) note(`the checklist card has no room around its text (${got.pad}px)`);
+  if (!got.open) note("the checklist starts folded");
+  if (got.wide) note("the Helper window scrolls sideways");
+  if (shot) await page.screenshot({ path: shot });
+  await page.locator(".cx-modal .cx-fieldcard summary").click();
+  await page.waitForTimeout(150);
+  if (await page.evaluate(() => document.querySelector(".cx-modal .cx-fieldcard details").open)) note("the checklist does not fold when clicked");
+  await page.locator(".cx-modal .cx-fieldcard summary").click();
+  await page.waitForTimeout(150);
+  if (!(await page.evaluate(() => document.querySelector(".cx-modal .cx-fieldcard details").open))) note("the checklist does not open again when clicked");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+}
+
 const { server, url } = await start(0);
 const problems = [];
 let ran = 0;
@@ -116,6 +147,7 @@ for (const name of wanted) {
     main.slack.forEach((m) => note(m));
     main.header.forEach((m) => note(m));
     if (!running) await autoHide(page, note);
+    if (!running) await helperChecklist(page, note, process.env.FUNUI_SHOTS ? `${process.env.FUNUI_SHOTS}/helper-${name}-${w}x${h}.png` : "");
     for (const [label, text] of WINDOWS) {
       await page.getByText(text).first().click({ timeout: 1500 }).catch(() => note(`${label} cannot be opened`));
       await page.waitForTimeout(500);

@@ -213,6 +213,18 @@ def routes(table, base, web):
             return web.json_response({"ok": False}, status=400)
         return web.json_response({"ok": nodes.stop_chat(body["conversation"])})
 
+    @table.post(base + "/chat_clear")
+    async def _chat_clear(req):
+        """Forget a conversation on the server (its turns, its job, its running request): {"conversation"}."""
+        from . import nodes
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not str(body.get("conversation") or "").strip():
+            return web.json_response({"ok": False}, status=400)
+        return web.json_response({"ok": True, "had": nodes.clear_chat(body["conversation"])})
+
     @table.post(base + "/edit_decision")
     async def _edit_decision(req):
         """The person's answer to a rule change the model proposed: {"id", "allow"}."""

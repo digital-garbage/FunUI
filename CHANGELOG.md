@@ -4,6 +4,9 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Helper's reminders now come from the app, not from you.** Every reminder the app sends the model (the checklist, "call the tool now", tool results) is marked as an app note, and the Helper's system prompt says such notes are not user messages, so the model no longer believes you wrote them.
+- **The Helper no longer sees the Chat tab conversation.** It can read it only through a new read_chat_log tool, and only when you explicitly ask it to look at that chat log.
+- **Clear in the Helper now forgets the conversation on the server too**, not only in the window: its saved turns and its finished request are dropped, and anything still running is stopped. The history still survives a refresh until you press Clear.
 - **An empty model answer is no longer left empty.** When the model's very first token is its end-of-turn, the same round is asked again with another seed (up to twice), and the engine log now says why a round wrote nothing (the model ended its turn at once, or it was cancelled by a Stop or by the page going away).
 - **A Helper request keeps running when the page is refreshed or loses its connection, and the Helper window follows it again.** The request now runs on the server; opening the Helper after a refresh shows what it has written so far and carries on live, including any Allow question still waiting. A dropped connection is followed again by itself instead of ending with "The answer stopped before it finished".
 - **The Helper keeps its checklist pinned at the top in a collapsible card and updates it as items are checked**, and the working line names what it is doing, for example "Editing shortcuts… 10s" or "Reading prompts… 10s", or "Waiting for your answer".

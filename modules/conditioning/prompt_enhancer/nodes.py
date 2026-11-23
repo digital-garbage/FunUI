@@ -111,7 +111,7 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
             if helper and on_event:                                  # the helper acts on the project: each call is asked of the person
                 from . import engine as eng, helper as hp
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
-                actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or (), rules_given=helper.get("rules") or None)
+                actions = hp.Actions(helper.get("scenes"), on_event, settings=helper.get("settings") or (), variables=helper.get("variables") or (), shortcuts=helper.get("shortcuts") or (), inputs=helper.get("inputs") or (), presets=helper.get("presets") or (), actions=helper.get("actions") or (), rules_given=helper.get("rules") or None, chat_log=lambda n: _chat_log(helper, n))
                 if "tools" in template and eng.dialect_for(ENGINE.tok.get_vocab(), template).call_open:
                     clip.tools, clip.handler = hp.tools(bool(helper.get("rules")), hp.intent(message)), actions
                 else:                                                # no tool calls: it writes TOOL blocks in its answer and the app runs them
@@ -297,6 +297,18 @@ def stop_chat(conversation) -> bool:
     return True
 
 
+def clear_chat(conversation) -> bool:
+    """Forget a conversation for good: stop its request, drop its saved turns and its finished job. -> whether anything was there."""
+    from .jobs import JOBS
+    key = str(conversation or "").strip()
+    stop_chat(key)
+    had = CONVOS.pop(key, None) is not None
+    had = JOBS.pop(key, None) is not None or had
+    if had:
+        history.save(RUNS, CONVOS)
+    return had
+
+
 def chat_reply(conversation, message, *, on_event=None, **kw):
     """One chat or helper request. A new request of a conversation that is still working stops that one first and then runs, so the model
     reads what it was asked before and the new message together; the stopped request stays in the conversation as unanswered."""
@@ -326,13 +338,17 @@ def chat_reply(conversation, message, *, on_event=None, **kw):
 
 
 def _chat_memory(helper, notes) -> str:
-    """What the helper may read of the Chat tab: its standing notes, the summary of the earlier conversation and the latest turns (it never writes there)."""
+    """What the helper is given besides the project: the user's standing notes. It never sees the Chat tab conversation."""
+    return ("\n\nNOTES (the user's standing instructions):\n" + str(notes).strip()) if str(notes or "").strip() else ""
+
+
+def _chat_log(helper, n=6) -> str:
+    """The Chat tab conversation (its summary and latest turns), for the helper's read_chat_log tool; read only."""
     chat = CONVOS.get(str((helper or {}).get("chat") or ""))
-    parts = [("\n\nNOTES (the user's standing instructions):\n" + str(notes).strip()) if str(notes or "").strip() else ""]
-    if chat:
-        turns = "\n".join(f"User: {t['request']}\nModel: {t['reply']}" for t in list(chat["turns"])[-6:])
-        parts.append("\n\nTHE CHAT TAB CONVERSATION (read only, for what the user said before; it is not a field of the project):\n" + ((("Condensed earlier part of that conversation: " + chat["summary"] + "\n") if chat["summary"] else "") + turns)[-6000:])
-    return "".join(parts)
+    if not chat or not (chat["turns"] or chat["summary"]):
+        return ""
+    turns = "\n".join(f"User: {t['request']}\nModel: {t['reply']}" for t in list(chat["turns"])[-n:])
+    return ((("Condensed earlier part of the conversation: " + chat["summary"] + "\n") if chat["summary"] else "") + turns)[-6000:]
 
 
 _LAST_CHAT_ID = [max([int(r.get("chat_id") or 0) for r in RUNS] or [0])]       # after a restart the numbers go on above the saved ones

@@ -18,6 +18,14 @@ FIND_PAGE = 40
 TEXTS = {"anchor": "the anchor", "postfix": "the postfix", "negative": "the negative prompt", "postfix_enabled": "the postfix switch"}
 ALIASES = {"prefix": "anchor", "main_prompt": "anchor", "negative_prompt": "negative", "postfix_on": "postfix_enabled", "postfix_switch": "postfix_enabled"}
 EXTRA = ("share_reference", "run_action", "set_story", "cut_scene", "set_cut_words", "set_node_inputs", "apply_preset", "set_project_text", "set_variable", "remove_variable", "save_shortcut", "remove_shortcut", "edit_shortcuts")
+APP_PREFIX = "APP NOTE (from the app, not from the user; the user has written nothing new):\n"
+
+
+def app_note(text) -> str:
+    """Mark a reminder as the app's, so the model never takes it for something the user said."""
+    return APP_PREFIX + str(text)
+
+
 HELPER_RULE = ("You are the helper of a video project. You can act on it with tools. Every change is shown to the user, who allows or refuses it, so propose changes instead of describing them. "
                "Scenes are numbered from 1. This is the project now:\n[[PROJECT_SHEET]]\nEarlier messages, answers and tool results in this chat are history: they already happened and are finished. Answer only the newest message, never redo an earlier change, and trust the project above over what the history says about it. "
                "Use edit_scene to change one scene's prompt, length or own prefix (a scene may have its own prefix instead of the project anchor; the sheet shows it), add_scene to add a scene, set_clip_length to change the default length of every scene, copy_reference to give one scene the same reference pictures and aspect ratio source as another scene, share_reference to give every scene the references of one scene (references pinned to the whole project already apply to every scene and are shown apart) (\"same reference\" means the scene before it unless the user says which). Reference pictures are listed per scene in the project. "
@@ -25,7 +33,7 @@ HELPER_RULE = ("You are the helper of a video project. You can act on it with to
                "The project has an anchor (also called the prefix: one text put in front of every scene prompt), a postfix (put after it, with an on/off switch), a negative prompt and $variables; change them with set_project_text (field anchor, postfix, negative or postfix_enabled with the text true or false), set_variable and remove_variable. Shortcuts (trigger words that expand into phrases) are looked up with find_shortcuts and changed with save_shortcut and remove_shortcut, and many at once (edits, renames, deletes) with edit_shortcuts; a shortcut is shared by every project, so change one only when asked. "
                "Every other setting of the app (the modules listed in the project, such as the attention explorer, auto contrast or the sampler) is reached with find_settings, to look a setting up by words, and set_setting, to change it. Always call find_settings first and use the module and setting names it gives; never guess them. "
                "The pipeline (the nodes behind Generate: model files, sampler, steps, resolution) is reached with find_node_inputs, to look inputs up with their allowed values, and set_node_inputs, to change several at once under one question. To pick models, find the loader inputs, choose the files that fit (an unset one says so) and set them together. apply_preset replaces the whole pipeline with one of the starting points listed in the project; use it only when asked. "
-               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. Every request for a change is done from a checklist, even a single change: first call plan with one item per change, or per batch of up to 60 changes (one item for one change), then do the items in order and call check_item for each one when its change is made. The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
+               "Act, do not announce: when you decide on a change, call the tool in that same turn. Never write that you will use a tool, never describe the call and never put the proposed text in your answer instead of calling. Lengths are in seconds. Change only what the user asked for. Every request for a change is done from a checklist, even a single change: first call plan with one item per change, or per batch of up to 60 changes (one item for one change), then do the items in order and call check_item for each one when its change is made. Messages that start with APP NOTE come from the app, never from the user: they are reminders of these rules, not requests. You never see the Chat tab conversation unless you call read_chat_log, and you call it only when the user explicitly asks you to look at or use that chat log. The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. When a tool answers that the user refused, think about why and correct yourself, as the tool says.")
 
 
 GROUPS = {"scenes": ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "share_reference"),
@@ -43,7 +51,7 @@ _WORDS = {"scenes": r"scene|shot|clip|second|length|story|cut|picture|image|refe
 _CHANGE = re.compile(r"\b(change|update|edit|make|set|add|remove|delete|rewrite|replace|fix|apply|put|turn|switch|inherit|use|let|tell|teach|rename|shorten|lengthen|extend|copy|run|save|create|merge|split|correct|adjust|modify|improve|tweak|reword|rephrase|include|exclude|ensure|stop|avoid|drop|enable|disable|increase|decrease|reduce|raise|lower)\b", re.I)
 
 
-READS = ("read_prompt", "find_settings", "find_shortcuts", "find_node_inputs", "plan", "check_item")
+READS = ("read_chat_log", "read_prompt", "find_settings", "find_shortcuts", "find_node_inputs", "plan", "check_item")
 MAX_PLAN_ROUNDS = 40         # how many times the app sends the model back to an unfinished checklist
 _CALLBACK = re.compile(r"didn'?t|did not|not (?:done|changed|call)|nothing (?:changed|happened)|call the tool|do it|go ahead|correct (?:it|them)|fix (?:it|them)|so\b.*\?", re.I)
 
@@ -75,17 +83,17 @@ def tools(with_rules=False, only=None) -> list:
     return [t for t in every if t["function"]["name"] in keep or not any(t["function"]["name"] in names for names in GROUPS.values())]
 
 
-FORCE_AGAIN = "Still nothing was changed. Call the tool that makes the change now, with all its arguments, and write nothing else."
+FORCE_AGAIN = app_note("Still nothing was changed. Call the tool that makes the change now, with all its arguments, and write nothing else.")
 
 
-PLAN_NOTE = ("Every change is done from a checklist, even a single one. Call plan now with one item per change (one item if there is only one; a batch of up to 60 changes may be one item). "
+PLAN_NOTE = app_note("Every change is done from a checklist, even a single one. Call plan now with one item per change (one item if there is only one; a batch of up to 60 changes may be one item). "
              "Then do the items, calling check_item for each one when its change is made. If a change was already made, plan it and check it. Write nothing else.")
 
 
 def force_note(message, with_rules=False, context="") -> str:
     """The reminder for a request that asked for a change and got none: which tools fit, and that one must be called now."""
     names = ", ".join(t["function"]["name"] for t in tools(with_rules, intent(f"{message} {context}")))
-    return ("The user asked for a change and nothing was changed, because you did not call a tool. Call the fitting tool now, with the full arguments"
+    return app_note("The user asked for a change and nothing was changed, because you did not call a tool. Call the fitting tool now, with the full arguments"
             + (f" (the tools that fit: {names})" if names else "") + ", and write nothing else."
             + (" To change a rule: edit_prompt takes field (the rule's name, instructions for the main rewrite rule), new_text (the whole rule, with only the asked change made) and reason. "
                "If you have not read the rule yet, the answer to edit_prompt shows it, so call edit_prompt directly." if "edit_prompt" in names else ""))
@@ -114,6 +122,7 @@ def _tools() -> list:
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
             fn("plan", "Write the checklist for a request that needs more than three separate changes: one item per change, or per batch of up to 60 changes. Call this first, before the changes.", {"items": {"type": "array", "items": {"type": "string"}, "description": "The steps, in the order they will be done."}}, ["items"]),
             fn("check_item", "Tick one item of the checklist once its change was made, or say why it cannot be done.", {"item": {"type": "integer", "description": "The item's number, from 1."}, "result": {"type": "string", "description": "done, or 'cannot: ' and the reason."}}, ["item", "result"]),
+            fn("read_chat_log", "Read the conversation of the user's Chat tab (the enhancer's own chat, not this one), newest part last. Call it ONLY when the user explicitly asks you to look at, use or adapt to that chat log; never on your own.", {"turns": {"type": "integer", "description": "How many of the latest turns to read (default 6, at most 20)."}}, []),
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all, and words in quotes are searched as an exact phrase. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name.", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
             fn("edit_shortcuts", "Change, rename or delete many shortcuts at once; the user allows the whole batch with one answer. Each change names an existing shortcut. Leave out what stays as it is.",
@@ -186,7 +195,8 @@ def describe(name, args) -> str:
 class Actions:
     """Answers the model's tool calls for one helper request. `scenes`: how many scenes the project has."""
 
-    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=(), rules_given=None):
+    def __init__(self, scenes, on_event, wait=rules.WAIT, settings=(), variables=(), shortcuts=(), inputs=(), presets=(), actions=(), rules_given=None, chat_log=None):
+        self.chat_log = chat_log
         self.scenes, self.on_event, self.wait = int(scenes or 0), on_event, wait
         self.editor = rules.Editor(rules_given, on_event, wait) if rules_given else None
         self.calls = 0
@@ -238,6 +248,11 @@ class Actions:
         self.show_plan()
         return f"Item {n} marked {state}. " + (f"Still open: {', '.join(str(i) for i in left[:20])}." if left else "Every item is checked: now tell the user in one or two sentences what was done and what could not be.")
 
+    def read_chat_log(self, turns) -> str:
+        n = min(20, max(1, int(turns))) if isinstance(turns, (int, float)) and not isinstance(turns, bool) else 6
+        got = self.chat_log(n) if self.chat_log else ""
+        return got or "The Chat tab conversation is empty."
+
     def show_plan(self):
         """The checklist as it stands, for the page to keep pinned."""
         self.on_event({"kind": "plan", "items": [{"text": x["text"], "state": x["state"], "note": x["note"]} for x in self.plan]})
@@ -245,7 +260,7 @@ class Actions:
     def plan_note(self) -> str:
         left = self.open_items()
         lines = "\n".join(f"{i}. {self.plan[i - 1]['text']}" for i in left[:12])
-        return (f"Your checklist is not finished: {len(self.plan) - len(left)} of {len(self.plan)} items are checked. Still open:\n{lines}\n"
+        return app_note(f"Your checklist is not finished: {len(self.plan) - len(left)} of {len(self.plan)} items are checked. Still open:\n{lines}\n"
                 "Do the next open item now: call the tool for it with all its arguments, then call check_item for it. If an item cannot be done, call check_item with result 'cannot: ' and the reason. "
                 "Do not write to the user until every item is checked.")
 
@@ -489,6 +504,8 @@ class Actions:
             self.changes += 1
         if name in ("plan", "check_item"):
             return self.planning(name, args)
+        if name == "read_chat_log":
+            return self.read_chat_log(args.get("turns"))
         if name in ("read_prompt", "edit_prompt"):
             return self.editor(call) if self.editor else "Error: the enhancer's system prompts are not available."
         if name not in ("edit_scene", "add_scene", "copy_reference", "set_clip_length", "find_settings", "set_setting", "find_shortcuts", "find_node_inputs") + EXTRA:
@@ -584,7 +601,7 @@ def node_line(x) -> str:
     return f"{x['slot']}.{x['name']} ({x.get('node')}, {x.get('group') or 'no group'}; {allowed}; now {'NOT SET' if now in (None, '') else now})"
 
 
-NUDGE = "You described a change but did not call a tool, so nothing happened. Call the tool now, with the full arguments, and write nothing else."
+NUDGE = app_note("You described a change but did not call a tool, so nothing happened. Call the tool now, with the full arguments, and write nothing else.")
 _TOOL_WORDS = re.compile(r"\b(" + "|".join(["edit_scene", "add_scene", "copy_reference", "set_clip_length", "set_story", "cut_scene", "set_cut_words", "set_project_text", "set_variable", "remove_variable",
                                               "save_shortcut", "remove_shortcut", "edit_shortcuts", "set_setting", "set_node_inputs", "apply_preset", "run_action"]) + r")\b|\bI (?:will|would|propose|suggest)\b", re.I)
 
@@ -675,7 +692,7 @@ def run_text_calls(ask, actions, message, state, first, rounds=4):
                 ran.append(f"{call['name']}: {str(out).splitlines()[0][:120]}")
             state["turns"].append({"request": str(message).strip(), "reply": reply, "kind": "chat"})
             pushed += 1
-            message = "TOOL RESULTS:\n" + "\n".join(results) + "\nNow write the next TOOL block, or tell the user in one or two sentences what happened."
+            message = app_note("TOOL RESULTS:\n" + "\n".join(results) + "\nNow write the next TOOL block, or tell the user in one or two sentences what happened.")
             reply, status, more_add, more_drop, thought = ask(message)
             add, drop = add + more_add, drop + more_drop
     finally:

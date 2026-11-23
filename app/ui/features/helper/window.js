@@ -15,7 +15,7 @@ const DOING = { read_prompt: "Reading prompts", edit_prompt: "Editing prompts", 
   find_settings: "Finding a setting", set_setting: "Changing a setting", find_node_inputs: "Finding a pipeline input", set_node_inputs: "Changing the pipeline", apply_preset: "Switching the pipeline",
   edit_scene: "Editing a scene", add_scene: "Adding a scene", copy_reference: "Copying references", share_reference: "Sharing references", set_clip_length: "Setting the clip length", set_story: "Rewriting the global prompt",
   cut_scene: "Cutting a scene", set_cut_words: "Setting the cut words", set_project_text: "Editing project text", set_variable: "Editing variables", remove_variable: "Editing variables", run_action: "Running an action",
-  plan: "Writing the checklist", check_item: "Checking the list" };
+  plan: "Writing the checklist", read_chat_log: "Reading the chat log", check_item: "Checking the list" };
 const MARK = { done: "✓", skipped: "✕", open: "○" };
 const log = new Map();      // project id -> [{ you, reply, status, done }]: what the helper and the person said; finished turns are also kept in this browser, so a refresh does not lose them
 const PAINT_MS = 120, KEEP = 30, LOGKEY = (id) => `funui_helper_log:${id}`;
@@ -239,7 +239,7 @@ export function openHelper(app, origin) {
   const send = c.button.md({ label: "Ask helper", tone: "primary", onClick: () => ask() });
   const stopper = c.button.md({ label: "Stop", tone: "ghost", disabled: true, title: "Stop what the helper is doing", onClick: () => stopAll() });
   const turns = () => { if (!log.has(p.project.id)) log.set(p.project.id, saved(p.project.id)); return log.get(p.project.id); };
-  const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); paint(true); } });
+  const clear = c.button.md({ label: "Clear", tone: "ghost", title: "Forget this conversation with the helper", onClick: () => { stopAll(); log.set(p.project.id, []); remember(p.project.id, []); Promise.resolve(app.api.enhancerChatClear ? app.api.enhancerChatClear(`helper:${p.project.id}`) : null).catch(() => {}); paint(true); } });
   const later = (f) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(f) : setTimeout(f, 0));
   let tick = 0;
   // The model's thinking stays folded: a line with a changing phrase and the time since the request began, opened by a click.

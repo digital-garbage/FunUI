@@ -726,7 +726,7 @@ def test_a_helper_model_without_tool_calls_works_through_tool_blocks_in_its_answ
         return "Clip length is 6 seconds now.", "ok", [], [], ""
     monkeypatch.setattr(nodes.en, "converse", fake)
     out = nodes.chat_reply("h:2", "make clips 6 seconds", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 1})
-    assert out["reply"] == "Clip length is 6 seconds now." and asked[1].startswith("TOOL RESULTS:\nset_clip_length: Allowed")
+    assert out["reply"] == "Clip length is 6 seconds now." and helper.APP_PREFIX + "TOOL RESULTS:\nset_clip_length: Allowed" in asked[1]
     assert any(e["kind"] == "action_request" and e["tool"] == "set_clip_length" for e in heard)
 
 
@@ -753,7 +753,7 @@ def test_a_helper_that_answers_without_any_call_is_asked_again_in_text_mode(tiny
         return "Done, six seconds.", "ok", [], [], ""
     monkeypatch.setattr(nodes.en, "converse", fake)
     out = nodes.chat_reply("h:3", "make it one scene focused on the face", engine_model="tiny", max_length=8, do_sample=False, on_event=on_event, helper={"sheet": "x", "scenes": 3})
-    assert out["reply"] == "Done, six seconds." and asked[2].startswith("TOOL RESULTS:")
+    assert out["reply"] == "Done, six seconds." and asked[2].startswith("APP NOTE (from the app, not from the user; the user has written nothing new):\n" + "TOOL RESULTS:")
 
 
 def test_a_gguf_model_that_cannot_trim_its_memory_starts_empty_for_a_changed_prompt():

@@ -112,7 +112,7 @@ def test_pipeline_inputs_are_looked_up_checked_and_changed_under_one_question():
     assert "H3 fast" in seen[1]["summary"]
 
 
-def test_helper_reads_the_chat_conversation_and_notes():
+def test_helper_reads_notes_but_never_the_chat_conversation():
     from .. import nodes
     from collections import deque
     nodes.CONVOS["p:0"] = {"summary": "talked about dogs", "turns": deque([{"request": "make it warmer", "reply": "ok, warmer light"}]), "seen": set()}
@@ -120,8 +120,38 @@ def test_helper_reads_the_chat_conversation_and_notes():
         text = nodes._chat_memory({"chat": "p:0"}, "no rain")
     finally:
         nodes.CONVOS.pop("p:0", None)
-    assert "no rain" in text and "talked about dogs" in text and "make it warmer" in text
+    assert "no rain" in text and "dogs" not in text and "warmer" not in text
     assert nodes._chat_memory({"chat": "none"}, "") == ""
+
+
+def test_chat_log_is_read_only_through_the_tool():
+    from .. import nodes
+    from collections import deque
+    nodes.CONVOS["p:1"] = {"summary": "talked about dogs", "turns": deque([{"request": "make it warmer", "reply": "ok"}]), "seen": set()}
+    try:
+        acts = helper.Actions(1, lambda ev: None, chat_log=lambda n: nodes._chat_log({"chat": "p:1"}, n))
+        out = acts({"name": "read_chat_log", "arguments": {"turns": 3}})
+        assert "dogs" in out and "make it warmer" in out and acts.changes == 0
+        assert "read_chat_log" in [t["function"]["name"] for t in helper.tools()]
+        assert "Chat tab" in helper.Actions(1, lambda ev: None)({"name": "read_chat_log", "arguments": {}})
+    finally:
+        nodes.CONVOS.pop("p:1", None)
+
+
+def test_clear_forgets_the_conversation_and_its_job():
+    from .. import nodes, jobs
+    from collections import deque
+    nodes.CONVOS["helper:x"] = {"summary": "", "turns": deque([{"request": "a", "reply": "b"}]), "seen": set()}
+    jobs.JOBS["helper:x"] = object()
+    assert nodes.clear_chat("helper:x") is True
+    assert "helper:x" not in nodes.CONVOS and "helper:x" not in jobs.JOBS
+    assert nodes.clear_chat("helper:x") is False
+
+
+def test_app_reminders_are_marked_as_the_apps():
+    for text in (helper.NUDGE, helper.PLAN_NOTE, helper.FORCE_AGAIN, helper.force_note("change it", False), helper.Actions(1, lambda e: None).plan_note() if False else helper.app_note("x")):
+        assert text.startswith("APP NOTE")
+    assert "APP NOTE" in helper.HELPER_RULE
 
 
 def test_cuts_are_checked_and_counted():
@@ -253,7 +283,7 @@ def test_text_mode_runs_blocks_until_the_model_answers_in_words():
     first = ('TOOL: find_settings\n{"query": "contrast"}\nEND_TOOL', "ok", ["note"], [], "")
     reply, status, add, drop, thought = helper.run_text_calls(ask, acts, "turn on auto contrast", state, first)
     assert reply == "Auto contrast is off and can be set." and add == ["note"]
-    assert asked[0][0].startswith("TOOL RESULTS:\nfind_settings: post_auto_contrast.mode")
+    assert (helper.APP_PREFIX + "TOOL RESULTS:\nfind_settings: post_auto_contrast.mode") in asked[0][0]
     assert asked[0][1] == [first[0]] and state["turns"] == []                       # it saw its own block; nothing of the loop stays in the conversation
 
 

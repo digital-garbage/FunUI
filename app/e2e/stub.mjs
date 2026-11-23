@@ -10,7 +10,7 @@ const TYPES = { ".js": "text/javascript", ".css": "text/css", ".html": "text/htm
 const json = (v) => JSON.stringify(v);
 
 const PROJECT = {
-  id: "p1", name: "Demo cut", num_frames_per_scene: 97, frame_rate: 25, scene_renders: {}, timeline_manually_ordered: false,
+  id: "p1", name: "Demo cut", editor_settings: { helper: true }, num_frames_per_scene: 97, frame_rate: 25, scene_renders: {}, timeline_manually_ordered: false,
   scenes: ["A fox runs through snow", "Close-up of the fox", "Wide shot, aurora sky"].map((text, i) => ({ id: `s${i + 1}`, text, frames_mode: "project" })),
 };
 const PIPELINE = {
