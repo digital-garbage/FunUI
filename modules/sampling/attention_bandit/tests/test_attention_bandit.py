@@ -426,6 +426,13 @@ def test_a_layout_push_is_the_same_every_time_for_a_mode_and_a_set_share_of_the_
     assert torch.allclose(four.reshape(2, 40, 32), a, atol=1e-5)
 
 
+def test_a_plain_half_precision_tensor_keeps_its_type():
+    from modules.sampling.attention_bandit import layout_push
+    for dtype in (torch.bfloat16, torch.float16):
+        x = torch.randn(1, 8, 16, dtype=dtype)
+        assert layout_push(x, 2, 0.1).dtype == dtype
+
+
 def test_a_packed_tensor_is_pushed_as_plain_numbers():
     from modules.sampling.attention_bandit import layout_push
 

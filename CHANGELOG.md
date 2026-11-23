@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Layout modes no longer turn the explorer off on half-precision models.** The packed-tensor unpack step turned a plain bf16 attention input into float32, which failed the first step and made the explorer quarantine itself.
 - **Layout modes use less memory and accept packed (MXFP8) tensors.** The push now works in place instead of making several full-size copies on the first step, which could push the model out of the card, and a packed attention input is unpacked first.
 - **The Helper is pushed into acting.** When a request asks for a change and the answer only talked about it, or only looked at a rule, the Helper runs one more round that names the fitting tools; a follow-up such as "will you correct them?" after an announcement counts as that request. It also lists only the tools that fit the request (all of them when the words name none), and no longer says "Done" after only looking something up.
 - **Attention explorer can try layout modes (off by default).** A few fixed small pushes on the attention input of chosen blocks (3-45 by default), on the steps you name (the first by default), picked and learned from your ratings. Idea after CosPert.

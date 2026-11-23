@@ -323,7 +323,7 @@ def layout_push(x, mode, size):
     to try again, not a draw per seed."""
     if not mode or not size:
         return x
-    if hasattr(x, "dequantize"):                 # a packed tensor (MXFP8 and the like): the push works on plain numbers
+    if type(x) is not torch.Tensor and hasattr(x, "dequantize"):         # a packed tensor (MXFP8 and the like): the push works on plain numbers. (A plain bf16 tensor has a dequantize too, which turns it into float32.)
         x = x.dequantize()
     d = x.shape[-1]
     key = (mode, d, x.device, x.dtype)
