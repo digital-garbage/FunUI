@@ -57,6 +57,7 @@ LTX_ONLY = {"audio_coupling", "context_windows", "identity_bank", "sharpen", "te
 #: Modifiers that cannot run here, and why. Said loudly: a feature in this list is not proven on this machine.
 EXEMPT = {
     "ptd": "needs a PTD adapter file in ComfyUI/models/ptd (none on this Mac)",
+    "pi_h3": "needs a pi-H3 adapter file in ComfyUI/models/pi_h3 (none here)",
     "taste": "always present: it is the rating store every other feature reads",
     "two_stage": "a dimension of every run here, not a feature in the subsets",
     "block_map": "follows a saved map, there is no switch to put in a subset: every run here has a map saved, test_block_map_is_wired_only_when_a_map_is_saved and the bare run below cover no map",
