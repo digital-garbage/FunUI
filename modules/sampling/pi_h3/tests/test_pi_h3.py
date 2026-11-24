@@ -33,10 +33,10 @@ def folder(tmp_path):
     return tmp_path
 
 
-def _install(pih3, patcher, name, steps="auto"):
+def _install(pih3, patcher, name, steps="auto", strength=1.0):
     from modules._core import patching
     guarded = patching.GuardedPatcher(patcher, "funui.pi_h3", patching.Dropped())
-    return pih3.install(guarded, {"enabled": True, "adapter": name, "steps": steps}, "funui.pi_h3")
+    return pih3.install(guarded, {"enabled": True, "adapter": name, "steps": steps, "strength": strength}, "funui.pi_h3")
 
 
 def test_the_schedule_is_the_published_one():
@@ -291,3 +291,29 @@ def test_quantized_layers_that_carry_the_adapter_are_reported(pih3, folder, monk
     monkeypatch.setattr(type(model), "is_dynamic", lambda self: True)
     _install(pih3, base.clone(), "pi_h3_2step_adapter.safetensors")
     assert any(lvl == log.ALERT and "--disable-dynamic-vram" in m for lvl, m in said)
+
+
+def test_a_lower_strength_blends_toward_the_models_own_weights(pih3, folder):
+    base = _tiny.native_model()
+    native = base.get_model_object("diffusion_model")
+    file = adapter_file(folder / "pi_h3_2step_adapter.safetensors", native)
+    before = {k: v.clone() for k, v in native.state_dict().items()}
+    model = base.clone()
+    assert "strength 0.5" in _install(pih3, model, "pi_h3_2step_adapter.safetensors", strength=0.5)
+    model.patch_model(device_to=torch.device("cpu"), force_patch_weights=True)
+    try:
+        now = native.state_dict()
+        theirs = file["proj_out.weight"].float()
+        assert torch.allclose(now["final_layer.video_out.weight"], before["final_layer.video_out.weight"] + 0.5 * (theirs - before["final_layer.video_out.weight"]), atol=1e-3)
+        want = before["blocks.0.attn.out_proj.weight"] + 0.5 * (file["transformer_blocks.0.attn.to_out.0.lora_B.weight"].float()
+                                                                @ file["transformer_blocks.0.attn.to_out.0.lora_A.weight"].float())
+        assert torch.allclose(now["blocks.0.attn.out_proj.weight"], want, atol=1e-3)
+    finally:
+        model.unpatch_model(torch.device("cpu"))
+    off = base.clone()
+    _install(pih3, off, "pi_h3_2step_adapter.safetensors", strength=0.0)
+    off.patch_model(device_to=torch.device("cpu"), force_patch_weights=True)
+    try:
+        assert torch.allclose(native.state_dict()["final_layer.video_out.weight"], before["final_layer.video_out.weight"], atol=1e-3)
+    finally:
+        off.unpatch_model(torch.device("cpu"))
