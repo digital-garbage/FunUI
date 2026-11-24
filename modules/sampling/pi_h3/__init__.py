@@ -91,7 +91,9 @@ def _swap(steps):
 
     def run(executor, guider, sigmas, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar):
         if abs(float(getattr(guider, "cfg", 1.0)) - 1.0) > 1e-6:
-            log.once("pi_h3:cfg", log.ALERT, "FunUI pi-H3", f"CFG is {guider.cfg:g}: pi-H3 was trained without guidance, so set CFG to 1")
+            # pi-H3 was trained without guidance: guidance on top doubles every step and spoils the picture, so it is not applied
+            log.once("pi_h3:cfg", log.INFO, "FunUI pi-H3", f"CFG {guider.cfg:g} is not used: pi-H3 runs without guidance")
+            guider.cfg = 1.0
         try:
             import latent_preview
             callback = latent_preview.prepare_callback(guider.model_patcher, steps)

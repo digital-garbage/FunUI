@@ -98,13 +98,15 @@ def test_the_shifts_and_the_sampler_are_the_files(pih3, folder, monkeypatch):
                         lambda self, wrap, sigmas, extra_args, *a, **k: given.update(sigmas=sigmas) or "done")
 
     class Guider:
-        cfg = 1.0
+        cfg = 5.0
         model_patcher = None
 
+    guider = Guider()
     extra = {"model_options": {"transformer_options": {}}}
     run = model.wrappers[WrappersMP.SAMPLER_SAMPLE]["funui.pi_h3"][0]
     sigmas = torch.linspace(1.0, 0.0, 21, device="meta")
-    assert run(None, Guider(), sigmas, extra, None, None, None, None, True) == "done"
+    assert run(None, guider, sigmas, extra, None, None, None, None, True) == "done"
+    assert guider.cfg == 1.0                                                              # guidance is not applied
     assert len(given["sigmas"]) == 5 and given["sigmas"].device == sigmas.device
     assert extra["model_options"]["transformer_options"]["sample_sigmas"] is given["sigmas"]
     # the base model is not left changed
