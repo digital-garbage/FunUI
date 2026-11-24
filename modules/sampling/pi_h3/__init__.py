@@ -10,6 +10,7 @@ Not yet run on a real H3 here.
 
 import copy
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -102,7 +103,10 @@ def _swap(steps):
             options["sample_sigmas"] = mine
         log.once(f"pi_h3:swap:{steps}", log.INFO, "FunUI pi-H3",
                  f"sampling {steps} steps from the adapter; the chosen sampler and steps ({len(sigmas) - 1}) are not used")
-        return euler.sample(guider, mine, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar)
+        started = time.time()
+        out = euler.sample(guider, mine, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar)
+        log.info("FunUI pi-H3", f"sampled {steps} steps in {time.time() - started:.1f} s ({(time.time() - started) / steps:.1f} s a step)")
+        return out
 
     return run
 
