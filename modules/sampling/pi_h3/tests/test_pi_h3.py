@@ -83,7 +83,7 @@ def test_whole_tensors_replace_and_lora_pairs_add(pih3, folder):
     assert torch.equal(native.state_dict()["final_layer.video_out.weight"], before["final_layer.video_out.weight"])
 
 
-def test_the_shifts_and_the_sampler_are_the_files(pih3, folder, monkeypatch):
+def test_the_shifts_and_the_schedule_are_the_files(pih3, folder):
     import comfy.samplers
     from comfy.patcher_extension import WrappersMP
     base = _tiny.native_model()
@@ -93,24 +93,34 @@ def test_the_shifts_and_the_sampler_are_the_files(pih3, folder, monkeypatch):
     sampling = model.get_model_object("model_sampling")
     assert (sampling.shift, sampling.audio_shift) == (12.0, 3.0)
     assert model.model_options["transformer_options"]["minimax_h3_sigma_shift_audio"] == 3.0
-    given = {}
-    monkeypatch.setattr(comfy.samplers.KSAMPLER, "sample",
-                        lambda self, wrap, sigmas, extra_args, *a, **k: given.update(sigmas=sigmas) or "done")
 
     class Guider:
         cfg = 5.0
         model_patcher = None
 
-    guider = Guider()
-    extra = {"model_options": {"transformer_options": {}}}
-    run = model.wrappers[WrappersMP.SAMPLER_SAMPLE]["funui.pi_h3"][0]
+    guider, given = Guider(), {}
+
+    class Executor:
+        class_obj = guider
+
+        def __call__(self, noise, latent_image, sampler, sigmas, *rest, **kwargs):
+            given.update(sampler=sampler, sigmas=sigmas, rest=rest)
+            return "done"
+
+    run = model.wrappers[WrappersMP.OUTER_SAMPLE]["funui.pi_h3"][0]
     sigmas = torch.linspace(1.0, 0.0, 21, device="meta")
-    assert run(None, guider, sigmas, extra, None, None, None, None, True) == "done"
+    assert run(Executor(), "noise", "latent", "the chosen sampler", sigmas, None, None, True, 7) == "done"
     assert guider.cfg == 1.0                                                              # guidance is not applied
-    assert len(given["sigmas"]) == 5 and given["sigmas"].device == sigmas.device
-    assert extra["model_options"]["transformer_options"]["sample_sigmas"] is given["sigmas"]
+    assert len(given["sigmas"]) == 5 and given["sigmas"].device == sigmas.device          # the file's schedule, where the run's is
+    assert given["sampler"].__class__ is comfy.samplers.KSAMPLER and given["sampler"] != "the chosen sampler"
+    assert given["rest"][-1] == 7
     # the base model is not left changed
     assert not base.patches and not base.object_patches and "funui_pi_h3" not in base.model_options
+
+
+def test_two_stages_cuts_the_files_own_schedule(pih3, folder):
+    """The schedule is replaced around the whole run before Two stages sees it, so it cuts the file's 4 steps, not the chosen 20."""
+    assert "two_stage" in pih3.BEFORE
 
 
 def test_it_samples_on_the_tiny_model_and_differs_from_the_base(pih3, folder):
@@ -236,3 +246,31 @@ def test_a_second_pass_does_not_wrap_the_dwd_hook_twice(pih3, folder):
     out = _sample_nested(again)
     from modules.sampling.pi_h3 import dwd
     assert dwd.take(out.unbind()[0]) is not None
+
+
+def test_two_stages_runs_the_files_four_steps_small_then_full(pih3, folder):
+    """A run asked for 20 steps: pi-H3 makes it 4, and Two stages (installed after it) cuts those 4 into 2 small and 2 full."""
+    import comfy.samplers
+    from comfy.nested_tensor import NestedTensor
+    from modules.sampling.two_stage import install as two_stage
+    base = _tiny.native_model()
+    adapter_file(folder / "pi_h3_4step_adapter.safetensors", base.get_model_object("diffusion_model"))
+    model = base.clone()
+    _install(pih3, model, "pi_h3_4step_adapter.safetensors")
+    two_stage(model, {"enabled": True, "size": 0.5, "steps": 2}, "funui.two_stage")
+    calls = []
+    model.model.diffusion_model.register_forward_pre_hook(
+        lambda m, a: calls.append(tuple(a[0][0].shape[-2:]) if isinstance(a[0], (list, tuple)) else tuple(a[0].shape[-2:])))
+    guider = comfy.samplers.CFGGuider(model)
+    context = torch.randn(1, 6, _tiny.DIMS["text_dim"], generator=torch.Generator().manual_seed(3))
+    guider.set_conds([[context, {}]], [[context, {}]])
+    guider.set_cfg(7.0)
+    noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
+    latent = NestedTensor((torch.zeros(1, 24, 2, 8, 8), torch.zeros(1, 32, 2, 3)))
+    try:
+        out = guider.sample(noise, latent, comfy.samplers.sampler_object("dpmpp_2m"), torch.linspace(1.0, 0.0, 21), seed=1, disable_pbar=True)
+    finally:
+        from comfy import model_management
+        model_management.unload_all_models()
+    assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)]
+    assert all(torch.isfinite(t).all() for t in out.unbind())

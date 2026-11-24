@@ -41,12 +41,6 @@ def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
             return "PTD sets its own schedule"
     except Exception:                                   # noqa: BLE001 -- no PTD module, nothing to clash with
         pass
-    try:
-        from ..pi_h3 import CONTROLLER_KEY as PI_H3_KEY
-        if PI_H3_KEY in guider.model_options or PI_H3_KEY in guider.model_patcher.model_options:
-            return "pi-H3 sets its own schedule"
-    except Exception:                                   # noqa: BLE001 -- no pi-H3 module, nothing to clash with
-        pass
     return None
 
 

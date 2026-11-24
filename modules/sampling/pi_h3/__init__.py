@@ -26,6 +26,7 @@ ID = "pi_h3"
 TITLE = "pi-H3 few-step"
 MOUNT = "generation.sampling"
 STAGE = "load"
+BEFORE = ["two_stage"]           # the schedule is replaced around the whole run first, so Two stages cuts the file's own steps
 CATEGORY = "sampling"
 STATUS = "experimental"
 REQUIRES = ["audio_stream", "adaln_modalities"]
@@ -53,7 +54,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Few-step pi-H3",
-        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Use the FL2VA base it was trained on, with SLA and turbo LoRAs off.",
+        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Use the stock FL2VA base it was trained on, not a turbo merge. Two stages works with it.",
     },
     "adapter": {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",
@@ -84,30 +85,31 @@ def _adapter(path, label):
 
 
 def _swap(steps):
-    """Run Euler over the file's own noise levels, in place of the sampler and the schedule that were chosen."""
+    """An OUTER_SAMPLE wrapper: the run gets the file's own noise levels and Euler in place of the schedule and the sampler that
+    were chosen. It sits around the whole run, so every step-aware module (SLA, Two stages, ...) sees the real schedule."""
     import comfy.k_diffusion.sampling as ks
     import comfy.samplers
     euler = comfy.samplers.KSAMPLER(ks.sample_euler)
     grid = ad.schedule(ad.SHIFT_VIDEO, steps)
 
-    def run(executor, guider, sigmas, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar):
+    def run(executor, noise, latent_image, sampler, sigmas, *args, **kwargs):
+        guider = executor.class_obj
         if abs(float(getattr(guider, "cfg", 1.0)) - 1.0) > 1e-6:
             # pi-H3 was trained without guidance: guidance on top doubles every step and spoils the picture, so it is not applied
             log.once("pi_h3:cfg", log.INFO, "FunUI pi-H3", f"CFG {guider.cfg:g} is not used: pi-H3 runs without guidance")
             guider.cfg = 1.0
+        mine = grid.to(device=sigmas.device, dtype=sigmas.dtype)
+        args = list(args)
         try:
             import latent_preview
-            callback = latent_preview.prepare_callback(guider.model_patcher, steps)
+            if len(args) >= 2:                                   # (denoise_mask, callback, ...): progress counts the file's steps
+                args[1] = latent_preview.prepare_callback(guider.model_patcher, steps)
         except Exception:      # noqa: BLE001 -- only the progress bar and previews are lost
             pass
-        mine = grid.to(device=sigmas.device, dtype=sigmas.dtype)
-        options = extra_args.get("model_options", {}).get("transformer_options")
-        if options is not None:
-            options["sample_sigmas"] = mine
         log.once(f"pi_h3:swap:{steps}", log.INFO, "FunUI pi-H3",
                  f"sampling {steps} steps from the adapter; the chosen sampler and steps ({len(sigmas) - 1}) are not used")
         started = time.time()
-        out = euler.sample(guider, mine, extra_args, callback, noise, latent_image, denoise_mask, disable_pbar)
+        out = executor(noise, latent_image, euler, mine, *args, **kwargs)
         log.info("FunUI pi-H3", f"sampled {steps} steps in {time.time() - started:.1f} s ({(time.time() - started) / steps:.1f} s a step)")
         return out
 
@@ -180,9 +182,9 @@ def install(patcher, values, key):
         # the pixel head: the last step's hidden states decode to pixels, and the decode takes them in place of the VAE
         hook = dwd.install(raw, adapter.dwd, native.final_layer.norm.eps)
         raw.add_object_patch("diffusion_model._run_blocks", patching.tag(hook, key))
-        raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, patching.tag(dwd.outer_sample, key))
+        raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.dwd", patching.tag(dwd.outer_sample, f"{key}.dwd"))
         raw.model_options[dwd.MARK_KEY] = patching.tag(dwd.Holder(), key)
-    raw.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, key, patching.tag(_swap(steps), key))
+    raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, patching.tag(_swap(steps), key))
     return f"{adapter.label}, {steps} steps{', DWD pixels (no video decode)' if adapter.dwd else ''}, {adapter.size / 2**30:.2f} GB"
 
 
