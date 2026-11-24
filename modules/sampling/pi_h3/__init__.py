@@ -70,6 +70,12 @@ SETTINGS = {
         "hint": "1 = the file as trained. Lower blends it with your model's own weights; try it on a merged or finetuned model, where the full replacement can clash.",
         "when": {"enabled": True},
     },
+    "sound_strength": {
+        "type": "float", "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05,
+        "label": "Sound strength", "ui": "slider",
+        "hint": "The same blend for the sound's own output layer. Lower it if the sound comes out twisted while the picture is right.",
+        "when": {"enabled": True},
+    },
     "steps": {
         "type": "enum", "default": "auto",
         "options": [{"value": "auto", "label": "From the file name"}, {"value": "2", "label": "2 steps"}, {"value": "4", "label": "4 steps"}],
@@ -174,14 +180,16 @@ def _blend(native, key, tensor, strength):
     return (base + strength * (tensor.to(torch.float32) - base)).to(tensor.dtype)
 
 
-def _patch(raw, adapter, strength=1.0):
+def _patch(raw, adapter, strength=1.0, sound=1.0):
     """The file's whole tensors as "set" patches and its LoRA pairs as LoRA patches, on the clone the caller owns.
     -> the record to find them again."""
     import comfy.lora
     native = raw.get_model_object("diffusion_model")
     for k in adapter.full:
         raw.patches.pop("diffusion_model." + k, None)           # an earlier patch on a replaced tensor would be wrong now
-    sets = {"diffusion_model." + k: ("set", ((v if strength >= 1.0 else _blend(native, k, v, strength)),))
+    def at(k):
+        return min(strength, sound) if "audio_out" in k else strength
+    sets = {"diffusion_model." + k: ("set", ((v if at(k) >= 1.0 else _blend(native, k, v, at(k))),))
             for k, v in adapter.full.items()}
     sd, to_load = {}, {}
     for i, (k, (a, b)) in enumerate(adapter.lora.items()):
@@ -220,7 +228,8 @@ def install(patcher, values, key):
     options["minimax_h3_sigma_shift_video"], options["minimax_h3_sigma_shift_audio"] = ad.SHIFT_VIDEO, ad.SHIFT_AUDIO
     options["funui_sla_all_sparse"] = True        # sparse attention (SLA, VEDA) keeps no dense first step: a 2 or 4 step run is trained sparse throughout
     strength = min(max(float(values.get("strength", 1.0)), 0.0), 1.0)
-    raw.model_options[CONTROLLER_KEY] = _patch(raw, adapter, strength)
+    sound = min(max(float(values.get("sound_strength", 1.0)), 0.0), 1.0)
+    raw.model_options[CONTROLLER_KEY] = _patch(raw, adapter, strength, sound)
     _say_quantized(raw, native, adapter)
     if adapter.dwd:
         # the pixel head: the last step's hidden states decode to pixels, and the decode takes them in place of the VAE
@@ -229,7 +238,7 @@ def install(patcher, values, key):
         raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, f"{key}.dwd", patching.tag(dwd.outer_sample, f"{key}.dwd"))
         raw.model_options[dwd.MARK_KEY] = patching.tag(dwd.Holder(), key)
     raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, patching.tag(_swap(steps), key))
-    return f"{adapter.label}, {steps} steps{f', strength {strength:g}' if strength < 1.0 else ''}{', DWD pixels (no video decode)' if adapter.dwd else ''}, {adapter.size / 2**30:.2f} GB"
+    return f"{adapter.label}, {steps} steps{f', strength {strength:g}' if strength < 1.0 else ''}{f', sound {sound:g}' if sound < 1.0 else ''}{', DWD pixels (no video decode)' if adapter.dwd else ''}, {adapter.size / 2**30:.2f} GB"
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"adapter": _options()}}

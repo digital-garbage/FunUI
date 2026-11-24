@@ -317,3 +317,22 @@ def test_a_lower_strength_blends_toward_the_models_own_weights(pih3, folder):
         assert torch.allclose(native.state_dict()["final_layer.video_out.weight"], before["final_layer.video_out.weight"], atol=1e-3)
     finally:
         off.unpatch_model(torch.device("cpu"))
+
+
+def test_the_sound_layer_has_its_own_strength(pih3, folder):
+    from modules._core import patching
+    base = _tiny.native_model()
+    native = base.get_model_object("diffusion_model")
+    file = adapter_file(folder / "pi_h3_2step_adapter.safetensors", native)
+    before = {k: v.clone() for k, v in native.state_dict().items()}
+    model = base.clone()
+    guarded = patching.GuardedPatcher(model, "funui.pi_h3", patching.Dropped())
+    note = pih3.install(guarded, {"enabled": True, "adapter": "pi_h3_2step_adapter.safetensors", "steps": "auto", "strength": 1.0, "sound_strength": 0.0}, "funui.pi_h3")
+    assert "sound 0" in note
+    model.patch_model(device_to=torch.device("cpu"), force_patch_weights=True)
+    try:
+        now = native.state_dict()
+        assert torch.allclose(now["final_layer.video_out.weight"], file["proj_out.weight"].float(), atol=1e-3)          # the picture's layer: the file
+        assert torch.allclose(now["final_layer.audio_out.weight"], before["final_layer.audio_out.weight"], atol=1e-3)   # the sound's: the model's own
+    finally:
+        model.unpatch_model(torch.device("cpu"))
