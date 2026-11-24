@@ -484,8 +484,10 @@ def make_wrapper(state, cfg):
         # so the wrapper is the only place it can be picked up.
         video, keep, refs = spans(minimax_payload)
         to["_funui_sla_spans"] = (video, tuple(keep), tuple(refs))
+        # A run that sets "funui_sla_all_sparse" (pi-H3: 2 or 4 steps, trained sparse on every step) has no room for a dense first step.
         to["_funui_sla_dense"] = bool(
-            (last > 0 and state["step"] > n_steps - last) or (state["step"] - 1) in dense_steps)
+            ((last > 0 and state["step"] > n_steps - last) or (state["step"] - 1) in dense_steps)
+            and not to.get("funui_sla_all_sparse"))
         state["n"] = n_steps
         state["sparsity"] = step_sparsity(cfg, state["step"], n_steps)
         if to["_funui_sla_dense"] and counted:

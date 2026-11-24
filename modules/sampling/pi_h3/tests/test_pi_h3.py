@@ -274,3 +274,20 @@ def test_two_stages_runs_the_files_four_steps_small_then_full(pih3, folder):
         model_management.unload_all_models()
     assert calls == [(4, 4), (4, 4), (8, 8), (8, 8)]
     assert all(torch.isfinite(t).all() for t in out.unbind())
+
+
+def test_quantized_layers_that_carry_the_adapter_are_reported(pih3, folder, monkeypatch):
+    from modules._core import log
+    base = _tiny.native_model()
+    adapter_file(folder / "pi_h3_2step_adapter.safetensors", base.get_model_object("diffusion_model"))
+    said = []
+    monkeypatch.setattr(log, "once", lambda key, level, source, message: said.append((level, message)))
+    monkeypatch.setattr(pih3, "_is_quantized", lambda w: w is not None and w.dim() == 2 and w.shape[0] > 100)
+    model = base.clone()
+    _install(pih3, model, "pi_h3_2step_adapter.safetensors")
+    quant = [m for lvl, m in said if "quantized layers carry the adapter" in m]
+    assert quant and "merged into them once at load" in quant[0]               # a plain patcher merges at load
+    said.clear()
+    monkeypatch.setattr(type(model), "is_dynamic", lambda self: True)
+    _install(pih3, base.clone(), "pi_h3_2step_adapter.safetensors")
+    assert any(lvl == log.ALERT and "--disable-dynamic-vram" in m for lvl, m in said)

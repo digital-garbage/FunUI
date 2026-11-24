@@ -54,7 +54,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Few-step pi-H3",
-        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Use the stock FL2VA base it was trained on, not a turbo merge. Two stages works with it.",
+        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Use the stock FL2VA base it was trained on, not a turbo merge. Sparse attention (SLA) and Two stages work with it: it was trained with sparse attention.",
     },
     "adapter": {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",
@@ -135,6 +135,26 @@ def _forget(raw):
     raw.patches_uuid = uuid.uuid4()
 
 
+def _is_quantized(weight):
+    return type(weight).__name__ == "QuantizedTensor"
+
+
+def _say_quantized(raw, native, adapter):
+    """Layers that carry the adapter AND are quantized (MXFP8, int8): where ComfyUI keeps patches apart from the weights (dynamic
+    VRAM), each of them runs dequantized and dense with the adapter added on every step, slower than the quantized matmul."""
+    sd = native.state_dict()
+    keys = [k for k in (*adapter.full, *adapter.lora) if _is_quantized(sd.get(k))]
+    if not keys:
+        return 0
+    dynamic = bool(getattr(raw, "is_dynamic", lambda: False)())
+    log.once(f"pi_h3:quant:{dynamic}", log.ALERT if dynamic else log.INFO, "FunUI pi-H3",
+             f"{len(keys)} quantized layers carry the adapter. "
+             + ("ComfyUI is in dynamic VRAM mode, which does not merge it into them: they run dense on every step, which costs speed. "
+                "Start ComfyUI with --disable-dynamic-vram (or --highvram) to merge the adapter once at load."
+                if dynamic else "It is merged into them once at load."))
+    return len(keys)
+
+
 def _patch(raw, adapter):
     """The file's whole tensors as "set" patches and its LoRA pairs as LoRA patches, on the clone the caller owns.
     -> the record to find them again."""
@@ -177,7 +197,9 @@ def install(patcher, values, key):
     raw.add_object_patch("model_sampling", patching.tag(sampling, key))
     options = raw.model_options["transformer_options"] = dict(raw.model_options.get("transformer_options", {}))
     options["minimax_h3_sigma_shift_video"], options["minimax_h3_sigma_shift_audio"] = ad.SHIFT_VIDEO, ad.SHIFT_AUDIO
+    options["funui_sla_all_sparse"] = True        # sparse attention (SLA, VEDA) keeps no dense first step: a 2 or 4 step run is trained sparse throughout
     raw.model_options[CONTROLLER_KEY] = _patch(raw, adapter)
+    _say_quantized(raw, native, adapter)
     if adapter.dwd:
         # the pixel head: the last step's hidden states decode to pixels, and the decode takes them in place of the VAE
         hook = dwd.install(raw, adapter.dwd, native.final_layer.norm.eps)

@@ -589,3 +589,20 @@ def test_install_drops_the_ramp_for_methods_that_do_not_use_a_fixed_share(monkey
     assert ok and "sparsity=0.70 rising to 0.90" in note
     _, note, ok = sla.install_sla(model, sparsity_start=0.7, method="sol-attn")
     assert ok and "rising" not in note
+
+
+def test_a_run_that_says_all_sparse_has_no_dense_first_step():
+    """pi-H3 (2 or 4 steps, trained sparse throughout) sets funui_sla_all_sparse: the configured dense steps do not apply."""
+    def run(flag, steps="1"):
+        w = sla.make_wrapper(sla.new_state(), _cfg(dense_steps=sla.parse_steps(steps)[0], dense_last_steps=1))
+        seen = []
+
+        def Ex(*a, **kw):
+            seen.append(kw["transformer_options"]["_funui_sla_dense"])
+
+        to = {"sample_sigmas": [0.0] * 5, "funui_sla_all_sparse": flag}
+        for _ in range(4):
+            w(Ex, None, None, None, transformer_options=to, minimax_payload=None)
+        return seen
+    assert run(False) == [True, False, False, True]
+    assert run(True) == [False, False, False, False]
