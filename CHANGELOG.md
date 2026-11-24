@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Self-check passes now see the pictures.** The model's check of its own rewrite was run without the pictures, so it could doubt a character's look it could not see; it now gets the same pictures as the rewrite itself.
 - **A rewrite with Thinking off now returns only the rewritten prompt.** A Gemma 4 prompt without thinking now ends with an empty, closed thought block (as Google's prompt-format guide advises), so the model answers at once instead of reasoning aloud into the result. The cleaner also cuts a "Rewritten prompt:" or "Final output:" label in front and a closing "Note:" or "Explanation:" paragraph after the prompt.
 - **A long generation error no longer takes over the screen.** The message is cut to its start and its end (the cause is usually at the end); the full text stays in ComfyUI's log.
 - **SA-Solver no longer fails a generation when the GPU's CUDA runtime compiler is incomplete.** Its small coefficient table needs a function PyTorch compiles for the GPU on first use; if that compile fails (libnvrtc-builtins missing), the table is made on the CPU instead and the log says so.

@@ -902,3 +902,17 @@ def test_a_label_before_and_a_note_after_the_rewrite_are_cut():
     assert enhance.clean("A fox runs.\n\n(Notes: nothing else changed)") == "A fox runs."
     assert enhance.clean("A fox runs. Note that it is fast.") == "A fox runs. Note that it is fast."        # a sentence inside the prompt stays
     assert enhance.clean("<think>hm</think>A fox runs.") == "A fox runs."
+
+
+def test_self_check_passes_get_the_pictures_too(monkeypatch):
+    from .. import enhance
+    seen = []
+    real = enhance.generate
+
+    def spy(clip, system, user, **kw):
+        seen.append(kw.get("image"))
+        return real(clip, system, user, **kw)
+    monkeypatch.setattr(enhance, "generate", spy)
+    clip = ScriptedClip(["A fox runs.", "FINAL:\nA red fox runs."])
+    enhance.enhance(clip, "a fox in snow", refine=1, seed=1, image="PICTURE")
+    assert seen == ["PICTURE", "PICTURE"]

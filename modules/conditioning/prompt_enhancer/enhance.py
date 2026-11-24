@@ -599,7 +599,7 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
 def refine_once(clip, system, user, draft, prompts=None, macros=None, **sampling):
     """-> the improved rewrite after one self-check, or "" when the model gave nothing usable (the draft then stands)."""
     ask = f"RULES YOU WROTE UNDER:\n{system}\n\nWHAT YOU WERE GIVEN:\n{user}\n\nYOUR REWRITE:\n{draft}"
-    raw, status = generate(clip, expand_macros(pick(prompts, "refine_prompt"), macros), ask, **{**sampling, "image": None})
+    raw, status = generate(clip, expand_macros(pick(prompts, "refine_prompt"), macros), ask, **sampling)               # the picture goes with it: the check must see what the rewrite was written from
     text = clean(raw)
     if "FINAL:" in text:
         text = text.rsplit("FINAL:", 1)[1]
