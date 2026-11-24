@@ -141,7 +141,7 @@ def install(patcher, values, key):
         if manual:
             return log.once(f"{ID}:state", log.INFO, "FunUI STAS",
                             f"manual alpha {live['alpha']:.2f} at block {block}")
-        live["alpha"], centre, held = DIAL.pick(rated_dial.history(taste.rows(KIND, blind_to="image"), {"b": block}))
+        live["alpha"], centre, held = DIAL.pick(rated_dial.history(taste.rows(KIND, blind_to="image"), {"b": block}), rated_dial.rng_for(taste))
         log.once(f"{ID}:state", log.INFO, "FunUI STAS",
                  f"key {taste.key!r}: learned alpha {centre:.2f} from {held} rating(s), trying "
                  f"{live['alpha']:.2f} at block {block}")

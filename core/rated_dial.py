@@ -11,7 +11,32 @@ capture `{"v": tensor, "e": tensor}` during the run; this file holds no state.
 
 import random
 
-MIN_EFFECTS = 3         # runs of history before an effect is compared with the key's own
+MIN_EFFECTS = 3
+
+
+class Greedy:
+    """Stands in for `random` when learning is frozen: no draw, no wobble, each choice is the best known one.
+    A Beta draw becomes its mean, a Gaussian jitter its centre, and `random()` never falls below an exploration chance."""
+
+    @staticmethod
+    def betavariate(alpha, beta):
+        return alpha / (alpha + beta)
+
+    @staticmethod
+    def gauss(mu=0.0, sigma=1.0):
+        return mu
+
+    @staticmethod
+    def random():
+        return 1.0
+
+
+GREEDY = Greedy()
+
+
+def rng_for(handle):
+    """`random` normally; the greedy stand-in when this taste key is frozen. Read when a run starts, not at install."""
+    return GREEDY if handle is not None and getattr(handle, "frozen", False) else random         # runs of history before an effect is compared with the key's own
 
 
 def history(rows, setup=None):
@@ -53,7 +78,7 @@ class Dial:
         return m
 
     def pick(self, hist, rng=random):
-        """-> (value to try, centre, ratings held)."""
+        """-> (value to try, centre, ratings held). With the greedy stand-in (frozen) the value is the centre."""
         centre = self.centre(hist)
         v = min(max(centre + rng.gauss(0.0, self.explore), self.lo), self.hi)
         return v, centre, len(hist)

@@ -24,7 +24,7 @@ import random
 import torch
 from comfy.patcher_extension import WrappersMP
 
-from ..._core import input_steer, log, registry, streams
+from ..._core import input_steer, log, rated_dial, registry, streams
 
 ID = "decisiveness"
 TITLE = "Decisiveness"
@@ -145,7 +145,7 @@ def install(patcher, values, key):
         history = [(float(r["rows"]["logk"]), float(r["reward"])) for r in live["rows"]
                    if "logk" in r["rows"] and int(r["rows"].get("steps", steps)) == steps]
         centre = learned_logk(history)
-        live["k"] = math.exp(min(max(centre + random.gauss(0.0, EXPLORE), -LOGK_MAX), LOGK_MAX))
+        live["k"] = math.exp(min(max(centre + rated_dial.rng_for(taste).gauss(0.0, EXPLORE), -LOGK_MAX), LOGK_MAX))
         log.once(f"{ID}:state", log.INFO, "FunUI Decisiveness",
                  f"key {taste.key!r}: learned k {math.exp(centre):.3f} from {len(history)} "
                  f"rating(s) at {steps} steps, trying {live['k']:.3f}")

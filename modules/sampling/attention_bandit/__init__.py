@@ -39,7 +39,7 @@ import torch
 import torch.nn.functional as F
 from comfy.patcher_extension import WrappersMP
 
-from ..._core import dit_hooks, log, registry
+from ..._core import dit_hooks, log, rated_dial, registry
 
 ID = "attention_bandit"
 TITLE = "Attention explorer"
@@ -549,7 +549,8 @@ def install(patcher, values, key):
         rows = taste.rows(KIND)
         cond = _prompt_of(getattr(executor, "class_obj", None))
         weighted = weights_of(rows, cond)[0]
-        plan = make_plan(rows, cond, signature, len(groups), focus, manual_spread if manual else None, regions)
+        plan = make_plan(rows, cond, signature, len(groups), focus, manual_spread if manual else None, regions,
+                         rng=rated_dial.rng_for(taste))
         arms, tarms, rarms, spread = plan["arms"], plan["tarms"], plan["rarms"], plan["spread"]
         tfac = [1.0 + PROMPT_SCALE * spread * ARMS[a] for a in tarms] if focus else [1.0] * len(groups)
         if regions and not sound:

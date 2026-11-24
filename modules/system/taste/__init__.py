@@ -31,7 +31,7 @@ SETTINGS = {
     "freeze": {
         "type": "bool", "default": False,
         "label": "Freeze learning",
-        "hint": "Stops every learning feature from learning from new ratings. They keep working with what they learned so far, and the ratings are still kept as given.",
+        "hint": "Stops learning and exploring: features use the best values they know, no random tries, and new ratings change nothing. Ratings are still kept.",
     },
 }
 
@@ -44,6 +44,11 @@ class Handle:
 
     def __init__(self, key):
         self.key = key
+
+    @property
+    def frozen(self):
+        """Whether learning is frozen for this key. Read each time it is asked: ComfyUI caches the node that installs modifiers."""
+        return store.is_frozen(self.key)
 
     def capture(self, kind, rows, keep=store.MAX_ROWS, only=None, mixed=False):
         store.capture(self.key, kind, rows, keep=keep, only=only, mixed=mixed)

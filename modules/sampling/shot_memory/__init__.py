@@ -30,7 +30,7 @@ import torch
 import torch.nn.functional as F
 from comfy.patcher_extension import WrappersMP
 
-from ..._core import dit_hooks, log, registry, streams
+from ..._core import dit_hooks, log, rated_dial, registry, streams
 
 ID = "shot_memory"
 TITLE = "Shot memory"
@@ -220,13 +220,14 @@ def install(patcher, values, key):
 
     def plan(cond, channels):
         if live["plan"] is None:
-            parent, why = choose_parent(live["rows"], cond, channels)
+            rng = rated_dial.rng_for(taste)
+            parent, why = choose_parent(live["rows"], cond, channels, rng)
             if parent is not None and manual and manual_amount <= 0.0:
                 parent, why = None, "fresh (reuse amount is 0)"       # not a reuse: do not record one
             amount = 0.0
             if parent is not None:
                 amount = manual_amount if manual else min(max(
-                    learned_amount(live["rows"]) + random.gauss(0.0, EXPLORE), AMOUNT_MIN), AMOUNT_MAX)
+                    learned_amount(live["rows"]) + rng.gauss(0.0, EXPLORE), AMOUNT_MIN), AMOUNT_MAX)
                 why += f", amount {amount:.2f}"
             log.once(f"{ID}:plan", log.INFO, "FunUI Shot memory", why)
             live["plan"] = (parent, amount)

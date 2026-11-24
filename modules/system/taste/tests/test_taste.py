@@ -299,3 +299,16 @@ def test_the_setting_freezes_and_thaws_the_key_it_names():
     assert store.is_frozen("fox")
     assert "teaching" in taste.install(p, {"key": "fox", "freeze": False}, "k")
     assert not store.is_frozen("fox")
+
+
+def test_a_frozen_key_stops_exploring_and_uses_the_best_known_values():
+    from core import rated_dial
+    p = _Patcher()
+    taste.install(p, {"key": "fox", "freeze": True}, "k")
+    h = taste.Handle("fox")
+    assert h.frozen
+    rng = rated_dial.rng_for(h)
+    assert rng.betavariate(3, 1) == 0.75 and rng.gauss(2.0, 5.0) == 2.0 and rng.random() == 1.0
+    taste.install(p, {"key": "fox", "freeze": False}, "k")
+    assert rated_dial.rng_for(h) is rated_dial.random                # thawed: draws again
+    assert rated_dial.rng_for(None) is rated_dial.random
