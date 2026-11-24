@@ -28,6 +28,11 @@ SETTINGS = {
         "label": "Taste key",
         "hint": "Name what your ratings teach, e.g. a style or a character. Empty = learning features stay off.",
     },
+    "freeze": {
+        "type": "bool", "default": False,
+        "label": "Freeze learning",
+        "hint": "Stops every learning feature from learning from new ratings. They keep working with what they learned so far, and the ratings are still kept as given.",
+    },
 }
 
 _OPTION = "funui_taste_key"
@@ -119,8 +124,11 @@ def install(patcher, values, key):
         return None
     if not store.valid(name):
         raise ValueError(f"{name!r} can't be a key name: letters, digits, space, _ . - only")
+    frozen = bool(values.get("freeze"))
+    if frozen != store.is_frozen(name):
+        store.set_frozen(name, frozen)
     patcher.model_options[_OPTION] = name
-    return f"teaching {name!r}"
+    return f"{name!r} is frozen: ratings change nothing it learned" if frozen else f"teaching {name!r}"
 
 
 def taste_store(patcher):

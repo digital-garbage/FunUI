@@ -276,3 +276,26 @@ def test_an_unreadable_waiting_capture_does_not_stop_a_new_generate_forgetting_t
     store._pending_path("k", "vel").write_bytes(b"not a tensor file")
     assert store.new_generation(keep="mine") >= 1
     assert not store._pending_path("k", "vel").exists()
+
+
+def test_a_frozen_key_keeps_what_it_learned_and_ignores_new_ratings():
+    store.capture("fox", "reins", {25: _v(1)}, prompt_id="p1")
+    store.rate("p1", "liked")
+    store.capture("fox", "reins", {25: _v(2)}, prompt_id="p2")
+    store.set_frozen("fox", True)
+    out = store.rate("p2", "disliked")
+    assert out["recorded"] == [] and out["frozen"] == ["fox"] and "frozen" in out["why"]
+    assert store.counts("fox", "reins") == (1, 0)                   # the new rating taught nothing
+    assert store.rate("p1", "disliked")["updated"] == []            # nor did a changed mind about an old one
+    assert store.counts("fox", "reins") == (1, 0)
+    store.set_frozen("fox", False)                                  # thawed: the waiting capture can be rated again
+    assert store.rate("p2", "disliked")["recorded"] == ["reins"]
+    assert store.counts("fox", "reins") == (1, 1)
+
+
+def test_the_setting_freezes_and_thaws_the_key_it_names():
+    p = _Patcher()
+    assert "frozen" in taste.install(p, {"key": "fox", "freeze": True}, "k")
+    assert store.is_frozen("fox")
+    assert "teaching" in taste.install(p, {"key": "fox", "freeze": False}, "k")
+    assert not store.is_frozen("fox")

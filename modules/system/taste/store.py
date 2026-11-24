@@ -95,6 +95,24 @@ def load(key, kind):
     return hit[1]
 
 
+def is_frozen(key) -> bool:
+    """Whether this key's learning is frozen: ratings are still given, but nothing learns from them."""
+    try:
+        return (_dir(key) / ".frozen").is_file()
+    except ValueError:
+        return False
+
+
+def set_frozen(key, frozen):
+    """Freeze or thaw a key (a marker file beside its rated rows, so it survives restarts and is the same for every feature)."""
+    marker = _dir(key) / ".frozen"
+    if frozen:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("1")
+    else:
+        marker.unlink(missing_ok=True)
+
+
 def latest_key():
     """The key the most recent capture went to, or None."""
     return _read_latest().get("key")
@@ -250,7 +268,10 @@ def rate(prompt_id, rating, axis=None):
         state = _read_latest()
         entry = state.get("runs", {}).get(prompt_id) or {}
         # A clip already recorded: change or remove its row, in every key/kind.
+        frozen = {k for k in keys() if is_frozen(k)}
         for key in keys():
+            if key in frozen:
+                continue
             for path in _dir(key).glob("*.pt"):
                 if path.name.endswith(".pending.pt"):
                     continue
@@ -285,6 +306,9 @@ def rate(prompt_id, rating, axis=None):
         if rating is None:
             return out
         for key, kinds in entry.items():
+            if key in frozen:
+                out.setdefault("frozen", []).append(key)
+                continue
             for kind in kinds:
                 where = [_pending_path(key, kind)]
                 if _PID.match(str(prompt_id)):
@@ -310,7 +334,9 @@ def rate(prompt_id, rating, axis=None):
                 _write(_dir(key) / f"{kind}.pt", data)
                 pending_path.unlink(missing_ok=True)
                 out["recorded"].append(kind)
-        if not out["recorded"] and not out.get("skipped"):
+        if out.get("frozen") and not out["recorded"]:
+            out["why"] = "learning is frozen for this key: the rating is kept, but nothing learns from it"
+        elif not out["recorded"] and not out.get("skipped"):
             out["why"] = ("this clip's capture was not kept (more runs waited than are kept, or it was "
                           "cleared); nothing was learned")
     return out

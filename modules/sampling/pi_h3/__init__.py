@@ -55,7 +55,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Few-step pi-H3",
-        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Use the stock FL2VA base it was trained on, not a turbo merge. Sparse attention (SLA) and Two stages work with it: it was trained with sparse attention.",
+        "hint": "Renders in the adapter's own 2 or 4 steps without CFG. Made for the stock FL2VA base; on a merged model lower the strength. SLA and Two stages work with it.",
     },
     "adapter": {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",
