@@ -893,3 +893,12 @@ def test_thinking_follows_the_comments_switch_when_there_is_something_to_follow_
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=True, thinking_comments=False, chat=comment)
     node.FunUIEnhancePrompt.execute(FakeClip("A fox runs."), "fox", enabled=True, seed=3, thinking=False, thinking_comments=True)        # the main switch off, nothing to follow: no thinking
     assert seen == [True, True, False, False]
+
+
+def test_a_label_before_and_a_note_after_the_rewrite_are_cut():
+    from .. import enhance
+    assert enhance.clean("**Rewritten prompt:**\n\nA fox runs through snow, soft light.") == "A fox runs through snow, soft light."
+    assert enhance.clean("Final output: A fox runs.\n\nNote: I kept it short and added light.") == "A fox runs."
+    assert enhance.clean("A fox runs.\n\n(Notes: nothing else changed)") == "A fox runs."
+    assert enhance.clean("A fox runs. Note that it is fast.") == "A fox runs. Note that it is fast."        # a sentence inside the prompt stays
+    assert enhance.clean("<think>hm</think>A fox runs.") == "A fox runs."

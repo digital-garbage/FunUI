@@ -105,6 +105,18 @@ DIALECTS = (
 )
 
 
+def close_thinking(text, dialect, thinking) -> str:
+    """With thinking off, a Gemma 4 prompt ends with an empty, already closed thought block (as Google's prompt-format guide advises), so the model
+    goes straight to its answer instead of reasoning aloud into it. Other dialects and prompts that already end that way are left alone."""
+    if thinking or dialect.name != "gemma4":
+        return text
+    tail = text.rstrip()
+    done = dialect.think_open + dialect.label + dialect.think_close
+    if tail.endswith(dialect.think_close) or not tail.endswith("<|turn>model"):
+        return text
+    return tail + "\n" + done
+
+
 def dialect_for(vocab, template=""):
     """The dialect whose markers are in this model's vocabulary (or its chat template); a plain one when none is."""
     have = lambda m: m in vocab or m in str(template)      # noqa: E731
@@ -758,6 +770,7 @@ class Engine:
         except TypeError:
             text = tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, **kwargs)
         dialect = dialect_for(tok.get_vocab(), getattr(tok, "chat_template", "") or "")
+        text = close_thinking(text, dialect, thinking)
         drops = [getattr(tok, n, None) for n in ("eos_token", "bos_token", "pad_token")] + (["<turn|>", "<|turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else [])
         opened = bool(dialect.think_open) and not dialect.label and text.rstrip().endswith(dialect.think_open)       # the prompt itself opened the thinking
         inputs = tok(text, return_tensors="pt", add_special_tokens=False).to(model.device)
@@ -849,6 +862,7 @@ class Engine:
         picture = model.pngs(image)[:MAX_PICTURES] if image is not None and model.projector else None
         text = model.render(messages, tools=tools, thinking=thinking, picture=len(picture) if picture else False)
         dialect = dialect_for({}, model.chat_template)
+        text = close_thinking(text, dialect, thinking)
         ends = ["<turn|>", "<|turn>", "<|im_end|>", "<end_of_turn>", "<|tool_response>", "<tool_response|>"] if dialect.name == "gemma4" else ["<|im_end|>", "<end_of_turn>", "<|eot_id|>"]
         drops = [model.bos, model.eos, *ends]
         opened = bool(dialect.think_open) and not dialect.label and text.rstrip().endswith(dialect.think_open)

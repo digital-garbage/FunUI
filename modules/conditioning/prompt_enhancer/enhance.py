@@ -365,7 +365,8 @@ def clean(raw) -> str:
     text = re.sub(r"(?is).*?</think>", "", text)
     text = re.sub(r"(?is)<think>.*", "", text)
     text = re.sub(r"```[a-zA-Z]*\n?", "", text).replace("```", "")
-    text = re.sub(r"(?i)^\s*(here(?:'s| is)[^:\n]*:|output\s*:|prompt\s*:)\s*", "", text.strip())
+    text = re.sub(r"(?i)^[\s*_#]*(here(?:'s| is)[^:\n]*:|(?:final |rewritten |new |revised )?(?:output|prompt|rewrite|result)\s*:)[\s*_]*", "", text.strip())
+    text = re.sub(r"(?is)\n\s*\n[\s*_(\[-]*(?:notes?|explanation|changes made|what i changed|reasoning)\s*[:)\]*].*$", "", text)         # a closing note about what was done is not part of the prompt
     text = text.strip().strip("`").strip()
     if len(text) > 1 and text[0] in "\"'“" and text[-1] in "\"'”":
         text = text[1:-1].strip()

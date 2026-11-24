@@ -1242,3 +1242,16 @@ def test_a_round_that_looped_is_thrown_away_and_asked_again_with_a_note_and_with
     assert raw == "Done." and "just do it" not in raw
     assert seen[0][0] is True and seen[1][0] is False and seen[1][1] != 5
     assert seen[1][2].startswith("rename them") and "APP NOTE" in seen[1][2] and "stuck repeating itself" in seen[1][2]
+
+
+def test_gemma_prompt_without_thinking_ends_with_a_closed_empty_thought():
+    from .. import engine as eng
+    d = eng.DIALECTS[0]
+    assert d.name == "gemma4"
+    base = "<bos><|turn>user\nhi<turn|>\n<|turn>model\n"
+    out = eng.close_thinking(base, d, False)
+    assert out.endswith("<|turn>model\n<|channel>thought\n<channel|>")
+    assert eng.close_thinking(base, d, True) == base                                  # thinking on: untouched
+    assert eng.close_thinking(out, d, False) == out                                    # already closed: not doubled
+    assert eng.close_thinking(base, eng.DIALECTS[1], False) == base                    # another dialect: untouched
+    assert eng.close_thinking("no model turn here", d, False) == "no model turn here"
