@@ -24,6 +24,34 @@ MAX_PICTURES = 4          # pictures sent to the model in one request
 SHARD = re.compile(r"(.+)-(\d{5})-of-(\d{5})(\.[A-Za-z0-9]+)")
 
 
+AUX_GGUF = re.compile(r"mmproj|imatrix", re.I)           # files that sit beside a model but are not one: the picture projector, an importance matrix
+
+
+def main_first(names) -> list:
+    """The picked files with a model file first and the helpers (a picture projector) after it; an importance matrix is no use here and is left out."""
+    names = [n for n in names if n and not re.search("imatrix", n, re.I)]
+    return [n for n in names if not AUX_GGUF.search(n)] + [n for n in names if AUX_GGUF.search(n)]
+
+
+def reuse_sibling(repo, target, name, size=0) -> bool:
+    """Put `name` into `target` from another download of the same repo that already has it (same size), so a file is never fetched twice. -> whether it is there."""
+    here = os.path.join(target, name)
+    if os.path.isfile(here):
+        return True
+    root = local_dir(repo)
+    folder = os.path.dirname(root) or "."
+    for other in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        path = os.path.join(folder, other, name)
+        if os.path.join(folder, other) != target and other.startswith(os.path.basename(root) + "__") and os.path.isfile(path) and (not size or os.path.getsize(path) == size):
+            os.makedirs(os.path.dirname(here), exist_ok=True)
+            try:
+                os.link(path, here)
+            except OSError:
+                shutil.copyfile(path, here)
+            return True
+    return False
+
+
 def shard_set(name, files) -> list:
     """The parts of a split model that `name` is one of (model-00002-of-00004.safetensors -> all four, in order), or [] for a file that is not a part.
     Raises when a part is not in the repo."""
@@ -489,10 +517,15 @@ class Engine:
         repo, wanted, base = match.groups()
         extra = [f.strip() for f in (wanted or "").split("|")[1:] if f.strip()]          # more files of the same repo (the other parts of a split model)
         wanted = (wanted or "").split("|")[0].strip()
+        if wanted.lower().endswith(".gguf") or any(f.lower().endswith(".gguf") for f in extra):
+            picked = main_first([wanted, *extra])                    # the model first, whatever order the files were picked in; the rest of a split model stay behind it
+            if not picked or AUX_GGUF.search(picked[0]):
+                raise ValueError("pick the model file of the repo as well, not only its picture projector or importance matrix")
+            wanted, extra = picked[0], picked[1:]
         target = local_dir(repo) + (("__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(wanted)[0])) if wanted else "")
         self._dir = target
-        if os.path.exists(os.path.join(target, ".complete")):
-            return self._cached(target)
+        if os.path.exists(os.path.join(target, ".complete")) and all(os.path.isfile(os.path.join(target, f)) for f in [wanted, *extra] if f.lower().endswith(".gguf")):
+            return self._cached(target)                              # everything picked is there already
         info = HfApi().model_info(repo, files_metadata=True)
         files = {s.rfilename: s.size or 0 for s in info.siblings}
         parts = shard_set(wanted, files)                             # one part of a split model names them all
@@ -516,6 +549,8 @@ class Engine:
             return target, ""
         if single.lower().endswith(".gguf"):                         # llama.cpp reads everything from the file itself
             for f in pull:
+                if reuse_sibling(repo, target, f, files.get(f, 0)):          # a file another pick of this repo already holds is not fetched again
+                    continue
                 self.message = f"downloading {f}"
                 hf_hub_download(repo, f, local_dir=target)
             with open(os.path.join(target, ".complete"), "w") as out:

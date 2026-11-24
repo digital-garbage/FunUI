@@ -1255,3 +1255,60 @@ def test_gemma_prompt_without_thinking_ends_with_a_closed_empty_thought():
     assert eng.close_thinking(out, d, False) == out                                    # already closed: not doubled
     assert eng.close_thinking(base, eng.DIALECTS[1], False) == base                    # another dialect: untouched
     assert eng.close_thinking("no model turn here", d, False) == "no model turn here"
+
+
+def test_a_model_file_comes_first_and_an_importance_matrix_is_left_out():
+    from .. import engine as eng
+    assert eng.main_first(["imatrix.gguf", "mmproj-F16.gguf", "m-Q4.gguf"]) == ["m-Q4.gguf", "mmproj-F16.gguf"]
+    assert eng.main_first(["mmproj-F16.gguf"]) == ["mmproj-F16.gguf"]
+    assert eng.main_first(["a.gguf", "", "b.gguf"]) == ["a.gguf", "b.gguf"]
+
+
+def test_a_file_another_pick_of_the_repo_already_holds_is_linked_not_fetched_again(tmp_path, monkeypatch):
+    from .. import engine as eng
+    monkeypatch.setattr(eng, "local_dir", lambda repo: str(tmp_path / "owner__name"))
+    first = tmp_path / "owner__name__m-Q4"
+    first.mkdir()
+    (first / "mmproj-F16.gguf").write_bytes(b"x" * 10)
+    second = tmp_path / "owner__name__m-Q8"
+    second.mkdir()
+    assert eng.reuse_sibling("owner/name", str(second), "mmproj-F16.gguf", 10) is True
+    assert (second / "mmproj-F16.gguf").read_bytes() == b"x" * 10
+    assert eng.reuse_sibling("owner/name", str(second), "other.gguf", 5) is False
+    (first / "w.gguf").write_bytes(b"y" * 3)
+    assert eng.reuse_sibling("owner/name", str(second), "w.gguf", 99) is False          # a different size is not the same file
+
+
+def test_gguf_picks_load_the_model_not_the_importance_matrix_and_fetch_only_what_is_missing(monkeypatch, tmp_path):
+    import os
+    import types
+    from .. import engine as eng
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    names = ["imatrix.gguf", "m-Q4.gguf", "m-Q8.gguf", "mmproj-F16.gguf"]
+    sib = lambda n: types.SimpleNamespace(rfilename=n, size=4)       # noqa: E731
+    info = types.SimpleNamespace(siblings=[sib(n) for n in names], tags=[])
+    import huggingface_hub
+    monkeypatch.setattr(huggingface_hub.HfApi, "model_info", lambda self, repo, files_metadata=False: info)
+    got = []
+
+    def fetch(repo, f, local_dir=None):
+        got.append(f)
+        os.makedirs(local_dir, exist_ok=True)
+        open(os.path.join(local_dir, f), "wb").write(b"abcd")
+        return f
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fetch)
+    e = eng.Engine()
+    _, weights = e._fetch("a/m::imatrix.gguf|m-Q4.gguf|mmproj-F16.gguf")
+    assert weights.endswith("m-Q4.gguf") and got == ["m-Q4.gguf", "mmproj-F16.gguf"]          # the matrix is not the model and not fetched
+    got.clear()
+    _, weights = e._fetch("a/m::m-Q4.gguf|mmproj-F16.gguf")
+    assert got == []                                                                           # everything is there already
+    _, weights = e._fetch("a/m::m-Q8.gguf|mmproj-F16.gguf")
+    assert weights.endswith("m-Q8.gguf") and got == ["m-Q8.gguf"]                              # only the new model: the projector is taken from the first download
+    got.clear()
+    os.remove(os.path.join(os.path.dirname(weights), "mmproj-F16.gguf"))
+    os.remove(os.path.join(os.path.dirname(weights), ".complete"))
+    e._fetch("a/m::m-Q8.gguf|mmproj-F16.gguf")
+    assert got == []                                                                           # the model was there, the projector is linked from the other download
+    with __import__("pytest").raises(ValueError, match="model file"):
+        e._fetch("a/m::mmproj-F16.gguf|imatrix.gguf")

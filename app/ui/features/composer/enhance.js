@@ -2,6 +2,7 @@
 // enhancer node, edited through the shared pipeline state; off, or on failure, the prompt runs as typed.
 import { composer as c } from "../../composer/composer.js";
 import { RATING_PREFIX } from "../rating/choices.js";
+import { pickFiles } from "./repo_pick.js";
 
 const NODE = "FunUIEnhancePrompt";
 const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wording, lower more predictable."], ["top_p", 0.92, 0, 1, 0.01, "Picks only among the likeliest words whose chances add up to this share."],
@@ -87,8 +88,8 @@ export function enhance(app, own) {
         "Uses a text encoder file from ComfyUI's models list as the engine model. Its config and tokenizer are downloaded from Hugging Face once; add @owner/name to the model above if the right one is not found."),
       ...(() => { const r = repoOf(val("engine_model", "")); if (!r) return []; listRepo(val("engine_model", "")); const sel = repoFiles.repo === r.repo ? repoFiles.files : [];
         const picked = r.file.split("|").filter(Boolean);
-        const choose = (name, on) => { const next = sel.map((f) => f.name).filter((n) => (n === name ? on : picked.includes(n))); set("engine_model", next.length ? `${r.repo}::${next.join("|")}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); };
-        return sel.length > 1 || r.file ? [c.label.section({ text: "Files in the repo" }), c.hint.default({ text: "Nothing checked downloads the whole repo. Check only the files you need (one fp8 file, or every part of a split .gguf model), then press Load now." }),
+        const choose = (name, on) => { const next = pickFiles(sel.map((f) => f.name), picked, name, on); set("engine_model", next.length ? `${r.repo}::${next.join("|")}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); };
+        return sel.length > 1 || r.file ? [c.label.section({ text: "Files in the repo" }), c.hint.default({ text: "Nothing checked downloads the whole repo. Pick one model file (a new pick replaces it) and its mmproj for pictures. Only missing files download." }),
           ...sel.map((f) => c.toggle.default({ label: `${f.name} (${gb(f.size)})${downloads.some((m) => String(m.source || "").startsWith(`${r.repo}::${f.name}`)) ? ", downloaded" : ""}`, checked: picked.includes(f.name), disabled: off(), onChange: (x) => choose(f.name, x) }))] : []; })(),
       toggle("Use ComfyUI's text generation instead", "Writes with ComfyUI's own text generation (the pipeline's text encoder, or the file picked below) and leaves FunUI's engine off. No streaming, no model editing its own rules.", "use_comfy", false, off()),
       c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),

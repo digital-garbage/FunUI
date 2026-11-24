@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Picking GGUF files of a repo is smarter and downloads only what is new.** The model file is always loaded first, so an importance-matrix file (imatrix) can no longer be mistaken for the model (it is ignored and never downloaded). Picking another model file replaces the old pick instead of adding to it, while its picture projector (mmproj) stays picked and the parts of a split model go together. A download fetches only the files that are missing: a projector another pick of the same repo already holds is linked, and adding a projector to an already downloaded model no longer needs a full re-download.
 - **Self-check passes now see the pictures.** The model's check of its own rewrite was run without the pictures, so it could doubt a character's look it could not see; it now gets the same pictures as the rewrite itself.
 - **A rewrite with Thinking off now returns only the rewritten prompt.** A Gemma 4 prompt without thinking now ends with an empty, closed thought block (as Google's prompt-format guide advises), so the model answers at once instead of reasoning aloud into the result. The cleaner also cuts a "Rewritten prompt:" or "Final output:" label in front and a closing "Note:" or "Explanation:" paragraph after the prompt.
 - **A long generation error no longer takes over the screen.** The message is cut to its start and its end (the cause is usually at the end); the full text stays in ComfyUI's log.
