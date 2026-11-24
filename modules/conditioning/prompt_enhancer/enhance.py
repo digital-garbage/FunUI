@@ -46,6 +46,7 @@ Output: one paragraph of plain prose. No preamble, no headings, no markdown, no 
 
 #: what the Style choice selects; "default" must stay SYSTEM_PROMPT so an old workflow rewrites as before
 STYLES = {"default": SYSTEM_PROMPT, "dynamic": DYNAMIC_PROMPT}
+REQUEST_RULE = "The text under PROMPT TO REWRITE is the request: rewrite it. Whatever comes after it (a dictionary of entries, notes, a rating) is reference for you, not part of the prompt."
 FIXED_RULE = ("The prompt you rewrite is only the middle of a longer one. Fixed text before it: [[PROMPT_PREFIX]]\nFixed text after it: [[PROMPT_POSTFIX]]\n"
               "That text is added around your answer afterwards and stays exactly as it is. Use it only to understand the whole prompt: never repeat it, "
               "and write what you add so it reads well between the two.")
@@ -550,6 +551,10 @@ def enhance(clip, text, *, system="", reference_text="", chat="", style="default
     note = str(note or "").strip()
     if note:                                            # one closing line, after everything else in the request
         user += "\n\n" + note
+    fixed = any(str((macros or {}).get(k) or "").strip() not in ("", "(none)") for k in ("PROMPT_PREFIX", "PROMPT_POSTFIX"))       # a prefix or postfix is told in the system turn
+    if not chat and (str(reference_text or "").strip() or note or fixed):
+        user = "PROMPT TO REWRITE:\n" + user           # with a dictionary or notes after it, a model must still know which part is the request
+        system += "\n\n" + REQUEST_RULE
     rounds = ()
     if convo and (history or convo.get("summary")) and native_turns(clip):
         # real turns: the earlier requests and answers go in as turns of their own, the summary into the system turn

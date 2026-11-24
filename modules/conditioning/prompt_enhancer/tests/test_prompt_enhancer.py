@@ -916,3 +916,15 @@ def test_self_check_passes_get_the_pictures_too(monkeypatch):
     clip = ScriptedClip(["A fox runs.", "FINAL:\nA red fox runs."])
     enhance.enhance(clip, "a fox in snow", refine=1, seed=1, image="PICTURE")
     assert seen == ["PICTURE", "PICTURE"]
+
+
+def test_the_request_is_labelled_when_reference_notes_or_fixed_text_surround_it():
+    from .. import enhance
+    sent = lambda **kw: enhance.enhance(ScriptedClip(["A fox runs."]), "a fox in snow", seed=1, **kw)[2]["sent"]      # noqa: E731
+    plain = sent()
+    assert "PROMPT TO REWRITE" not in plain
+    with_ref = sent(reference_text="\n\nDictionary: entry")
+    assert "USER:\nPROMPT TO REWRITE:\na fox in snow" in with_ref and "The text under PROMPT TO REWRITE is the request" in with_ref
+    assert "USER:\nPROMPT TO REWRITE:\na fox in snow" in sent(note="Rating: 4")
+    assert "USER:\nPROMPT TO REWRITE:\na fox in snow" in sent(macros={"PROMPT_PREFIX": "Cinematic.", "PROMPT_POSTFIX": "(none)"})
+    assert "PROMPT TO REWRITE" not in sent(macros={"PROMPT_PREFIX": "(none)", "PROMPT_POSTFIX": "(none)"})
