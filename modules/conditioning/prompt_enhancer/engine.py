@@ -907,12 +907,42 @@ class Engine:
         cancel = self.cancel = Cancel(interruptible, getattr(ASKING, "stop", None))
         me = self
 
+        budget = int(getattr(ASKING, "budget", 0) or 0) if thinking and dialect.think_close else 0
+
+        def run(prompt, room, into):
+            return model.text_stream(prompt, max_new_tokens=room, temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
+                                     repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy,
+                                     stops=ends, cancel=cancel, stats=into, picture=picture)
+
         def chunks():
-            for piece in model.text_stream(text, max_new_tokens=int(max_new_tokens), temperature=temperature, top_p=top_p, top_k=top_k, min_p=min_p,
-                                           repetition_penalty=repetition_penalty, presence_penalty=presence_penalty, seed=seed, greedy=greedy,
-                                           stops=ends, cancel=cancel, stats=stats, picture=picture):
+            written, spent, over = "", 0, False
+            stream = run(text, int(max_new_tokens), stats)
+            for piece in stream:
                 me.activity.update(stage="writing", tokens=stats["steps"], prompt=stats["prompt"])
+                written += piece
                 yield piece
+                if budget and split.mode == "thinking":
+                    spent += 1
+                    if spent >= budget:                      # it has thought long enough: the thought is closed for it and it answers
+                        over = True
+                        break
+            if not over:
+                return
+            stream.close()
+            first = stats["steps"]
+            yield dialect.think_close + ("" if dialect.name == "gemma4" else "\n\n")
+            more = {"prompt": stats["prompt"]}
+            room = int(max_new_tokens) - first if int(max_new_tokens) else 0
+            if int(max_new_tokens) and room <= 0:
+                stats["tokens"] = first
+                return
+            for piece in run(text + written + dialect.think_close + ("" if dialect.name == "gemma4" else "\n\n"), room, more):
+                me.activity.update(stage="writing", tokens=first + more.get("steps", 0), prompt=stats["prompt"])
+                yield piece
+            stats["steps"] = stats["tokens"] = first + more.get("steps", 0)
+            stats["last"] = more.get("last", stats.get("last", 0))
+            if more.get("why"):
+                stats["why"] = more["why"]
         split = Splitter(dialect, drops, opened)
         try:
             yield from self._pieces(chunks(), split, calls, dialect)

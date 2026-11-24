@@ -1312,3 +1312,46 @@ def test_gguf_picks_load_the_model_not_the_importance_matrix_and_fetch_only_what
     assert got == []                                                                           # the model was there, the projector is linked from the other download
     with __import__("pytest").raises(ValueError, match="model file"):
         e._fetch("a/m::mmproj-F16.gguf|imatrix.gguf")
+
+
+def test_a_thinking_budget_closes_a_long_thought_and_the_model_answers_from_there():
+    from .. import engine as eng
+    prompts = []
+
+    class Rambler(_FakeGGUF):
+        def text_stream(self, text, *, stats=None, cancel=None, max_new_tokens=0, **k):
+            prompts.append(text)
+            if "<channel|>" in text:                                 # second start: the thought is closed already
+                pieces = ["The fox ", "runs."]
+            else:
+                pieces = ["<|channel>thought\n"] + [f"hmm{i} " for i in range(50)]
+            for i, piece in enumerate(pieces):
+                stats["steps"] = i + 1
+                yield piece
+            stats.update(tokens=len(pieces), prompt=len(text))
+    e = eng.Engine()
+    e.model = e.tok = Rambler()
+    e.source, e.phase = "x.gguf", "ready"
+    eng.ASKING.budget = 10
+    try:
+        events = list(e.stream([{"role": "user", "content": "hi"}], thinking=True))
+    finally:
+        eng.ASKING.budget = 0
+    thought = "".join(x["text"] for x in events if x["kind"] == "thinking")
+    assert thought.count("hmm") <= 10 and "hmm49" not in thought
+    assert "".join(x["text"] for x in events if x["kind"] == "answer") == "The fox runs."
+    assert len(prompts) == 2 and prompts[1].endswith("<channel|>") and "hmm3 " in prompts[1]
+    assert events[-1]["tokens"] > 10
+
+
+def test_without_a_budget_or_with_thinking_off_the_model_is_started_once():
+    from .. import engine as eng
+    e = eng.Engine()
+    e.model = e.tok = _FakeGGUF()
+    e.source, e.phase = "x.gguf", "ready"
+    eng.ASKING.budget = 1
+    try:
+        events = list(e.stream([{"role": "user", "content": "hi"}], thinking=False))
+    finally:
+        eng.ASKING.budget = 0
+    assert "A fox runs." in "".join(x["text"] for x in events if x["kind"] == "answer")

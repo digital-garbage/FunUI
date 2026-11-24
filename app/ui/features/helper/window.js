@@ -237,7 +237,7 @@ export function askAction(ev, signal) {
   });
 }
 
-const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "context_tokens", "thinking", "thinking_helper", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact"];
+const PICK = ["temperature", "top_p", "top_k", "min_p", "repetition_penalty", "context_tokens", "thinking", "thinking_helper", "greedy", "seed", "precision", "prefix_cache", "lookup_tokens", "compact", "thinking_budget"];
 
 /** The Helper window: a message box in the middle of the screen. The model's own settings are the Enhance tab's. -> the window. */
 export function openHelper(app, origin) {

@@ -91,7 +91,7 @@ def _pictures(*images):
     return got[0] if len(got) == 1 else (got or None)
 
 
-def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, video_length="", aspect_ratio="", helper=None, **sampling):
+def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments=(), engine_model="", on_event=None, rules=None, self_edit=False, speed=None, use_comfy=False, encoder_file="", encoder_family="stable_diffusion", compact=True, context_tokens=0, max_length=400, thinking=False, thinking_budget=0, video_length="", aspect_ratio="", helper=None, **sampling):
     """One live answer in a conversation, from the encoder the person picked. -> {"ok", "reply", "status"}. The exchange joins the conversation."""
     key = str(conversation or "").strip()
     editing, editor, text_mode, actions = False, None, False, None
@@ -314,6 +314,7 @@ def chat_reply(conversation, message, *, on_event=None, **kw):
     reads what it was asked before and the new message together; the stopped request stays in the conversation as unanswered."""
     from . import engine as eng
     key = str(conversation or "").strip()
+    eng.ASKING.budget = max(int(kw.pop("thinking_budget", 0) or 0), 0)
     if not key:
         return _chat_reply(conversation, message, stop=Stop(), on_event=on_event, **kw)
     stop_chat(key)
@@ -334,6 +335,7 @@ def chat_reply(conversation, message, *, on_event=None, **kw):
             return {"ok": False, "reply": "", "status": "stopped", "stopped": True, "remember": [], "forget": [], "compacted": False}
         finally:
             eng.ASKING.stop = None
+            eng.ASKING.budget = 0
             stop.done = True
 
 
@@ -450,6 +452,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 io.Float.Input("helper_temperature", default=0.3, min=0.0, max=2.0, step=0.05, optional=True,
                                tooltip="The temperature the Helper writes with (its own, so Enhance can stay creative). Low is steadier for tool calls."),
                 # Text, not a list: a file that has gone must not stop a run where Enhance is off. The Enhance panel offers the files.
+                io.Int.Input("thinking_budget", default=0, min=0, max=16384, step=64, optional=True,
+                             tooltip="The most tokens a model may spend thinking before the app closes the thought and makes it answer. 0 means no limit."),
                 io.String.Input("encoder_file", default="", optional=True,
                                 tooltip="A text encoder file just for rewriting (Gemma, Qwen...). Empty uses the model's own encoder."),
                 io.String.Input("encoder_family", default="stable_diffusion", optional=True,
@@ -518,9 +522,11 @@ class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def execute(cls, clip, text, enabled=False, engine_model="", instructions="", max_length=0, greedy=False,
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
-                presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
+                presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, thinking_budget=0, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
                 chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
+        from . import engine as _eng
+        _eng.ASKING.budget = max(int(thinking_budget or 0), 0)
         if not enabled:
             # still the final prompt, and the Composer's Enhance tab shows what was encoded either way
             _log({"prompt_id": _prompt_id(), "status": "off: the prompt ran as typed", "before": text, "after": text,
