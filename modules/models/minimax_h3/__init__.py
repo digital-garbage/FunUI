@@ -170,7 +170,9 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
     video_latent, audio_latent = parts
 
     t0 = time.perf_counter()
-    images = _video_images(vae, video_latent, tile_size)
+    images = _dwd_images(model, video_latent)
+    if images is None:
+        images = _video_images(vae, video_latent, tile_size)
     t1 = time.perf_counter()
     if len(images.shape) == 5:
         images = images.reshape(-1, *images.shape[-3:])
@@ -185,6 +187,22 @@ def decode(latent, model=None, vae=None, audio_vae=None, tile_size=0):
     audio = vae_decode_audio(audio_vae, {"samples": audio_latent})
     log.info("FunUI H3 decode", f"picture {t1 - t0:.1f}s ({_vae_state(vae)}, {tuple(images.shape[:3])}) · sound {time.perf_counter() - t1:.1f}s ({_vae_state(audio_vae)})")
     return images, audio
+
+
+def _dwd_images(model, video_latent):
+    """The pixels a pi-H3 DWD adapter wrote at its last step (no VAE decode), or None for a model without one. A DWD model's
+    latent is not for the VAE: when its pixels are gone (the run was changed after sampling), say so instead of decoding noise."""
+    try:
+        from ...sampling.pi_h3 import dwd
+    except Exception:                                       # noqa: BLE001 -- no pi-H3 module, no DWD
+        return None
+    if not dwd.carries(model):
+        return None
+    pixels = dwd.take(video_latent)
+    if pixels is None:
+        raise RuntimeError("this model has a pi-H3 DWD adapter, whose latent cannot be decoded by the VAE, and its pixels are not "
+                           "there: the latent was changed after sampling, or this is not the sampler's own output")
+    return pixels.float()
 
 
 def _vae_state(vae):

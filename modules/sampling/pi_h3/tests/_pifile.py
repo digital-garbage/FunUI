@@ -30,6 +30,14 @@ def adapter_file(path, native, rank=4, full_blocks=(1,), seed=1, dwd=False, poli
         out[f"{diff}.bias"] = r(*sd[f"{nat}.bias"].shape)
     out["norm_out.norm.weight"] = r(*sd["final_layer.norm.weight"].shape)
     if dwd:
-        out["dwd_norm_out.linear.weight"] = r(4, 4)
+        import comfy.ops
+        from modules.sampling.pi_h3.sol_head import SolH3DWDHead
+        hidden = native.final_layer.norm.weight.shape[0]
+        head = SolH3DWDHead(hidden, (32, 32), 1, dtype=torch.float32, device="cpu", operations=comfy.ops.disable_weight_init)
+        for k, v in head.state_dict().items():
+            out[f"dwd_pixel_refiner.{k}"] = (torch.randn(v.shape, generator=g) * 0.02).half() if v.is_floating_point() else v
+        t_dim = sd["final_layer.adaln_proj.linear.weight"].shape[1]
+        out["dwd_norm_out.linear.weight"] = r(2 * hidden, t_dim)
+        out["dwd_norm_out.linear.bias"] = r(2 * hidden)
     save_file(out, str(path), metadata={"policy_config": policy} if policy else {})
     return out

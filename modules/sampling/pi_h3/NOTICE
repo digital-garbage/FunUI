@@ -4,6 +4,7 @@ This folder is a port of existing Apache-2.0 work; the licence text is in LICENS
 
 * pi-H3 (https://huggingface.co/Lakonik/pi-H3) and ComfyUI-piFlow (https://github.com/Lakonik/ComfyUI-piFlow) by
   Hansheng Chen (Lakonik), from the paper arXiv:2611.22287: the adapter file layout, the key names of the
-  replaced tensors and the sampling recipe (2 or 4 steps, shifts 12 and 3, the raw-time schedule).
+  replaced tensors and the sampling recipe (2 or 4 steps, shifts 12 and 3, the raw-time schedule), and the DWD pixel
+  head (sol_head.py, dwd.py) with the hook that catches the last step's hidden states.
 
 The adapter weights and MiniMax-H3 have their own licences; see their model repositories.

@@ -164,11 +164,8 @@ def test_a_second_pass_replaces_the_first_install_and_off_removes_it(pih3, folde
 def test_files_that_do_not_fit_are_refused_in_plain_words(pih3, folder):
     base = _tiny.native_model()
     native = base.get_model_object("diffusion_model")
-    adapter_file(folder / "pi_h3_2step_dwd_adapter.safetensors", native, dwd=True)
     adapter_file(folder / "plain.safetensors", native, policy=None)
     adapter_file(folder / "pi_h3_adapter.safetensors", native)
-    with pytest.raises(ValueError, match="DWD"):
-        _install(pih3, base.clone(), "pi_h3_2step_dwd_adapter.safetensors")
     with pytest.raises(ValueError, match="not a pi-H3 adapter"):
         _install(pih3, base.clone(), "plain.safetensors")
     from modules._core import control
@@ -185,3 +182,57 @@ def test_no_file_chosen_is_said(pih3, folder):
     with pytest.raises(control.Unavailable, match="models/pi_h3"):
         pih3.install(patching.GuardedPatcher(_tiny.native_model().clone(), "funui.pi_h3", patching.Dropped()),
                      {"enabled": True, "adapter": "", "steps": "auto"}, "funui.pi_h3")
+
+
+def _sample_nested(model, steps=20):
+    import comfy.nested_tensor
+    import comfy.samplers
+    guider = comfy.samplers.CFGGuider(model)
+    context = torch.randn(1, 6, _tiny.DIMS["text_dim"], generator=torch.Generator().manual_seed(3))
+    guider.set_conds([[context, {}]], [[context, {}]])
+    guider.set_cfg(1.0)
+    video, audio = torch.zeros(1, 24, 2, 4, 4), torch.zeros(1, 32, 2, 3)
+    noise = comfy.nested_tensor.NestedTensor([torch.randn(video.shape, generator=torch.Generator().manual_seed(4)),
+                                              torch.randn(audio.shape, generator=torch.Generator().manual_seed(5))])
+    try:
+        return guider.sample(noise, comfy.nested_tensor.NestedTensor([video, audio]), comfy.samplers.sampler_object("euler"),
+                             torch.linspace(1.0, 0.0, steps + 1), disable_pbar=True, seed=7)
+    finally:
+        from comfy import model_management
+        model_management.unload_all_models()
+
+
+def test_a_dwd_file_writes_pixels_at_the_last_step_and_the_decode_takes_them(pih3, folder):
+    from modules.sampling.pi_h3 import dwd
+    base = _tiny.native_model()
+    adapter_file(folder / "pi_h3_2step_dwd_adapter.safetensors", base.get_model_object("diffusion_model"), dwd=True)
+    model = base.clone()
+    assert "DWD pixels" in _install(pih3, model, "pi_h3_2step_dwd_adapter.safetensors")
+    assert dwd.carries(model) and not dwd.carries(base)
+    out = _sample_nested(model)
+    video = out.unbind()[0]
+    pixels = dwd.take(video)
+    assert pixels is not None and pixels.shape[-1] == 3 and pixels.shape[1:3] == (64, 64)
+    assert torch.isfinite(pixels.float()).all() and 0.0 <= float(pixels.min()) and float(pixels.max()) <= 1.0
+    # another run's latent has no pixels: it must not decode as if it had
+    assert dwd.take(video + 1) is None
+    from modules.models import minimax_h3
+    images = minimax_h3._dwd_images(model, video)
+    assert images.shape == pixels.shape
+    with pytest.raises(RuntimeError, match="cannot be decoded by the VAE"):
+        minimax_h3._dwd_images(model, video + 1)
+    assert minimax_h3._dwd_images(base, video) is None
+
+
+def test_a_second_pass_does_not_wrap_the_dwd_hook_twice(pih3, folder):
+    from modules._core import patching
+    base = _tiny.native_model()
+    adapter_file(folder / "pi_h3_2step_dwd_adapter.safetensors", base.get_model_object("diffusion_model"), dwd=True)
+    model = base.clone()
+    _install(pih3, model, "pi_h3_2step_dwd_adapter.safetensors")
+    again = model.clone()
+    patching.strip(again, "funui.")
+    _install(pih3, again, "pi_h3_2step_dwd_adapter.safetensors")
+    out = _sample_nested(again)
+    from modules.sampling.pi_h3 import dwd
+    assert dwd.take(out.unbind()[0]) is not None

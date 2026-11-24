@@ -43,7 +43,7 @@ class Adapter:
 
     @property
     def size(self):
-        tensors = list(self.full.values()) + [t for pair in self.lora.values() for t in pair]
+        tensors = list(self.full.values()) + [t for pair in self.lora.values() for t in pair] + list(self.dwd.values())
         return sum(t.numel() * t.element_size() for t in tensors)
 
 
@@ -78,9 +78,7 @@ def parse(path, label=""):
         policy = json.loads(meta["policy_config"])
     except ValueError:
         policy = {}
-    if any(k.startswith("dwd_") for k in tensors):
-        raise ValueError(f"{label or path} is a DWD adapter (it writes the video's pixels itself): DWD is not supported yet. "
-                         "Use pi_h3_2step_adapter or pi_h3_4step_adapter, the ones without DWD")
+    dwd = {k: tensors.pop(k) for k in list(tensors) if k.startswith("dwd_")}
     for part in ("image", "audio"):
         kind = policy.get(part) or {}
         if kind.get("type") != "DX" or kind.get("mode") != "grid":
@@ -105,7 +103,7 @@ def parse(path, label=""):
         key, swap = found
         lora[key] = (pair["A"], _swap_halves(pair["B"]) if swap else pair["B"])
     steps = 2 if "2step" in str(label or path).lower() else 4 if "4step" in str(label or path).lower() else 0
-    return Adapter(label or str(path), steps, full, lora, False)
+    return Adapter(label or str(path), steps, full, lora, dwd)
 
 
 def verify(adapter, native):

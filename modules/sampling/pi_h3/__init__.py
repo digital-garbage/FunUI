@@ -2,7 +2,7 @@
 
 A pi-H3 file is not a plain LoRA (see adapter.py). Switching this on puts it on the model, sets the video and audio shifts
 the file was trained with, and runs Euler over the file's own 2 or 4 noise levels, whatever sampler and steps are chosen.
-The picture is decoded by the VAE as usual; the DWD files (they write pixels themselves) are not supported yet.
+The picture is decoded by the VAE as usual; a DWD file's last step writes the pixels itself and the VAE decode is skipped.
 
 Ported from Hansheng Chen's pi-H3 and ComfyUI-piFlow (Apache-2.0); see the README Thank you section.
 Not yet run on a real H3 here.
@@ -20,6 +20,7 @@ from comfy.patcher_extension import WrappersMP
 from ..._core import control, log, patching
 
 from . import adapter as ad
+from . import dwd
 
 ID = "pi_h3"
 TITLE = "pi-H3 few-step"
@@ -58,7 +59,7 @@ SETTINGS = {
         "type": "enum", "default": _FOUND[0] if _FOUND else "",
         "options": _options(),
         "label": "pi-H3 adapter file",
-        "hint": "pi_h3_2step_adapter or pi_h3_4step_adapter (not the DWD ones) from ComfyUI/models/pi_h3. Read again each time Settings opens.",
+        "hint": "A pi_h3 2 or 4 step adapter (DWD or not) from ComfyUI/models/pi_h3. DWD files skip the video VAE decode. Read again each time Settings opens.",
         "when": {"enabled": True},
     },
     "steps": {
@@ -118,6 +119,10 @@ def _forget(raw):
     record = raw.model_options.pop(CONTROLLER_KEY, None)
     if not record:
         return
+    raw.model_options.pop(dwd.MARK_KEY, None)
+    if record.get("dwd"):
+        raw.remove_additional_models("funui_pi_h3_dwd")
+        raw.object_patches.pop("diffusion_model._run_blocks", None)
     for key, entries in list(raw.patches.items()):
         left = [e for e in entries if id(e[1]) not in record["mine"]]
         if len(left) != len(entries):
@@ -142,7 +147,7 @@ def _patch(raw, adapter):
     loras = comfy.lora.load_lora(sd, to_load, log_missing=False)
     raw.add_patches(sets, 1.0)
     raw.add_patches(loras, 1.0)
-    return {"mine": {id(v) for v in (*sets.values(), *loras.values())}}
+    return {"mine": {id(v) for v in (*sets.values(), *loras.values())}, "dwd": bool(adapter.dwd)}
 
 
 def install(patcher, values, key):
@@ -171,8 +176,14 @@ def install(patcher, values, key):
     options = raw.model_options["transformer_options"] = dict(raw.model_options.get("transformer_options", {}))
     options["minimax_h3_sigma_shift_video"], options["minimax_h3_sigma_shift_audio"] = ad.SHIFT_VIDEO, ad.SHIFT_AUDIO
     raw.model_options[CONTROLLER_KEY] = _patch(raw, adapter)
+    if adapter.dwd:
+        # the pixel head: the last step's hidden states decode to pixels, and the decode takes them in place of the VAE
+        hook = dwd.install(raw, adapter.dwd, native.final_layer.norm.eps)
+        raw.add_object_patch("diffusion_model._run_blocks", patching.tag(hook, key))
+        raw.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, patching.tag(dwd.outer_sample, key))
+        raw.model_options[dwd.MARK_KEY] = patching.tag(dwd.Holder(), key)
     raw.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, key, patching.tag(_swap(steps), key))
-    return f"{adapter.label}, {steps} steps, {adapter.size / 2**30:.2f} GB"
+    return f"{adapter.label}, {steps} steps{', DWD pixels (no video decode)' if adapter.dwd else ''}, {adapter.size / 2**30:.2f} GB"
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"adapter": _options()}}
