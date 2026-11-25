@@ -123,6 +123,32 @@ def needs_own_build(capability) -> bool:
     return bool(capability) and capability > NEWEST_PREBUILT
 
 
+def has_cublas(exe) -> bool:
+    """Whether the toolkit that `exe` belongs to has the cuBLAS development files (some images carry only the compiler and the headers)."""
+    import glob
+    root = os.path.dirname(os.path.dirname(os.path.realpath(exe)))
+    pats = [f"{root}/lib64/libcublas.so*", f"{root}/lib/libcublas.so*", f"{root}/targets/*/lib/libcublas.so*", "/usr/lib/x86_64-linux-gnu/libcublas.so*"]
+    return any(glob.glob(p) for p in pats)
+
+
+def install_cublas(version, say) -> bool:
+    """Install the toolkit's cuBLAS development package with apt (needs root); -> whether cuBLAS is there afterwards."""
+    import shutil
+    apt = shutil.which("apt-get")
+    if not apt or (hasattr(os, "geteuid") and os.geteuid() != 0):
+        return False
+    say(f"engine: the CUDA toolkit here has no cuBLAS files, which the build needs: installing libcublas-dev-{version[0]}-{version[1]} with apt")
+    env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
+    subprocess.run([apt, "update"], capture_output=True, text=True, env=env)
+    names = [f"libcublas-dev-{version[0]}-{version[1]}", f"libcublas-dev-{version[0]}"]
+    for name in names:
+        proc = subprocess.run([apt, "install", "-y", "--no-install-recommends", name], capture_output=True, text=True, env=env)
+        if proc.returncode == 0:
+            return True
+        say(f"engine: apt could not install {name}: {(proc.stderr or proc.stdout).strip().splitlines()[-1:] or ['no output']}")
+    return False
+
+
 def build_for_card(say, capability):
     """Compile llama-cpp-python for this card's own architecture (only with a CUDA toolkit that knows it). -> (done, why not)."""
     exe, version = nvcc_version()
@@ -130,6 +156,8 @@ def build_for_card(say, capability):
         return False, "no CUDA toolkit (nvcc) was found, which a build for this card needs"
     if version < TOOLKIT_FOR_12:
         return False, f"the CUDA toolkit here is {version[0]}.{version[1]} (nvcc), too old for this card: it needs {TOOLKIT_FOR_12[0]}.{TOOLKIT_FOR_12[1]} or newer"
+    if not has_cublas(exe) and not (install_cublas(version, say) and has_cublas(exe)):
+        return False, "the CUDA toolkit here has no cuBLAS files (libcublas-dev), which the build links to, and they could not be installed"
     arch = f"{capability[0]}{capability[1]}"
     say(f"engine: building llama.cpp for this card (compute {capability[0]}.{capability[1]}) with CUDA {version[0]}.{version[1]}: this takes a while, once")
     env = {"CMAKE_ARGS": f"-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES={arch}", "CUDACXX": exe, "PATH": os.path.dirname(exe) + os.pathsep + os.environ.get("PATH", "")}

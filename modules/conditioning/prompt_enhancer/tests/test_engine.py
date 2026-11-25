@@ -1505,6 +1505,10 @@ def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with
     assert "too old" in gguf.build_for_card(said.append, (12, 0))[1]
     seen = {}
     monkeypatch.setattr(gguf, "nvcc_version", lambda: ("/cuda/bin/nvcc", (13, 0)))
+    monkeypatch.setattr(gguf, "has_cublas", lambda exe: False)
+    monkeypatch.setattr(gguf, "install_cublas", lambda version, say: False)
+    assert "cuBLAS" in gguf.build_for_card(said.append, (12, 0))[1]       # headers and compiler only: say so instead of failing inside cmake
+    monkeypatch.setattr(gguf, "has_cublas", lambda exe: True)
     monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (seen.update(args=args, env=env), (True, "ok"))[1])
     assert gguf.build_for_card(said.append, (12, 0))[0] is True
     assert "-DCMAKE_CUDA_ARCHITECTURES=120" in seen["env"]["CMAKE_ARGS"] and "--no-binary" in seen["args"]
