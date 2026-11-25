@@ -204,3 +204,18 @@ test("files of a repo are checkboxes, and every checked one goes into the model 
   await new Promise((r) => setTimeout(r, 5));
   assert.deepEqual(saved.slice(-1), [{ inputs: { e: { engine_model: "o/m::a-2.gguf" } } }]);
 });
+
+test("Download and Load are collapsible lists of checkboxes with their own buttons; Load lists only what is downloaded", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b::q8.gguf" } }], currentValues: () => ({ engine_model: "a/b::q8.gguf" }), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
+    enhancerEngineFiles: async () => ({ files: [{ name: "q4.gguf", size: 2 ** 30 }, { name: "q8.gguf", size: 2 ** 31 }] }),
+    enhancerEngineModels: async () => ({ models: [{ name: "a__b__q8", source: "a/b::q8.gguf", size: 2 ** 31, loaded: false }] }) };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 10));
+  const [dl, ld] = [...page.node.querySelectorAll("details.cx-collapsible")].filter((d) => /^(Download|Load)$/.test(d.querySelector("summary").textContent));
+  assert.equal(dl.querySelectorAll('input[type="checkbox"]').length, 2);
+  assert.equal(ld.querySelectorAll('input[type="checkbox"]').length, 1);
+  assert.ok([...dl.querySelectorAll("button")].some((b) => b.textContent === "Download"));
+  assert.ok([...ld.querySelectorAll("button")].some((b) => b.textContent === "Load model"));
+});
