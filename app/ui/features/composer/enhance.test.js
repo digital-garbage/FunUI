@@ -120,7 +120,7 @@ test("settings that hang on another switch follow it and are greyed out while it
   assert.equal(chat("temperature"), true);                   // greedy: the dials are not used
 });
 
-test("downloaded models are listed with Use and Delete buttons; Use picks the model, Delete asks first and removes only that model", async () => {
+test("downloaded models are listed in Load; checking one and pressing Load model picks and loads it, Delete asks first and removes only that model", async () => {
   const deleted = [], saved = [];
   const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async (x) => { saved.push(x); }, subscribe: () => () => {} };
   const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
@@ -128,12 +128,16 @@ test("downloaded models are listed with Use and Delete buttons; Use picks the mo
   const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(page.node.textContent, /Downloaded models \(2\)/);
   assert.match(page.node.textContent, /a\/big: 3\.0 GB \(loaded\)/);
-  [...page.node.querySelectorAll("button")].filter((b) => b.textContent === "Use")[1].click();
+  const ld = () => [...page.node.querySelectorAll("details.cx-collapsible")].find((d) => d.querySelector("summary").textContent === "Load");
+  ld().querySelectorAll('input[type="checkbox"]')[1].click();
   await new Promise((r) => setTimeout(r, 0));
+  [...ld().querySelectorAll("button")].find((b) => b.textContent === "Load model").click();
+  await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(saved.slice(-1), [{ inputs: { e: { engine_model: "b/small" } } }]);
-  [...page.node.querySelectorAll("button")].filter((b) => b.textContent === "Delete")[0].click();
+  ld().querySelectorAll('input[type="checkbox"]')[0].click();
+  await new Promise((r) => setTimeout(r, 0));
+  [...ld().querySelectorAll("button")].find((b) => b.textContent === "Delete").click();
   await new Promise((r) => setTimeout(r, 0));
   const dialog = document.querySelector(".cx-modal");
   assert.match(dialog.textContent, /Delete a\/big \(3\.0 GB\) from disk\?/);
@@ -157,7 +161,6 @@ test("pressing Download refreshes the downloaded list at once, so a fast downloa
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(started, 1);
   assert.ok(listed > before);
-  assert.match(page.node.textContent, /Downloaded models \(1\)/);
   assert.match(page.node.textContent, /q8\.gguf \(2\.0 GB\), downloaded/);
 });
 
