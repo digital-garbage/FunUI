@@ -95,6 +95,7 @@ export function enhance(app, own) {
       c.label.section({ text: "Prompt enhancer" }),
       c.hint.default({ text: "A language model rewrites the finished prompt. Off or failed, your prompt is used as typed. Markup like (word:1.5) is kept. Dependent settings are greyed out while their switch is off." }),
       toggle("Enhance prompt", "", "enabled", false, false),
+      ...(on ? [] : [c.hint.default({ text: "The enhancer is off, so everything below is greyed out. Switch \"Enhance prompt\" on to use it." })]),
       c.label.section({ text: "Model" }),
       field("Engine model", c.input.sm({ label: "Engine model", value: val("engine_model", ""), placeholder: "owner/name on Hugging Face, or a folder", disabled: off(), onCommit: (x) => { set("engine_model", x.trim()); refreshEngine(); } }),
         "Runs the model on FunUI's own engine, which can use any model that transformers supports and shows the chat as it is written. The first use downloads it. For the fastest writing pick a GGUF repo (for example a Q4_K_M or Q8_0 file): the engine runs those with llama.cpp, which is installed on first use. fp8 files save memory, not time."),
