@@ -74,6 +74,40 @@ def shard_index(part, files) -> str:
     return next((f for f in (f"{m.group(1)}{m.group(4)}.index.json", f"{m.group(1)}.safetensors.index.json") if f in files), "")
 
 
+BIG_FILE = 64 * 2 ** 20            # from this size a download keeps its half-finished file and continues it next time
+
+
+def pull_file(repo, filename, target, size=0):
+    """`hf_hub_download` into `target`, except that a big file stops where it was cut and continues there on the next try: this
+    huggingface_hub throws a half-finished file away. The unfinished bytes sit beside the file as `<name>.part` until it is whole."""
+    import huggingface_hub as hub
+    if size < BIG_FILE:
+        return hub.hf_hub_download(repo, filename, local_dir=target)
+    from urllib.parse import urlparse
+    from huggingface_hub.file_download import http_get
+    url = hub.hf_hub_url(repo, filename)
+    meta = hub.get_hf_file_metadata(url)
+    final = os.path.join(target, filename)
+    if os.path.isfile(final) and (not meta.size or os.path.getsize(final) == meta.size):
+        return final                                                 # whole already
+    headers = hub.utils.build_hf_headers()
+    where = meta.location or url
+    if urlparse(where).netloc != urlparse(url).netloc:                # a storage host: the token is not sent along
+        headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+    else:
+        where = url
+    part = final + ".part"
+    os.makedirs(os.path.dirname(final), exist_ok=True)
+    have = os.path.getsize(part) if os.path.isfile(part) else 0
+    if meta.size and have > meta.size:
+        have = 0                                                     # not a piece of this file: start over
+    with open(part, "ab" if have else "wb") as out:
+        if not meta.size or have < meta.size:
+            http_get(where, out, resume_size=have, headers=headers, expected_size=meta.size or None, displayed_filename=filename)
+    os.replace(part, final)
+    return final
+
+
 def _say(message):
     """A line in FunUI's log: the engine does not run through ComfyUI, so this is how its loading and writing can be followed there."""
     try:
@@ -523,7 +557,7 @@ class Engine:
         if os.path.isfile(source) and source.lower().endswith(".gguf"):
             job.dir = ""
             return os.path.dirname(source), source
-        from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+        from huggingface_hub import HfApi, snapshot_download
         if source.startswith("comfy:"):
             name, _, base = source[6:].partition("@")
             path = comfy_file(name)
@@ -578,7 +612,7 @@ class Engine:
                 if reuse_sibling(repo, target, f, files.get(f, 0)):          # a file another pick of this repo already holds is not fetched again
                     continue
                 job.message = f"downloading {f}"
-                hf_hub_download(repo, f, local_dir=target)
+                pull_file(repo, f, target, files.get(f, 0))
             with open(os.path.join(target, ".complete"), "w") as out:
                 out.write(single)
             return os.path.join(target, "base"), os.path.join(target, single)
@@ -593,13 +627,13 @@ class Engine:
                 raise ValueError(f"{repo} has no index file for the parts of {single}")
             for f in [*pull, index]:
                 job.message = f"downloading {f}"
-                hf_hub_download(repo, f, local_dir=target)
+                pull_file(repo, f, target, files.get(f, 0))
             if os.path.basename(index) != "model.safetensors.index.json":
                 shutil.copyfile(os.path.join(target, index), os.path.join(target, "model.safetensors.index.json"))
             snapshot_download(base, local_dir=target, allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
             open(os.path.join(target, ".complete"), "w").close()
             return target, ""
-        hf_hub_download(repo, single, local_dir=target)
+        pull_file(repo, single, target, files.get(single, 0))
         snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
         with open(os.path.join(target, ".complete"), "w") as f:
             f.write(single)

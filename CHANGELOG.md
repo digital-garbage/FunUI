@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A cut-off helper model download continues where it stopped.** Files of 64 MB and more keep their unfinished part (`<name>.part` beside the file) and the next Download or Load asks only for the rest, also after a restart. The installed huggingface_hub threw half-finished files away, so every retry started from zero.
+
 - **Restart ComfyUI stops a running generation.** Pressing it by hand used to refuse until the run finished; now it interrupts the run and restarts. Updates and branch switches still wait for a running generation.
 - **The helper model downloads and loads as separate actions.** A download can run while a model loads, and the model that is loaded keeps writing while the new one's files download; it is unloaded just before the new one loads, so the two never share memory. If the files cannot be fetched, the old one stays and the page says why. The Load list shows every downloaded model, not only the typed repo. Downloading or picking another model never swaps the loaded one: only the Load button does, and a rewrite or chat uses the loaded model. With nothing loaded, the first use still loads the picked one.
 

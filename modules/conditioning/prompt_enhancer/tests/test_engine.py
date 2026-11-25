@@ -1396,3 +1396,31 @@ def test_a_request_uses_the_loaded_model_whatever_the_setting_names_and_loads_on
     tiny.model = None
     tiny.serve("other/model")
     assert asked == ["other/model"]
+
+
+def test_a_big_file_cut_off_half_way_continues_from_its_part_file_next_time(monkeypatch, tmp_path):
+    import huggingface_hub as hub
+    from huggingface_hub import file_download
+    from .. import engine as eng
+    data = bytes(range(256)) * 8
+    meta = type("M", (), {"size": len(data), "location": ""})()
+    monkeypatch.setattr(hub, "get_hf_file_metadata", lambda url, **k: meta)
+    monkeypatch.setattr(hub, "hf_hub_url", lambda repo, f, **k: f"https://hub/{repo}/{f}")
+    monkeypatch.setattr(eng, "BIG_FILE", 1)
+    starts, cut = [], [True]
+    def fake_get(url, out, *, resume_size=0, headers=None, expected_size=None, displayed_filename=None):
+        starts.append(resume_size)
+        if cut[0]:
+            out.write(data[: len(data) // 2])
+            raise OSError("connection lost")
+        out.write(data[resume_size:])
+    monkeypatch.setattr(file_download, "http_get", fake_get)
+    with pytest.raises(OSError):
+        eng.pull_file("a/b", "m.gguf", str(tmp_path), size=len(data))
+    assert (tmp_path / "m.gguf.part").stat().st_size == len(data) // 2 and not (tmp_path / "m.gguf").exists()
+    cut[0] = False
+    eng.pull_file("a/b", "m.gguf", str(tmp_path), size=len(data))
+    assert starts == [0, len(data) // 2]                                  # the second try asked only for what was missing
+    assert (tmp_path / "m.gguf").read_bytes() == data and not (tmp_path / "m.gguf.part").exists()
+    eng.pull_file("a/b", "m.gguf", str(tmp_path), size=len(data))
+    assert starts == [0, len(data) // 2]                                  # a whole file is not fetched again
