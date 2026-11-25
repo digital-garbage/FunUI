@@ -167,3 +167,18 @@ test("a sampling setting that could not be saved is said in the window, not only
   await new Promise((r) => setTimeout(r, 10));
   assert.match(document.body.textContent.replace(before, ""), /Could not save: ComfyUI refused/);
 });
+
+test("each sampling module folds into its own section; steps, sampler and scheduler stay on top", async () => {
+  const mods = [{ id: "sharpen", title: "Sharpen", category: "sampling", settings: { enabled: { type: "bool", default: false, label: "Adjust detail" } } }, { id: "stas", title: "STAS", category: "sampling", settings: { enabled: { type: "bool", default: false, label: "Spread" } } }];
+  const slot = { id: "k", node: "KSampler", inputs: { steps: 20 }, roles: [{ at: "generation.sampling", input: "steps", label: "Steps" }] };
+  const ps = { slots: () => [slot], activeModules: () => mods, useful: () => true, usefulness: () => () => true, currentValues: () => ({ stas: { enabled: true } }), loading: () => false, loadError: () => null,
+    subscribe: () => () => {}, ensureLoaded: async () => {}, save: async () => {}, setModuleValue: async () => {}, settled: async () => true, saveNotes: () => [] };
+  const host = document.createElement("div");
+  document.body.append(host);
+  hub.setup({ host, app: { pipeline: ps, api: { describeNodes: async () => ({ nodes: { KSampler: { widgets: [{ name: "steps", type: "INT", default: 20 }] } } }) }, on: () => () => {}, actions: null } });
+  await new Promise((r) => setTimeout(r, 0));
+  host.querySelector("button").click();
+  await new Promise((r) => setTimeout(r, 10));
+  const heads = [...document.querySelectorAll("details.cx-collapsible > summary")].map((x) => x.textContent);
+  assert.deepEqual(heads.slice(-2), ["Sharpen", "STAS (on)"]);
+});

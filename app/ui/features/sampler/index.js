@@ -13,6 +13,7 @@ export default {
   setup({ host, app }) {
     const ps = app.pipeline;
     let pop = null, specs = {}, unreadable = false;
+    const folds = {};               // which module sections are open, kept across redraws
     const latest = {};              // per input, the value whose save is still on its way: newer than the slot
     const sampling = () => { const ok = ps.usefulness(); return ps.activeModules().filter((m) => (m.category || "") === "sampling" && Object.keys(m.settings || {}).length && ok(m)); };
     const marked = () => (ps.slots() || []).flatMap((slot) => (slot.roles || []).filter((r) => r.at === "generation.sampling" && r.input && !Array.isArray((slot.inputs || {})[r.input])).map((role) => ({ slot, role })));
@@ -72,8 +73,11 @@ export default {
     };
       const rows = [...marked().map(inputRow), ...seedRows()];
       const unread = marked().length && !rows.some(Boolean) && (unreadable || marked().every(({ slot }) => slot.node in specs)) ? [c.hint.default({ text: "Steps, sampler and scheduler could not be read from the sampler node: change them in Settings ▸ Models & Pipeline." })] : [];
-      body.set([...unread, ...rows, ...mods.flatMap((m) => [mods.length > 1 ? c.label.section({ text: m.title || m.id }) : null,
-        ...Object.entries(m.settings).filter(([, spec]) => whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change))])].filter(Boolean));
+      // Steps, sampler, scheduler and seed stay on top; each sampling module folds into its own section.
+      const on = (m) => (values[m.id] || {}).enabled === true;
+      const group = (m) => c.collapsible.default({ label: `${m.title || m.id}${on(m) ? " (on)" : ""}`, open: Boolean(folds[m.id]), onToggle: (o) => { folds[m.id] = o; },
+        body: c.region.stack({ gap: "xs", children: Object.entries(m.settings).filter(([, spec]) => whenSatisfied(values, m.id, spec.when)).map(([name, spec]) => settingRow(m.id, name, spec, values, change)) }) });
+      body.set([...unread, ...rows, ...mods.map(group)].filter(Boolean));
     };
     const typing = () => app.dom.typingIn(body.node);
     const off = ps.subscribe(() => { if (pop && !typing()) describe().then(draw); });

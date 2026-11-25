@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Sampler window is grouped.** Steps, sampler, scheduler and the seed stay on top; every sampling feature folds into its own collapsible section, marked (on) when it is switched on. Sections keep their open or closed state while you change settings.
+
 - **Enhance settings are grouped, and the page stays still while the model writes.** Main settings (rewrites, max tokens, temperature and the other dials, seed), Thinking, Helper, Conversation, Picture, Speed, System prompts and Reference are each a collapsible section now. A new switch, Show live writing on this page, is off by default: the Enhance page no longer redraws as the model streams, the Chat tab still streams, and Last run fills in when the run ends.
 
 - **Helper model download and load are tidier** (Composer > Enhance). Download and Load are each a collapsible section now. The files of the repo are a checklist inside Download, with the Download button under it. Load shows the downloaded files as a checklist, with Load model and Unload under it.
