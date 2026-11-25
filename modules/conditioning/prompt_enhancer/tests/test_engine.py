@@ -1493,6 +1493,21 @@ def test_a_llama_build_that_dies_in_the_trial_process_is_an_error_not_a_dead_com
     assert len(ran) == 2                                                  # the second pass was remembered
 
 
+def test_toolkit_gaps_name_what_a_bare_toolkit_lacks(tmp_path):
+    from .. import gguf
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "nvcc").write_text("")
+    inc = tmp_path / "targets" / "x" / "include"
+    inc.mkdir(parents=True)
+    (inc / "cuda_runtime.h").write_text("")
+    assert [n for n, _ in gguf.toolkit_gaps(str(tmp_path / "bin" / "nvcc"))] == ["cuBLAS", "NVML headers"]
+    (inc / "nvml.h").write_text("")
+    (inc / "cublas_v2.h").write_text("")
+    (tmp_path / "lib64").mkdir()
+    (tmp_path / "lib64" / "libcublas.so.13").write_text("")
+    assert gguf.toolkit_gaps(str(tmp_path / "bin" / "nvcc")) == []
+
+
 def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with_a_toolkit_that_knows_it(monkeypatch, tmp_path):
     from .. import engine as eng, gguf
     monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
@@ -1505,10 +1520,10 @@ def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with
     assert "too old" in gguf.build_for_card(said.append, (12, 0))[1]
     seen = {}
     monkeypatch.setattr(gguf, "nvcc_version", lambda: ("/cuda/bin/nvcc", (13, 0)))
-    monkeypatch.setattr(gguf, "has_cublas", lambda exe: False)
-    monkeypatch.setattr(gguf, "install_cublas", lambda version, say: False)
+    monkeypatch.setattr(gguf, "toolkit_gaps", lambda exe: [("cuBLAS", "libcublas-dev")])
+    monkeypatch.setattr(gguf, "install_toolkit", lambda version, gaps, say: False)
     assert "cuBLAS" in gguf.build_for_card(said.append, (12, 0))[1]       # headers and compiler only: say so instead of failing inside cmake
-    monkeypatch.setattr(gguf, "has_cublas", lambda exe: True)
+    monkeypatch.setattr(gguf, "toolkit_gaps", lambda exe: [])
     monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (seen.update(args=args, env=env), (True, "ok"))[1])
     assert gguf.build_for_card(said.append, (12, 0))[0] is True
     assert "-DCMAKE_CUDA_ARCHITECTURES=120" in seen["env"]["CMAKE_ARGS"] and "--no-binary" in seen["args"]

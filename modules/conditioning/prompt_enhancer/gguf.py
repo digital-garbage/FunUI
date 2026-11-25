@@ -123,21 +123,35 @@ def needs_own_build(capability) -> bool:
     return bool(capability) and capability > NEWEST_PREBUILT
 
 
-def has_cublas(exe) -> bool:
-    """Whether the toolkit that `exe` belongs to has the cuBLAS development files (some images carry only the compiler and the headers)."""
+#: What a build needs from the toolkit beyond the compiler: (name, files that show it is there, apt package). Some images carry only the compiler and part of the headers.
+TOOLKIT_PARTS = (
+    ("cuBLAS", ("lib64/libcublas.so*", "lib/libcublas.so*", "targets/*/lib/libcublas.so*", "targets/*/include/cublas_v2.h", "include/cublas_v2.h"), "libcublas-dev"),
+    ("NVML headers", ("targets/*/include/nvml.h", "include/nvml.h"), "cuda-nvml-dev"),
+    ("CUDA runtime headers", ("targets/*/include/cuda_runtime.h", "include/cuda_runtime.h"), "cuda-cudart-dev"),
+)
+
+
+def toolkit_gaps(exe) -> list:
+    """-> [(name, apt package)] of what the toolkit that `exe` belongs to lacks for a build."""
     import glob
     root = os.path.dirname(os.path.dirname(os.path.realpath(exe)))
-    pats = [f"{root}/lib64/libcublas.so*", f"{root}/lib/libcublas.so*", f"{root}/targets/*/lib/libcublas.so*", "/usr/lib/x86_64-linux-gnu/libcublas.so*"]
-    return any(glob.glob(p) for p in pats)
+    gaps = []
+    for name, files, package in TOOLKIT_PARTS:
+        # cuBLAS needs its library and its header; the other parts need their header
+        here = [any(glob.glob(f"{root}/{p}") or glob.glob(f"/usr/{p}") or glob.glob(f"/usr/lib/x86_64-linux-gnu/{os.path.basename(p)}") for p in group) for group in
+                ([files[:3], files[3:]] if name == "cuBLAS" else [files])]
+        if not all(here):
+            gaps.append((name, package))
+    return gaps
 
 
-def install_cublas(version, say) -> bool:
-    """Install the toolkit's cuBLAS development package with apt (needs root); -> whether cuBLAS is there afterwards."""
+def install_toolkit(version, gaps, say) -> bool:
+    """Install the missing toolkit packages with apt (needs root); -> whether they all went in."""
     import shutil
     apt = shutil.which("apt-get")
     if not apt or (hasattr(os, "geteuid") and os.geteuid() != 0):
         return False
-    say(f"engine: the CUDA toolkit here has no cuBLAS files, which the build needs: installing libcublas-dev-{version[0]}-{version[1]} with apt")
+    say(f"engine: the CUDA toolkit here lacks {', '.join(n for n, _ in gaps)}, which the build needs: installing the whole CUDA toolkit with apt (a few GB, once)")
     env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
 
     def run(args):
@@ -148,11 +162,11 @@ def install_cublas(version, say) -> bool:
             line = line.strip()
             if line:
                 last = line
-                say(f"installing cuBLAS: {line[:110]}")
+                say(f"installing CUDA parts: {line[:110]}")
         return proc.wait() == 0, last
 
     run(["update"])
-    for name in [f"libcublas-dev-{version[0]}-{version[1]}", f"libcublas-dev-{version[0]}"]:
+    for name in (f"cuda-toolkit-{version[0]}-{version[1]}", f"cuda-toolkit-{version[0]}"):      # the whole toolkit: more complete than guessing the next missing part
         done, last = run(["install", "-y", "--no-install-recommends", name])
         if done:
             return True
@@ -167,8 +181,9 @@ def build_for_card(say, capability):
         return False, "no CUDA toolkit (nvcc) was found, which a build for this card needs"
     if version < TOOLKIT_FOR_12:
         return False, f"the CUDA toolkit here is {version[0]}.{version[1]} (nvcc), too old for this card: it needs {TOOLKIT_FOR_12[0]}.{TOOLKIT_FOR_12[1]} or newer"
-    if not has_cublas(exe) and not (install_cublas(version, say) and has_cublas(exe)):
-        return False, "the CUDA toolkit here has no cuBLAS files (libcublas-dev), which the build links to, and they could not be installed"
+    gaps = toolkit_gaps(exe)
+    if gaps and not (install_toolkit(version, gaps, say) and not toolkit_gaps(exe)):
+        return False, f"the CUDA toolkit here lacks {', '.join(n for n, _ in gaps)} (apt packages {', '.join(p for _, p in gaps)}), which the build needs, and they could not be installed"
     arch = f"{capability[0]}{capability[1]}"
     say(f"engine: building llama.cpp for this card (compute {capability[0]}.{capability[1]}) with CUDA {version[0]}.{version[1]}: this takes a while, once")
     env = {"CMAKE_ARGS": f"-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES={arch}", "CUDACXX": exe, "PATH": os.path.dirname(exe) + os.pathsep + os.environ.get("PATH", "")}
