@@ -11,8 +11,9 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], folds = { dl: false, ld: false }, writing = null, tick = 0, watchUntil = 0;
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], liveFlag = null, folds = { dl: false, ld: false, main: false, think: false, help: false, conv: false, pic: false, spd: false, sys: false, ref: false }, writing = null, tick = 0, watchUntil = 0;
   own(() => { alive = false; clearTimeout(poll); clearTimeout(tick); });
+  const liveOn = () => { if (liveFlag === null) { try { liveFlag = localStorage.getItem("fp.enhance.live") === "1"; } catch { liveFlag = false; } } return liveFlag; };
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
   const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load model.", loading: `Loading… ${engine.message || ""}`, ready: engine.busy && engine.busy.stage ? `${engine.busy.stage}${engine.busy.tokens ? `: ${engine.busy.tokens} tokens` : engine.busy.prompt ? ` (${engine.busy.prompt} tokens)` : ""}, ${engine.busy.seconds}s` : `Ready: ${engine.message || ""}`,
     downloading: `Downloading${engine.label ? ` ${engine.label}` : ""}: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
@@ -103,46 +104,55 @@ export function enhance(app, own) {
               c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] })] }) })]; })(),
       toggle("Use ComfyUI's text generation instead", "Writes with ComfyUI's own text generation (the pipeline's text encoder, or the file picked below) and leaves FunUI's engine off. No streaming, no model editing its own rules.", "use_comfy", false, off()),
       ...(downloads.length ? [c.collapsible.default({ label: `Downloaded models (${downloads.length})`, body: c.region.stack({ gap: "xs", children: downloads.map((m) => c.toolbar.default({ items: [c.text.sm({ text: `${m.name.replace("__", "/")}: ${gb(m.size)}${m.loaded ? " (loaded)" : ""}` })], trailing: [c.button.sm({ label: "Use", tone: "ghost", title: "Use this downloaded model as the engine model", disabled: engine.phase === "loading" || engine.phase === "downloading", onClick: () => { set("engine_model", m.source || m.name.replace("__", "/")); app.api.enhancerEngineLoad(m.source || m.name.replace("__", "/"), val("precision", "auto")).then(refreshEngine).catch(() => {}); } }), c.button.sm({ label: "Delete", tone: "ghost", title: "Remove this model's downloaded files from disk", onClick: () => forget(m) })] })) }) })] : []),
-      field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
-      c.label.section({ text: "Picture" }),
-      toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
-      toggle("Pass the last frame of previous scene as enhancer input", "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference. Needs Continuity on.", "last_frame", false, off(pic, cont)),
-      c.label.section({ text: "Conversation" }),
-      toggle("Send everything into chat", "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", "to_chat", false, off()),
-      toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
-      num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
-      toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
-      toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models).", "self_edit", false, off(chat, engineSet)),
-      toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
-      c.label.section({ text: "Speed" }),
-      field("Precision", c.select.md({ label: "Precision", value: val("precision", "auto"), disabled: off(engineSet), options: [{ value: "auto", label: "Automatic" }, { value: "bf16", label: "bf16 (fastest, double memory)" }, { value: "fp8", label: "fp8 (smallest)" }] , onChange: (x) => set("precision", x) }), "How a single fp8 model file is run. Automatic widens it to bf16 once when the graphics card has room, which makes every word faster; on the processor it stays fp8. Applies the next time the model loads."),
-      toggle("Reuse the unchanged start of a request", "The start of a request that did not change since the last one (the rules, the conversation) is not read again, only the new part is.", "prefix_cache", true, off(engineSet)),
-      num("Guess ahead (words)", val("lookup_tokens", 0), 0, 10, 1, "lookup_tokens", "The model may guess up to this many words from the prompt itself and check them in one step. Only helps when a rewrite mostly repeats the prompt, and costs time otherwise: off by default (0).", off(engineSet)),
-      c.label.section({ text: "Writing" }),
-      num("Max tokens", val("max_length", 0), 0, 4096, 8, "max_length", "The longest the rewrite may be. 0 means no limit: the model stops by itself, or when the context window is full.", off()),
-      num("Max tokens in Helper", val("helper_max_length", 0), 0, 16384, 8, "helper_max_length", "The most the Helper may write in one answer. 0 means no limit, which is the default; it has its own setting so the rewrite's limit does not cut it short.", off()),
-      num("Helper temperature", val("helper_temperature", 0.3), 0, 2, 0.05, "helper_temperature", "The temperature the Helper writes with, apart from the one above. Low (0.3) keeps its tool calls steady; higher makes it wander.", off()),
-      num("Thinking budget", val("thinking_budget", 0), 0, 16384, 64, "thinking_budget", "Most tokens a model may think before the app closes the thought and makes it answer. 0 means no limit; 512 to 1024 is short.", off()),
-      num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
-      toggle("Thinking", "Let a thinking model reason first on a plain rewrite, with no comments. Its reasoning eats the token budget.", "thinking", false, off()),
-      toggle("Enable thinking on comments", "A rewrite that has comments to follow reasons first. Off: it answers straight away and saves time.", "thinking_comments", true, off()),
-      toggle("Enable thinking on chat messages", "Messages of the Chat tab are reasoned over first. Off: they answer straight away.", "thinking_chat", true, off()),
-      toggle("Enable thinking in Helper", "The Helper reasons first before it acts. Off: it acts straight away, which is faster.", "thinking_helper", true, off()),
-      toggle("Greedy (always the likeliest word)", "The same rewrite every time; the dials below are not used.", "greedy", false, off()),
-      ...DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n, undefined, off(!greedy))),
-      num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed", undefined, off()),
-      c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
-      c.label.section({ text: "System prompts" }),
-      c.collapsible.default({ label: "Everything the model is told", body: c.region.stack({ gap: "xs", children: [
+      c.collapsible.default({ label: "Main settings", open: folds.main, onToggle: (o) => { folds.main = o; }, body: c.region.stack({ gap: "xs", children: [
+        field("Rewrites", c.select.md({ label: "Rewrites", value: val("scope", "whole"), disabled: off(), options: [{ value: "whole", label: "The whole prompt" }, { value: "own", label: "Only my own text" }], onChange: (x) => set("scope", x) }), "Only my own text keeps the global prefix and postfix exactly as written and rewrites what sits between them."),
+          c.toggle.default({ label: "Show live writing on this page", hint: "Off: the Enhance page stays still while the model writes, so nothing jumps under your hands. The Chat tab still streams, and Last run fills in when the run ends.", checked: liveOn(), onChange: (x) => { try { localStorage.setItem("fp.enhance.live", x ? "1" : "0"); } catch { /* private window: lasts until reload */ } liveFlag = x; if (!x) writing = null; draw(); } }),
+        num("Max tokens", val("max_length", 0), 0, 4096, 8, "max_length", "The longest the rewrite may be. 0 means no limit: the model stops by itself, or when the context window is full.", off()),
+        num("Self-check passes", val("refine_passes", 0), 0, 3, 1, "refine_passes", "How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer.", off()),
+        toggle("Greedy (always the likeliest word)", "The same rewrite every time; the dials below are not used.", "greedy", false, off()),
+        ...DIALS.map(([n, d, lo, hi, st]) => num(n, val(n, d), lo, hi, st, n, undefined, off(!greedy))),
+        num("Seed", val("seed", 0), 0, 2 ** 53, 1, "seed", undefined, off()),
+        c.hint.default({ text: "Seed 0 = a fresh rewrite every Generate; any other number repeats the same rewrite." }),
+      ] }) }),
+      c.collapsible.default({ label: "Thinking", open: folds.think, onToggle: (o) => { folds.think = o; }, body: c.region.stack({ gap: "xs", children: [
+        num("Thinking budget", val("thinking_budget", 0), 0, 16384, 64, "thinking_budget", "Most tokens a model may think before the app closes the thought and makes it answer. 0 means no limit; 512 to 1024 is short.", off()),
+        toggle("Thinking", "Let a thinking model reason first on a plain rewrite, with no comments. Its reasoning eats the token budget.", "thinking", false, off()),
+        toggle("Enable thinking on comments", "A rewrite that has comments to follow reasons first. Off: it answers straight away and saves time.", "thinking_comments", true, off()),
+        toggle("Enable thinking on chat messages", "Messages of the Chat tab are reasoned over first. Off: they answer straight away.", "thinking_chat", true, off()),
+        toggle("Enable thinking in Helper", "The Helper reasons first before it acts. Off: it acts straight away, which is faster.", "thinking_helper", true, off()),
+      ] }) }),
+      c.collapsible.default({ label: "Helper", open: folds.help, onToggle: (o) => { folds.help = o; }, body: c.region.stack({ gap: "xs", children: [
+        num("Max tokens in Helper", val("helper_max_length", 0), 0, 16384, 8, "helper_max_length", "The most the Helper may write in one answer. 0 means no limit, which is the default; it has its own setting so the rewrite's limit does not cut it short.", off()),
+        num("Helper temperature", val("helper_temperature", 0.3), 0, 2, 0.05, "helper_temperature", "The temperature the Helper writes with, apart from the one above. Low (0.3) keeps its tool calls steady; higher makes it wander.", off()),
+      ] }) }),
+      c.collapsible.default({ label: "Conversation", open: folds.conv, onToggle: (o) => { folds.conv = o; }, body: c.region.stack({ gap: "xs", children: [
+        toggle("Send everything into chat", "Keeps one running conversation with the model: each request is sent together with the earlier requests and its answers, instead of as a one-time request. Reset in the Chat tab starts it over.", "to_chat", false, off()),
+        toggle("Summarise long conversations", "When a request would nearly fill the model's context window, the conversation so far is summarised and the summary is sent instead of every turn.", "compact", true, off(chat)),
+        num("Context window (tokens)", val("context_tokens", 0), 0, 1048576, 256, "context_tokens", "Summarising starts at 80% of this. 0 uses 32768, or the model's own size if smaller.", off(chat, sum)),
+        toggle("Pass the rating", "Part of the conversation: adds the rating of the last rated scene before this one to the end of the request.", "pass_rating", false, off(chat)),
+        toggle("Let the model edit its own rules", "The model can read its system prompts and propose changes to them in the Chat tab. Each change is shown before/after and applies only if you allow it. Needs a model with tool calls (Gemma 4, Qwen 3 and most newer chat models).", "self_edit", false, off(chat, engineSet)),
+        toggle("Comment button", "Shows a Comment button next to a scene's rating. A comment goes to the model with the next Generate, the same as in the Chat tab.", "comment_button", false, off()),
+      ] }) }),
+      c.collapsible.default({ label: "Picture", open: folds.pic, onToggle: (o) => { folds.pic = o; }, body: c.region.stack({ gap: "xs", children: [
+        toggle("Use the picture", "Sends the scene's picture to the model along with the prompt.", "use_image", true, off()),
+        toggle("Pass the last frame of previous scene as enhancer input", "Shows the model the previous scene's last frame instead of the first reference. The first scene uses the first reference. Needs Continuity on.", "last_frame", false, off(pic, cont)),
+      ] }) }),
+      c.collapsible.default({ label: "Speed", open: folds.spd, onToggle: (o) => { folds.spd = o; }, body: c.region.stack({ gap: "xs", children: [
+        field("Precision", c.select.md({ label: "Precision", value: val("precision", "auto"), disabled: off(engineSet), options: [{ value: "auto", label: "Automatic" }, { value: "bf16", label: "bf16 (fastest, double memory)" }, { value: "fp8", label: "fp8 (smallest)" }] , onChange: (x) => set("precision", x) }), "How a single fp8 model file is run. Automatic widens it to bf16 once when the graphics card has room, which makes every word faster; on the processor it stays fp8. Applies the next time the model loads."),
+        toggle("Reuse the unchanged start of a request", "The start of a request that did not change since the last one (the rules, the conversation) is not read again, only the new part is.", "prefix_cache", true, off(engineSet)),
+        num("Guess ahead (words)", val("lookup_tokens", 0), 0, 10, 1, "lookup_tokens", "The model may guess up to this many words from the prompt itself and check them in one step. Only helps when a rewrite mostly repeats the prompt, and costs time otherwise: off by default (0).", off(engineSet)),
+      ] }) }),
+      c.collapsible.default({ label: "System prompts", open: folds.sys, onToggle: (o) => { folds.sys = o; }, body: c.region.stack({ gap: "xs", children: [
         c.hint.default({ text: "In the order a request meets it. An empty field uses the built-in text shown in it. Any field can use the macros listed below. Fields that do not apply are greyed out." }),
         field("Style", c.select.md({ label: "Style", value: style, disabled: off(), options: styles.map((n) => ({ value: n, label: n === "dynamic" ? "Dynamic (more motion)" : "Default" })), onChange: (x) => set("style", x) }), "Which built-in rewrite instructions an empty Rewrite instructions field means. Dynamic asks for a concrete action beat, a change over time and secondary motion in every shot."),
         ...PROMPTS.map(([n, label, hint, rows, dflt, dep]) => field(label, c.textarea.md({ label, rows, disabled: off(dep ? live[dep] : true), value: val(n, ""), placeholder: dflt ? dflt() : defaults && defaults.prompts ? defaults.prompts[n] || "" : "(built-in text)", onCommit: (x) => set(n, x) }), hint)),
         c.collapsible.default({ label: "Macros", body: c.region.stack({ gap: "xs", children: [
           ...Object.entries((defaults && defaults.macros) || {}).map(([n, d]) => c.hint.default({ text: `[[${n}]]: ${d}` })),
           c.hint.default({ text: "Nothing to show yet gives \"(nothing yet: none was given so far)\". A name that is not in this list stays as written. Turns that were shortened are only in [[CONVERSATION_SUMMARY]]." })] }) })] }) }),
-      c.label.section({ text: "Reference" }),
-      field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, disabled: off(), value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
-      toggle("Name shortcuts to the model", "Off: the model gets only the text of each shortcut or lore entry, never its name, so it cannot write one into the prompt.", "name_entries", true, off()),
+      c.collapsible.default({ label: "Reference", open: folds.ref, onToggle: (o) => { folds.ref = o; }, body: c.region.stack({ gap: "xs", children: [
+        field("Lorebook / shortcut files", c.textarea.md({ label: "Lorebook files", rows: 2, disabled: off(), value: val("lorebooks", ""), placeholder: "one path per line", onCommit: (x) => set("lorebooks", x) }), "SillyTavern lorebooks or FunUI shortcut files, on the machine running ComfyUI."),
+        toggle("Name shortcuts to the model", "Off: the model gets only the text of each shortcut or lore entry, never its name, so it cannot write one into the prompt.", "name_entries", true, off()),
+      ] }) }),
       ...readout(),
     ]);
   }
@@ -151,7 +161,7 @@ export function enhance(app, own) {
   ps.ensureLoaded().then(draw);
   refreshDownloads();
   const watch = () => Promise.resolve().then(() => app.api.enhancerLive()).then((r) => {
-    const now = r && r.id && !r.done ? r : null;
+    const now = liveOn() && r && r.id && !r.done ? r : null;
     if (JSON.stringify(now) !== JSON.stringify(writing)) { const ended = writing && !now; writing = now; if (alive && !app.dom.typingIn(page.node)) { if (ended) app.api.enhancerRuns().then((x) => { last = (x.runs || []).slice(-1)[0] || last; draw(); }).catch(() => draw()); else draw(); } }
   }).catch(() => {}).finally(() => { if (alive) { tick = setTimeout(watch, writing ? 600 : 2500); if (tick && tick.unref) tick.unref(); } });
   watch();

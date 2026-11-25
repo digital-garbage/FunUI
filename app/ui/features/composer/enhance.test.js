@@ -177,6 +177,8 @@ test("a rewrite running inside a generation shows up as it is written, and goes 
   let now = { id: 1, kind: "rewrite", label: "a fox", thinking: "Let me think", answer: "A fox in snow", status: "writing", done: false };
   const api = { enhancerEngine: async () => ({ phase: "ready" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}), enhancerLive: async () => now };
   let stop = () => {};
+  const store = new Map([["fp.enhance.live", "1"]]);
+  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) };
   const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });
   document.body.append(page.node);
   await new Promise((r) => setTimeout(r, 20));
@@ -185,6 +187,19 @@ test("a rewrite running inside a generation shows up as it is written, and goes 
   now = { ...now, done: true };
   await new Promise((r) => setTimeout(r, 800));
   assert.doesNotMatch(page.node.textContent, /Writing now/);
+  stop(); delete globalThis.localStorage;
+});
+
+test("with live writing off (the default) the Enhance page does not follow the model's writing", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const now = { id: 1, kind: "rewrite", label: "a fox", thinking: "", answer: "A fox in snow", status: "writing", done: false };
+  const api = { enhancerEngine: async () => ({ phase: "ready" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}), enhancerEngineModels: async () => ({ models: [] }), enhancerLive: async () => now };
+  let stop = () => {};
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.doesNotMatch(page.node.textContent, /Writing now/);
+  assert.match(page.node.textContent, /Show live writing on this page/);
   stop();
 });
 

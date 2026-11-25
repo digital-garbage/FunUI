@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Enhance settings are grouped, and the page stays still while the model writes.** Main settings (rewrites, max tokens, temperature and the other dials, seed), Thinking, Helper, Conversation, Picture, Speed, System prompts and Reference are each a collapsible section now. A new switch, Show live writing on this page, is off by default: the Enhance page no longer redraws as the model streams, the Chat tab still streams, and Last run fills in when the run ends.
+
 - **Helper model download and load are tidier** (Composer > Enhance). Download and Load are each a collapsible section now. The files of the repo are a checklist inside Download, with the Download button under it. Load shows the downloaded files as a checklist, with Load model and Unload under it.
 
 - **Freeze learning.** New switch on the Taste key (Settings > Engine > Sampling): while it is on, every learning feature (attention explorer, REINS, shot memory and the rest) keeps what it learned so far, ignores new ratings and stops exploring: no random tries, it uses the best values it knows, the same every run. Ratings are still given and kept as given; the waiting captures learn again once it is switched off. Applies to the key you named.
