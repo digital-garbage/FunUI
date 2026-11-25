@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Download takes exactly what you check.** It no longer refuses a pick that has no model file (only a picture projector, say); only Load needs a model file. A model that is already loaded is never loaded again, even when its files were picked in another order.
+
 - **A cut-off helper model download continues where it stopped.** Files of 64 MB and more keep their unfinished part (`<name>.part` beside the file) and the next Download or Load asks only for the rest, also after a restart. The installed huggingface_hub threw half-finished files away, so every retry started from zero.
 
 - **Restart ComfyUI stops a running generation.** Pressing it by hand used to refuse until the run finished; now it interrupts the run and restarts. Updates and branch switches still wait for a running generation.

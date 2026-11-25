@@ -1424,3 +1424,25 @@ def test_a_big_file_cut_off_half_way_continues_from_its_part_file_next_time(monk
     assert (tmp_path / "m.gguf").read_bytes() == data and not (tmp_path / "m.gguf.part").exists()
     eng.pull_file("a/b", "m.gguf", str(tmp_path), size=len(data))
     assert starts == [0, len(data) // 2]                                  # a whole file is not fetched again
+
+
+def test_a_download_takes_whatever_is_picked_even_only_a_projector(monkeypatch, tmp_path):
+    import huggingface_hub
+    from .. import engine as eng
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    got = []
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda repo, f, local_dir=None: got.append(f) or f)
+    info = type("I", (), {"siblings": [type("S", (), {"rfilename": n, "size": 10})() for n in ("q8.gguf", "mmproj-f16.gguf")], "tags": []})()
+    monkeypatch.setattr(huggingface_hub.HfApi, "model_info", lambda self, repo, files_metadata=False: info)
+    e = eng.Engine()
+    e.download("a/b::mmproj-f16.gguf")
+    assert got == ["mmproj-f16.gguf"]
+    with pytest.raises(ValueError, match="pick the model file"):
+        e.load("a/c::mmproj-f16.gguf")
+
+
+def test_the_same_files_in_another_order_are_the_same_model():
+    from .. import engine as eng
+    assert eng.same_model("a/b::q8.gguf|mmproj.gguf", "a/b::q8.gguf|mmproj.gguf")
+    assert eng.same_model("a/b::q8.gguf|mmproj.gguf", "a/b::mmproj.gguf|q8.gguf")
+    assert not eng.same_model("a/b::q8.gguf", "a/b::q4.gguf") and not eng.same_model("a/b", "a/c")

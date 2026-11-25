@@ -108,6 +108,18 @@ def pull_file(repo, filename, target, size=0):
     return final
 
 
+def same_model(a, b):
+    """Whether two engine model names are the same model: the same repo, the same files in any order, the same base."""
+    a, b = str(a or "").strip(), str(b or "").strip()
+    if a == b:
+        return True
+    parts = [re.fullmatch(r"([\w.\-]+/[\w.\-]+)(?:::([^@]+))?(?:@([\w.\-]+/[\w.\-]+))?", x) for x in (a, b)]
+    if not all(parts):
+        return False
+    key = lambda m: (m.group(1), sorted(f.strip() for f in (m.group(2) or "").split("|") if f.strip()), m.group(3) or "")      # noqa: E731
+    return key(parts[0]) == key(parts[1])
+
+
 def _say(message):
     """A line in FunUI's log: the engine does not run through ComfyUI, so this is how its loading and writing can be followed there."""
     try:
@@ -490,6 +502,7 @@ class Job:
 
     def __init__(self, source):
         self.source, self.dir, self.total, self.message = source, "", 0, ""
+        self.lenient = False               # a download takes whatever was picked; only a load needs a model file among them
 
 
 class Engine:
@@ -579,7 +592,7 @@ class Engine:
         wanted = (wanted or "").split("|")[0].strip()
         if wanted.lower().endswith(".gguf") or any(f.lower().endswith(".gguf") for f in extra):
             picked = main_first([wanted, *extra])                    # the model first, whatever order the files were picked in; the rest of a split model stay behind it
-            if not picked or AUX_GGUF.search(picked[0]):
+            if not job.lenient and (not picked or AUX_GGUF.search(picked[0])):
                 raise ValueError("pick the model file of the repo as well, not only its picture projector or importance matrix")
             wanted, extra = picked[0], picked[1:]
         target = local_dir(repo) + (("__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(wanted)[0])) if wanted else "")
@@ -592,6 +605,8 @@ class Engine:
         if parts:
             wanted, extra = parts[0], [*parts[1:], *[f for f in extra if f not in parts]]
         ggufs = sorted(f for f in files if f.lower().endswith(".gguf"))
+        if job.lenient and not wanted and ggufs and "config.json" not in files:
+            wanted, extra = ggufs[0], ggufs[1:]                      # nothing picked in a GGUF repo: a download takes all of it
         if not wanted and ggufs and "config.json" not in files:
             raise ValueError(f"{repo} holds GGUF files; pick one with {repo}::{ggufs[0]} (a model split in parts needs only the name of one part). Files: {', '.join(ggufs[:6])}")
         single = wanted or ("" if "config.json" in files else next((f for f in files if f.endswith(".safetensors")), ""))
@@ -653,7 +668,7 @@ class Engine:
         precision = precision if precision in ("auto", "fp8", "bf16") else "auto"
         if not source:
             raise ValueError("no engine model is set")
-        if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
+        if self.model is not None and same_model(self.source, source) and (self.precision == precision or not self.weights):
             return
         return self._load(source, precision)
 
@@ -666,7 +681,7 @@ class Engine:
 
     def _load(self, source, precision):
         with self.lock:
-            if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
+            if self.model is not None and same_model(self.source, source) and (self.precision == precision or not self.weights):
                 return
             job = self.ld = Job(source)
             self._jobs.job = job
@@ -764,6 +779,7 @@ class Engine:
             keep = (self.phase, self.message)
             idle = self.model is None
             job = self.dl = Job(source)
+            job.lenient = True
             self._jobs.job = job
             job.message = f"downloading {label(source)}"
             try:
