@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Freeze learning is on the picker wheel.** Tick it under Editor settings > Picker wheel, then one release on it freezes or resumes learning (the same switch as on the Taste key).
+
 - **Delete is in the Load list.** Check a downloaded model and press Delete to remove its files. The separate Downloaded models section is gone, since the Load list shows the same models.
 
 - **Download takes exactly what you check.** It no longer refuses a pick that has no model file (only a picture projector, say); only Load needs a model file. A model that is already loaded is never loaded again, even when its files were picked in another order.

@@ -30,6 +30,7 @@ export default {
     ];
     const p = () => app.project, pipe = () => app.pipeline;
     const say = (text) => c.toast.info({ text });
+    const frozen = () => Boolean(((pipe().currentValues?.() || {}).taste || {}).freeze);
     const toggles = [
       offer(app, { id: "all-off", optIn: true, icon: "⊘", get label() { return pipe().allOff() ? "Enable enhancements" : "Disable all enhancements"; },
         when: () => Boolean(pipe() && pipe().allOff && pipe().setAllOff),
@@ -40,6 +41,9 @@ export default {
       offer(app, { id: "camera-off", optIn: true, icon: "◎", get label() { return pipe().cameraOff?.() ? "Enable camera move enhancements" : "Disable camera move enhancements"; },
         when: () => Boolean(pipe() && pipe().cameraOff && pipe().setCameraOff && pipe().modulesById?.().conditioning_shot_camera),
         run: async () => { const on = !pipe().cameraOff(); await pipe().setCameraOff(on); say(on ? "Camera move enhancements disabled" : "Camera move enhancements enabled again"); } }),
+      offer(app, { id: "freeze-learning", optIn: true, icon: "❄", get label() { return frozen() ? "Resume learning" : "Freeze learning"; },
+        when: () => Boolean(pipe() && pipe().setModuleValue && pipe().modulesById?.().taste),
+        run: async () => { const now = !frozen(); await pipe().setModuleValue("taste", "freeze", now); say(now ? "Learning frozen: no new ratings taken, no exploring" : "Learning resumed"); } }),
       offer(app, { id: "quick-ab", optIn: true, label: "Quick A/B", icon: "⇄",
         when: () => Boolean(app.runner && app.runner.quickAB && pipe() && pipe().setAllOff),
         run: () => app.runner.quickAB() }),

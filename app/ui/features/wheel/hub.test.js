@@ -102,3 +102,24 @@ test("Quick A/B is an opt-in wheel action, offered as soon as it is ticked, and 
     assert.equal(ran, 1);
   } finally { off(); }
 });
+
+test("Freeze learning is an opt-in wheel action that flips the taste module's switch", async () => {
+  server();
+  localStorage.clear();
+  const project = createProject({});
+  await project.start();
+  const values = { taste: {} };
+  const pipeline = { allOff: () => false, currentValues: () => values, setModuleValue: async (id, name, v) => { values[id][name] = v; }, modulesById: () => ({ taste: {} }) };
+  const app = { dom: createDom(), project, pipeline, actions: [], editorSettings: [], openSettings: () => {} };
+  const off = hub.setup({ host: document.createElement("div"), app });
+  try {
+    const a = app.actions.find((x) => x.id === "freeze-learning");
+    assert.ok(a && a.optIn === true && a.when());
+    assert.equal(a.label, "Freeze learning");
+    await a.run();
+    assert.equal(values.taste.freeze, true);
+    assert.equal(a.label, "Resume learning");
+    await a.run();
+    assert.equal(values.taste.freeze, false);
+  } finally { off(); }
+});
