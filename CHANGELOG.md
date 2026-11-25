@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Compile the writing step (Enhance > Speed).** Optional, off by default: safetensors helper models on a graphics card use a fixed-size cache and a compiled decode step, which can be several times faster after a slow first request.
 - **GGUF build for new cards installs what it is missing.** Building llama.cpp for a Blackwell card failed in cmake ("CUDA::cublas not found") on machines whose CUDA toolkit has only the compiler and headers. The engine now checks for the cuBLAS files first and installs them with apt when it can (as root), or says plainly why it cannot.
 - **INT8 ConvRot helper models run.** A ComfyUI text encoder stored as int8 with a rotation (the "INT8-ConvRot" files, for example the Gemma 4 12B one) failed with `"addmm_cuda" not implemented for 'Char'`. The engine now reads the scale and the rotation beside each weight and widens it when the model runs, or once up front (bf16 mode), like the fp8 files.
 

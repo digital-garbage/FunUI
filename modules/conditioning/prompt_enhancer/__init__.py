@@ -49,7 +49,7 @@ def routes(table, base, web):
             look = max(0, min(10, int(body.get("lookup_tokens", 0))))
         except (TypeError, ValueError):
             look = 0
-        return dict(precision=str(body.get("precision") or "auto"), prefix_cache=body.get("prefix_cache") is not False, lookup_tokens=look)
+        return dict(precision=str(body.get("precision") or "auto"), prefix_cache=body.get("prefix_cache") is not False, lookup_tokens=look, compile_decode=body.get("compile_decode") is True)
 
     def chat_args(body):
         """The request body of a chat message -> chat_reply's arguments."""

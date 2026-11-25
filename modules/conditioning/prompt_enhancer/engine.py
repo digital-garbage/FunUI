@@ -898,11 +898,12 @@ class Engine:
             self.turns.release(place)
 
     def _stream(self, messages, *, thinking=False, tools=None, max_new_tokens=400, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
-               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, image=None, interruptible=False):
+               repetition_penalty=1.0, presence_penalty=0.0, seed=0, greedy=False, cache=True, lookup=0, compiled=False, image=None, interruptible=False):
         """Yield {"kind": "thinking" | "answer" | "call", "text"} as the model writes, then {"kind": "end", "calls": [...], "tokens", "seconds", "tps", "cached"}.
         `cache`: reuse the start of the last request when this one begins with it (the long instructions are only read once).
         `lookup`: prompt-lookup decoding, up to that many tokens guessed from the text already there and checked in one pass (0 = off);
-        the words written are the same as without it. Raises when the model is not loaded or generation fails."""
+        the words written are the same as without it. `compiled`: a fixed-size cache and a compiled decode step (faster per word after a first slow request;
+        it replaces the prefix cache and the lookup, and a model that cannot do it answers the plain way). Raises when the model is not loaded or generation fails."""
         if self.model is None:
             raise RuntimeError("the engine model is not loaded")
         import torch
@@ -955,7 +956,9 @@ class Engine:
         def run(fast):
             """One generation; `fast`: with the prefix cache and prompt lookup."""
             extra, start, cache_obj = {}, 0, None
-            if fast and cache and ids.shape[1] > 1:
+            if fast and compiled and str(getattr(model, "device", "")).startswith("cuda"):
+                extra["cache_implementation"] = "static"             # transformers compiles the decode step itself for a static cache on a graphics card
+            elif fast and cache and ids.shape[1] > 1:
                 from transformers import DynamicCache
                 cache_obj = DynamicCache()
                 snap = self._snap
@@ -965,7 +968,7 @@ class Engine:
                     model(input_ids=ids[:, start:-1], past_key_values=cache_obj, use_cache=True)
                 self._snap = (ids[0, :-1].detach().cpu().clone(), copy.deepcopy(cache_obj))
                 extra["past_key_values"] = cache_obj
-            if fast and lookup:
+            if fast and lookup and not compiled:
                 extra["prompt_lookup_num_tokens"] = int(lookup)
             stats["cached"] = start
             out = model.generate(**gen, **extra)
@@ -977,7 +980,7 @@ class Engine:
                     try:
                         run(True)
                     except Exception:                               # noqa: BLE001 -- a model that cannot do the speed-ups still answers, the plain way
-                        if not (cache or lookup) or stats["steps"] or self.cancel.is_set():
+                        if not (cache or lookup or compiled) or stats["steps"] or self.cancel.is_set():
                             raise
                         self._snap = None
                         run(False)
@@ -1154,11 +1157,11 @@ class EngineClip:
 
     MAX_TOOL_ROUNDS = 4
 
-    def __init__(self, engine=None, on_event=None, tools=None, handler=None, live="", cache=True, lookup=0):
+    def __init__(self, engine=None, on_event=None, tools=None, handler=None, live="", cache=True, lookup=0, compiled=False):
         """`handler(call) -> text` answers the model's tool calls (the answer goes back to the model, which then carries on).
         `live`: a name for what is being written ("rewrite"): the pieces are then also kept in LIVE for the tabs to show."""
         self.engine, self.on_event, self.tools, self.handler, self.calls, self.live = engine or ENGINE, on_event, tools, handler, [], live
-        self.cache, self.lookup = bool(cache), max(0, int(lookup))
+        self.cache, self.lookup, self.compiled = bool(cache), max(0, int(lookup)), bool(compiled)
 
     def run(self, system, user, *, rounds=(), thinking=False, max_length=0, temperature=0.7, top_p=0.92, top_k=50, min_p=0.05,
             repetition_penalty=1.0, presence_penalty=0.0, do_sample=True, seed=None, image=None):
@@ -1178,7 +1181,7 @@ class EngineClip:
                 before = (thought, answer)
                 for ev in self.engine.stream(messages, thinking=think, tools=self.tools, max_new_tokens=max_length, temperature=temperature, top_p=top_p,
                                              top_k=top_k, min_p=min_p, repetition_penalty=repetition_penalty, presence_penalty=presence_penalty,
-                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, image=image, interruptible=self.live == "rewrite", label="a rewrite" if self.live == "rewrite" else "a chat answer"):
+                                             seed=seed or 0, greedy=not do_sample, cache=self.cache, lookup=self.lookup, compiled=self.compiled, image=image, interruptible=self.live == "rewrite", label="a rewrite" if self.live == "rewrite" else "a chat answer"):
                     if ev["kind"] == "thinking":
                         thought += ev["text"]
                     elif ev["kind"] == "answer":

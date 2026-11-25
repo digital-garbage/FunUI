@@ -107,7 +107,7 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
                 return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
             engine_model = ""                                       # an older project's encoder: ComfyUI's own loader reads it
         else:
-            clip = EngineClip(ENGINE, on_event, live="chat", cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 0))
+            clip = EngineClip(ENGINE, on_event, live="chat", cache=speed.get("prefix_cache", True), lookup=speed.get("lookup_tokens", 0), compiled=speed.get("compile_decode", False))
             if helper and on_event:                                  # the helper acts on the project: each call is asked of the person
                 from . import engine as eng, helper as hp
                 template = getattr(ENGINE.tok, "chat_template", "") or ""
@@ -416,6 +416,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Reuses the start of the request that did not change since the last one, so only the new part is read again."),
                 io.Int.Input("lookup_tokens", default=0, min=0, max=10, optional=True,
                              tooltip="Words guessed from the prompt and checked in one step. Helps only when a rewrite mostly repeats the prompt; slower otherwise. 0 = off."),
+                io.Boolean.Input("compile_decode", default=False, optional=True,
+                                 tooltip="Compiles the model's writing step (fixed-size cache). The first request after loading is slow, later ones can be several times faster. Safetensors models on a graphics card only; replaces the prefix cache and the guessing ahead."),
                 io.Int.Input("refine_passes", default=0, min=0, max=3, optional=True,
                              tooltip="How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer."),
                 io.String.Input("refine_prompt", multiline=True, default="", optional=True,
@@ -524,7 +526,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, thinking_budget=0, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, use_comfy=False) -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, compile_decode=False, use_comfy=False) -> io.NodeOutput:
         from . import engine as _eng
         _eng.ASKING.budget = max(int(thinking_budget or 0), 0)
         if not enabled:
@@ -549,7 +551,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         if engine_model:
             try:
                 ENGINE.serve(engine_model, precision)
-                clip = EngineClip(ENGINE, live="rewrite", cache=prefix_cache, lookup=lookup_tokens)
+                clip = EngineClip(ENGINE, live="rewrite", cache=prefix_cache, lookup=lookup_tokens, compiled=compile_decode)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
                 if not encoder_file:
                     log.warning("FunUI Prompt enhancer", f"could not load the engine model {engine_model}: {e}; the original prompt is used")
