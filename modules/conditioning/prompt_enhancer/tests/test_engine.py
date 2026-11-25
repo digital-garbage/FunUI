@@ -966,6 +966,7 @@ def test_the_gguf_model_is_loaded_with_llama_cpps_own_batch_sizes(monkeypatch, t
     monkeypatch.setattr(gguf, "find_projector", lambda path: "")
     gguf.load(str(tmp_path / "m.gguf"), cuda=True)
     assert "n_batch" not in seen and "n_ubatch" not in seen
+    assert seen["n_ctx"] == 32768 + 8192                # room for an answer to run past the window the conversation is kept in
 
 
 def test_a_sliding_window_model_starts_from_empty_instead_of_trimming():

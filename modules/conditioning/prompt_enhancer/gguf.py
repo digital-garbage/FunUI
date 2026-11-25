@@ -491,6 +491,8 @@ class Backend:
                                 stats["why"] = "it repeated the same text again and again, so it was stopped"
                             break
                     if count >= max_new_tokens or count + len(tokens) >= window - 1:
+                        if stats is not None and count + len(tokens) >= window - 1 and count < max_new_tokens:
+                            stats["why"] = "the context window was full, so the answer ended there"
                         break
                 break
             except RuntimeError as exc:                             # llama.cpp ran out of cache slots (reusing the last request's memory): start from empty once
@@ -690,6 +692,11 @@ def probe(llama_cpp, path, projector, say, timeout=900):
                        "for this card (CMAKE_ARGS=\"-DGGML_CUDA=on\" pip install llama-cpp-python --no-binary llama-cpp-python --force-reinstall).")
 
 
+#: The window the conversation is kept inside (see enhance.DEFAULT_WINDOW), and the extra room a long answer may run into after it:
+#: the conversation is summarised before the next request, not by cutting the answer that is being written.
+WORKING_WINDOW, ANSWER_HEADROOM = 32768, 8192
+
+
 def load(path, *, cuda, context=0, say=lambda text: None):
     """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it).
     A projector file beside it is loaded too, so the model can see pictures."""
@@ -711,7 +718,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except RuntimeError as exc:
             rebuild_for_card(exc, say)
             raise
-    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
+    llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or WORKING_WINDOW + ANSWER_HEADROOM, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
         gpu = bool(llama_cpp.llama_supports_gpu_offload())
     except Exception:                                               # noqa: BLE001
