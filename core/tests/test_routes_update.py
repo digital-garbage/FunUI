@@ -334,11 +334,15 @@ def test_a_blocked_restart_is_actually_finishable_once_the_run_ends(server, monk
     status, body = _request(server["port"], "POST", "/fun/api/git/update", {})
     assert status == 409, body
 
-    # Still running: the dedicated restart route refuses too, same as the guard.
+    # Still running: pressing Restart ComfyUI by hand stops the run and restarts anyway (only an update waits).
+    stopped = []
+    monkeypatch.setattr(routes, "_interrupt_generation", lambda: stopped.append(1))
     status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
-    assert body["restarting"] is False
-    assert server["restarts"] == []
+    assert body["restarting"] is True and body["interrupted"] is True and stopped == [1]
+    time.sleep(1.0)
+    assert server["restarts"] == [1]
+    server["restarts"].clear()
 
     # The run ends. The SAME deferred restart finishes -- `pull` is not called
     # again, so if it were, this would fail on Mock's default None return.
@@ -364,13 +368,15 @@ def test_restarting_with_nothing_pending_just_restarts(server, monkeypatch):
     assert server["restarts"] == [1]
 
 
-def test_restarting_with_nothing_pending_still_respects_a_running_generation(server, monkeypatch):
+def test_restarting_by_hand_interrupts_a_running_generation_instead_of_waiting(server, monkeypatch):
     monkeypatch.setattr(routes, "_generation_running", lambda: True)
+    stopped = []
+    monkeypatch.setattr(routes, "_interrupt_generation", lambda: stopped.append(1))
     status, body = _request(server["port"], "POST", "/fun/api/git/restart")
     assert status == 200, body
-    assert body["restarting"] is False
-    assert body["blocked"]
-    assert server["restarts"] == []
+    assert body["restarting"] is True and body["interrupted"] is True
+    time.sleep(1.0)
+    assert stopped == [1] and server["restarts"] == [1]
 
 
 def test_a_rollback_pressed_twice_while_blocked_does_not_roll_back_twice(server, monkeypatch):

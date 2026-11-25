@@ -451,21 +451,29 @@ class Turns:
         return held()
 
 
+class Job:
+    """One download or one load in progress: what it is fetching, how far, and what it says."""
+
+    def __init__(self, source):
+        self.source, self.dir, self.total, self.message = source, "", 0, ""
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
     def __init__(self):
         self.lock = threading.Lock()           # loading and unloading
         self.dl_lock, self._dl_worker = threading.Lock(), None          # downloading alone
+        self._jobs, self._source_locks = threading.local(), {}
+        self.ld = self.dl = None               # the load and the download that are running now (they run side by side)
+        self.load_error = ""                   # why the last load failed while an older model kept serving
         self.turns = Turns()                   # one request at a time, first come first served
         self.model = self.tok = None
         self.source = ""                       # what the loaded model came from
-        self._dir = ""                         # the folder a download goes into
         self.activity = {}                     # what a running request is doing: stage, tokens, started
         self.loaded_dir = ""                   # the download folder the loaded model came from ("" for a folder given by hand)
         self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
-        self.done_bytes = self.total_bytes = 0
         self.device = ""
         self.precision, self.weights = "auto", False
         self._snap = None                      # (ids, cache) of the last request, minus its final token
@@ -474,17 +482,34 @@ class Engine:
 
     # -- loading ------------------------------------------------------------
     def status(self):
-        shown = self.wanted if self.phase in ("loading", "downloading") and self.wanted else self.source
-        size = _folder_size(self._dir or local_dir(shown)) if self.phase == "downloading" and shown else self.done_bytes
+        """`phase` is the model that serves: idle, loading (only while there is none yet), ready or error. A load or a download that runs beside
+        a ready model is in `loading` / `download`, so the old model stays usable and the page can say both."""
+        ld, dl = self.ld, self.dl
+        shown = self.source
         busy = dict(self.activity)
         if busy:
             busy["seconds"] = round(time.time() - busy.get("started", time.time()), 1)
-        return {"busy": busy, "phase": self.phase, "message": self.message, "source": shown, "label": label(shown), "device": self.device,
-                "downloaded": size, "total": self.total_bytes}
+        message = ld.message if self.phase == "loading" and ld and ld.message else self.message
+        fetching = dl or (ld if ld and ld.total else None)
+        size = _folder_size(fetching.dir) if fetching and fetching.dir else 0
+        return {"busy": busy, "phase": self.phase, "message": message, "source": shown, "label": label(shown), "device": self.device,
+                "loading": {"source": ld.source, "label": label(ld.source), "message": ld.message or "starting"} if ld else None,
+                "download": {"source": dl.source, "label": label(dl.source), "message": dl.message, "downloaded": size, "total": dl.total} if dl else None,
+                "load_error": self.load_error, "downloaded": size, "total": fetching.total if fetching else 0}
 
     BASE_FILES = ["*.json", "*.jinja", "*.model", "*.txt", "*.tiktoken"]      # a base model's config and tokenizer, never its weights
 
+    def _job(self):
+        """The download or load this thread is running (a scratch one when none): what a fetch reports into."""
+        return getattr(self._jobs, "job", None) or Job("")
+
     def _fetch(self, source):
+        """-> (folder, weights file or ""): see `_fetch_files`. The same source is fetched by one thread at a time, so a load asked while a
+        download of it runs waits for the files instead of fetching them twice; a different source goes on beside it."""
+        with self._source_locks.setdefault(source, threading.Lock()):
+            return self._fetch_files(source)
+
+    def _fetch_files(self, source):
         """-> (folder, weights file or ""): where the model is, downloading what is missing once into the models directory.
         * a folder: used as it is;
         * `owner/name`: a Hugging Face repo (all of it, bar copies in other formats);
@@ -492,21 +517,22 @@ class Engine:
           takes the config and tokenizer of its base model (read from the repo's tags), or of `@owner/base` when you name one;
         * `comfy:file.safetensors`: a file from ComfyUI's text encoders list. Its config and tokenizer come from the matching Hugging Face
           model, found by the file's name, or from `@owner/base` when you name one."""
+        job = self._job()
         if os.path.isdir(source):
             return source, ""
         if os.path.isfile(source) and source.lower().endswith(".gguf"):
-            self._dir = ""
+            job.dir = ""
             return os.path.dirname(source), source
         from huggingface_hub import HfApi, hf_hub_download, snapshot_download
         if source.startswith("comfy:"):
             name, _, base = source[6:].partition("@")
             path = comfy_file(name)
             target = os.path.join(models_dir(), "comfy__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(os.path.basename(path))[0]))
-            self._dir = target
+            job.dir = target
             if os.path.exists(os.path.join(target, ".complete")):
                 return os.path.join(target, "base"), path
             base = base.strip() or guess_base(os.path.basename(path))
-            self.phase, self.message = "downloading", f"downloading the config and tokenizer of {base}"
+            job.message = f"downloading the config and tokenizer of {base}"
             os.makedirs(target, exist_ok=True)
             snapshot_download(base, local_dir=os.path.join(target, "base"), allow_patterns=self.BASE_FILES, ignore_patterns=["*.safetensors.index.json"])
             open(os.path.join(target, ".complete"), "w").close()
@@ -523,7 +549,7 @@ class Engine:
                 raise ValueError("pick the model file of the repo as well, not only its picture projector or importance matrix")
             wanted, extra = picked[0], picked[1:]
         target = local_dir(repo) + (("__" + re.sub(r"[^\w.\-]+", "_", os.path.splitext(wanted)[0])) if wanted else "")
-        self._dir = target
+        job.dir = target
         if os.path.exists(os.path.join(target, ".complete")) and all(os.path.isfile(os.path.join(target, f)) for f in [wanted, *extra] if f.lower().endswith(".gguf")):
             return self._cached(target)                              # everything picked is there already
         info = HfApi().model_info(repo, files_metadata=True)
@@ -539,9 +565,9 @@ class Engine:
             if f and f not in files:
                 raise ValueError(f"{repo} has no file {f}")
         pull = [f for f in [single, *extra] if f]
-        self.total_bytes = sum(size for name, size in files.items() if (name in pull) or (not single and name.endswith((".safetensors", ".json"))) or (single and name.endswith(".json") and name not in pull and not single.lower().endswith(".gguf")))
-        self.phase, self.message = "downloading", f"downloading {repo}"
-        _say(f"engine: downloading {repo}" + (f" ({self.total_bytes / 2 ** 30:.1f} GB)" if self.total_bytes else ""))
+        job.total = sum(size for name, size in files.items() if (name in pull) or (not single and name.endswith((".safetensors", ".json"))) or (single and name.endswith(".json") and name not in pull and not single.lower().endswith(".gguf")))
+        job.message = f"downloading {repo}"
+        _say(f"engine: downloading {repo}" + (f" ({job.total / 2 ** 30:.1f} GB)" if job.total else ""))
         os.makedirs(target, exist_ok=True)
         if not single:
             snapshot_download(repo, local_dir=target, allow_patterns=REPO_FILES)
@@ -551,7 +577,7 @@ class Engine:
             for f in pull:
                 if reuse_sibling(repo, target, f, files.get(f, 0)):          # a file another pick of this repo already holds is not fetched again
                     continue
-                self.message = f"downloading {f}"
+                job.message = f"downloading {f}"
                 hf_hub_download(repo, f, local_dir=target)
             with open(os.path.join(target, ".complete"), "w") as out:
                 out.write(single)
@@ -566,7 +592,7 @@ class Engine:
             if not index:
                 raise ValueError(f"{repo} has no index file for the parts of {single}")
             for f in [*pull, index]:
-                self.message = f"downloading {f}"
+                job.message = f"downloading {f}"
                 hf_hub_download(repo, f, local_dir=target)
             if os.path.basename(index) != "model.safetensors.index.json":
                 shutil.copyfile(os.path.join(target, index), os.path.join(target, "model.safetensors.index.json"))
@@ -587,82 +613,99 @@ class Engine:
 
     def load(self, source, precision="auto"):
         """Make `source` the loaded model (a no-op when it already is). Blocks; raises with the reason.
-        `precision` ("auto", "fp8", "bf16") only matters for a single fp8 file; a different one loads it again."""
+        `precision` ("auto", "fp8", "bf16") only matters for a single fp8 file; a different one loads it again.
+        The model that is loaded keeps serving requests while the new one is built; they switch over when it is ready."""
         source = str(source or "").strip()
         precision = precision if precision in ("auto", "fp8", "bf16") else "auto"
         if not source:
             raise ValueError("no engine model is set")
         if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
             return
-        with self.turns.exclusive("loading the model"):          # a request that is writing finishes first; the others wait behind the load
-            return self._load(source, precision)
+        return self._load(source, precision)
 
     def _load(self, source, precision):
         with self.lock:
             if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
                 return
-            self.precision = precision
-            self.model = self.tok = self._snap = None
-            self.source = self.wanted = source
-            self.done_bytes = 0
+            job = self.ld = Job(source)
+            self._jobs.job = job
+            self.load_error = ""
+            first = self.model is None                                 # nothing serves yet: the page shows the load as the model's own state
+            if first:
+                self.source = self.wanted = source
+                self.phase = "loading"
             started = time.time()
-            self.phase, self.message = "loading", f"looking for {source}"
+            job.message = f"looking for {source}"
             _say(f"engine: loading {source} (the first time downloads it)")
             try:
                 folder, weights = self._fetch(source)
-                self.weights = bool(weights)
-                self._remember(source)                                # what to type to use this download again
+                weighted = bool(weights)
+                self._remember(source, job.dir)                       # what to type to use this download again
                 _say(f"engine: files are in place after {time.time() - started:.0f}s, loading the model")
-                self.phase, self.message = "loading", f"loading {source}"
+                job.message = f"loading {source}"
                 import torch
                 from transformers import AutoTokenizer
                 cuda = torch.cuda.is_available()
                 if weights and weights.lower().endswith(".gguf"):    # llama.cpp runs it, quantized as it is
                     from . import gguf
-                    self.model = self.tok = gguf.load(weights, cuda=cuda, say=lambda t: setattr(self, "message", t) or _say(t))
-                    self.weights = False
+                    model = tok = gguf.load(weights, cuda=cuda, say=lambda t: setattr(job, "message", t) or _say(t))
+                    weighted = False
                 else:
                     try:
-                        self.tok = AutoTokenizer.from_pretrained(folder)
+                        tok = AutoTokenizer.from_pretrained(folder)
                     except Exception as exc:                            # noqa: BLE001 -- a base without a tokenizer file of the fast kind: the weights file may carry one
                         if not (weights and write_embedded_tokenizer(weights, folder)):
                             raise ValueError(f"{exc} (the model has no tokenizer.json; sentencepiece must be installed to read its older tokenizer file)") from exc
-                        self.tok = AutoTokenizer.from_pretrained(folder)
+                        tok = AutoTokenizer.from_pretrained(folder)
                     if weights:                                          # one scaled-fp8 file: kept fp8 in memory, widened layer by layer
                         from . import fp8
                         def step(done, total):
-                            self.message = f"loading the weights: {100 * done // max(total, 1)}%"
-                        self.model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu", progress=step, precision=precision)
+                            job.message = f"loading the weights: {100 * done // max(total, 1)}%"
+                        model = fp8.build(folder, weights, dtype=torch.bfloat16, device="cuda" if cuda else "cpu", progress=step, precision=precision)
                     else:
                         for cls in ("AutoModelForCausalLM", "AutoModelForImageTextToText"):      # text-only models first, then the ones that also see pictures
                             try:
-                                self.model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
+                                model = getattr(__import__("transformers"), cls).from_pretrained(folder, dtype="auto", device_map="cuda" if cuda else None).eval()
                                 break
                             except (ValueError, KeyError, AttributeError) as exc:
                                 failure = exc
                         else:
                             raise failure
-                self.loaded_dir = "" if os.path.isdir(source) else self._dir
-                self.device = "cuda" if cuda else "cpu"
-                how = getattr(self.model, "funui_precision", "")
-                self.phase, self.message = "ready", f"{label(source)} on {self.device}" + (f", {how}" if how else "")
+                how = getattr(model, "funui_precision", "")
+                with self.turns.exclusive("switching the model"):        # a request that is writing finishes on the old one first
+                    self.model, self.tok, self._snap = model, tok, None
+                    self.source, self.precision, self.weights = source, precision, weighted
+                    self.loaded_dir = "" if os.path.isdir(source) else job.dir
+                    self.device = "cuda" if cuda else "cpu"
+                    self.phase, self.message = "ready", f"{label(source)} on {self.device}" + (f", {how}" if how else "")
+                if not first:
+                    try:
+                        if cuda:
+                            torch.cuda.empty_cache()                      # the old model's memory goes back
+                    except Exception:                                   # noqa: BLE001
+                        pass
                 _say(f"engine: {label(source)} is ready on {self.device}" + (f" as {how}" if how else "") + f" ({time.time() - started:.0f}s)")
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
-                self.model = self.tok = None
-                self.phase, self.message = "error", str(exc)
+                if first:
+                    self.model = self.tok = None
+                    self.phase, self.message = "error", str(exc)
+                else:
+                    self.load_error = f"could not load {label(source)}: {exc}"          # the old model is still there and still serves
                 _say(f"engine: could not load {source}: {exc}")
                 raise
+            finally:
+                self.ld = None
 
     def use(self, model, tokenizer, name="test", device="cpu"):
         """Install a model that was built elsewhere (the tests' tiny one)."""
         self.model, self.tok, self.source, self.device, self._snap, self.weights = model, tokenizer, name, device, None, False
         self.phase, self.message = "ready", f"{name} on {device}"
 
-    def _remember(self, source):
+    def _remember(self, source, folder):
         """Write what the downloaded folder was fetched from beside it, so it can be picked again."""
-        if not os.path.isdir(source) and self._dir and os.path.isdir(self._dir):
+        if not os.path.isdir(source) and folder and os.path.isdir(folder):
             try:
-                open(os.path.join(self._dir, ".source"), "w").write(source)
+                open(os.path.join(folder, ".source"), "w").write(source)
             except OSError:
                 pass
 
@@ -673,26 +716,32 @@ class Engine:
         if not source:
             raise ValueError("no engine model is set")
         with self.dl_lock:
-            keep = (self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes)
+            keep = (self.phase, self.message)
             idle = self.model is None
-            self.wanted, self.done_bytes = source, 0
-            self.phase, self.message = "downloading", f"downloading {label(source)}"
+            job = self.dl = Job(source)
+            self._jobs.job = job
+            job.message = f"downloading {label(source)}"
             try:
                 self._fetch(source)
-                self._remember(source)
+                self._remember(source, job.dir)
                 _say(f"engine: downloaded {source}")
                 done = f"downloaded {label(source)}"
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 _say(f"engine: could not download {source}: {exc}")
                 failed = f"download failed: {exc}"
-                self.phase, self.message, self._dir, self.wanted, self.total_bytes, self.done_bytes = ("error" if idle else keep[0]), failed, *keep[2:]
+                if idle and self.ld is None:
+                    self.phase, self.message = "error", failed
+                else:
+                    self.load_error = failed
                 raise
-            self._dir, self.wanted, self.total_bytes, self.done_bytes = keep[2:]
-            self.phase, self.message = ("idle", done) if idle else (keep[0], f"{keep[1]}. {done[0].upper()}{done[1:]}.")
+            finally:
+                self.dl = None
+            if self.ld is None:                                     # a load that runs now owns the message
+                self.phase, self.message = ("idle", done) if idle else (keep[0], f"{keep[1]}. {done[0].upper()}{done[1:]}.")
 
     def download_async(self, source):
-        """Start downloading in the background (the status says how far it is). False while a load or another download runs."""
-        if (self._worker is not None and self._worker.is_alive()) or (self._dl_worker is not None and self._dl_worker.is_alive()):
+        """Start downloading in the background (the status says how far it is). False while another download runs; a load does not stop it."""
+        if self._dl_worker is not None and self._dl_worker.is_alive():
             return False
 
         def work():
@@ -705,8 +754,8 @@ class Engine:
         return True
 
     def load_async(self, source, precision="auto"):
-        """Start loading in the background; the status says how far it is."""
-        if (self._worker is not None and self._worker.is_alive()) or (self._dl_worker is not None and self._dl_worker.is_alive()):
+        """Start loading in the background; the status says how far it is. False while another load runs; a download does not stop it."""
+        if self._worker is not None and self._worker.is_alive():
             return False
 
         def work():
@@ -714,7 +763,10 @@ class Engine:
                 self.load(source, precision)
             except Exception:                                       # noqa: BLE001 -- already in the status
                 pass
-        self.phase, self.message, self.wanted = "loading", f"starting {source}", str(source).strip()
+            finally:
+                self.ld = None
+        self.ld = Job(str(source).strip())
+        self.ld.message = f"starting {source}"
         self._worker = threading.Thread(target=work, daemon=True, name="funui-engine-load")
         self._worker.start()
         return True

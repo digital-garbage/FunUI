@@ -123,10 +123,10 @@ def routes(table, base, web):
                     def tick():             # the page sees the download and the loading move, not one line that looks stuck
                         while not done.wait(2):
                             st = eng.ENGINE.status()
-                            if st["phase"] == "downloading":
+                            if st["download"] or (st["loading"] and st["total"]):
                                 push({"kind": "status", "text": f"downloading: {st['downloaded'] / 2 ** 30:.1f}" + (f" of {st['total'] / 2 ** 30:.1f}" if st["total"] else "") + " GB"})
-                            elif st["phase"] == "loading":
-                                push({"kind": "status", "text": st["message"]})
+                            elif st["loading"]:
+                                push({"kind": "status", "text": st["loading"]["message"]})
                     threading.Thread(target=tick, daemon=True, name="funui-engine-status").start()
                 try:
                     result = nodes.chat_reply(body["conversation"], body["message"], on_event=push, **args)

@@ -249,3 +249,20 @@ test("a busy counter ticking on the engine line updates that line only, so a fie
   assert.match(page.node.textContent, /writing: \d+ tokens, \d+s/);
   stop();
 });
+
+test("the Load list shows every downloaded model, whatever repo is typed, and Load model loads the checked one while download stays free", async () => {
+  const loaded = [];
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "x/typed" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "ready", message: "x", loading: { label: "n/m", message: "loading" }, download: null }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
+    enhancerEngineModels: async () => ({ models: [{ name: "a__one", source: "a/one", size: 2 ** 30, loaded: true }, { name: "b__two", source: "b/two", size: 2 ** 31, loaded: false }] }),
+    enhancerEngineLoad: async (src) => { loaded.push(src); return {}; }, enhancerEngineDownload: async () => ({ started: true }) };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 20));
+  const ld = [...page.node.querySelectorAll("details.cx-collapsible")].find((d) => d.querySelector("summary").textContent === "Load");
+  assert.equal(ld.querySelectorAll('input[type="checkbox"]').length, 2);
+  const dl = [...page.node.querySelectorAll("button")].find((b) => b.textContent === "Download");
+  assert.equal(dl.disabled, false);                                                // a load is running, a download may still start
+  assert.equal([...page.node.querySelectorAll("button")].find((b) => b.textContent === "Load model").disabled, true);   // but not a second load
+  assert.match(page.node.textContent, /Ready: x Loading n\/m: loading/);
+});

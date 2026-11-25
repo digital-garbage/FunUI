@@ -68,7 +68,22 @@ def _generation_running():
         return False
 
 
-def _schedule_restart():
+def _interrupt_generation():
+    """Stop what is running and drop what is queued, so a restart asked for by hand does not wait for it."""
+    instance = getattr(PromptServer, "instance", None)
+    try:
+        if instance is not None:
+            instance.prompt_queue.wipe_queue()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import comfy.model_management as mm
+        mm.interrupt_current_processing(True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _schedule_restart(force=False):
     """Restart ComfyUI shortly, unless a generation started in the meantime.
 
     The 0.7s delay (so the response reaches the client before the process
@@ -83,7 +98,7 @@ def _schedule_restart():
 
     def _fire():
         global _pending_restart
-        if _generation_running():
+        if _generation_running() and not force:
             _pending_restart = True
             return
         from . import restart as restart_mod
@@ -648,15 +663,13 @@ def register(routes, prefix=None):
         """
         global _pending_restart
         async with _git_lock:
-            if _generation_running():
-                return web.json_response({
-                    "restarting": False,
-                    "blocked": "A generation is running. Wait for it to finish, "
-                              "or cancel it, then restart.",
-                })
+            interrupted = _generation_running()
+            if interrupted:
+                # Asked for by hand: a run that is stale or stuck must not hold the restart back, so it is stopped.
+                _interrupt_generation()
             _pending_restart = False
-            _schedule_restart()
-            return web.json_response({"restarting": True})
+            _schedule_restart(force=True)
+            return web.json_response({"restarting": True, "interrupted": interrupted})
 
     # The torch switch runs as a task the client polls: a multi-GB download outlives the ~100s a
     # rental's proxy keeps one request open. Shares the git lock and its restart rules.

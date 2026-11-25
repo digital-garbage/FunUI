@@ -11,22 +11,27 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], statusHint = null, liveFlag = null, folds = { dl: false, ld: false, main: false, think: false, help: false, conv: false, pic: false, spd: false, sys: false, ref: false }, writing = null, tick = 0, watchUntil = 0;
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], statusHint = null, loadPick = "", liveFlag = null, folds = { dl: false, ld: false, main: false, think: false, help: false, conv: false, pic: false, spd: false, sys: false, ref: false }, writing = null, tick = 0, watchUntil = 0;
   own(() => { alive = false; clearTimeout(poll); clearTimeout(tick); });
   const liveOn = () => { if (liveFlag === null) { try { liveFlag = localStorage.getItem("fp.enhance.live") === "1"; } catch { liveFlag = false; } } return liveFlag; };
+  const pickNow = () => { const typed = String((((slot() || {}).inputs) || {}).engine_model || ""); const hit = downloads.find((m) => (m.source || m.name.replace("__", "/")) === loadPick) || downloads.find((m) => m.source === typed); return hit ? (hit.source || hit.name.replace("__", "/")) : ""; };
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
-  const engineLine = () => ({ idle: "Not loaded yet. It loads the first time it is used, or press Load model.", loading: `Loading… ${engine.message || ""}`, ready: engine.busy && engine.busy.stage ? `${engine.busy.stage}${engine.busy.tokens ? `: ${engine.busy.tokens} tokens` : engine.busy.prompt ? ` (${engine.busy.prompt} tokens)` : ""}, ${engine.busy.seconds}s` : `Ready: ${engine.message || ""}`,
-    downloading: `Downloading${engine.label ? ` ${engine.label}` : ""}: ${gb(engine.downloaded || 0)}${engine.total ? ` of ${gb(engine.total)}` : ""}`, error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
+  const engineLine = () => {
+    const base = ({ idle: "Not loaded yet. It loads the first time it is used, or press Load model.", loading: `Loading… ${engine.message || ""}`, ready: engine.busy && engine.busy.stage ? `${engine.busy.stage}${engine.busy.tokens ? `: ${engine.busy.tokens} tokens` : engine.busy.prompt ? ` (${engine.busy.prompt} tokens)` : ""}, ${engine.busy.seconds}s` : `Ready: ${engine.message || ""}`,
+      error: `Could not load: ${engine.message || ""}` })[engine.phase] || "";
+    const ld = engine.loading, dl = engine.download;
+    return [base, engine.phase === "loading" ? "" : ld ? `Loading ${ld.label}: ${ld.message}` : "", dl ? `Downloading ${dl.label}: ${gb(dl.downloaded || 0)}${dl.total ? ` of ${gb(dl.total)}` : ""}` : "", engine.load_error || ""].filter(Boolean).join(" ");
+  };
   const refreshEngine = () => app.api.enhancerEngine().then((r) => {
     const changed = JSON.stringify(r) !== JSON.stringify(engine);
-    const was = engine.phase;
-    const inPlace = changed && r.phase === was && statusHint && statusHint.node.isConnected;      // a counter ticking, not a new state: the line alone moves
+    const was = engine.phase, hadDownload = Boolean(engine.download);
+    const inPlace = changed && r.phase === was && Boolean(r.loading) === Boolean(engine.loading) && Boolean(r.download) === Boolean(engine.download) && statusHint && statusHint.node.isConnected;      // a counter ticking, not a new state: the line alone moves
     engine = r;
-    if ((was === "downloading" && r.phase !== "downloading") || (changed && r.phase !== "downloading" && /downloaded|download failed/.test(r.message || ""))) refreshDownloads();
+    if ((hadDownload && !r.download) || (changed && !r.download && /downloaded|download failed/.test(r.message || ""))) refreshDownloads();
     if (inPlace) statusHint.node.textContent = engineLine();
     else if (changed && alive && !app.dom.typingIn(page.node)) draw();
     clearTimeout(poll);
-    if (alive) { poll = setTimeout(refreshEngine, r.phase === "downloading" || r.phase === "loading" || Date.now() < watchUntil || (r.busy && r.busy.stage) ? 1000 : 5000); if (poll && poll.unref) poll.unref(); }     // keeps watching: a model that works or loads in the background shows it here
+    if (alive) { poll = setTimeout(refreshEngine, r.download || r.loading || r.phase === "loading" || Date.now() < watchUntil || (r.busy && r.busy.stage) ? 1000 : 5000); if (poll && poll.unref) poll.unref(); }     // keeps watching: a model that works or loads in the background shows it here
   }).catch(() => {});
   // The weight files of the typed Hugging Face repo, so one of them can be picked (an fp8 file without the bf16 ones).
   const repoOf = (v) => { const m = /^([\w.-]+\/[\w.-]+)(?:::([^@]+))?(?:@(.+))?$/.exec(String(v || "").trim()); return m ? { repo: m[1], file: m[2] || "", base: m[3] || "" } : null; };
@@ -100,15 +105,16 @@ export function enhance(app, own) {
         const choose = (name, on) => { const next = pickFiles(sel.map((f) => f.name), picked, name, on); set("engine_model", next.length ? `${r.repo}::${next.join("|")}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); };
         const have = (f) => downloads.some((m) => String(m.source || "").startsWith(`${r.repo}::${f.name}`));
         const rows = (list) => c.region.stack({ gap: "xs", children: list.map((f) => c.checkboxRow.default({ label: `${f.name} (${gb(f.size)})${have(f) ? ", downloaded" : ""}`, checked: picked.includes(f.name), disabled: off(), onChange: (x) => choose(f.name, x) })) });
-        const listed = Boolean(r) && (sel.length > 1 || Boolean(r.file)), onDisk = listed ? sel.filter(have) : [];
+        const listed = Boolean(r) && (sel.length > 1 || Boolean(r.file));
         return [
           (statusHint = c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." })),
           c.collapsible.default({ label: "Download", open: folds.dl, onToggle: (o) => { folds.dl = o; }, body: c.region.stack({ gap: "xs", children: [
             ...(listed ? [c.hint.default({ text: "Nothing checked downloads the whole repo. Pick one model file (a new pick replaces it) and its mmproj for pictures. Only missing files download." }), rows(sel)] : []),
-            c.toolbar.default({ items: [c.button.sm({ label: "Download", tone: "ghost", title: "Download the model's files only (the checked ones); nothing is loaded into memory and the loaded model stays", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineDownload(val("engine_model", "")).then((r) => { watchUntil = Date.now() + 15000; if (r && r.started === false) c.toast.warn({ text: "Not started: a download or a load is still running. Try again when it ends." }); refreshEngine(); refreshDownloads(); }).catch((e) => c.toast.warn({ text: `Could not start downloading: ${e.message}` })) })] })] }) }),
+            c.toolbar.default({ items: [c.button.sm({ label: "Download", tone: "ghost", title: "Download the model's files only (the checked ones); nothing is loaded into memory and the loaded model stays", disabled: off(engineSet) || Boolean(engine.download), onClick: () => app.api.enhancerEngineDownload(val("engine_model", "")).then((r) => { watchUntil = Date.now() + 15000; if (r && r.started === false) c.toast.warn({ text: "Not started: a download is still running. Try again when it ends." }); refreshEngine(); refreshDownloads(); }).catch((e) => c.toast.warn({ text: `Could not start downloading: ${e.message}` })) })] })] }) }),
           c.collapsible.default({ label: "Load", open: folds.ld, onToggle: (o) => { folds.ld = o; }, body: c.region.stack({ gap: "xs", children: [
-            ...(listed ? [onDisk.length ? rows(onDisk) : c.hint.default({ text: "Nothing of this repo is downloaded yet. Loading downloads what is checked first." })] : []),
-            c.toolbar.default({ items: [c.button.sm({ label: "Load model", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineLoad(val("engine_model", ""), val("precision", "auto")).then(refreshEngine).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })) }),
+            c.hint.default({ text: "Every downloaded model. Check the one to load; the loaded model keeps working until the new one is ready." }),
+            ...(downloads.length ? [c.region.stack({ gap: "xs", children: downloads.map((m) => { const src = m.source || m.name.replace("__", "/"); return c.checkboxRow.default({ label: `${m.name.replace("__", "/")}: ${gb(m.size)}${m.loaded ? " (loaded)" : ""}`, checked: pickNow() === src, disabled: off(), onChange: (x) => { loadPick = x ? src : ""; draw(); } }); }) })] : [c.hint.default({ text: "Nothing is downloaded yet. Loading downloads the model typed above first." })]),
+            c.toolbar.default({ items: [c.button.sm({ label: "Load model", disabled: off(engineSet || pickNow()) || Boolean(engine.loading), onClick: () => { const src = pickNow() || val("engine_model", ""); (pickNow() ? set("engine_model", src) : Promise.resolve()).then(() => app.api.enhancerEngineLoad(src, val("precision", "auto"))).then(() => { watchUntil = Date.now() + 15000; return refreshEngine(); }).catch((e) => c.toast.warn({ text: `Could not start loading: ${e.message}` })); } }),
               c.button.sm({ label: "Unload", tone: "ghost", disabled: off(engineSet) || engine.phase !== "ready", onClick: () => app.api.enhancerEngineUnload().then(refreshEngine) })] })] }) })]; })(),
       toggle("Use ComfyUI's text generation instead", "Writes with ComfyUI's own text generation (the pipeline's text encoder, or the file picked below) and leaves FunUI's engine off. No streaming, no model editing its own rules.", "use_comfy", false, off()),
       ...(downloads.length ? [c.collapsible.default({ label: `Downloaded models (${downloads.length})`, body: c.region.stack({ gap: "xs", children: downloads.map((m) => c.toolbar.default({ items: [c.text.sm({ text: `${m.name.replace("__", "/")}: ${gb(m.size)}${m.loaded ? " (loaded)" : ""}` })], trailing: [c.button.sm({ label: "Use", tone: "ghost", title: "Use this downloaded model as the engine model", disabled: engine.phase === "loading" || engine.phase === "downloading", onClick: () => { set("engine_model", m.source || m.name.replace("__", "/")); app.api.enhancerEngineLoad(m.source || m.name.replace("__", "/"), val("precision", "auto")).then(refreshEngine).catch(() => {}); } }), c.button.sm({ label: "Delete", tone: "ghost", title: "Remove this model's downloaded files from disk", onClick: () => forget(m) })] })) }) })] : []),

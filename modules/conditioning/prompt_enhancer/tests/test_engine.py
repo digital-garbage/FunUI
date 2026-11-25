@@ -295,8 +295,36 @@ def test_choosing_another_engine_model_really_loads_it(tiny, monkeypatch):
     monkeypatch.setattr(tiny, "_fetch", lambda source: (asked.append(source), (_ for _ in ()).throw(ValueError("stop here")))[1])
     assert tiny.load_async("other/model") is True
     tiny._worker.join(5)
-    assert asked == ["other/model"] and tiny.phase == "error"            # not skipped because the name was already set for the status
-    assert tiny.status()["source"] == "other/model"
+    assert asked == ["other/model"]                                      # not skipped because the name was already set for the status
+    assert tiny.phase == "ready" and tiny.model is not None              # the model that was loaded keeps serving
+    assert "other/model" in tiny.status()["load_error"] and tiny.status()["loading"] is None
+
+
+def test_the_loaded_model_serves_while_a_new_one_loads_and_a_download_runs_beside_it(tiny, monkeypatch):
+    import threading
+    old = tiny.model
+    gate, started = threading.Event(), threading.Event()
+    def slow_fetch(source):
+        started.set()
+        gate.wait(5)
+        raise ValueError("stop here")
+    monkeypatch.setattr(tiny, "_fetch", slow_fetch)
+    assert tiny.load_async("other/model") is True
+    assert started.wait(5)
+    st = tiny.status()
+    assert st["phase"] == "ready" and st["loading"]["source"] == "other/model" and tiny.model is old
+    assert "ok" in "".join(str(x) for x in [tiny.status()["phase"] == "ready" and "ok"])
+    seen = []
+    def other_fetch(source):
+        seen.append(tiny.status()["download"]["source"])
+        return "", ""
+    # a download is its own action: it starts although a load is running, and a second load is refused
+    monkeypatch.setattr(tiny, "_fetch", lambda source: (seen.append(source), ("", ""))[1])
+    assert tiny.download_async("a/b") is True
+    tiny._dl_worker.join(5)
+    assert seen == ["a/b"] and tiny.load_async("third/model") is False
+    gate.set()
+    tiny._worker.join(5)
 
 
 def test_a_reader_that_goes_away_stops_the_writing_before_the_next_request(tiny):
@@ -602,12 +630,12 @@ def test_a_download_fetches_files_without_touching_the_model_that_is_loaded(monk
     e.model, e.tok, e.source, e.phase, e.message = model, model, "a/b::q4.gguf", "ready", "a/b::q4.gguf on cuda"
     seen = []
     def fake_fetch(source):
-        seen.append((source, e.phase))
-        e._dir = str(tmp_path)
+        seen.append((source, e.status()["download"]["source"]))
+        e._job().dir = str(tmp_path)
         return str(tmp_path), ""
     monkeypatch.setattr(e, "_fetch", fake_fetch)
     e.download("a/b::q8.gguf")
-    assert seen == [("a/b::q8.gguf", "downloading")]
+    assert seen == [("a/b::q8.gguf", "a/b::q8.gguf")] and e.status()["download"] is None
     assert e.model is model and e.source == "a/b::q4.gguf" and e.phase == "ready"      # still the loaded one
     assert (tmp_path / ".source").read_text() == "a/b::q8.gguf"
     assert e.message == "a/b::q4.gguf on cuda. Downloaded a/b: q8.gguf."
