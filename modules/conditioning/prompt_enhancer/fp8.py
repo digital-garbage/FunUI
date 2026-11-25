@@ -1,7 +1,8 @@
 """Single-file fp8 checkpoints in the ComfyUI text-encoder layout, run by transformers' own model classes.
 
 Such a file holds each large weight as float8 (`name.weight`) with one scale beside it (`name.weight_scale`) and a small
-`name.comfy_quant` marker; everything else stays bf16. The model is built from the base model's config with no memory
+`name.comfy_quant` marker; everything else stays bf16. The INT8 ConvRot files of the same layout hold int8 with a scale per
+row, rotated by a block Hadamard matrix along the inputs: they are read the same way and unrotated when widened. The model is built from the base model's config with no memory
 behind it, then filled from the file: the fp8 weights stay fp8 (about half the memory of bf16) and are widened to the
 compute dtype only while a layer runs. The model's code is untouched, so any architecture transformers has works.
 
@@ -15,6 +16,36 @@ from torch.nn import functional as F
 SKIP_SUFFIXES = (".weight_scale", ".comfy_quant", ".input_scale", "tokenizer_json")
 
 
+_HADAMARD = {}
+
+
+def hadamard(size, device="cpu"):
+    """The normalised regular Hadamard matrix ConvRot rotates with (the 4x4 block, repeated by Kronecker products: sizes 4, 16, 64, 256 ...)."""
+    key = (size, str(device))
+    if key not in _HADAMARD:
+        if size < 4 or round(torch.log(torch.tensor(float(size))).item() / torch.log(torch.tensor(4.0)).item(), 6) % 1 != 0:
+            raise ValueError(f"a ConvRot group size must be a power of 4, not {size}")
+        four = torch.tensor([[1, 1, 1, -1], [1, 1, -1, 1], [1, -1, 1, 1], [-1, 1, 1, 1]], dtype=torch.float32)
+        h = four
+        while h.shape[0] < size:
+            h = torch.kron(h, four)
+        _HADAMARD[key] = (h / size ** 0.5).to(device)
+    return _HADAMARD[key]
+
+
+def dequantize(weight, scale, dtype, group=0, chunk=16384):
+    """The weights as numbers: the stored values times their scale, and for ConvRot unrotated again (the file holds W @ H^T per group of inputs;
+    H is orthogonal and symmetric, so W is the stored matrix times H). A big table goes through in slices, so the float copy never is the whole of it."""
+    if weight.shape[0] > chunk:
+        scale = scale.to(weight.device)
+        return torch.cat([dequantize(weight[i:i + chunk], scale[i:i + chunk] if scale.numel() > 1 else scale, dtype, group, chunk) for i in range(0, weight.shape[0], chunk)])
+    wide = weight.to(torch.float32) * scale.to(weight.device, torch.float32)
+    if group:
+        rows, cols = wide.shape[0], wide.shape[-1]
+        wide = (wide.reshape(rows, cols // group, group) @ hadamard(group, weight.device)).reshape(rows, cols)
+    return wide.to(dtype).contiguous()
+
+
 def is_scaled_fp8(path) -> bool:
     """Whether this safetensors file holds scaled fp8 weights (it has `*.weight_scale` entries and float8 tensors)."""
     from safetensors import safe_open
@@ -26,17 +57,17 @@ def is_scaled_fp8(path) -> bool:
 class FP8Linear(nn.Module):
     """A Linear whose weight stays float8; each call widens it to the input's dtype (the last layer keeps its widened copy)."""
 
-    def __init__(self, weight, scale, bias=None, keep=False):
+    def __init__(self, weight, scale, bias=None, keep=False, group=0):
         super().__init__()
         self.register_buffer("weight", weight)
         self.register_buffer("scale", scale)
         self.bias = bias
-        self.keep, self._wide, self.plain = keep, None, False
+        self.keep, self._wide, self.plain, self.group = keep, None, False, group
 
     def widen(self, dtype):
         """Widen the weight once and for all (twice the memory of fp8, but no work per call)."""
         if not self.plain:
-            self.weight = (self.weight.to(dtype) * self.scale.to(self.weight.device, dtype)).contiguous()
+            self.weight = dequantize(self.weight, self.scale, dtype, self.group)
             self.plain = True
 
     def forward(self, x):
@@ -45,7 +76,7 @@ class FP8Linear(nn.Module):
         if self._wide is not None and self._wide.dtype == x.dtype and self._wide.device == x.device:
             w = self._wide
         else:
-            w = self.weight.to(x.device).to(x.dtype) * self.scale.to(x.device, x.dtype)
+            w = dequantize(self.weight.to(x.device), self.scale, x.dtype, self.group)
             if self.keep:
                 self._wide = w
         return F.linear(x, w, None if self.bias is None else self.bias.to(x.dtype))
@@ -54,18 +85,36 @@ class FP8Linear(nn.Module):
 class FP8Embedding(nn.Module):
     """An embedding table kept in float8: only the rows asked for are widened. Keeps the original's own scale factor."""
 
-    def __init__(self, weight, scale, original):
+    def __init__(self, weight, scale, original, group=0):
         super().__init__()
         self.register_buffer("weight", weight)
         self.register_buffer("scale", scale)
+        self.group = group
         self.padding_idx = getattr(original, "padding_idx", None)
         extra = getattr(original, "embed_scale", None)
         self.register_buffer("embed_scale", extra if extra is not None else torch.tensor(1.0), persistent=False)
         self.dtype = torch.bfloat16
 
     def forward(self, ids):
-        rows = self.weight[ids.to(self.weight.device)].to(self.dtype)
+        ids = ids.to(self.weight.device)
+        if self.scale.numel() > 1:                                           # a scale per row (INT8): the rows asked for, with their own
+            rows = dequantize(self.weight[ids.reshape(-1)], self.scale[ids.reshape(-1)], torch.float32, self.group).reshape(*ids.shape, -1).to(self.dtype)
+            return rows * self.embed_scale.to(rows.device, self.dtype)
+        rows = self.weight[ids].to(self.dtype)
         return rows * self.scale.to(rows.device, self.dtype) * self.embed_scale.to(rows.device, self.dtype)
+
+
+def _group(handle, weight_key):
+    """The ConvRot group size a tensor was stored with (0: not rotated), from the small JSON marker beside it."""
+    import json
+    marker = weight_key[:-len("weight")] + "comfy_quant"
+    if marker not in handle.keys():
+        return 0
+    try:
+        info = json.loads(bytes(handle.get_tensor(marker).tolist()).decode())
+    except (ValueError, UnicodeDecodeError):
+        return 0
+    return int(info.get("convrot_groupsize", 256)) if info.get("convrot") else 0
 
 
 def _slot(model, key):
@@ -124,13 +173,14 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu", progress=N
             tensor = f.get_tensor(have)
             owner, attr = _slot(model, want)
             scale_key = have[:-len("weight")] + "weight_scale" if have.endswith(".weight") else ""
-            if tensor.dtype == torch.float8_e4m3fn and scale_key in f.keys() and attr == "weight":
+            if tensor.dtype in (torch.float8_e4m3fn, torch.int8) and scale_key in f.keys() and attr == "weight":
                 scale = f.get_tensor(scale_key).float()
+                group = _group(f, have) if tensor.dtype == torch.int8 else 0
                 if isinstance(owner, nn.Embedding) or hasattr(owner, "embed_scale"):
-                    new = FP8Embedding(tensor, scale, owner)
+                    new = FP8Embedding(tensor, scale, owner, group)
                     new.dtype = dtype
                 else:
-                    new = FP8Linear(tensor, scale, owner.bias if getattr(owner, "bias", None) is not None else None)
+                    new = FP8Linear(tensor, scale, owner.bias if getattr(owner, "bias", None) is not None else None, group=group)
                 parent, name = _slot(model, want.rsplit(".", 1)[0])
                 setattr(parent, name, new)
             elif attr in owner._parameters:
@@ -140,7 +190,7 @@ def build(base_dir, weights_file, dtype=torch.bfloat16, device="cpu", progress=N
         embed = model.get_input_embeddings()
         if "lm_head.weight" in wanted and "lm_head.weight" not in names:           # no output layer of its own in the file: it shares the input table
             if isinstance(embed, FP8Embedding):                                     # keep one widened copy of the fp8 table
-                model.lm_head = FP8Linear(embed.weight, embed.scale, keep=True)
+                model.lm_head = FP8Linear(embed.weight, embed.scale, keep=True, group=embed.group)
             else:
                 model.lm_head.weight = embed.weight
     for name, p in list(model.named_parameters()) + list(model.named_buffers()):

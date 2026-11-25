@@ -1512,3 +1512,55 @@ def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with
     with pytest.raises(RuntimeError, match="Restart ComfyUI"):
         gguf.rebuild_for_card(RuntimeError("first"), said.append)
     gguf.rebuild_for_card(RuntimeError("first"), said.append)             # built once: the plain error stands
+
+
+def test_an_int8_convrot_file_is_unrotated_and_runs_like_the_weights_it_was_made_from(tmp_path):
+    import json
+    import torch
+    from safetensors.torch import save_file
+    from transformers import Gemma4ForCausalLM, Gemma4TextConfig
+    from modules.conditioning.prompt_enhancer import fp8
+    torch.manual_seed(2)
+    cfg = Gemma4TextConfig(vocab_size=64, hidden_size=64, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, head_dim=16, global_head_dim=16,
+                           intermediate_size=64, hidden_size_per_layer_input=8, layer_types=["sliding_attention", "full_attention"], sliding_window=16,
+                           max_position_embeddings=256, num_kv_shared_layers=0, pad_token_id=0, bos_token_id=1, eos_token_id=2)
+    cfg.save_pretrained(tmp_path)
+    reference = Gemma4ForCausalLM(cfg).eval().to(torch.bfloat16)
+    h = fp8.hadamard(16)
+    assert torch.allclose(h @ h.T, torch.eye(16), atol=1e-5)               # orthogonal: unrotating is multiplying by it again
+    note = torch.tensor(list(json.dumps({"format": "int8_tensorwise", "convrot": True, "convrot_groupsize": 16}).encode()), dtype=torch.uint8)
+    tensors = {}
+    for name, value in reference.state_dict().items():
+        if name == "lm_head.weight":
+            continue
+        if value.ndim == 2 and ("mlp" in name or "embed_tokens" in name):
+            w = value.float()
+            rotated = (w.reshape(w.shape[0], -1, 16) @ h.T).reshape(w.shape)             # what the quantiser stores: W @ H^T per group
+            scale = (rotated.abs().amax(dim=1, keepdim=True) / 127).clamp_min(1e-8)
+            packed = (rotated / scale).round().clamp(-127, 127).to(torch.int8)
+            base = name[:-len("weight")]
+            tensors[name], tensors[base + "weight_scale"], tensors[base + "comfy_quant"] = packed, scale, note.clone()
+            value.copy_(fp8.dequantize(packed, scale, torch.float32, 16).to(torch.bfloat16))      # the reference holds what the file means
+            assert torch.allclose(value.float(), w, atol=0.05 * float(w.abs().max()))        # and that is close to where it started
+        else:
+            tensors[name] = value
+    save_file(tensors, str(tmp_path / "w.safetensors"))
+    model = fp8.build(tmp_path, tmp_path / "w.safetensors")
+    ids = torch.tensor([[1, 5, 9, 12, 7]])
+    with torch.inference_mode():
+        got, want = model(ids).logits.float(), reference(ids).logits.float()
+    assert torch.allclose(got, want, atol=0.1, rtol=0.1)
+    wide = fp8.build(tmp_path, tmp_path / "w.safetensors", precision="bf16")
+    with torch.inference_mode():
+        assert torch.allclose(wide(ids).logits.float(), got, atol=0.1, rtol=0.1)
+    assert all(m.weight.dtype == torch.bfloat16 for m in wide.modules() if isinstance(m, fp8.FP8Linear))
+
+
+def test_a_big_int8_table_unrotates_the_same_in_slices():
+    import torch
+    from modules.conditioning.prompt_enhancer import fp8
+    torch.manual_seed(3)
+    q = torch.randint(-127, 127, (50, 32), dtype=torch.int8)
+    scale = torch.rand(50, 1) + 0.1
+    whole = fp8.dequantize(q, scale, torch.float32, 16)
+    assert torch.allclose(fp8.dequantize(q, scale, torch.float32, 16, chunk=7), whole)

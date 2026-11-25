@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **INT8 ConvRot helper models run.** A ComfyUI text encoder stored as int8 with a rotation (the "INT8-ConvRot" files, for example the Gemma 4 12B one) failed with `"addmm_cuda" not implemented for 'Char'`. The engine now reads the scale and the rotation beside each weight and widens it when the model runs, or once up front (bf16 mode), like the fp8 files.
+
 - **llama.cpp is installed by the card's architecture.** A card newer than the prebuilt wheels (compute 12, the Blackwell cards) gets llama-cpp-python compiled for it when a CUDA toolkit 12.8 or newer (`nvcc`) is on the machine, and then needs no CUDA 12 packages. Without one, the prebuilt wheel is used and tried in a separate process first. If an installed prebuilt build fails that trial on such a card, it is rebuilt once and ComfyUI asks for a restart. Older cards keep the prebuilt wheel.
 
 - **A llama.cpp build that cannot run on the card no longer takes ComfyUI down.** The first GGUF load on a card is tried once in a separate process; if that dies, you get an error with the exit signal and its last lines instead of a ComfyUI restart. A build that passed is remembered for that card, so later loads are not slowed.
