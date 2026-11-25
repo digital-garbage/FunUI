@@ -986,6 +986,43 @@ def test_a_llama_install_missing_its_own_imports_gets_them_installed(monkeypatch
     assert gguf.ensure_llama() == "llama_cpp" and ran and "diskcache" in ran[0]
 
 
+def test_a_fresh_install_takes_the_prebuilt_wheel_and_builds_nothing(monkeypatch, tmp_path):
+    from .. import engine as eng, gguf
+    import importlib.util
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    monkeypatch.setattr(gguf, "wheel_index", lambda: ("https://wheels/cu125", True))
+    monkeypatch.setattr(gguf, "card_capability", lambda: (12, 0))
+    built, calls = [], []
+    monkeypatch.setattr(gguf, "build_for_card", lambda say, cap: built.append(cap) or (True, ""))
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (calls.append(args), (True, "ok"))[1])
+    monkeypatch.setattr(gguf, "_import", lambda: "llama_cpp")
+    assert gguf.ensure_llama() == "llama_cpp" and not built and any("https://wheels/cu125" in c for c in calls)
+
+
+def test_a_build_without_card_support_is_rebuilt_once_and_never_blocks_the_load(monkeypatch, tmp_path):
+    import types
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    fake = types.SimpleNamespace(Llama=lambda **kw: types.SimpleNamespace(), llama_supports_gpu_offload=lambda: False, llama_log_callback=lambda f: f, llama_log_set=lambda *a: None)
+    monkeypatch.setattr(gguf, "ensure_llama", lambda say=None: fake)
+    monkeypatch.setattr(gguf, "find_projector", lambda path: "")
+    monkeypatch.setattr(gguf, "card_capability", lambda: (8, 9))
+    monkeypatch.setattr(gguf, "make_room", lambda *a: None)
+    monkeypatch.setattr(gguf, "probe", lambda *a: None)
+    tries = []
+    monkeypatch.setattr(gguf, "build_for_card", lambda say, cap: tries.append(cap) or (False, "no CUDA toolkit"))
+    said = []
+    gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)               # the build could not be made: it still loads (on the processor)
+    assert tries == [(8, 9)] and any("could not be rebuilt" in x for x in said)
+    gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)
+    assert tries == [(8, 9)]                                                       # a build that failed is not tried again on every load
+    (tmp_path / ".llama_build_failed").unlink()
+    monkeypatch.setattr(gguf, "build_for_card", lambda say, cap: tries.append(cap) or (True, ""))
+    with pytest.raises(RuntimeError, match="Restart ComfyUI"):
+        gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)
+
+
 def test_a_sliding_window_model_starts_from_empty_instead_of_trimming():
     from modules.conditioning.prompt_enhancer import gguf
     b = gguf.Backend.__new__(gguf.Backend)

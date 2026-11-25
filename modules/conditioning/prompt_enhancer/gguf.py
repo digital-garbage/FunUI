@@ -183,8 +183,9 @@ def build_for_card(say, capability):
     exe, version = nvcc_version()
     if not exe:
         return False, "no CUDA toolkit (nvcc) was found, which a build for this card needs"
-    if version < TOOLKIT_FOR_12:
-        return False, f"the CUDA toolkit here is {version[0]}.{version[1]} (nvcc), too old for this card: it needs {TOOLKIT_FOR_12[0]}.{TOOLKIT_FOR_12[1]} or newer"
+    need = TOOLKIT_FOR_12 if needs_own_build(capability) else (11, 0)
+    if version < need:
+        return False, f"the CUDA toolkit here is {version[0]}.{version[1]} (nvcc), too old for this card: it needs {need[0]}.{need[1]} or newer"
     gaps = toolkit_gaps(exe)
     if gaps and not (install_toolkit(version, gaps, say) and not toolkit_gaps(exe)):
         return False, f"the CUDA toolkit here lacks {', '.join(n for n, _ in gaps)} (apt packages {', '.join(p for _, p in gaps)}), which the build needs, and they could not be installed"
@@ -209,7 +210,7 @@ def ensure_llama(say=lambda text: None):
     import importlib
     import importlib.util
     problem, index, card = "", *wheel_index()
-    own = False
+    own = False                                                     # (kept for the CUDA runtime check below: a prebuilt wheel needs the runtime)
     if importlib.util.find_spec("llama_cpp") is not None:
         try:
             return _import()
@@ -226,13 +227,8 @@ def ensure_llama(say=lambda text: None):
     restarted = os.path.exists(_marker())
     if fresh:
         say("GGUF models need llama-cpp-python, which is not installed yet: installing it now (a restart of ComfyUI may be needed afterwards)")
-        built = False
-        if card and needs_own_build(card_capability()):             # a card newer than every prebuilt wheel: made for it, when the toolkit allows
-            built, why = build_for_card(say, card_capability())
-            own = built
-            if not built:
-                say(f"engine: llama.cpp could not be built for this card ({why}); trying the prebuilt wheel, which is tested in a separate process before it is used")
-        for url in [] if built else [index] + ([WHEELS + "cpu"] if card else []):
+        built = False                                              # the prebuilt wheel first: it is tried in a separate process at load, and only a failure there makes a build
+        for url in [index] + ([WHEELS + "cpu"] if card else []):
             done, last = _pip(["llama-cpp-python", "--only-binary=:all:", "--extra-index-url", url], say, "installing llama-cpp-python")
             if done:
                 built = True
@@ -632,16 +628,23 @@ def make_room(path, projector, say, margin=2 * 2 ** 30):
     say(f"engine: {free / 2 ** 30:.0f} GB are free on the graphics card now")
 
 
-def rebuild_for_card(exc, say):
+def rebuild_for_card(exc, say, force=False):
     """The build that failed its trial is a prebuilt one on a card newer than they are: make one for it (once), then ask for the restart that
     lets this process load it. Raises that request, or `exc` with the reason it could not be rebuilt; returns when the card is not such a card."""
     capability = card_capability()
     from . import engine
     mark = os.path.join(engine.models_dir(), ".llama_built_for_card")
-    if not needs_own_build(capability) or os.path.exists(mark):
+    if not (needs_own_build(capability) or force) or os.path.exists(mark):
+        return
+    failed = os.path.join(engine.models_dir(), ".llama_build_failed")
+    if os.path.exists(failed):                                      # a build that failed here is not tried again on every load (delete this file to try once more)
         return
     built, why = build_for_card(say, capability)
     if not built:
+        try:
+            open(failed, "w").write(str(why)[:300])
+        except OSError:
+            pass
         raise RuntimeError(f"{exc} It could not be rebuilt for this card either: {why}.") from exc
     try:
         open(mark, "w").close()
@@ -726,11 +729,22 @@ def load(path, *, cuda, context=0, say=lambda text: None):
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
     if cuda:
+        try:
+            gpu_ready = bool(llama_cpp.llama_supports_gpu_offload())
+        except Exception:                                           # noqa: BLE001
+            gpu_ready = False
+        if not gpu_ready:                                           # a build without card support (the processor wheel): one made for this card, once, when a toolkit is here
+            try:
+                rebuild_for_card(RuntimeError("this llama.cpp build has no graphics-card support."), say, force=True)
+            except RuntimeError as exc:
+                if "Restart ComfyUI" in str(exc):
+                    raise
+                say(f"engine: {exc}")
         make_room(path, projector, say)
         try:
             probe(llama_cpp, path, projector, say)
         except RuntimeError as exc:
-            rebuild_for_card(exc, say)
+            rebuild_for_card(exc, say, force=True)          # the prebuilt build failed its trial: only now one is made here
             raise
     llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or WORKING_WINDOW + ANSWER_HEADROOM, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
