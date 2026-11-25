@@ -628,6 +628,27 @@ def make_room(path, projector, say, margin=2 * 2 ** 30):
     say(f"engine: {free / 2 ** 30:.0f} GB are free on the graphics card now")
 
 
+def reinstall_prebuilt(say):
+    """An installed llama.cpp without card support: the prebuilt wheel for the card goes over it, once, and the restart that loads it is asked for.
+    Returns when this was tried before (the caller goes on to a build) or when there is no card wheel to try."""
+    index, card = wheel_index()
+    from . import engine
+    mark = os.path.join(engine.models_dir(), ".llama_wheel_tried")
+    if not card or os.path.exists(mark):
+        return
+    say("engine: the installed llama.cpp has no graphics-card support: trying the prebuilt card wheel first")
+    done, _ = _pip(["llama-cpp-python", "--force-reinstall", "--no-deps", "--only-binary=:all:", "--extra-index-url", index], say, "installing llama-cpp-python")
+    if done:
+        _pip(list(NEEDS) + ["nvidia-cuda-runtime-cu12", "nvidia-cublas-cu12"], say, "installing what llama-cpp-python needs")
+    try:
+        os.makedirs(os.path.dirname(mark), exist_ok=True)
+        open(mark, "w").close()
+    except OSError:
+        pass
+    if done:
+        raise RuntimeError("the prebuilt llama.cpp for the graphics card was installed. Restart ComfyUI, then load the model again.")
+
+
 def rebuild_for_card(exc, say, force=False):
     """The build that failed its trial is a prebuilt one on a card newer than they are: make one for it (once), then ask for the restart that
     lets this process load it. Raises that request, or `exc` with the reason it could not be rebuilt; returns when the card is not such a card."""
@@ -733,7 +754,8 @@ def load(path, *, cuda, context=0, say=lambda text: None):
             gpu_ready = bool(llama_cpp.llama_supports_gpu_offload())
         except Exception:                                           # noqa: BLE001
             gpu_ready = False
-        if not gpu_ready:                                           # a build without card support (the processor wheel): one made for this card, once, when a toolkit is here
+        if not gpu_ready:                                           # a build without card support (the processor wheel): the prebuilt card wheel first, a build only when that did not help
+            reinstall_prebuilt(say)
             try:
                 rebuild_for_card(RuntimeError("this llama.cpp build has no graphics-card support."), say, force=True)
             except RuntimeError as exc:

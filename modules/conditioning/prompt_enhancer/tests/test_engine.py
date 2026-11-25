@@ -1008,12 +1008,18 @@ def test_a_build_without_card_support_is_rebuilt_once_and_never_blocks_the_load(
     monkeypatch.setattr(gguf, "ensure_llama", lambda say=None: fake)
     monkeypatch.setattr(gguf, "find_projector", lambda path: "")
     monkeypatch.setattr(gguf, "card_capability", lambda: (8, 9))
+    monkeypatch.setattr(gguf, "wheel_index", lambda: ("https://wheels/cu125", True))
+    pips = []
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (pips.append(args), (True, "ok"))[1])
     monkeypatch.setattr(gguf, "make_room", lambda *a: None)
     monkeypatch.setattr(gguf, "probe", lambda *a: None)
     tries = []
     monkeypatch.setattr(gguf, "build_for_card", lambda say, cap: tries.append(cap) or (False, "no CUDA toolkit"))
     said = []
-    gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)               # the build could not be made: it still loads (on the processor)
+    with pytest.raises(RuntimeError, match="Restart ComfyUI"):                     # the prebuilt card wheel first, and a restart to load it
+        gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)
+    assert not tries and any("https://wheels/cu125" in a for call in pips for a in call)
+    gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)               # still no card support after that: the build; it could not be made: it still loads (on the processor)
     assert tries == [(8, 9)] and any("could not be rebuilt" in x for x in said)
     gguf.load(str(tmp_path / "m.gguf"), cuda=True, say=said.append)
     assert tries == [(8, 9)]                                                       # a build that failed is not tried again on every load
