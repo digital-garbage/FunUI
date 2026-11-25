@@ -387,3 +387,12 @@ def test_a_scheduler_that_cannot_join_the_hand_over_falls_back(monkeypatch):
     second = torch.tensor([0.8, 0.3, 0.0], dtype=torch.float64)
     out = second_schedule(None, "x", torch.tensor([1.0, 0.9, 0.7, 0.3, 0.0]), 2, second)
     assert out[0] == 0.8 and out.dtype == torch.float64 and bool((out[1:] < out[:-1]).all())
+
+
+def test_a_named_start_level_sets_the_full_size_stage_noise_and_ignores_a_lower_one():
+    from modules.sampling.two_stage.stages import backed_up
+    sigmas = torch.tensor([1.0, 0.9, 0.7, 0.4, 0.0], dtype=torch.float32)
+    assert abs(float(backed_up(sigmas, 2, 0.0, 0.8)[0]) - 0.8) < 1e-6 and backed_up(sigmas, 2, 0.0, 0.8)[1:].tolist() == sigmas[3:].tolist()
+    assert abs(float(backed_up(sigmas, 2, 0.5, 0.8)[0]) - 0.8) < 1e-6              # it wins over the back-up amount
+    assert backed_up(sigmas, 2, 0.5, 0.5).tolist() == backed_up(sigmas, 2, 0.5).tolist()      # below where the first stage stopped: unchanged
+    assert float(backed_up(sigmas, 2, 0.0, 1.0)[0]) < float(sigmas[1])                # never as far back as the previous step

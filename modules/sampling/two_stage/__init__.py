@@ -63,6 +63,12 @@ SETTINGS = {
         "hint": "How far back the full-size stage starts. 0: where stage one stopped. Higher: more fresh noise, which can redraw soft or doubled outlines.",
         "when": {"enabled": True},
     },
+    "start_sigma": {
+        "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
+        "label": "Start the full size at noise level",
+        "hint": "Names the noise level the full-size stage starts from, for a LoRA made to begin there (a refine LoRA: 0.6). 0 uses the setting above. A level below where the first stage stopped changes nothing.",
+        "when": {"enabled": True},
+    },
     "resize": {
         "type": "enum", "default": "bicubic",
         "options": [{"value": "bicubic", "label": "Bicubic"}, {"value": "mitchell", "label": "Mitchell"},
@@ -119,7 +125,7 @@ def install(patcher, values, key):
     if nofile:
         log.once("two_stage:no_upscaler_file", log.WARNING, TITLE, "Latent upscaler is chosen but no file is picked (models/latent_upscale_models is empty), so the hand-over is enlarged by Bicubic")
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5)),
-                                  _known(values.get("sampler2"), comfy.samplers.SAMPLER_NAMES), _known(values.get("scheduler2"), comfy.samplers.SCHEDULER_NAMES)))
+                                  _known(values.get("sampler2"), comfy.samplers.SAMPLER_NAMES), _known(values.get("scheduler2"), comfy.samplers.SCHEDULER_NAMES), float(values.get("start_sigma", 0.0))))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
     other = [n for n in (values.get("sampler2"), values.get("scheduler2")) if _known(n, comfy.samplers.SAMPLER_NAMES + comfy.samplers.SCHEDULER_NAMES)]
     return f"first {steps} step(s) at {size:.0%} of the size" + (f", full size by {'/'.join(other)}" if other else "") + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else "")

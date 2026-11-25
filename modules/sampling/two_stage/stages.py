@@ -158,22 +158,28 @@ def enlarge(video, h, w, upscaler=None, method="bicubic"):
     return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
-def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0, sampler2=None, scheduler2=None):
+def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0, sampler2=None, scheduler2=None, start_sigma=0.0):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, back_up, sampler2, scheduler2, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
 
 
-def backed_up(sigmas, steps, amount):
+def backed_up(sigmas, steps, amount, start=0.0):
     """The schedule for the full-size stage. The hand-over starts `amount` of the way from the cut back to the sigma
-    before it: the enlarged guess gets more fresh noise, and the model is told the true noise level it now sees."""
+    before it: the enlarged guess gets more fresh noise, and the model is told the true noise level it now sees.
+    `start` > 0 names that noise level directly (a LoRA trained to begin at 0.6 gets 0.6) and wins over `amount`; a level
+    below where the first stage stopped cannot take noise away, so it leaves the schedule as it is."""
     second = sigmas[steps:].clone()
+    if start and float(start) > float(second[0]):
+        top = float(second[0]) + 0.95 * (float(sigmas[steps - 1]) - float(second[0])) if steps >= 1 else float(sigmas[0])
+        second[0] = min(float(start), top)                         # as with `amount`: never as far back as the previous step's own sigma
+        return second
     amount = max(0.0, min(0.95, float(amount)))        # 1.0 would start at the previous step's own sigma: two steps with one noise level
     if amount > 0.0 and steps >= 1:
         before = sigmas[steps - 1].to(device=second.device, dtype=second.dtype)
@@ -209,7 +215,7 @@ def model_for_stage(patcher, stage):
     return staged
 
 
-def _staged(original, guider, size, steps, resize, method, back_up, sampler2, scheduler2, *args, **kwargs):
+def _staged(original, guider, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
@@ -236,7 +242,7 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
         (video_noise[..., :h1, :w1].contiguous(), audio_noise))
     small_image, _ = comfy.utils.pack_latents(
         (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
-    first, second = sigmas[:steps + 1], backed_up(sigmas, steps, back_up)
+    first, second = sigmas[:steps + 1], backed_up(sigmas, steps, back_up, start_sigma)
     if scheduler2:
         second = second_schedule(guider.model_patcher.get_model_object("model_sampling"), scheduler2, sigmas, steps, second)
     sampler_two = sampler

@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Two stages can start the full-size stage at a named noise level.** New slider "Start the full size at noise level" (0 = off). A refine LoRA made to begin at 0.6 gets 0.6 at the hand-over, wherever the first stage stopped. It wins over "Noise added at the hand-over". A level below where the first stage stopped changes nothing.
+
 - **Freeze learning is on the picker wheel.** Tick it under Editor settings > Picker wheel, then one release on it freezes or resumes learning (the same switch as on the Taste key).
 
 - **Delete is in the Load list.** Check a downloaded model and press Delete to remove its files. The separate Downloaded models section is gone, since the Load list shows the same models.
