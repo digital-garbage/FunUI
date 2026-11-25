@@ -614,7 +614,7 @@ class Engine:
     def load(self, source, precision="auto"):
         """Make `source` the loaded model (a no-op when it already is). Blocks; raises with the reason.
         `precision` ("auto", "fp8", "bf16") only matters for a single fp8 file; a different one loads it again.
-        The model that is loaded keeps serving requests while the new one is built; they switch over when it is ready."""
+        The model that is loaded keeps serving while the new one's files are fetched; it is unloaded just before the new one is built, so the two never share memory."""
         source = str(source or "").strip()
         precision = precision if precision in ("auto", "fp8", "bf16") else "auto"
         if not source:
@@ -622,6 +622,13 @@ class Engine:
         if self.model is not None and self.source == source and (self.precision == precision or not self.weights):
             return
         return self._load(source, precision)
+
+    def serve(self, source, precision="auto"):
+        """What a request calls: use the model that is loaded, whatever the setting names now; only with nothing loaded does it load `source`.
+        Switching models is the Load button's job, so a download or a changed pick never swaps the model under a request."""
+        if self.model is not None:
+            return
+        self.load(source, precision)
 
     def _load(self, source, precision):
         with self.lock:
@@ -646,6 +653,16 @@ class Engine:
                 import torch
                 from transformers import AutoTokenizer
                 cuda = torch.cuda.is_available()
+                if self.model is not None:                                # files are here: the old model goes first, so the two never share memory
+                    with self.turns.exclusive("unloading the model"):      # a request that is writing finishes on it first
+                        self.model = self.tok = self._snap = None
+                        self.phase, self.message = "loading", f"loading {source}"
+                        self.source = self.wanted = source
+                    import gc
+                    gc.collect()
+                    if cuda:
+                        torch.cuda.empty_cache()
+                    first = True
                 if weights and weights.lower().endswith(".gguf"):    # llama.cpp runs it, quantized as it is
                     from . import gguf
                     model = tok = gguf.load(weights, cuda=cuda, say=lambda t: setattr(job, "message", t) or _say(t))
@@ -672,18 +689,12 @@ class Engine:
                         else:
                             raise failure
                 how = getattr(model, "funui_precision", "")
-                with self.turns.exclusive("switching the model"):        # a request that is writing finishes on the old one first
+                with self.turns.exclusive("switching the model"):
                     self.model, self.tok, self._snap = model, tok, None
                     self.source, self.precision, self.weights = source, precision, weighted
                     self.loaded_dir = "" if os.path.isdir(source) else job.dir
                     self.device = "cuda" if cuda else "cpu"
                     self.phase, self.message = "ready", f"{label(source)} on {self.device}" + (f", {how}" if how else "")
-                if not first:
-                    try:
-                        if cuda:
-                            torch.cuda.empty_cache()                      # the old model's memory goes back
-                    except Exception:                                   # noqa: BLE001
-                        pass
                 _say(f"engine: {label(source)} is ready on {self.device}" + (f" as {how}" if how else "") + f" ({time.time() - started:.0f}s)")
             except Exception as exc:                                # noqa: BLE001 -- said in the status, raised to the caller
                 if first:

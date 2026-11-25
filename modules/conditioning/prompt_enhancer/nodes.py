@@ -101,7 +101,7 @@ def _chat_reply(conversation, message, *, stop, notes="", prompts=None, comments
     speed = speed or {}
     if engine_model:
         try:
-            ENGINE.load(engine_model, speed.get("precision", "auto"))
+            ENGINE.serve(engine_model, speed.get("precision", "auto"))
         except Exception as e:                                      # noqa: BLE001
             if not encoder_file:
                 return {"ok": False, "reply": "", "status": f"could not load the engine model {engine_model}: {e}"}
@@ -548,7 +548,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
         engine_model = "" if use_comfy else (str(engine_model or "").strip() or (f"comfy:{encoder_file}" if encoder_file else ""))          # a file picked from ComfyUI's list runs on the engine
         if engine_model:
             try:
-                ENGINE.load(engine_model, precision)
+                ENGINE.serve(engine_model, precision)
                 clip = EngineClip(ENGINE, live="rewrite", cache=prefix_cache, lookup=lookup_tokens)
             except Exception as e:                                  # noqa: BLE001 -- the prompt must still go through
                 if not encoder_file:

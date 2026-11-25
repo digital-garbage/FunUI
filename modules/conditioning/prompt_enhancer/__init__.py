@@ -117,7 +117,7 @@ def routes(table, base, web):
         def work():
             try:
                 done = threading.Event()
-                if eng.ENGINE.model is None or eng.ENGINE.source != args["engine_model"] or eng.ENGINE.precision != args["speed"]["precision"]:
+                if eng.ENGINE.model is None:
                     push({"kind": "status", "text": f"loading {args['engine_model']} (the first time downloads it)"})
 
                     def tick():             # the page sees the download and the loading move, not one line that looks stuck

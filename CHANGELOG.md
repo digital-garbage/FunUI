@@ -5,7 +5,7 @@ What is new in each version, in plain words. Newest first.
 ## [Unreleased]
 
 - **Restart ComfyUI stops a running generation.** Pressing it by hand used to refuse until the run finished; now it interrupts the run and restarts. Updates and branch switches still wait for a running generation.
-- **The helper model downloads and loads as separate actions.** A download can run while a model loads, and the model that is loaded keeps writing until the new one is ready, then switches over. If the new one fails to load, the old one stays and the page says why. The Load list shows every downloaded model, not only the typed repo.
+- **The helper model downloads and loads as separate actions.** A download can run while a model loads, and the model that is loaded keeps writing while the new one's files download; it is unloaded just before the new one loads, so the two never share memory. If the files cannot be fetched, the old one stays and the page says why. The Load list shows every downloaded model, not only the typed repo. Downloading or picking another model never swaps the loaded one: only the Load button does, and a rewrite or chat uses the loaded model. With nothing loaded, the first use still loads the picked one.
 
 - **The Enhance page no longer jumps while the model works.** The seconds and token counter on the model line used to rebuild the whole page every second, which threw you back to the top and cut off editing a system prompt. Now only that line changes, and any other redraw keeps your scroll position.
 

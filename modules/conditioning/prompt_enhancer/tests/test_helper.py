@@ -408,6 +408,7 @@ def test_the_model_is_sent_back_to_an_unfinished_checklist_until_every_item_is_c
     class Tiny:
         tok = type("T", (), {"chat_template": "plain chat", "get_vocab": lambda self: {}})()
         def load(self, *a, **k): return None
+        def serve(self, *a, **k): return None
     monkeypatch.setattr(nodes, "ENGINE", Tiny())
     monkeypatch.setattr(nodes, "EngineClip", lambda *a, **k: type("C", (), {"tools": None, "handler": None})())
     nodes.CONVOS.clear()
@@ -447,6 +448,7 @@ def test_even_one_change_is_made_from_a_checklist_the_model_is_asked_for(monkeyp
     class Tiny:
         tok = type("T", (), {"chat_template": "plain chat", "get_vocab": lambda self: {}})()
         def load(self, *a, **k): return None
+        def serve(self, *a, **k): return None
     monkeypatch.setattr(nodes, "ENGINE", Tiny())
     monkeypatch.setattr(nodes, "EngineClip", lambda *a, **k: type("C", (), {"tools": None, "handler": None})())
     nodes.CONVOS.clear()

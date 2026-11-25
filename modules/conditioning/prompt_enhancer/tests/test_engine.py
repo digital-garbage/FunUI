@@ -129,6 +129,9 @@ def test_the_rewrite_can_come_from_the_engine_and_a_missing_model_hands_the_prom
     out = nodes.FunUIEnhancePrompt.execute(None, "a b c", enabled=True, engine_model="tiny", max_length=10, greedy=True)
     assert asked and asked[0][-1]["content"].startswith("a b c") and nodes.RUNS[-1]["before"] == "a b c"
     assert out.args[0]                                                                   # whatever the tiny model wrote, a prompt comes out
+    another = nodes.FunUIEnhancePrompt.execute(None, "a b c", enabled=True, engine_model="not/a model", max_length=10, greedy=True)
+    assert "could not load" not in str(nodes.RUNS[-1].get("status"))                      # a loaded model serves; a different pick waits for the Load button
+    tiny.model = None                                                                    # with nothing loaded, the pick is loaded for the request
     missing = nodes.FunUIEnhancePrompt.execute(None, "a fox", enabled=True, engine_model="not/a model", max_length=10)
     assert missing.args[0] == "a fox" and "could not load the engine model" in nodes.RUNS[-1]["status"]
 
@@ -1383,3 +1386,13 @@ def test_without_a_budget_or_with_thinking_off_the_model_is_started_once():
     finally:
         eng.ASKING.budget = 0
     assert "A fox runs." in "".join(x["text"] for x in events if x["kind"] == "answer")
+
+
+def test_a_request_uses_the_loaded_model_whatever_the_setting_names_and_loads_only_when_nothing_is(tiny, monkeypatch):
+    asked = []
+    monkeypatch.setattr(tiny, "load", lambda source, precision="auto": asked.append(source))
+    tiny.serve("other/model")
+    assert asked == []                                                    # the Load button swaps models, a pick or a download never does
+    tiny.model = None
+    tiny.serve("other/model")
+    assert asked == ["other/model"]
