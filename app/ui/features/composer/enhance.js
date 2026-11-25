@@ -11,7 +11,7 @@ const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wordin
 
 export function enhance(app, own) {
   const ps = app.pipeline, page = c.region.stack({ gap: "sm" });
-  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], liveFlag = null, folds = { dl: false, ld: false, main: false, think: false, help: false, conv: false, pic: false, spd: false, sys: false, ref: false }, writing = null, tick = 0, watchUntil = 0;
+  let defaults = null, last = null, alive = true, engine = { phase: "idle", message: "", downloaded: 0, total: 0 }, poll = 0, encoders = { files: [], families: [] }, repoFiles = { repo: "", files: [], why: "" }, downloads = [], statusHint = null, liveFlag = null, folds = { dl: false, ld: false, main: false, think: false, help: false, conv: false, pic: false, spd: false, sys: false, ref: false }, writing = null, tick = 0, watchUntil = 0;
   own(() => { alive = false; clearTimeout(poll); clearTimeout(tick); });
   const liveOn = () => { if (liveFlag === null) { try { liveFlag = localStorage.getItem("fp.enhance.live") === "1"; } catch { liveFlag = false; } } return liveFlag; };
   const gb = (n) => `${(n / 2 ** 30).toFixed(1)} GB`;
@@ -20,9 +20,11 @@ export function enhance(app, own) {
   const refreshEngine = () => app.api.enhancerEngine().then((r) => {
     const changed = JSON.stringify(r) !== JSON.stringify(engine);
     const was = engine.phase;
+    const inPlace = changed && r.phase === was && statusHint && statusHint.node.isConnected;      // a counter ticking, not a new state: the line alone moves
     engine = r;
     if ((was === "downloading" && r.phase !== "downloading") || (changed && r.phase !== "downloading" && /downloaded|download failed/.test(r.message || ""))) refreshDownloads();
-    if (changed && alive && !app.dom.typingIn(page.node)) draw();
+    if (inPlace) statusHint.node.textContent = engineLine();
+    else if (changed && alive && !app.dom.typingIn(page.node)) draw();
     clearTimeout(poll);
     if (alive) { poll = setTimeout(refreshEngine, r.phase === "downloading" || r.phase === "loading" || Date.now() < watchUntil || (r.busy && r.busy.stage) ? 1000 : 5000); if (poll && poll.unref) poll.unref(); }     // keeps watching: a model that works or loads in the background shows it here
   }).catch(() => {});
@@ -68,6 +70,12 @@ export function enhance(app, own) {
   const styleNow = () => { const x = (slot() && slot().inputs) || {}; return x.style || "default"; };
   function draw() {
     if (!alive) return;
+    const box = scroller(page.node), top = box ? box.scrollTop : 0;
+    paint();
+    if (box && box.scrollTop !== top) box.scrollTop = top;       // a redraw never throws the page back to the top
+  }
+  const scroller = (n) => { for (let e = n && n.parentElement; e; e = e.parentElement) if (e.scrollHeight > e.clientHeight && /(auto|scroll)/.test((e.ownerDocument.defaultView.getComputedStyle(e) || {}).overflowY || "")) return e; return null; };
+  function paint() {
     const sl = slot();
     if (!sl) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
     const v = sl.inputs || {}, val = (n, d) => (v[n] === undefined ? d : v[n]);
@@ -94,7 +102,7 @@ export function enhance(app, own) {
         const rows = (list) => c.region.stack({ gap: "xs", children: list.map((f) => c.checkboxRow.default({ label: `${f.name} (${gb(f.size)})${have(f) ? ", downloaded" : ""}`, checked: picked.includes(f.name), disabled: off(), onChange: (x) => choose(f.name, x) })) });
         const listed = Boolean(r) && (sel.length > 1 || Boolean(r.file)), onDisk = listed ? sel.filter(have) : [];
         return [
-          c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." }),
+          (statusHint = c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." })),
           c.collapsible.default({ label: "Download", open: folds.dl, onToggle: (o) => { folds.dl = o; }, body: c.region.stack({ gap: "xs", children: [
             ...(listed ? [c.hint.default({ text: "Nothing checked downloads the whole repo. Pick one model file (a new pick replaces it) and its mmproj for pictures. Only missing files download." }), rows(sel)] : []),
             c.toolbar.default({ items: [c.button.sm({ label: "Download", tone: "ghost", title: "Download the model's files only (the checked ones); nothing is loaded into memory and the loaded model stays", disabled: off(engineSet) || engine.phase === "loading" || engine.phase === "downloading", onClick: () => app.api.enhancerEngineDownload(val("engine_model", "")).then((r) => { watchUntil = Date.now() + 15000; if (r && r.started === false) c.toast.warn({ text: "Not started: a download or a load is still running. Try again when it ends." }); refreshEngine(); refreshDownloads(); }).catch((e) => c.toast.warn({ text: `Could not start downloading: ${e.message}` })) })] })] }) }),

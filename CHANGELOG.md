@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **The Enhance page no longer jumps while the model works.** The seconds and token counter on the model line used to rebuild the whole page every second, which threw you back to the top and cut off editing a system prompt. Now only that line changes, and any other redraw keeps your scroll position.
+
 - **The Sampler window is grouped.** Steps, sampler, scheduler and the seed stay on top; every sampling feature folds into its own collapsible section, marked (on) when it is switched on. Sections keep their open or closed state while you change settings.
 
 - **Enhance settings are grouped, and the page stays still while the model writes.** Main settings (rewrites, max tokens, temperature and the other dials, seed), Thinking, Helper, Conversation, Picture, Speed, System prompts and Reference are each a collapsible section now. A new switch, Show live writing on this page, is off by default: the Enhance page no longer redraws as the model streams, the Chat tab still streams, and Last run fills in when the run ends.

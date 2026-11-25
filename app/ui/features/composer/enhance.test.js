@@ -234,3 +234,18 @@ test("Download and Load are collapsible lists of checkboxes with their own butto
   assert.ok([...dl.querySelectorAll("button")].some((b) => b.textContent === "Download"));
   assert.ok([...ld.querySelectorAll("button")].some((b) => b.textContent === "Load model"));
 });
+
+test("a busy counter ticking on the engine line updates that line only, so a field being edited is never rebuilt", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  let secs = 1;
+  const api = { enhancerEngine: async () => ({ phase: "ready", message: "x", busy: { stage: "writing", tokens: secs, seconds: secs++ } }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}), enhancerEngineModels: async () => ({ models: [] }) };
+  let stop = () => {};
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, (f) => { stop = f; });
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 30));
+  const input = page.node.querySelector("input");
+  await new Promise((r) => setTimeout(r, 1200));
+  assert.ok(input.isConnected, "the page was not rebuilt");
+  assert.match(page.node.textContent, /writing: \d+ tokens, \d+s/);
+  stop();
+});
