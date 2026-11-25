@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **llama.cpp is installed by the card's architecture.** A card newer than the prebuilt wheels (compute 12, the Blackwell cards) gets llama-cpp-python compiled for it when a CUDA toolkit 12.8 or newer (`nvcc`) is on the machine, and then needs no CUDA 12 packages. Without one, the prebuilt wheel is used and tried in a separate process first. If an installed prebuilt build fails that trial on such a card, it is rebuilt once and ComfyUI asks for a restart. Older cards keep the prebuilt wheel.
+
 - **A llama.cpp build that cannot run on the card no longer takes ComfyUI down.** The first GGUF load on a card is tried once in a separate process; if that dies, you get an error with the exit signal and its last lines instead of a ComfyUI restart. A build that passed is remembered for that card, so later loads are not slowed.
 
 - **Download lists the file of a repo that holds only one.** It used to show a file list only for two or more.

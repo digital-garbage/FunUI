@@ -1491,3 +1491,24 @@ def test_a_llama_build_that_dies_in_the_trial_process_is_an_error_not_a_dead_com
     gguf.probe(llama, "m.gguf", "", lambda t: None)
     gguf.probe(llama, "m.gguf", "", lambda t: None)
     assert len(ran) == 2                                                  # the second pass was remembered
+
+
+def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with_a_toolkit_that_knows_it(monkeypatch, tmp_path):
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    assert gguf.needs_own_build((12, 0)) and not gguf.needs_own_build((9, 0)) and not gguf.needs_own_build(None)
+    said = []
+    monkeypatch.setattr(gguf, "nvcc_version", lambda: (None, None))
+    done, why = gguf.build_for_card(said.append, (12, 0))
+    assert not done and "no CUDA toolkit" in why
+    monkeypatch.setattr(gguf, "nvcc_version", lambda: ("/cuda/bin/nvcc", (12, 4)))
+    assert "too old" in gguf.build_for_card(said.append, (12, 0))[1]
+    seen = {}
+    monkeypatch.setattr(gguf, "nvcc_version", lambda: ("/cuda/bin/nvcc", (13, 0)))
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (seen.update(args=args, env=env), (True, "ok"))[1])
+    assert gguf.build_for_card(said.append, (12, 0))[0] is True
+    assert "-DCMAKE_CUDA_ARCHITECTURES=120" in seen["env"]["CMAKE_ARGS"] and "--no-binary" in seen["args"]
+    monkeypatch.setattr(gguf, "card_capability", lambda: (12, 0))
+    with pytest.raises(RuntimeError, match="Restart ComfyUI"):
+        gguf.rebuild_for_card(RuntimeError("first"), said.append)
+    gguf.rebuild_for_card(RuntimeError("first"), said.append)             # built once: the plain error stands

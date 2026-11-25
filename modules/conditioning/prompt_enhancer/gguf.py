@@ -75,9 +75,10 @@ def _import():
         return llama_cpp
 
 
-def _pip(args, say, what):
+def _pip(args, say, what, env=None):
     """Run pip with its lines going to `say`, so the install does not look stuck. -> (success, last line)."""
-    proc = subprocess.Popen([sys.executable, "-m", "pip", "install", *args, "--prefer-binary", "--progress-bar", "off"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    proc = subprocess.Popen([sys.executable, "-m", "pip", "install", *args, "--prefer-binary", "--progress-bar", "off"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            env={**os.environ, **(env or {})})
     last = ""
     for line in proc.stdout:
         line = line.strip()
@@ -85,6 +86,55 @@ def _pip(args, say, what):
             last = line
             say(f"{what}: {line[:110]}")
     return proc.wait() == 0, last
+
+
+def card_capability():
+    """The compute capability of the graphics card, (12, 0) for a Blackwell workstation card, or None without one."""
+    try:
+        import torch
+        return tuple(torch.cuda.get_device_capability(0)) if torch.cuda.is_available() else None
+    except Exception:                                               # noqa: BLE001
+        return None
+
+
+#: The prebuilt llama-cpp-python wheels stop at CUDA 12.5, which came before the cards of compute capability 12: those need a build made for them.
+NEWEST_PREBUILT = (9, 0)
+#: The first CUDA toolkit that can compile for compute capability 12.
+TOOLKIT_FOR_12 = (12, 8)
+
+
+def nvcc_version():
+    """-> (path to nvcc, (major, minor) of its toolkit) or (None, None)."""
+    import re
+    import shutil
+    candidates = [shutil.which("nvcc"), *sorted(__import__("glob").glob("/usr/local/cuda*/bin/nvcc"), reverse=True)]
+    for exe in [c for c in candidates if c]:
+        try:
+            text = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        found = re.search(r"release (\d+)\.(\d+)", text)
+        if found:
+            return exe, (int(found.group(1)), int(found.group(2)))
+    return None, None
+
+
+def needs_own_build(capability) -> bool:
+    return bool(capability) and capability > NEWEST_PREBUILT
+
+
+def build_for_card(say, capability):
+    """Compile llama-cpp-python for this card's own architecture (only with a CUDA toolkit that knows it). -> (done, why not)."""
+    exe, version = nvcc_version()
+    if not exe:
+        return False, "no CUDA toolkit (nvcc) was found, which a build for this card needs"
+    if version < TOOLKIT_FOR_12:
+        return False, f"the CUDA toolkit here is {version[0]}.{version[1]} (nvcc), too old for this card: it needs {TOOLKIT_FOR_12[0]}.{TOOLKIT_FOR_12[1]} or newer"
+    arch = f"{capability[0]}{capability[1]}"
+    say(f"engine: building llama.cpp for this card (compute {capability[0]}.{capability[1]}) with CUDA {version[0]}.{version[1]}: this takes a while, once")
+    env = {"CMAKE_ARGS": f"-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES={arch}", "CUDACXX": exe, "PATH": os.path.dirname(exe) + os.pathsep + os.environ.get("PATH", "")}
+    done, last = _pip(["llama-cpp-python", "--no-binary", "llama-cpp-python", "--force-reinstall", "--no-deps", "--no-cache-dir"], say, "building llama-cpp-python", env=env)
+    return done, last
 
 
 def _marker() -> str:
@@ -99,6 +149,7 @@ def ensure_llama(say=lambda text: None):
     import importlib
     import importlib.util
     problem, index, card = "", *wheel_index()
+    own = False
     if importlib.util.find_spec("llama_cpp") is not None:
         try:
             return _import()
@@ -108,14 +159,21 @@ def ensure_llama(say=lambda text: None):
     restarted = os.path.exists(_marker())
     if fresh:
         say("GGUF models need llama-cpp-python, which is not installed yet: installing it now (a restart of ComfyUI may be needed afterwards)")
-        for url in [index] + ([WHEELS + "cpu"] if card else []):
+        built = False
+        if card and needs_own_build(card_capability()):             # a card newer than every prebuilt wheel: made for it, when the toolkit allows
+            built, why = build_for_card(say, card_capability())
+            own = built
+            if not built:
+                say(f"engine: llama.cpp could not be built for this card ({why}); trying the prebuilt wheel, which is tested in a separate process before it is used")
+        for url in [] if built else [index] + ([WHEELS + "cpu"] if card else []):
             done, last = _pip(["llama-cpp-python", "--only-binary=:all:", "--extra-index-url", url], say, "installing llama-cpp-python")
             if done:
+                built = True
                 break
             problem = last or "pip failed"
-        else:
+        if not built:
             raise RuntimeError(f"llama-cpp-python could not be installed ({problem[:300]}). Install it by hand: pip install llama-cpp-python --extra-index-url {index}")
-    if card and ("libcud" in problem or "libcublas" in problem or fresh):
+    if card and not (fresh and own) and ("libcud" in problem or "libcublas" in problem or fresh):       # a build made here uses the toolkit's own libraries
         say("the graphics-card build needs the CUDA 12 runtime: installing it")
         _pip(["nvidia-cuda-runtime-cu12", "nvidia-cublas-cu12"], say, "installing the CUDA runtime")
     importlib.invalidate_caches()
@@ -504,6 +562,24 @@ def make_room(path, projector, say, margin=2 * 2 ** 30):
     say(f"engine: {free / 2 ** 30:.0f} GB are free on the graphics card now")
 
 
+def rebuild_for_card(exc, say):
+    """The build that failed its trial is a prebuilt one on a card newer than they are: make one for it (once), then ask for the restart that
+    lets this process load it. Raises that request, or `exc` with the reason it could not be rebuilt; returns when the card is not such a card."""
+    capability = card_capability()
+    from . import engine
+    mark = os.path.join(engine.models_dir(), ".llama_built_for_card")
+    if not needs_own_build(capability) or os.path.exists(mark):
+        return
+    built, why = build_for_card(say, capability)
+    if not built:
+        raise RuntimeError(f"{exc} It could not be rebuilt for this card either: {why}.") from exc
+    try:
+        open(mark, "w").close()
+    except OSError:
+        pass
+    raise RuntimeError("llama.cpp was rebuilt for this card. Restart ComfyUI, then load the model again.") from exc
+
+
 PROBE = r"""
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location("funui_gguf", sys.argv[1])
@@ -576,7 +652,11 @@ def load(path, *, cuda, context=0, say=lambda text: None):
             projector = ""
     if cuda:
         make_room(path, projector, say)
-        probe(llama_cpp, path, projector, say)
+        try:
+            probe(llama_cpp, path, projector, say)
+        except RuntimeError as exc:
+            rebuild_for_card(exc, say)
+            raise
     llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
         gpu = bool(llama_cpp.llama_supports_gpu_offload())
