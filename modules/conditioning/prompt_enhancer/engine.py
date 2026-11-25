@@ -522,7 +522,7 @@ class Engine:
         self.wanted = ""                       # what is being loaded now (it becomes `source` when done)
         self.phase, self.message = "idle", ""
         self.device = ""
-        self.precision, self.weights = "auto", False
+        self.precision, self.weights, self.compile_off = "auto", False, False
         self._snap = None                      # (ids, cache) of the last request, minus its final token
         self.cancel = threading.Event()
         self._worker = None
@@ -740,7 +740,7 @@ class Engine:
                 how = getattr(model, "funui_precision", "")
                 with self.turns.exclusive("switching the model"):
                     self.model, self.tok, self._snap = model, tok, None
-                    self.source, self.precision, self.weights = source, precision, weighted
+                    self.source, self.precision, self.weights, self.compile_off = source, precision, weighted, False
                     self.loaded_dir = "" if os.path.isdir(source) else job.dir
                     self.device = "cuda" if cuda else "cpu"
                     self.phase, self.message = "ready", f"{label(source)} on {self.device}" + (f", {how}" if how else "")
@@ -956,8 +956,13 @@ class Engine:
         def run(fast):
             """One generation; `fast`: with the prefix cache and prompt lookup."""
             extra, start, cache_obj = {}, 0, None
-            if fast and compiled and str(getattr(model, "device", "")).startswith("cuda"):
+            if fast and compiled and not self.compile_off and str(getattr(model, "device", "")).startswith("cuda"):
                 extra["cache_implementation"] = "static"             # transformers compiles the decode step itself for a static cache on a graphics card
+                try:                                                 # without CUDA graphs: ComfyUI's memory allocator does not support them
+                    from transformers.generation.configuration_utils import CompileConfig
+                    extra["compile_config"] = CompileConfig(mode="default", fullgraph=False)
+                except Exception:                                    # noqa: BLE001 -- an older library: its own choice
+                    pass
             elif fast and cache and ids.shape[1] > 1:
                 from transformers import DynamicCache
                 cache_obj = DynamicCache()
@@ -968,7 +973,7 @@ class Engine:
                     model(input_ids=ids[:, start:-1], past_key_values=cache_obj, use_cache=True)
                 self._snap = (ids[0, :-1].detach().cpu().clone(), copy.deepcopy(cache_obj))
                 extra["past_key_values"] = cache_obj
-            if fast and lookup and not compiled:
+            if fast and lookup and not (compiled and not self.compile_off):
                 extra["prompt_lookup_num_tokens"] = int(lookup)
             stats["cached"] = start
             out = model.generate(**gen, **extra)
@@ -980,7 +985,13 @@ class Engine:
                     try:
                         run(True)
                     except Exception:                               # noqa: BLE001 -- a model that cannot do the speed-ups still answers, the plain way
-                        if not (cache or lookup or compiled) or stats["steps"] or self.cancel.is_set():
+                        if compiled and not self.compile_off and stats["steps"] <= 2 and not self.cancel.is_set():
+                            self.compile_off = True                 # this model or card cannot: off until the model is loaded again
+                            _say("engine: the compiled writing step did not work here, writing the plain way from now on")
+                            self._snap = None
+                            run(False)
+                            return
+                        if not (cache or lookup) or stats["steps"] or self.cancel.is_set():
                             raise
                         self._snap = None
                         run(False)
