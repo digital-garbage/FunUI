@@ -121,6 +121,7 @@ export const api = {
   /** Forget a helper conversation on the server: its saved turns, its finished request, anything still running. */
   enhancerChatClear: (conversation) => call("POST", "/api/m/conditioning_prompt_enhancer/chat_clear", { conversation }),
   /** The person's answer to a rule change the model proposed. */
+  enhancerBriefingAnswer: (id, text) => call("POST", "/api/m/conditioning_prompt_enhancer/briefing_answer", { id, text: text || "" }),
   enhancerEditDecision: (id, allow) => call("POST", "/api/m/conditioning_prompt_enhancer/edit_decision", { id, allow: !!allow }),
   rateTaste: (promptId, rating, axis) => call("POST", "/api/m/taste/rate", { prompt_id: promptId, rating, axis: axis || null }),
   newTasteGeneration: (promptId) => call("POST", "/api/m/taste/generation", promptId ? { prompt_id: promptId } : {}),

@@ -334,6 +334,16 @@ def compact(clip, summary, turns, prompts=None, macros=None, **sampling):
     return clean(raw)
 
 
+def briefing_question(clip, text, *, system="", reference_text="", notes="", **sampling) -> str:
+    """The one question the model would like answered before it rewrites `text` ("" when it needs none or could not say)."""
+    from . import briefing
+    body = "\n\n".join(x for x in (f"INSTRUCTIONS:\n{system}" if system else "", f"REFERENCE:\n{reference_text}" if reference_text else "",
+                                    f"NOTES:\n{notes}" if str(notes or "").strip() else "", f"PROMPT TO REWRITE:\n{text}") if x)
+    plain = {"max_length": 160, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
+    raw, _ = generate(clip, briefing.QUESTION_SYSTEM, body, **{**sampling, **plain})
+    return briefing.clean(raw)
+
+
 def cut_chat_echo(text) -> str:
     """A model that treats the conversation as more prompt text repeats its labels:
     a leading label is removed, and everything from the first later label is cut. A label is

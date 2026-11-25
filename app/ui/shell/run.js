@@ -46,6 +46,8 @@ export function createRun({
   let state = {
     phase: IDLE, promptId: null, progress: null, images: [], audio: [],
     error: null, node: null,
+    // A question the prompt enhancer asks before it rewrites ({id, question}), while the run waits for the answer.
+    briefing: null,
     // Whether this page can still hear ComfyUI at all. Part of the run state
     // rather than a second thing to subscribe to: one state object is what
     // stops two parts of the UI disagreeing about what is happening.
@@ -177,6 +179,14 @@ export function createRun({
             traceback: data.traceback || null,
           },
         });
+        break;
+
+      case "funui.briefing":
+        if (mine(data) && data.id) emit({ briefing: { id: String(data.id), question: String(data.question || "") } });
+        break;
+
+      case "funui.briefing_done":
+        if (mine(data)) emit({ briefing: null });
         break;
 
       case "execution_interrupted":

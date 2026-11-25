@@ -45,6 +45,7 @@ export default [
   "./features/guides/index.js",
   "./features/composer/index.js",
   "./features/helper/index.js",
+  "./features/briefing/index.js",
   "./features/settings/index.js",
   "./features/welcome/index.js",
   "./features/addons/index.js",

@@ -238,6 +238,18 @@ def routes(table, base, web):
             return web.json_response({"ok": False}, status=400)
         return web.json_response({"ok": rules.decide(body["id"], body.get("allow") is True)})
 
+    @table.post(base + "/briefing_answer")
+    async def _briefing_answer(req):
+        """The person's answer to the question before a rewrite: {"id", "text"}; no text is Cancel."""
+        from . import briefing
+        try:
+            body = await req.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, dict) or not body.get("id"):
+            return web.json_response({"ok": False}, status=400)
+        return web.json_response({"ok": briefing.answer(body["id"], str(body.get("text") or "")[:4000])})
+
     @table.get(base + "/engine")
     async def _engine_status(_req):
         """Where the engine model is: idle, downloading (with bytes), loading, ready or error."""

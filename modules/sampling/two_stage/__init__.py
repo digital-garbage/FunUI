@@ -66,7 +66,7 @@ SETTINGS = {
     "start_sigma": {
         "type": "float", "default": 0.0, "min": 0.0, "max": 1.0, "step": 0.05, "ui": "slider",
         "label": "Start the full size at noise level",
-        "hint": "Names the noise level the full-size stage starts from, for a LoRA made to begin there (a refine LoRA: 0.6). 0 uses the setting above. A level below where the first stage stopped changes nothing.",
+        "hint": "The noise level the full-size stage starts from, for a LoRA made to begin there (a refine LoRA: 0.6). 0 uses the setting above.",
         "when": {"enabled": True},
     },
     "resize": {

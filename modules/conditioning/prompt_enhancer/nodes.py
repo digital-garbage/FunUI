@@ -368,6 +368,26 @@ def _log(entry):
     history.save(RUNS, CONVOS)
 
 
+def _briefed(clip, masked, **given) -> str:
+    """The question the model has before it rewrites, put to the person, and their answer as a note for the request ("" when there is none)."""
+    from . import briefing
+    try:
+        question = en.briefing_question(clip, masked, **given)
+    except Exception as e:                                          # noqa: BLE001 -- a briefing that fails must not stop the rewrite
+        log.warning("FunUI Prompt enhancer", f"the briefing question could not be written: {e}")
+        return ""
+    if not question:
+        return ""
+    _stop_if_interrupted()
+    try:
+        from server import PromptServer
+        send = PromptServer.instance.send_sync
+    except Exception:                                               # noqa: BLE001 -- no page to ask
+        return ""
+    reply = briefing.ask(question, _prompt_id(), send, _stop_if_interrupted)
+    return f'You asked the person: "{question}"\nTheir answer: {reply}' if reply else ""
+
+
 def _prompt_id():
     try:
         from server import PromptServer
@@ -416,8 +436,10 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                  tooltip="Reuses the start of the request that did not change since the last one, so only the new part is read again."),
                 io.Int.Input("lookup_tokens", default=0, min=0, max=10, optional=True,
                              tooltip="Words guessed from the prompt and checked in one step. Helps only when a rewrite mostly repeats the prompt; slower otherwise. 0 = off."),
+                io.Boolean.Input("briefing", default=False, optional=True,
+                                 tooltip="Before rewriting, the model may ask you one question in a window. Send adds your answer; Cancel, or no answer in 15 minutes, rewrites without it."),
                 io.Boolean.Input("compile_decode", default=False, optional=True,
-                                 tooltip="Compiles the model's writing step (fixed-size cache). The first request after loading is slow, later ones can be several times faster. Safetensors models on a graphics card only; replaces the prefix cache and the guessing ahead."),
+                                 tooltip="Compiles the writing step: slow first request, faster later ones. Safetensors models on a graphics card only; replaces prefix reuse and guessing ahead."),
                 io.Int.Input("refine_passes", default=0, min=0, max=3, optional=True,
                              tooltip="How many times the model checks its own rewrite against the rules and improves it. Each pass is another model call, so a rewrite takes longer."),
                 io.String.Input("refine_prompt", multiline=True, default="", optional=True,
@@ -526,7 +548,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, thinking_budget=0, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, compile_decode=False, use_comfy=False) -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, compile_decode=False, briefing=False, use_comfy=False) -> io.NodeOutput:
         from . import engine as _eng
         _eng.ASKING.budget = max(int(thinking_budget or 0), 0)
         if not enabled:
@@ -611,6 +633,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
             if state:
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}
+        if briefing:
+            note_text = "\n".join(x for x in (note_text, _briefed(clip, masked, system=system, reference_text=reference_text, notes=notes, seed=seed)) if x)
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,

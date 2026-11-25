@@ -451,7 +451,7 @@ def test_the_readout_routes_are_provided_and_answer():
         def json_response(d):
             return d
     mod.routes(T(), "/m", W)
-    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/download", "/m/engine/unload", "/m/engine/files", "/m/engine/live", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision", "/m/chat_stop", "/m/chat_attach", "/m/chat_clear"}
+    assert set(table) == {"/m/defaults", "/m/runs", "/m/chat", "/m/chat_stream", "/m/engine", "/m/engine/load", "/m/engine/download", "/m/engine/unload", "/m/engine/files", "/m/engine/live", "/m/engine/models", "/m/engine/delete", "/m/encoders", "/m/edit_decision", "/m/briefing_answer", "/m/chat_stop", "/m/chat_attach", "/m/chat_clear"}
 
 
 def test_a_tokenizer_that_reads_the_picture_out_of_kwargs_gets_it():
@@ -928,3 +928,29 @@ def test_the_request_is_labelled_when_reference_notes_or_fixed_text_surround_it(
     assert "USER:\nPROMPT TO REWRITE:\na fox in snow" in sent(note="Rating: 4")
     assert "USER:\nPROMPT TO REWRITE:\na fox in snow" in sent(macros={"PROMPT_PREFIX": "Cinematic.", "PROMPT_POSTFIX": "(none)"})
     assert "PROMPT TO REWRITE" not in sent(macros={"PROMPT_PREFIX": "(none)", "PROMPT_POSTFIX": "(none)"})
+
+
+def test_a_briefing_question_is_asked_of_the_person_and_the_answer_reaches_the_request():
+    from .. import briefing, enhance as en
+    import threading
+
+    class Clip:
+        is_engine = True
+
+        def run(self, system, user, **kw):
+            assert system == briefing.QUESTION_SYSTEM and "PROMPT TO REWRITE:\na dog runs" in user and "INSTRUCTIONS:\nbe brief" in user
+            return "Which season is it?", "ok"
+    assert en.briefing_question(Clip(), "a dog runs", system="be brief") == "Which season is it?"
+    assert briefing.clean("NONE.") == "" and briefing.clean("  ") == "" and briefing.clean('"Day or night?"') == "Day or night?"
+    sent = []
+
+    def send(event, data):
+        sent.append((event, data))
+        if event == "funui.briefing":
+            threading.Timer(0.05, lambda: briefing.answer(data["id"], "  Winter ")).start()
+    assert briefing.ask("Which season is it?", "p1", send) == "Winter"
+    assert [e for e, _ in sent] == ["funui.briefing", "funui.briefing_done"] and sent[0][1]["prompt_id"] == "p1"
+    sent.clear()
+    assert briefing.ask("Again?", "p1", lambda e, d: briefing.answer(d["id"], None) if e == "funui.briefing" else None) == ""      # Cancel: no answer
+    assert briefing.ask("Nobody?", "p1", lambda e, d: None, wait=1) == ""                                                          # nobody answers: the run goes on
+    assert briefing.answer("999", "late") is False
