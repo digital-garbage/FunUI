@@ -88,6 +88,10 @@ def _pip(args, say, what, env=None):
     return proc.wait() == 0, last
 
 
+#: What llama-cpp-python imports besides itself: installed by hand after an install made without dependencies (so it cannot replace the torch stack).
+NEEDS = ("diskcache", "numpy", "jinja2", "typing-extensions")
+
+
 def card_capability():
     """The compute capability of the graphics card, (12, 0) for a Blackwell workstation card, or None without one."""
     try:
@@ -188,6 +192,8 @@ def build_for_card(say, capability):
     say(f"engine: building llama.cpp for this card (compute {capability[0]}.{capability[1]}) with CUDA {version[0]}.{version[1]}: this takes a while, once")
     env = {"CMAKE_ARGS": f"-DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES={arch}", "CUDACXX": exe, "PATH": os.path.dirname(exe) + os.pathsep + os.environ.get("PATH", "")}
     done, last = _pip(["llama-cpp-python", "--no-binary", "llama-cpp-python", "--force-reinstall", "--no-deps", "--no-cache-dir"], say, "building llama-cpp-python", env=env)
+    if done:
+        _pip(list(NEEDS), say, "installing what llama-cpp-python needs")
     return done, last
 
 
@@ -209,6 +215,13 @@ def ensure_llama(say=lambda text: None):
             return _import()
         except (ImportError, RuntimeError, OSError) as exc:        # installed, but its libraries do not load
             problem = str(exc)
+            if "No module named" in problem:                        # one of what it imports is missing (an install without dependencies): added, then tried again
+                _pip(list(NEEDS), say, "installing what llama-cpp-python needs")
+                importlib.invalidate_caches()
+                try:
+                    return _import()
+                except (ImportError, RuntimeError, OSError) as again:
+                    problem = str(again)
     fresh = not problem
     restarted = os.path.exists(_marker())
     if fresh:
@@ -245,6 +258,7 @@ def ensure_llama(say=lambda text: None):
     if card:                                                        # still failing after a restart: the processor build, slower but it runs
         say("the graphics-card build of llama.cpp does not load here: installing the processor build instead")
         _pip(["llama-cpp-python", "--force-reinstall", "--no-deps", "--only-binary=:all:", "--extra-index-url", WHEELS + "cpu"], say, "installing llama-cpp-python")
+        _pip(list(NEEDS), say, "installing what llama-cpp-python needs")
         importlib.invalidate_caches()
         for name in [m for m in sys.modules if m.startswith("llama_cpp")]:
             del sys.modules[name]

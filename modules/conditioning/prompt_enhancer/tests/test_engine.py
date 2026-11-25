@@ -574,7 +574,7 @@ def test_a_fresh_llama_install_that_does_not_load_asks_for_a_restart_and_then_fa
     assert calls[0][0] == "llama-cpp-python" and calls[1][0] == "nvidia-cuda-runtime-cu12"        # everything is installed together, once
     assert any("restart" in x for x in said)                                                       # and the person is told up front
     monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())            # after the restart: installed, still failing
-    assert gguf.ensure_llama() == "module" and "--force-reinstall" in calls[-1]       # the processor build is the last resort
+    assert gguf.ensure_llama() == "module" and "--force-reinstall" in calls[-2]       # the processor build is the last resort (what it imports is installed after it)
 
 
 def test_a_failed_llama_decode_clears_the_memory_and_runs_the_request_again_once():
@@ -967,6 +967,23 @@ def test_the_gguf_model_is_loaded_with_llama_cpps_own_batch_sizes(monkeypatch, t
     gguf.load(str(tmp_path / "m.gguf"), cuda=True)
     assert "n_batch" not in seen and "n_ubatch" not in seen
     assert seen["n_ctx"] == 32768 + 8192                # room for an answer to run past the window the conversation is kept in
+
+
+def test_a_llama_install_missing_its_own_imports_gets_them_installed(monkeypatch):
+    from .. import gguf
+    state = {"ok": False}
+    ran = []
+
+    def fake_import():
+        if not state["ok"]:
+            raise ImportError("No module named 'diskcache'")
+        return "llama_cpp"
+    monkeypatch.setattr(gguf, "_import", fake_import)
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (ran.append(args), state.update(ok=True), (True, "ok"))[2])
+    monkeypatch.setattr(gguf, "wheel_index", lambda: ("", False))
+    import importlib.util
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    assert gguf.ensure_llama() == "llama_cpp" and ran and "diskcache" in ran[0]
 
 
 def test_a_sliding_window_model_starts_from_empty_instead_of_trimming():
@@ -1536,7 +1553,7 @@ def test_a_card_newer_than_the_prebuilt_wheels_gets_a_build_of_its_own_only_with
     monkeypatch.setattr(gguf, "install_toolkit", lambda version, gaps, say: False)
     assert "cuBLAS" in gguf.build_for_card(said.append, (12, 0))[1]       # headers and compiler only: say so instead of failing inside cmake
     monkeypatch.setattr(gguf, "toolkit_gaps", lambda exe: [])
-    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (seen.update(args=args, env=env), (True, "ok"))[1])
+    monkeypatch.setattr(gguf, "_pip", lambda args, say, what, env=None: (seen.update(args=args, env=env) if env else None, (True, "ok"))[1])
     assert gguf.build_for_card(said.append, (12, 0))[0] is True
     assert "-DCMAKE_CUDA_ARCHITECTURES=120" in seen["env"]["CMAKE_ARGS"] and "--no-binary" in seen["args"]
     monkeypatch.setattr(gguf, "card_capability", lambda: (12, 0))
