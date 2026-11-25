@@ -1446,3 +1446,25 @@ def test_the_same_files_in_another_order_are_the_same_model():
     assert eng.same_model("a/b::q8.gguf|mmproj.gguf", "a/b::q8.gguf|mmproj.gguf")
     assert eng.same_model("a/b::q8.gguf|mmproj.gguf", "a/b::mmproj.gguf|q8.gguf")
     assert not eng.same_model("a/b::q8.gguf", "a/b::q4.gguf") and not eng.same_model("a/b", "a/c")
+
+
+def test_a_gguf_that_cannot_fit_the_card_is_refused_instead_of_aborting_the_process(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    from .. import gguf
+    f = tmp_path / "m.gguf"
+    f.write_bytes(b"x" * 1000)
+    monkeypatch.setattr(gguf, "weight_bytes", lambda path, projector="": 30 * 2 ** 30)
+    import comfy.model_management as mm
+    freed, said = [], []
+    monkeypatch.setattr(mm, "unload_all_models", lambda: freed.append(1))
+    monkeypatch.setattr(mm, "soft_empty_cache", lambda *a, **k: None)
+    monkeypatch.setattr(torch.cuda, "mem_get_info", lambda *a: (10 * 2 ** 30, 24 * 2 ** 30))
+    with pytest.raises(RuntimeError, match="only 10 of 24 GB"):
+        gguf.make_room(str(f), "", said.append)
+    assert freed == [1]                                                  # ComfyUI let go of its models first
+    monkeypatch.setattr(torch.cuda, "mem_get_info", lambda *a: (40 * 2 ** 30, 48 * 2 ** 30))
+    freed.clear()
+    gguf.make_room(str(f), "", said.append)
+    assert freed == []                                                   # room enough: nothing touched

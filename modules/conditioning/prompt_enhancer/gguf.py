@@ -464,6 +464,46 @@ def watch_native(llama_cpp, say):
             pass
 
 
+def weight_bytes(path, projector=""):
+    """The size of the model files llama.cpp will put on the card: every part of a split model, and the picture projector."""
+    import re
+    first = str(path)
+    part = re.search(r"-0*1-of-(\d+)\.gguf$", first)
+    files = [first] if not part else sorted(__import__("glob").glob(re.sub(r"-0*1-of-\d+\.gguf$", "-*-of-*.gguf", first)))
+    if projector:
+        files.append(projector)
+    total = 0
+    for f in files:
+        try:
+            total += os.path.getsize(f)
+        except OSError:
+            pass
+    return total
+
+
+def make_room(path, projector, say, margin=2 * 2 ** 30):
+    """Free the card before llama.cpp takes its share: whatever ComfyUI keeps there (the video model, the encoders) is unloaded when the model
+    would not fit beside it, and a model that cannot fit even on an empty card is refused with the numbers, because llama.cpp aborts the whole
+    process when its memory runs out. Never blocks a load that has the room."""
+    try:
+        import torch
+        need = weight_bytes(path, projector) + margin
+        free, total = torch.cuda.mem_get_info()
+        if free >= need:
+            return
+        say(f"engine: the model needs about {need / 2 ** 30:.0f} GB on the graphics card and {free / 2 ** 30:.0f} GB are free: unloading what ComfyUI keeps there")
+        import comfy.model_management as mm
+        mm.unload_all_models()
+        mm.soft_empty_cache()
+        free, total = torch.cuda.mem_get_info()
+    except Exception:                                               # noqa: BLE001 -- no card, no ComfyUI here: nothing to make room in
+        return
+    if free < need - margin:
+        raise RuntimeError(f"the model files alone are {(need - margin) / 2 ** 30:.0f} GB and only {free / 2 ** 30:.0f} of {total / 2 ** 30:.0f} GB of the graphics card are free "
+                           "even after ComfyUI let go of its models. Pick a smaller quantization (Q4 or Q5), or free the card (something else is using it).")
+    say(f"engine: {free / 2 ** 30:.0f} GB are free on the graphics card now")
+
+
 def load(path, *, cuda, context=0, say=lambda text: None):
     """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it).
     A projector file beside it is loaded too, so the model can see pictures."""
@@ -478,6 +518,8 @@ def load(path, *, cuda, context=0, say=lambda text: None):
         except Exception as exc:                                    # noqa: BLE001 -- the model still writes text without it
             say(f"engine: the picture projector {os.path.basename(projector)} could not be loaded ({exc}); text only")
             projector = ""
+    if cuda:
+        make_room(path, projector, say)
     llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
         gpu = bool(llama_cpp.llama_supports_gpu_offload())
