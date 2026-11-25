@@ -139,13 +139,24 @@ def install_cublas(version, say) -> bool:
         return False
     say(f"engine: the CUDA toolkit here has no cuBLAS files, which the build needs: installing libcublas-dev-{version[0]}-{version[1]} with apt")
     env = {**os.environ, "DEBIAN_FRONTEND": "noninteractive"}
-    subprocess.run([apt, "update"], capture_output=True, text=True, env=env)
-    names = [f"libcublas-dev-{version[0]}-{version[1]}", f"libcublas-dev-{version[0]}"]
-    for name in names:
-        proc = subprocess.run([apt, "install", "-y", "--no-install-recommends", name], capture_output=True, text=True, env=env)
-        if proc.returncode == 0:
+
+    def run(args):
+        """apt with its lines going to `say`, so a long install does not look stuck. -> (success, last line)."""
+        proc = subprocess.Popen([apt, *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+        last = ""
+        for line in proc.stdout:
+            line = line.strip()
+            if line:
+                last = line
+                say(f"installing cuBLAS: {line[:110]}")
+        return proc.wait() == 0, last
+
+    run(["update"])
+    for name in [f"libcublas-dev-{version[0]}-{version[1]}", f"libcublas-dev-{version[0]}"]:
+        done, last = run(["install", "-y", "--no-install-recommends", name])
+        if done:
             return True
-        say(f"engine: apt could not install {name}: {(proc.stderr or proc.stdout).strip().splitlines()[-1:] or ['no output']}")
+        say(f"engine: apt could not install {name}: {last or 'no output'}")
     return False
 
 
