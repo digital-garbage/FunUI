@@ -1091,21 +1091,34 @@ class Engine:
     def _pieces(streamer, split, calls, dialect):
         """The events the model's text makes as it arrives (tool calls are collected in `calls`)."""
         call_text = ""
-        for chunk in streamer:
-            for kind, part in split.feed(chunk):
+
+        def events(pieces):
+            nonlocal call_text
+            for kind, part in pieces:
                 if kind == "call":
                     call_text += part
                 elif kind == "call_end":
-                    parsed = dialect.parse(call_text) if dialect.parse else None
-                    if not parsed and call_text.strip():        # not read: the model is told so (as the call's own answer) instead of the call vanishing
-                        named = re.search(r"([\w.\-]+)", call_text.replace("call:", " ", 1))
-                        parsed = {"name": named.group(1) if named else "unknown", "args": {}, "unreadable": call_text.strip()[:300]}
-                    call_text = ""
-                    if parsed:
-                        calls.append(parsed)
-                        yield {"kind": "call", "call": parsed}
+                    yield from finish()
                 else:
                     yield {"kind": kind, "text": part}
+
+        def finish():
+            """The call text gathered so far -> its event (a call that cannot be read is handed back as unreadable, so the model is told)."""
+            nonlocal call_text
+            parsed = dialect.parse(call_text) if dialect.parse else None
+            if not parsed and call_text.strip():                # not read: the model is told so (as the call's own answer) instead of the call vanishing
+                named = re.search(r"([\w.\-]+)", call_text.replace("call:", " ", 1))
+                parsed = {"name": named.group(1) if named else "unknown", "args": {}, "unreadable": call_text.strip()[:300]}
+            call_text = ""
+            if parsed:
+                calls.append(parsed)
+                yield {"kind": "call", "call": parsed}
+
+        for chunk in streamer:
+            yield from events(split.feed(chunk))
+        yield from events(split.feed("", final=True))
+        if call_text.strip():                                   # the turn ended (or was cut) before the call's closing marker: it is still a call
+            yield from finish()
 
 
 ENGINE = Engine()

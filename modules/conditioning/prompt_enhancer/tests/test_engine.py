@@ -1197,6 +1197,17 @@ def test_a_call_that_cannot_be_read_is_answered_with_an_error_not_dropped():
     assert told.startswith("Error: the call to edit_shortcuts could not be read") and acts.changes == 0 and acts.calls == 1
 
 
+def test_a_call_whose_closing_marker_never_comes_is_still_a_call():
+    from modules.conditioning.prompt_enhancer import engine as eng
+    d = next(x for x in eng.DIALECTS if x.name == "gemma4")
+    calls = []
+    got = list(eng.Engine._pieces(["I will do it.<|tool_call>call:edit_scene{scene:1,text:a dog}"], eng.Splitter(d), calls, d))        # the turn ended right after the arguments
+    assert calls == [{"name": "edit_scene", "args": {"scene": 1, "text": "a dog"}}] and [g["kind"] for g in got] == ["answer", "call"]
+    cut = []
+    list(eng.Engine._pieces(["<|tool_call>call:edit_scene{scene:1,te"], eng.Splitter(d), cut, d))                                  # cut off by the length limit: told as unreadable, not dropped
+    assert cut and cut[0]["name"] == "edit_scene" and cut[0].get("unreadable")
+
+
 def _llama_that_writes(tokens):
     class Llm:
         n_tokens = 0
