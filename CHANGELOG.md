@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Download lists the file of a repo that holds only one.** It used to show a file list only for two or more.
+
 - **A GGUF helper model no longer loads into a full graphics card.** Before llama.cpp takes its share, ComfyUI's own models are unloaded when the file would not fit beside them, and a model that cannot fit even on an empty card is refused with the numbers (llama.cpp aborts the whole ComfyUI process when its memory runs out, which restarted ComfyUI mid-load).
 
 - **Two stages can start the full-size stage at a named noise level.** New slider "Start the full size at noise level" (0 = off). A refine LoRA made to begin at 0.6 gets 0.6 at the hand-over, wherever the first stage stopped. It wins over "Noise added at the hand-over". A level below where the first stage stopped changes nothing.

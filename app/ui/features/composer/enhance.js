@@ -105,7 +105,7 @@ export function enhance(app, own) {
         const choose = (name, on) => { const next = pickFiles(sel.map((f) => f.name), picked, name, on); set("engine_model", next.length ? `${r.repo}::${next.join("|")}${r.base ? `@${r.base}` : ""}` : r.repo).then(refreshEngine); };
         const have = (f) => downloads.some((m) => String(m.source || "").startsWith(`${r.repo}::${f.name}`));
         const rows = (list) => c.region.stack({ gap: "xs", children: list.map((f) => c.checkboxRow.default({ label: `${f.name} (${gb(f.size)})${have(f) ? ", downloaded" : ""}`, checked: picked.includes(f.name), disabled: off(), onChange: (x) => choose(f.name, x) })) });
-        const listed = Boolean(r) && (sel.length > 1 || Boolean(r.file));
+        const listed = Boolean(r) && (sel.length > 0 || Boolean(r.file));
         return [
           (statusHint = c.hint.default({ text: engineSet ? engineLine() : "No model chosen: the pipeline's own text encoder writes the rewrites, and it cannot chat." })),
           c.collapsible.default({ label: "Download", open: folds.dl, onToggle: (o) => { folds.dl = o; }, body: c.region.stack({ gap: "xs", children: [

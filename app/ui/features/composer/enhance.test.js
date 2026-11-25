@@ -269,3 +269,14 @@ test("the Load list shows every downloaded model, whatever repo is typed, and Lo
   assert.equal([...page.node.querySelectorAll("button")].find((b) => b.textContent === "Load model").disabled, true);   // but not a second load
   assert.match(page.node.textContent, /Ready: x Loading n\/m: loading/);
 });
+
+
+test("a repo with a single file still lists it in Download", async () => {
+  const ps = { slots: () => [{ id: "e", node: "FunUIEnhancePrompt", inputs: { enabled: true, engine_model: "a/b" } }], currentValues: () => ({}), ensureLoaded: async () => {}, save: async () => {}, subscribe: () => () => {} };
+  const api = { enhancerEngine: async () => ({ phase: "idle" }), enhancerEncoders: async () => ({ files: [], families: [] }), enhancerRuns: async () => ({ runs: [] }), enhancerDefaults: async () => ({}),
+    enhancerEngineFiles: async () => ({ files: [{ name: "only.gguf", size: 2 ** 30 }] }), enhancerEngineModels: async () => ({ models: [] }) };
+  const page = enhance({ dom: createDom(), pipeline: ps, api }, () => {});
+  document.body.append(page.node);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(page.node.textContent, /only\.gguf \(1\.0 GB\)/);
+});
