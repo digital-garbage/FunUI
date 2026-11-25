@@ -504,6 +504,62 @@ def make_room(path, projector, say, margin=2 * 2 ** 30):
     say(f"engine: {free / 2 ** 30:.0f} GB are free on the graphics card now")
 
 
+PROBE = r"""
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("funui_gguf", sys.argv[1])
+g = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(g)
+llama_cpp = g._import()
+llm = llama_cpp.Llama(model_path=sys.argv[2], n_gpu_layers=-1, n_ctx=512, flash_attn=True, verbose=False)
+llm("Hi", max_tokens=1)
+del llm
+if sys.argv[3]:
+    g.projector_handler(llama_cpp, sys.argv[3], sys.argv[2])
+print("PROBE_OK")
+"""
+
+
+def probe(llama_cpp, path, projector, say, timeout=900):
+    """Load the model once in a throwaway process before it is loaded in ComfyUI's own: llama.cpp aborts the whole process when its build has no
+    kernels for the card (a CUDA 12.5 wheel on Blackwell, say), and this way that ends as an error message with its reason. A build that passed is
+    remembered for this card, so later loads skip the extra pass."""
+    try:
+        import torch
+        card = f"{torch.cuda.get_device_name(0)} {torch.cuda.get_device_capability(0)}"
+    except Exception:                                               # noqa: BLE001 -- no card to ask: nothing to test on
+        return
+    key = f"{getattr(llama_cpp, '__version__', '?')}|{card}|{bool(projector)}"
+    from . import engine
+    mark = os.path.join(engine.models_dir(), ".llama_gpu_ok")
+    try:
+        if key in open(mark).read().splitlines():
+            return
+    except OSError:
+        pass
+    say("engine: trying the graphics-card build of llama.cpp once in a separate process first (a bad build would otherwise stop ComfyUI itself)")
+    started = time.time()
+    try:
+        done = subprocess.run([sys.executable, "-I", "-c", PROBE, os.path.abspath(__file__), str(path), projector or ""], capture_output=True, text=True, timeout=timeout)
+        code, out = done.returncode, (done.stdout or "") + (done.stderr or "")
+    except subprocess.TimeoutExpired:
+        code, out = None, "no answer within the time allowed"
+    if code == 0 and "PROBE_OK" in out:
+        try:
+            os.makedirs(os.path.dirname(mark), exist_ok=True)
+            with open(mark, "a") as f:
+                f.write(key + "\n")
+        except OSError:
+            pass
+        say(f"engine: the llama.cpp build works on {card} ({time.time() - started:.0f}s)")
+        return
+    lines = [x.strip() for x in out.splitlines() if x.strip()][-8:]
+    how = f"ended with signal {-code}" if code is not None and code < 0 else (f"ended with exit code {code}" if code is not None else out)
+    raise RuntimeError(f"the graphics-card build of llama.cpp ({getattr(llama_cpp, '__version__', '?')}) stopped while loading the model on {card}: it {how}. "
+                       f"Last lines: {' | '.join(x[:160] for x in lines) or 'none'}. ComfyUI was not touched. "
+                       "A pack built for older cards is the usual reason on a new one: use a safetensors or fp8 model instead, or build llama-cpp-python from source "
+                       "for this card (CMAKE_ARGS=\"-DGGML_CUDA=on\" pip install llama-cpp-python --no-binary llama-cpp-python --force-reinstall).")
+
+
 def load(path, *, cuda, context=0, say=lambda text: None):
     """-> a Backend for the .gguf file `path` (the first part of a split model: llama.cpp finds the others beside it).
     A projector file beside it is loaded too, so the model can see pictures."""
@@ -520,6 +576,7 @@ def load(path, *, cuda, context=0, say=lambda text: None):
             projector = ""
     if cuda:
         make_room(path, projector, say)
+        probe(llama_cpp, path, projector, say)
     llm = llama_cpp.Llama(model_path=str(path), n_gpu_layers=-1 if cuda else 0, n_ctx=int(context) or 32768, flash_attn=bool(cuda), verbose=False, chat_handler=handler, swa_full=False)
     try:
         gpu = bool(llama_cpp.llama_supports_gpu_offload())

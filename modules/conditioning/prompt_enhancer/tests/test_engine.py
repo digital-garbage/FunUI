@@ -1468,3 +1468,26 @@ def test_a_gguf_that_cannot_fit_the_card_is_refused_instead_of_aborting_the_proc
     freed.clear()
     gguf.make_room(str(f), "", said.append)
     assert freed == []                                                   # room enough: nothing touched
+
+
+def test_a_llama_build_that_dies_in_the_trial_process_is_an_error_not_a_dead_comfyui(monkeypatch, tmp_path):
+    import subprocess
+    import types
+    import torch
+    from .. import engine as eng, gguf
+    monkeypatch.setattr(eng, "models_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i=0: "Card X")
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda i=0: (12, 0))
+    llama = types.SimpleNamespace(__version__="9.9")
+    ran = []
+    def dies(*a, **k):
+        ran.append(1)
+        return subprocess.CompletedProcess(a, -6, "", "CUDA error: no kernel image is available for execution on the device")
+    monkeypatch.setattr(gguf.subprocess, "run", dies)
+    with pytest.raises(RuntimeError, match="signal 6.*no kernel image"):
+        gguf.probe(llama, "m.gguf", "", lambda t: None)
+    ok = lambda *a, **k: (ran.append(1), subprocess.CompletedProcess(a, 0, "PROBE_OK\n", ""))[1]       # noqa: E731
+    monkeypatch.setattr(gguf.subprocess, "run", ok)
+    gguf.probe(llama, "m.gguf", "", lambda t: None)
+    gguf.probe(llama, "m.gguf", "", lambda t: None)
+    assert len(ran) == 2                                                  # the second pass was remembered

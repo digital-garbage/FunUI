@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A llama.cpp build that cannot run on the card no longer takes ComfyUI down.** The first GGUF load on a card is tried once in a separate process; if that dies, you get an error with the exit signal and its last lines instead of a ComfyUI restart. A build that passed is remembered for that card, so later loads are not slowed.
+
 - **Download lists the file of a repo that holds only one.** It used to show a file list only for two or more.
 
 - **A GGUF helper model no longer loads into a full graphics card.** Before llama.cpp takes its share, ComfyUI's own models are unloaded when the file would not fit beside them, and a model that cannot fit even on an empty card is refused with the numbers (llama.cpp aborts the whole ComfyUI process when its memory runs out, which restarted ComfyUI mid-load).
