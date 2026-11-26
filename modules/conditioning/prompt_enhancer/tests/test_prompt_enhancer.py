@@ -983,3 +983,26 @@ def test_a_briefing_question_is_asked_once_for_a_while_across_runs_and_the_answe
     assert [q for q, _ in briefing.asked()] == ["Day or night?"]
     assert seen[1] == [("Which season is it?", "Winter")]             # the model is told what was already asked
     assert "Winter" in first and "Winter" in again and third.count("Their answer") == 2 and last.count("Their answer") == 2
+
+
+def test_a_conversation_keeps_its_briefing_answers_for_as_long_as_it_lasts_and_a_reset_forgets_them(monkeypatch):
+    from .. import briefing, nodes, enhance as en
+    import sys, types
+    monkeypatch.setattr(nodes, "_prompt_id", lambda: "r")
+    monkeypatch.setattr(briefing, "ask", lambda q, run, send, check=None, wait=0: "Winter")
+    server = types.ModuleType("server")
+    server.PromptServer = types.SimpleNamespace(instance=types.SimpleNamespace(send_sync=lambda *a: None))
+    monkeypatch.setitem(sys.modules, "server", server)
+    questions = iter(["Which season is it?", "which season is it", "Day or night?"])
+    seen = []
+    monkeypatch.setattr(en, "briefing_question", lambda clip, text, earlier=(), **kw: seen.append(list(earlier)) or next(questions))
+    briefing._ASKED.clear()
+    briefing._BOOK.clear()
+    first = nodes._briefed(object(), "s1", "chat-1")
+    briefing._ASKED[:] = []
+    second = nodes._briefed(object(), "s2", "chat-1")                 # long after, in the same conversation: not asked again, and not repeated in the request
+    third = nodes._briefed(object(), "s3", "chat-1")
+    assert "Winter" in first and second == "" and third.count("Their answer") == 1 and "Day or night?" in third
+    assert seen[1] == [("Which season is it?", "Winter")] and len(briefing.asked("chat-1")) == 2
+    assert briefing.asked("chat-2") == [] and briefing.asked() == []      # another conversation, and the no-conversation list, are not touched
+    assert nodes.clear_chat("chat-1") in (True, False) and briefing.asked("chat-1") == []

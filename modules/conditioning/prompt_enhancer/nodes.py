@@ -303,6 +303,7 @@ def clear_chat(conversation) -> bool:
     key = str(conversation or "").strip()
     stop_chat(key)
     had = CONVOS.pop(key, None) is not None
+    __import__(__package__ + ".briefing", fromlist=["x"]).forget(key)
     had = JOBS.pop(key, None) is not None or had
     if had:
         history.save(RUNS, CONVOS)
@@ -368,12 +369,12 @@ def _log(entry):
     history.save(RUNS, CONVOS)
 
 
-def _briefed(clip, masked, **given) -> str:
+def _briefed(clip, masked, conversation="", **given) -> str:
     """The question the model has before it rewrites, put to the person, and their answers as a note for the request ("" when there is none).
     Each thing is asked once for a while: what was asked lately goes to the model, and a question that comes up again is answered from before."""
     from . import briefing
     run = _prompt_id()
-    before = briefing.asked()
+    before = briefing.asked(conversation)
     try:
         question = en.briefing_question(clip, masked, earlier=before, **given)
     except Exception as e:                                          # noqa: BLE001 -- a briefing that fails must not stop the rewrite
@@ -387,8 +388,9 @@ def _briefed(clip, masked, **given) -> str:
         except Exception:                                           # noqa: BLE001 -- no page to ask
             send = None
         if send:
-            briefing.remember(question, briefing.ask(question, run, send, _stop_if_interrupted))
-    return "\n".join(f'You asked the person: "{q}"\nTheir answer: {a}' for q, a in briefing.asked() if a)
+            briefing.remember(question, briefing.ask(question, run, send, _stop_if_interrupted), conversation)
+    # in a conversation the earlier answers are already in its history (they went in with the request they belong to): only what this request asked is new
+    return "\n".join(f'You asked the person: "{q}"\nTheir answer: {a}' for q, a in briefing.asked(conversation)[len(before) if conversation else 0:] if a)
 
 
 def _prompt_id():
@@ -637,7 +639,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 history = en.convo_block(state["turns"], state["summary"], keep)
             context = {"used": used, "window": window, "compact": bool(compact)}
         if briefing:
-            note_text = "\n".join(x for x in (note_text, _briefed(clip, masked, system=system, reference_text=reference_text, notes=notes, seed=seed)) if x)
+            note_text = "\n".join(x for x in (note_text, _briefed(clip, masked, key, system=system, reference_text=reference_text, notes=notes, seed=seed)) if x)
         out, status, info = en.enhance(
             clip, masked, system=system,
             reference_text=reference_text, chat="" if key else en.chat_block(rounds), style=style,

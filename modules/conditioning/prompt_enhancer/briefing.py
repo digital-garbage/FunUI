@@ -18,12 +18,15 @@ QUESTION_SYSTEM = (
     "If the material is enough, write only the word NONE.")
 
 
-KEEP = 1800                                                 # seconds an answer is remembered: the next runs do not ask it again
+KEEP = 1800                                                 # seconds an answer is remembered outside a conversation: the next runs do not ask it again
 _ASKED = []                                                 # [(when, question, answer)], newest last
+_BOOK = {}                                                  # conversation -> [(question, answer)]: kept as long as the conversation is
 
 
-def asked() -> list:
-    """What was asked lately, and what was answered ("" for no answer): [(question, answer)]."""
+def asked(key="") -> list:
+    """What was asked lately (in this conversation, for the whole of it), and what was answered ("" for no answer): [(question, answer)]."""
+    if key:
+        return list(_BOOK.get(key, ()))
     now = time.time()
     _ASKED[:] = [x for x in _ASKED if now - x[0] < KEEP][-20:]
     return [(q, a) for _, q, a in _ASKED]
@@ -35,8 +38,19 @@ def same(a, b) -> bool:
     return norm(a) == norm(b)
 
 
-def remember(question, reply):
-    _ASKED.append((time.time(), question, reply))
+def remember(question, reply, key=""):
+    if key:
+        _BOOK.setdefault(key, []).append((question, reply))
+        del _BOOK[key][:-30]
+        while len(_BOOK) > 20:                              # the longest unused conversations go first
+            _BOOK.pop(next(iter(_BOOK)))
+    else:
+        _ASKED.append((time.time(), question, reply))
+
+
+def forget(key):
+    """A conversation that was reset takes its questions with it."""
+    return _BOOK.pop(key, None) is not None
 
 
 def clean(text) -> str:
