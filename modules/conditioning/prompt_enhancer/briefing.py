@@ -4,6 +4,7 @@ The run waits here while the page shows the question (a small window with an inp
 all mean "no answer": the rewrite goes on without it."""
 import itertools
 import threading
+import time
 
 WAIT = 900                                                  # seconds the run waits for the person
 
@@ -15,6 +16,27 @@ QUESTION_SYSTEM = (
     "Do not rewrite anything. Decide whether ONE short question to the person would clearly improve the rewrite, for example a detail that is missing "
     "or two readings that give very different results. If so, write only that question, in the person's language, in one or two sentences. "
     "If the material is enough, write only the word NONE.")
+
+
+KEEP = 1800                                                 # seconds an answer is remembered: the next runs do not ask it again
+_ASKED = []                                                 # [(when, question, answer)], newest last
+
+
+def asked() -> list:
+    """What was asked lately, and what was answered ("" for no answer): [(question, answer)]."""
+    now = time.time()
+    _ASKED[:] = [x for x in _ASKED if now - x[0] < KEEP][-20:]
+    return [(q, a) for _, q, a in _ASKED]
+
+
+def same(a, b) -> bool:
+    """Whether two questions are the same one, word for word without caring for case or punctuation."""
+    norm = lambda t: " ".join("".join(ch if ch.isalnum() else " " for ch in str(t).lower()).split())      # noqa: E731
+    return norm(a) == norm(b)
+
+
+def remember(question, reply):
+    _ASKED.append((time.time(), question, reply))
 
 
 def clean(text) -> str:

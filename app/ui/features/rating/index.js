@@ -46,6 +46,20 @@ export default {
         if (text) c.toast.warn({ text });
       } catch { /* no taste module here: the rating stays a label */ }
     };
+    const slotOf = () => (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt");
+    /** A comment on the enhancer's last rewrite, asked for in a window (the same as the Chat tab's). */
+    const askComment = async (title, label, placeholder) => {
+      const text = await c.modal.prompt({ title, label, placeholder, confirmLabel: "Send" }).result;
+      if (!text || !text.trim()) return;
+      const last = await Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => { learnClock(r); return (r.runs || []).slice(-1)[0] || null; }, () => null);
+      addComment(app, text, last);
+    };
+    /** Right after a dislike, when the person switched it on: ask what was wrong, and the answer is feedback for the next rewrite. */
+    const askWhy = (value) => {
+      const taste = tasteOf(value), slot = slotOf();
+      if (!(taste && taste.rating === "disliked") || app.project.pref("enhance_ask_dislike", false) !== true || !(slot && (slot.inputs || {}).enabled)) return;
+      askComment("What was wrong with it?", "The next Generate rewrites again with this applied", "e.g. the dog should run toward the camera");
+    };
     const draw = () => {
       const t = target(), open = p.project, focus = open ? open.scenes.findIndex((s) => s.id === sel.focus) : -1;
       if (!t) return put();
@@ -57,16 +71,11 @@ export default {
       const button = c.button.sm({ label: now ? `★ ${now}` : "Rate scene…", tone: now ? "neutral" : "ghost", title: "Rate this scene's render: features that learn from ratings use it on the next generation",
         onClick: async () => {
           const pick = await c.modal.choice({ title: "How did it turn out?", items: [...CHOICES.map((o) => ({ id: o.value, label: o.label, hint: o.hint })), { id: FORGET, label: "Forget my rating", hint: "Clears it: nothing is learned from this clip." }] }).result;
-          if (pick) rate(pick);
+          if (pick) rate(pick).then(() => askWhy(pick));
         } });
       const comment = c.button.sm({ label: "Comment…", tone: "ghost", title: "Comment on the enhancer's last rewrite: the same as a comment in the Chat tab",
-        onClick: async () => {
-          const text = await c.modal.prompt({ title: "Comment on the last rewrite", label: "The next Generate rewrites again with this applied", placeholder: "e.g. warmer light, no rain", confirmLabel: "Send" }).result;
-          if (!text || !text.trim()) return;
-          const last = await Promise.resolve().then(() => app.api.enhancerRuns()).then((r) => { learnClock(r); return (r.runs || []).slice(-1)[0] || null; }, () => null);
-          addComment(app, text, last);
-        } });
-      const slot = (app.pipeline.slots() || []).find((x) => x.node === "FunUIEnhancePrompt");
+        onClick: () => askComment("Comment on the last rewrite", "The next Generate rewrites again with this applied", "e.g. warmer light, no rain") });
+      const slot = slotOf();
       put(picker.node, button.node, ...(slot && (slot.inputs || {}).comment_button ? [comment.node] : []));      // only while the enhancer has it switched on
     };
     draw();

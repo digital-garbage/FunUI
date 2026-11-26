@@ -334,11 +334,12 @@ def compact(clip, summary, turns, prompts=None, macros=None, **sampling):
     return clean(raw)
 
 
-def briefing_question(clip, text, *, system="", reference_text="", notes="", **sampling) -> str:
+def briefing_question(clip, text, *, system="", reference_text="", notes="", earlier=(), **sampling) -> str:
     """The one question the model would like answered before it rewrites `text` ("" when it needs none or could not say)."""
     from . import briefing
     body = "\n\n".join(x for x in (f"INSTRUCTIONS:\n{system}" if system else "", f"REFERENCE:\n{reference_text}" if reference_text else "",
-                                    f"NOTES:\n{notes}" if str(notes or "").strip() else "", f"PROMPT TO REWRITE:\n{text}") if x)
+                                    f"NOTES:\n{notes}" if str(notes or "").strip() else "",
+                                    ("ALREADY ASKED IN THIS RUN (do not ask these again):\n" + "\n".join(f"- {q} -> {a or '(no answer)'}" for q, a in earlier)) if earlier else "", f"PROMPT TO REWRITE:\n{text}") if x)
     plain = {"max_length": 160, "do_sample": False, "thinking": False, "repetition_penalty": 1.0}
     raw, _ = generate(clip, briefing.QUESTION_SYSTEM, body, **{**sampling, **plain})
     return briefing.clean(raw)

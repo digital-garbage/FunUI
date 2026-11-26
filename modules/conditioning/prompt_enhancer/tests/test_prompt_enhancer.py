@@ -954,3 +954,32 @@ def test_a_briefing_question_is_asked_of_the_person_and_the_answer_reaches_the_r
     assert briefing.ask("Again?", "p1", lambda e, d: briefing.answer(d["id"], None) if e == "funui.briefing" else None) == ""      # Cancel: no answer
     assert briefing.ask("Nobody?", "p1", lambda e, d: None, wait=1) == ""                                                          # nobody answers: the run goes on
     assert briefing.answer("999", "late") is False
+
+
+def test_a_briefing_question_is_asked_once_for_a_while_across_runs_and_the_answers_are_kept(monkeypatch):
+    from .. import briefing, nodes, enhance as en
+    asked = []
+    ids = iter(["run-1", "run-2", "run-3", "run-4"])
+    monkeypatch.setattr(nodes, "_prompt_id", lambda: next(ids))
+    monkeypatch.setattr(briefing, "ask", lambda q, run, send, check=None, wait=0: asked.append(q) or "Winter")
+    import sys, types
+    server = types.ModuleType("server")
+    server.PromptServer = types.SimpleNamespace(instance=types.SimpleNamespace(send_sync=lambda *a: None))
+    monkeypatch.setitem(sys.modules, "server", server)
+    seen = []
+    questions = iter(["Which season is it?", "which season is it", "Day or night?", ""])
+
+    def fake(clip, text, earlier=(), **kw):
+        seen.append(list(earlier))
+        return next(questions)
+    monkeypatch.setattr(en, "briefing_question", fake)
+    briefing._ASKED.clear()
+    first = nodes._briefed(object(), "scene 1")
+    again = nodes._briefed(object(), "scene 2")                       # the same question in other words: not asked again
+    third = nodes._briefed(object(), "scene 3")
+    last = nodes._briefed(object(), "scene 4")                        # nothing new to ask: the answers still go with the request
+    assert asked == ["Which season is it?", "Day or night?"]
+    briefing._ASKED[0] = (0, *briefing._ASKED[0][1:])                  # an answer older than half an hour is forgotten
+    assert [q for q, _ in briefing.asked()] == ["Day or night?"]
+    assert seen[1] == [("Which season is it?", "Winter")]             # the model is told what was already asked
+    assert "Winter" in first and "Winter" in again and third.count("Their answer") == 2 and last.count("Their answer") == 2

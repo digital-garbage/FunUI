@@ -369,23 +369,26 @@ def _log(entry):
 
 
 def _briefed(clip, masked, **given) -> str:
-    """The question the model has before it rewrites, put to the person, and their answer as a note for the request ("" when there is none)."""
+    """The question the model has before it rewrites, put to the person, and their answers as a note for the request ("" when there is none).
+    Each thing is asked once for a while: what was asked lately goes to the model, and a question that comes up again is answered from before."""
     from . import briefing
+    run = _prompt_id()
+    before = briefing.asked()
     try:
-        question = en.briefing_question(clip, masked, **given)
+        question = en.briefing_question(clip, masked, earlier=before, **given)
     except Exception as e:                                          # noqa: BLE001 -- a briefing that fails must not stop the rewrite
         log.warning("FunUI Prompt enhancer", f"the briefing question could not be written: {e}")
-        return ""
-    if not question:
-        return ""
-    _stop_if_interrupted()
-    try:
-        from server import PromptServer
-        send = PromptServer.instance.send_sync
-    except Exception:                                               # noqa: BLE001 -- no page to ask
-        return ""
-    reply = briefing.ask(question, _prompt_id(), send, _stop_if_interrupted)
-    return f'You asked the person: "{question}"\nTheir answer: {reply}' if reply else ""
+        question = ""
+    if question and not any(briefing.same(question, q) for q, _ in before):
+        _stop_if_interrupted()
+        try:
+            from server import PromptServer
+            send = PromptServer.instance.send_sync
+        except Exception:                                           # noqa: BLE001 -- no page to ask
+            send = None
+        if send:
+            briefing.remember(question, briefing.ask(question, run, send, _stop_if_interrupted))
+    return "\n".join(f'You asked the person: "{q}"\nTheir answer: {a}' for q, a in briefing.asked() if a)
 
 
 def _prompt_id():
