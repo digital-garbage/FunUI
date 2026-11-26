@@ -47,6 +47,7 @@ function remember(id, list) {
   } catch { /* lasts until the page is closed */ }
 }
 let draft = "";
+const watchers = new Map();     // project id -> windows that wait for a running turn to end (a window closed and opened again while the helper works)
 
 /** The pictures a scene works from, as ids the model can compare: ", references: ab12 cd34, aspect source: ef56". */
 const short = (id) => String(id);
@@ -366,6 +367,7 @@ export function openHelper(app, origin) {
     else if (!err && r && r.reply) turn.reply = r.reply;
     if (err) { if (turn.stopped) { turn.reply = ""; turn.status = "Stopped."; } else turn.reply = `No reply: ${(err && err.message) || err}`; }
     turn.open = false; turn.t1 = Date.now(); remember(p.project.id, turns()); active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true);
+    [...(watchers.get(p.project.id) || [])].forEach((f) => f(turn));
   };
   // after a refresh the helper may still be working on the server: follow it, so its writing and its questions show again
   async function attach() {
@@ -385,6 +387,13 @@ export function openHelper(app, origin) {
       });
     } catch (e) { err = e; }
     if (turn) settle(turn, r, err);
+  }
+  // a turn that still works for a window that was closed: this window shows it as working (clock, Stop) and shows its end
+  const adopted = new Set(turns().filter((t) => !t.t1));
+  if (adopted.size) {
+    active += adopted.size; busy = true; tick = setInterval(paint, 1000);
+    const ws = watchers.get(p.project.id) || new Set(); watchers.set(p.project.id, ws);
+    ws.add((t) => { if (!adopted.delete(t)) return; active -= 1; busy = active > 0; if (!busy) { clearInterval(tick); tick = 0; } paint(true); });
   }
   win = c.modal.generic({ title: "Helper", subtitle: "acts on the project, you allow each change", size: "lg", origin: origin ? () => origin.node : undefined, body: c.region.stack({ gap: "sm", children: [history, box] }), actions: [clear, stopper, send] });
   paint();

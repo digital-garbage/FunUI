@@ -505,6 +505,13 @@ class Job:
         self.lenient = False               # a download takes whatever was picked; only a load needs a model file among them
 
 
+def repeating(text, size=160, times=3):
+    """True when the end of the text is a stretch of `size` characters that the text already holds `times` times: a thought that goes round in circles."""
+    if len(text) < size * times:
+        return False
+    return text.count(text[-size:]) >= times
+
+
 class Engine:
     """One model, loaded on demand, shared by every request (one generation at a time)."""
 
@@ -1042,17 +1049,24 @@ class Engine:
                                      stops=ends, cancel=cancel, stats=into, picture=picture)
 
         def chunks():
-            written, spent, over = "", 0, False
+            written, spent, over, thought, seen = "", 0, False, "", 0
             stream = run(text, int(max_new_tokens), stats)
             for piece in stream:
                 me.activity.update(stage="writing", tokens=stats["steps"], prompt=stats["prompt"])
                 written += piece
                 yield piece
-                if budget and split.mode == "thinking":
+                if dialect.think_close and split.mode == "thinking":
                     spent += 1
-                    if spent >= budget:                      # it has thought long enough: the thought is closed for it and it answers
+                    thought += piece
+                    seen += 1
+                    if budget and spent >= budget:           # it has thought long enough: the thought is closed for it and it answers
                         over = True
                         break
+                    if seen >= 20:
+                        seen = 0
+                        if repeating(thought):               # it says the same thing again and again: the thought is closed for it and it answers
+                            over = True
+                            break
             if not over:
                 return
             stream.close()

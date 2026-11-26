@@ -4,6 +4,8 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **A thought that goes round in circles is cut off.** When a thinking model repeats the same passage again and again (for example saying over and over that it will read a rule first), the thought is closed and the model answers from there, so the Helper no longer stalls on it.
+- **Helper window reopened while it works.** Closing the Helper and opening it again during a request now shows the request as still working (clock and Stop button) and shows its answer when it ends, instead of a frozen line.
 - **Enhance tab says when it is off.** With the enhancer switched off the whole tab is greyed out; a line under the switch now says why.
 - **Helper tool calls no longer vanish when the model stops early.** A tool call that the model ended without its closing marker (it stopped right after the arguments, or was cut by the length limit) was dropped silently, so the helper looked stuck. It now counts as a call; one that cannot be read is answered with an error the model sees.
 - **Long answers are not cut at the context limit.** A GGUF model now has 8k tokens of room beyond the window the conversation is kept in, so an answer that runs past the summarising limit is finished. The conversation is summarised before the next request, as before. If the real window does fill up, the status says so.

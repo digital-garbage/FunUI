@@ -1447,6 +1447,27 @@ def test_a_thinking_budget_closes_a_long_thought_and_the_model_answers_from_ther
     assert events[-1]["tokens"] > 10
 
 
+def test_a_thought_that_goes_round_in_circles_is_closed_and_the_model_answers():
+    from .. import engine as eng
+    said = "I need to read the rule first, so I will call read_prompt before I do anything else with it. "
+
+    class Circler(_FakeGGUF):
+        def text_stream(self, text, *, stats=None, cancel=None, max_new_tokens=0, **k):
+            pieces = ["The fox ", "runs."] if "<channel|>" in text else ["<|channel>thought\n"] + [said[i:i + 5] for i in range(0, len(said), 5)] * 12
+            for i, piece in enumerate(pieces):
+                stats["steps"] = i + 1
+                yield piece
+            stats.update(tokens=len(pieces), prompt=len(text))
+    e = eng.Engine()
+    e.model = e.tok = Circler()
+    e.source, e.phase = "x.gguf", "ready"
+    events = list(e.stream([{"role": "user", "content": "hi"}], thinking=True))
+    thought = "".join(x["text"] for x in events if x["kind"] == "thinking")
+    assert 2 <= thought.count(said) < 12
+    assert "".join(x["text"] for x in events if x["kind"] == "answer") == "The fox runs."
+    assert eng.repeating("abc" * 200) and not eng.repeating("a short thought")
+
+
 def test_without_a_budget_or_with_thinking_off_the_model_is_started_once():
     from .. import engine as eng
     e = eng.Engine()
