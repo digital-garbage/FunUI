@@ -37,9 +37,9 @@ HELPER_RULE = ("You are the helper of a video project. You act on it with tools;
                "The anchor (= prefix) goes in front of every scene prompt, the postfix after it. A shortcut is shared by every project, so change one only when asked. A shortcut has a NAME (its label in the library), TRIGGERS (the words typed in a prompt that fire it) and REPLACEMENTS (what it expands into): they are three different things. Rename = change the name only, with new_name; leave triggers and replacements alone, and never remove or change triggers to rename. "
                "Always call find_settings before set_setting and find_node_inputs before set_node_inputs, and use the names they give; never guess. apply_preset only when asked; run_action only starts the action (never Generate unless asked). Lengths are in seconds.\n\n"
                "HOW YOU WORK. Act, do not announce: when you decide on a change, call the tool in that same turn; never write that you will use a tool and never put the proposed text in your answer instead of calling. Change only what the user asked for. "
-               "Every request for a change is done from a checklist, even a single change: first call plan with one item per change (or per batch of up to 20 changes), then do the items in order and call check_item for each when its change is made. "
-               "The app will not let you stop until every item is checked, so check an item only when its change was really made, or give the reason it cannot be done. "
-               "Example: the user says \"make scene 2 five seconds\". You call plan (items: [\"scene 2 to 5 seconds\"]), then edit_scene (scene 2, seconds 5, reason), then check_item (item 1, result done), then answer in one sentence. "
+               "One change is just made: call its tool. A request with several changes is done from a checklist: first call plan with one item per change, then make the changes in order; the app checks each item when its change is made, so call check_item only for an item that cannot be done (result \"cannot: the reason\"). "
+               "The app will not let you stop until every item is checked. "
+               "Example: the user says \"make scene 2 five seconds\". You call edit_scene (scene 2, seconds 5, reason), then answer in one sentence. "
                "Messages that start with APP NOTE come from the app, never from the user: they are reminders of these rules, not requests. "
                "You never see the Chat tab conversation unless you call read_chat_log, and only when the user explicitly asks you to look at or use it. "
                "Never say a change worked until the tool answered that it did. If the same call fails twice, do not repeat it: change the approach, or tell the user what blocks you. "
@@ -82,6 +82,18 @@ def intent(message) -> set:
     return {g for g, words in _WORDS.items() if re.search(words, text)}
 
 
+_MANY = re.compile(r"\b(all|every|each|both|everything|throughout)\b|\bscenes?\s*\d+\s*(?:-|to|and|,|&)\s*\d+|\b(?:\d+|two|three|four|five|several|many|multiple)\s+(?:scenes|shots|changes|things|variables|settings)\b", re.I)
+
+
+def several(message) -> bool:
+    """A request with more than one change in it (a list, several scenes, "and then"): only these are done from a checklist; one change is just made."""
+    text = str(message or "").strip()
+    if len([x for x in text.splitlines() if x.strip()]) >= 3 or _MANY.search(text):
+        return True
+    verbs = {m.group(1).lower() for m in _CHANGE.finditer(text)}
+    return len(verbs) >= 2 and bool(re.search(r"\b(and|then|also|plus|after that)\b|[;]", text, re.I))
+
+
 def wants_change(message, last_reply="") -> bool:
     """A request that asks for something to be done (not a question), so an answer without a change has failed it. A follow-up such as "will you correct them?"
     or "you didn't call the tool" counts when the helper's last answer only announced a change."""
@@ -106,8 +118,8 @@ def tools(with_rules=False, only=None) -> list:
 FORCE_AGAIN = app_note("Still nothing was changed. Call the tool that makes the change now, with all its arguments, and write nothing else.")
 
 
-PLAN_NOTE = app_note("Every change is done from a checklist, even a single one. Call plan now with one item per change (one item if there is only one; a batch of up to 20 changes may be one item). "
-             "Then do the items, calling check_item for each one when its change is made. If a change was already made, plan it and check it. Write nothing else.")
+PLAN_NOTE = app_note("This request has several changes, so write the checklist: call plan now with one item per change. "
+             "Then do the items in order; the app checks each one when its change is made. Write nothing else.")
 
 
 def force_note(message, with_rules=False, context="") -> str:
@@ -140,8 +152,8 @@ def _tools() -> list:
             fn("set_project_text", "Set the project's anchor (= prefix), postfix, negative prompt, or switch the postfix on or off (field postfix_enabled, text true or false). The whole new text; empty clears it.", {"field": {"type": "string", "enum": list(TEXTS)}, "text": {"type": "string"}, "reason": reason}, ["field", "text", "reason"]),
             fn("set_variable", "Add a $variable of the project or change its value.", {"name": {"type": "string", "description": "The name without the $."}, "value": {"type": "string"}, "reason": reason}, ["name", "value", "reason"]),
             fn("remove_variable", "Remove a $variable from the project.", {"name": {"type": "string"}, "reason": reason}, ["name", "reason"]),
-            fn("plan", "Write the checklist for any request that changes something, even one change: one item per change, or per batch of up to 20 changes. Call this first, before the changes.", {"items": {"type": "array", "items": {"type": "string"}, "description": "The steps, in the order they will be done."}}, ["items"]),
-            fn("check_item", "Tick one item of the checklist once its change was made, or say why it cannot be done.", {"item": {"type": "integer", "description": "The item's number, from 1."}, "result": {"type": "string", "description": "done, or 'cannot: ' and the reason."}}, ["item", "result"]),
+            fn("plan", "Write the checklist for a request with several changes: one item per change. Call this first, before the changes. One change needs no checklist.", {"items": {"type": "array", "items": {"type": "string"}, "description": "The steps, in the order they will be done."}}, ["items"]),
+            fn("check_item", "Say why an item of the checklist cannot be done (result: cannot: the reason). The app checks the other items itself when their change is made.", {"item": {"type": "integer", "description": "The item's number, from 1."}, "result": {"type": "string", "description": "done, or 'cannot: ' and the reason."}}, ["item", "result"]),
             fn("read_chat_log", "Read the conversation of the user's Chat tab (the enhancer's own chat, not this one), newest part last. Call it ONLY when the user explicitly asks you to look at, use or adapt to that chat log; never on your own.", {"turns": {"type": "integer", "description": "How many of the latest turns to read (default 6, at most 20)."}}, []),
             fn("find_shortcuts", "Look up shortcuts by words in their name, triggers or replacements; an empty query lists all, and words in quotes are searched as an exact phrase. Shows 40 at a time and says how many there are in all: when asked for all of them, page on with offset until you have seen every one.", {"query": {"type": "string"}, "offset": {"type": "integer", "description": "How many matches to skip, to get the next page."}}, []),
             fn("save_shortcut", "Add a shortcut or replace the one with the same name (the name is its label; the triggers are the words that fire it).", {"name": {"type": "string"}, "triggers": {"type": "array", "items": {"type": "string"}, "description": "Words or phrases that fire it."}, "replacements": {"type": "array", "items": {"type": "string"}, "description": "What it expands into; with several, one is drawn each time."}, "category": {"type": "string"}, "reason": reason}, ["name", "triggers", "replacements", "reason"]),
@@ -234,6 +246,15 @@ class Actions:
     def open_items(self) -> list:
         return [i for i, x in enumerate(self.plan, 1) if x["state"] == "open"]
 
+    def tick(self):
+        """A change was made: the app checks the next open item of the checklist itself, so the model never has to."""
+        left = self.open_items()
+        if not left:
+            return
+        self.plan[left[0] - 1].update(state="done", note="done")
+        self.on_event({"kind": "status", "text": f"Checklist: {len(self.plan) - len(left) + 1} of {len(self.plan)} done"})
+        self.show_plan()
+
     def planning(self, name, args) -> str:
         """`plan` writes the checklist, `check_item` ticks an item. They change nothing in the project; the app holds the model to the list."""
         if name == "plan":
@@ -246,7 +267,7 @@ class Actions:
             self.plan_changes = 0                          # any change made in this request counts, whether it came before the list or after
             self.on_event({"kind": "status", "text": f"Checklist: 0 of {len(self.plan)} done"})
             self.show_plan()
-            return f"Checklist saved with {len(self.plan)} items. Do them in order: make the change for an item, then call check_item for it. You may answer the user only when every item is checked."
+            return f"Checklist saved with {len(self.plan)} items. Do them in order: the app checks an item when its change is made. You may answer the user only when every item is checked."
         if not self.plan:
             return "Error: there is no checklist yet. Call plan first."
         n, result = args.get("item"), str(args.get("result") or "").strip()
@@ -254,6 +275,9 @@ class Actions:
             n = int(n)
         if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= len(self.plan):
             return f"Error: item is a number from 1 to {len(self.plan)}."
+        if self.plan[n - 1]["state"] != "open":
+            left = self.open_items()
+            return f"Item {n} is already checked. " + (f"Still open: {', '.join(str(i) for i in left[:20])}." if left else "Every item is checked: now tell the user in one or two sentences what was done and what could not be.")
         if not result:
             return "Error: result is 'done', or 'cannot: ' and the reason."
         if re.match(r"(?i)\s*(cannot|can't|skipped|refused|not possible)", result):
@@ -283,7 +307,7 @@ class Actions:
         left = self.open_items()
         lines = "\n".join(f"{i}. {self.plan[i - 1]['text']}" for i in left[:12])
         return app_note(f"Your checklist is not finished: {len(self.plan) - len(left)} of {len(self.plan)} items are checked. Still open:\n{lines}\n"
-                "Do the next open item now: call the tool for it with all its arguments, then call check_item for it. If an item cannot be done, call check_item with result 'cannot: ' and the reason. "
+                "Do the next open item now: call the tool for it with all its arguments (the app checks the item when the change is made). If an item cannot be done, call check_item with result 'cannot: ' and the reason. "
                 "Do not write to the user until every item is checked.")
 
     def find(self, query) -> str:
@@ -525,7 +549,10 @@ class Actions:
         """Answer one tool call; the page hears which tool is at work (kind "doing") until it is done."""
         self.on_event({"kind": "doing", "tool": str(call.get("name") or "")})
         try:
-            return self._call(call)
+            result = self._call(call)
+            if call.get("name") not in READS and str(result).startswith("Allowed"):
+                self.tick()
+            return result
         finally:
             self.on_event({"kind": "doing", "tool": ""})
 

@@ -440,7 +440,7 @@ def test_the_model_is_sent_back_to_an_unfinished_checklist_until_every_item_is_c
     assert out["reply"] == "Finished." and "Not finished" not in out["reply"]
 
 
-def test_even_one_change_is_made_from_a_checklist_the_model_is_asked_for(monkeypatch):
+def test_one_change_is_just_made_and_a_request_with_several_is_asked_for_a_checklist(monkeypatch):
     import json
     import threading
     from modules.conditioning.prompt_enhancer import nodes, rules as rl
@@ -454,12 +454,11 @@ def test_even_one_change_is_made_from_a_checklist_the_model_is_asked_for(monkeyp
     nodes.CONVOS.clear()
     block = lambda tool, **a: f"TOOL: {tool}\n{json.dumps(a)}\nEND_TOOL"        # noqa: E731
     seen = []
-    script = iter([block("set_variable", name="a", value="1", reason="r"), "I will try again.",                    # one change, no list, and it stops
-                   block("plan", items=["set $a"]) + "\n" + block("check_item", item=1, result="done"), "Checked."])
+    script = iter([block("set_variable", name="a", value="1", reason="r"), "Done."])
 
     def converse(clip, text, **kw):
         seen.append(text)
-        return next(script, "Checked."), "ok", [], [], ""
+        return next(script, "Done."), "ok", [], [], ""
     monkeypatch.setattr(nodes.en, "converse", converse)
     done = []
 
@@ -468,8 +467,22 @@ def test_even_one_change_is_made_from_a_checklist_the_model_is_asked_for(monkeyp
             done.append(ev["tool"])
             threading.Timer(0.01, lambda: rl.decide(ev["id"], True)).start()
     out = nodes.chat_reply("h:one", "set the variable a to 1", engine_model="tiny", max_length=8, on_event=on_event, helper={"sheet": "x", "scenes": 1})
-    assert done == ["set_variable"] and any("checklist" in t.lower() and "even a single one" in t for t in seen)
+    assert done == ["set_variable"] and not any("checklist" in t.lower() for t in seen[1:])          # nothing asked it for a list
     assert "Not finished" not in out["reply"]
+
+
+def test_the_app_checks_the_items_itself_when_a_change_is_made_and_only_a_request_with_several_changes_gets_a_checklist():
+    acts = helper.Actions(1, lambda ev: None, wait=1, variables=["a", "b"])
+    acts({"name": "plan", "args": {"items": ["set a", "set b"]}})
+    acts.changes += 1                                                          # (a refused call does not tick: only an answer that starts with Allowed does)
+    acts.tick()
+    assert acts.open_items() == [2] and acts.plan[0]["state"] == "done"
+    assert acts({"name": "check_item", "args": {"item": 1, "result": "done"}}).startswith("Item 1 is already checked. Still open: 2")
+    acts.tick()
+    assert acts.open_items() == [] and acts({"name": "check_item", "args": {"item": 2, "result": "done"}}).startswith("Item 2 is already checked. Every item is checked")
+    assert not helper.several("make scene 2 five seconds") and not helper.several("set the variable a to 1")
+    for many in ("make scenes 1-3 shorter", "shorten every scene", "make scene 2 five seconds and then rename the shortcut", "do this:\n- one\n- two\n- three", "change both prompts"):
+        assert helper.several(many), many
 
 
 def test_a_text_written_again_and_again_is_seen_as_a_loop():
