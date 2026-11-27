@@ -21,7 +21,8 @@ import { composer as c } from "./composer/composer.js";
 import { startLoading } from "./shell/loading.js";
 import { install as lightPrivacy } from "./shell/envelope.js";
 
-lightPrivacy();                      // every call to the backend travels wrapped from here on (light privacy)
+// Light privacy (shell/envelope.js) is built but switched off until it is confirmed flawless on a rental: call lightPrivacy() to turn it on.
+void lightPrivacy;
 
 // Browser settings saved under the old name (FunPack, before 5.0.3) are carried over once.
 try {

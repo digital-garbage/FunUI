@@ -65,9 +65,10 @@ export function createEnvelope({ cipher = new Cipher(), plainFetch, origin = glo
     if (!wrapped(url)) return plainFetch(input, init);
     const wire = await pack(request.clone());
     const outer = await plainFetch(ENDPOINT, { method: "POST", body: wire, headers: { "Content-Type": "application/octet-stream" }, signal: request.signal, keepalive: request.keepalive && wire.length < 60000, cache: "no-store", credentials: "same-origin" });
-    if (outer.status === 404) { off = true; return plainFetch(input, init); }
-    if (outer.status !== 200 || !/octet-stream/.test(outer.headers.get("content-type") || "")) return outer;      // not an envelope answer: the server's own refusal
-    return unwrap(outer, cipher);
+    // Only an envelope answer is wrapped (200, octet-stream). Anything else came from something that does not take the
+    // address (an older server, a proxy that refuses or rewrites the body): plain requests from here on, this one again.
+    if (outer.status !== 200 || !/octet-stream/.test(outer.headers.get("content-type") || "")) { off = true; return plainFetch(input, init); }
+    try { return await unwrap(outer, cipher); } catch (err) { if (err instanceof EnvelopeError) { off = true; return plainFetch(input, init); } throw err; }
   }
 
   /** A form upload with progress (fetch cannot report bytes sent) -> {ok, status, json()} */
