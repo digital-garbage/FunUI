@@ -287,8 +287,10 @@ def register(routes, prefix=None):
             body = None
         aid = body.get("id") if isinstance(body, dict) else None
         on = body.get("enabled") if isinstance(body, dict) else None
-        if not isinstance(on, bool) or not isinstance(aid, str) or not addons_mod.set_wanted(aid, on):
-            return web.json_response({"detail": "Name an add-on this machine offers, and say true or false."}, status=400)
+        if not isinstance(on, bool) or not isinstance(aid, str):
+            return web.json_response({"detail": f"The request did not say which add-on and true or false (it carried {type(body).__name__}: {str(body)[:80]})."}, status=400)
+        if not addons_mod.set_wanted(aid, on):
+            return web.json_response({"detail": f"This machine does not offer the add-on {aid} (NVIDIA add-ons need a CUDA card that torch can see)."}, status=400)
         return web.json_response({"addons": addons_mod.listing()})
 
     def _pipeline():
