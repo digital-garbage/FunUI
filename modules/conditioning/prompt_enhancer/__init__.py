@@ -16,6 +16,7 @@ result: confirmed working on Gemma3-12B. v5 on a rental: works with Gemma 4 E4B 
 """
 
 import time
+from ..._core import envelope_http
 from .nodes import RUNS, FunUIEnhancePrompt
 
 ID = "conditioning_prompt_enhancer"
@@ -140,7 +141,7 @@ def routes(table, base, web):
                 push({"kind": "result", "result": result})
                 push(None)
         loop.run_in_executor(None, work)
-        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        resp = envelope_http.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         await resp.prepare(req)
         try:
             while True:
@@ -173,7 +174,7 @@ def routes(table, base, web):
             return web.json_response({"running": False})
         loop, queue = asyncio.get_running_loop(), asyncio.Queue()
         backlog = job.attach(loop, queue)
-        resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        resp = envelope_http.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         await resp.prepare(req)
         send = lambda ev: resp.write(b"data: " + json.dumps(ev).encode() + b"\n\n")      # noqa: E731
         try:

@@ -19,6 +19,9 @@ import { hostFor } from "./shell/mounts.js";
 import paths from "./modules.js";
 import { composer as c } from "./composer/composer.js";
 import { startLoading } from "./shell/loading.js";
+import { install as lightPrivacy } from "./shell/envelope.js";
+
+lightPrivacy();                      // every call to the backend travels wrapped from here on (light privacy)
 
 // Browser settings saved under the old name (FunPack, before 5.0.3) are carried over once.
 try {

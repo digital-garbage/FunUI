@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Light privacy between the page and the backend.** Everything the page asks of the backend now goes through one address and is scrambled on the wire, and so are the answers, progress lines, previews and finished pictures and videos. Someone glancing at the traffic sees unreadable data instead of what you asked for. Always on, nothing to set up; older backends still work as before. This is light privacy, not security: it only keeps the traffic from being readable at a glance. Videos are now fully downloaded before they play.
 - **Gemma 4 and Qwen 3.5 as the text encoder for MiniMax-H3.** The CLIP Loader has a new "adapter" choice: put an adapter file for your encoder (from the TE-PK-Minimax-H3 page) in `models/clip_projections`, pick it, and H3 reads its prompt through that encoder. The adapter must match the encoder's size. Pictures of a request are not read by the adapted encoder, only the words. Credit: Alisson Anjos.
 - **Blank choice in a loader slot works.** Picking the empty entry of an optional file slot (for example the extra CLIP files) now clears the slot instead of bringing the old file back.
 - **A thought that goes round in circles is cut off.** When a thinking model repeats the same passage again and again (for example saying over and over that it will read a rule first), the thought is closed and the model answers from there, so the Helper no longer stalls on it.

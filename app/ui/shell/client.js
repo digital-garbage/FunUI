@@ -18,6 +18,8 @@
 // starts out sharing the id. That is the same collision, from a deliberate act,
 // and there is nothing readable on the page that would tell the two apart.
 
+import { openSocket } from "./envelope.js";
+
 const KEY = "funui.client-id";
 
 export function clientId() {
@@ -36,7 +38,7 @@ export function clientId() {
 /** ComfyUI's socket, on whatever origin served this page. */
 export function connect(id) {
   const scheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return new WebSocket(`${scheme}//${window.location.host}/ws?clientId=${encodeURIComponent(id)}`);
+  return openSocket(`${scheme}//${window.location.host}/ws?clientId=${encodeURIComponent(id)}`);
 }
 
 /**

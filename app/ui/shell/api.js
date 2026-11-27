@@ -53,6 +53,10 @@ export async function call(method, path, body) {
 /** POST a form. fetch cannot report bytes sent, so use XHR where it exists (browsers) and fetch elsewhere.
  *  Resolves a fetch-like {ok, status, json()}. */
 function post(url, form, onFraction) {
+  const env = globalThis.__funuiEnvelope;                              // light privacy: the form travels wrapped (see envelope.js)
+  return (env ? env.upload(url, form, onFraction) : Promise.resolve(null)).then((done) => done || plainPost(url, form, onFraction));
+}
+function plainPost(url, form, onFraction) {
   if (typeof XMLHttpRequest === "undefined") return fetch(url, { method: "POST", body: form });
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();

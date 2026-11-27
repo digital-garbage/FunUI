@@ -240,6 +240,9 @@ def register(routes, prefix=None):
     # pull's fetch/merge at worst.
     _git_lock = asyncio.Lock()
 
+    from . import envelope_http
+    envelope_http.register(routes, P)                  # the one address the browser sends its calls to, wrapped (light privacy)
+
     @routes.get(P + "/api/health")
     async def _health(_req):
         return web.json_response({"ok": True})
