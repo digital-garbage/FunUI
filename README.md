@@ -104,7 +104,7 @@ FunUI uses your existing ComfyUI/PyTorch install. Optional dependencies install 
 
 ## Models
 
-Manually tested on Hailuo MiniMax-H3, Lightricks LTX2.3, Lightricks LTX 2.5 and Stable Diffusion 1.5. Running other models using built-in modules is possible but not guaranteed.
+Manually tested on Hailuo MiniMax-H3 (video and image), Lightricks LTX2.3, Lightricks LTX 2.5 and Stable Diffusion 1.5. Running other models using built-in modules is possible but not guaranteed.
 
 ## Documentation
 
