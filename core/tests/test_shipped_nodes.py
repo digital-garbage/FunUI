@@ -45,7 +45,7 @@ def test_every_shipped_node_is_a_real_comfy_node(shipped, comfyui):
 FROZEN = {
     "FunUICheckpointLoader": ["ckpt_name"],
     "FunUICLIPLoader": [
-        "clip_name1", "clip_name2", "clip_name3", "clip_name4", "type", "device",
+        "clip_name1", "clip_name2", "clip_name3", "clip_name4", "type", "device", "adapter", "adapter_strength",
     ],
     "FunUISampler": [
         "model", "positive", "negative", "latent", "seed", "steps", "cfg",

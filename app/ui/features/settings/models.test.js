@@ -47,6 +47,18 @@ test("a file input nothing has chosen shows “choose”, not the first file, an
   assert.deepEqual(picked, ["only.safetensors"]);
 });
 
+test("a slot that may stay empty offers the blank choice, and picking it clears the slot", async () => {
+  const { widgetControl } = await import("./models.js");
+  const picked = [];
+  const ctl = widgetControl({ name: "clip_name2", type: "COMBO", choices: ["", "a.safetensors"] }, "a.safetensors", (v) => picked.push(v));
+  const select = ctl.node.querySelector("select") || ctl.node;
+  select.value = "";
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  assert.deepEqual(picked, [""]);
+  const empty = widgetControl({ name: "clip_name2", type: "COMBO", choices: ["", "a.safetensors"] }, "", () => {});
+  assert.equal([...(empty.node.querySelector("select") || empty.node).options].filter((o) => o.value === "").length, 1, "one blank choice, not two");
+});
+
 test("the simple view shows only nodes that ask for a choice (files, sampler, broken); “Show all nodes” brings back the rest", async () => {
   globalThis.localStorage = window.localStorage; localStorage.clear();
   const slots = [{ id: "m", node: "FunUIDiffusionModelLoader", group: "Loaders", inputs: { model_name: "h3.safetensors" } },

@@ -31,6 +31,9 @@ from comfy_api.latest import io
 
 from ..._core import log
 from .. import gguf_support
+from . import adapter as adapters
+
+adapters.register_folder()
 
 MAX_ENCODERS = 4
 
@@ -80,6 +83,11 @@ class FunUICLIPLoader(io.ComfyNode):
                                optional=True,
                                tooltip="'cpu' keeps the encoder off the GPU: slower prompts, "
                                        "more VRAM for the diffusion model."),
+                io.Combo.Input("adapter", options=["None"] + adapters.adapter_files(), default="None", optional=True,
+                               tooltip="Lets MiniMax H3 use this encoder (Gemma 4, Qwen 3.5) in place of its own. "
+                                       "Files go in models/clip_projections and must match the encoder."),
+                io.Float.Input("adapter_strength", default=1.0, min=0.0, max=2.0, step=0.05, optional=True,
+                               tooltip="1 is the fitted setting; a little above (1.05 to 1.1) matches the loudness of H3's own encoder."),
             ],
             outputs=[
                 io.Clip.Output(display_name="clip"),
@@ -88,7 +96,7 @@ class FunUICLIPLoader(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, clip_name1: str, type: str, device: str = "default", **slots) -> io.NodeOutput:
+    def execute(cls, clip_name1: str, type: str, device: str = "default", adapter: str = "None", adapter_strength: float = 1.0, **slots) -> io.NodeOutput:
         # Order matters to load_clip, so the slots are read in slot order rather
         # than in whatever order kwargs arrive.
         names = [clip_name1] + [slots.get(f"clip_name{n}") for n in range(2, MAX_ENCODERS + 1)]
@@ -167,6 +175,10 @@ class FunUICLIPLoader(io.ComfyNode):
             # and a None CLIP fails at encode time, far from the mistake.
             raise RuntimeError(
                 f"Could not load a text encoder from {', '.join(names)} as type {type!r}.")
+
+        if adapter and adapter != "None":
+            adapters.attach(clip, adapters.load_key(adapter), float(adapter_strength))
+            gguf_notes.append(f"adapter {adapter} (strength {float(adapter_strength):g})")
 
         log.info("FunUI CLIP Loader",
                  f"{len(names)} encoder file(s) loaded as type {type}, device {device}: "

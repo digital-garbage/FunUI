@@ -143,6 +143,7 @@ I express my deepest gratitude to everyone who inspired FunUI, helped with its d
 - DeepSeek team and model;
 - Google and Gemini model; Google's Gemma 4 prompt-format documentation shaped how the Helper talks to its model;
 - The Cline project: its openly published agent prompt (Apache-2.0) inspired the Helper's tool-use rules; no text was copied;
+- [Alisson Anjos](https://github.com/alisson-anjos) — the "Plato's Key" text encoder adapters for MiniMax-H3 ([TE-PK-Minimax-H3](https://huggingface.co/Alissonerdx/TE-PK-Minimax-H3), [ComfyUI-H3-Text-Encoders](https://github.com/alisson-anjos/ComfyUI-H3-Text-Encoders)); FunUI's CLIP Loader adapter is a native port of the transform;
 - Lightricks and the LTX-Video model; FunUI's identity-transfer phase tag is a port of `ltx_core` (Apache-2.0);
 - [ComfyUI-LTXVideo](https://github.com/Lightricks/ComfyUI-LTXVideo) — the LTX nodes used by the LTX pipeline presets;
 - [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) — utility nodes used by the H3 pipeline presets;

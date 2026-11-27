@@ -14,8 +14,10 @@ export const widgetControl = (w, current, set) => {
     if (!unset && !choices.includes(current)) choices.unshift(current);       // a file gone from disk still shows, so saving something else cannot swap it out
     // Nothing chosen shows as nothing chosen: showing the first file would look picked while the run has none
     // (and with one file there is nothing to change to, so it could never be picked).
-    const options = [...(unset ? [{ value: "", label: "— choose —" }] : []), ...choices.map((v) => ({ value: v, label: String(v) }))];
-    return choices.length ? c.select.md({ label, value: unset ? "" : current, options, onChange: (v) => { if (v !== "") set(choices.find((x) => String(x) === String(v)) ?? v); } })       // the choice itself: a select gives back text, and ComfyUI refuses "8" for 8
+    // A list that holds "" offers it as a choice of its own ("no file here", an optional slot): picking it clears the slot.
+    const blank = choices.includes("");
+    const options = [...(unset && !blank ? [{ value: "", label: "— choose —" }] : []), ...choices.map((v) => ({ value: v, label: v === "" ? "— none —" : String(v) }))];
+    return choices.length ? c.select.md({ label, value: unset ? "" : current, options, onChange: (v) => { if (v !== "" || blank) set(choices.find((x) => String(x) === String(v)) ?? v); } })       // the choice itself: a select gives back text, and ComfyUI refuses "8" for 8
       : c.hint.default({ text: "No choices available — nothing found in the models folder." });
   }
   if (w.type === "INT" || w.type === "FLOAT") {
