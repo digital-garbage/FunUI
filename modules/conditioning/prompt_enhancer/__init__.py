@@ -351,10 +351,19 @@ def _is_link(v):
     return isinstance(v, (list, tuple)) and len(v) == 2 and isinstance(v[0], str)
 
 
+def _link_settings(slots):
+    """An enhancer saved before prompt steps ran ahead of it is linked to the pipeline's settings, where those steps are switched on."""
+    hub = next((x["id"] for x in slots if x.get("node") == "FunUIModifierSettings"), None)
+    lacks = lambda x: x.get("node") == "FunUIEnhancePrompt" and "settings" not in (x.get("inputs") or {})
+    if hub is None or not any(lacks(x) for x in slots):
+        return slots
+    return [dict(x, inputs={**x["inputs"], "settings": [hub, 0]}) if lacks(x) else x for x in slots]
+
+
 def upgrade_slots(slots, _outputs=None):
     """An enhancer added by hand that nothing reads (the prompt still goes straight to the encoder) is wired in front of the
     prompt, as the shipped presets have it. Its own settings are kept; only the links and the prompt roles are put right."""
-    slots = list(slots)
+    slots = _link_settings(list(slots))
     for e in [x for x in slots if x.get("node") == "FunUIEnhancePrompt"]:
         if any(_is_link(v) and v[0] == e["id"] for x in slots for v in (x.get("inputs") or {}).values()):
             continue                                              # something reads it already

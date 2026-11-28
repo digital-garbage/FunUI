@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Prompt steps run before the enhancer.** What is switched on in Shot camera (camera moves, cut times, views, reframes) is written into the prompt first, so the enhancer rewrites a prompt that already has them. This works for saved pipelines too; the enhancer is linked to the pipeline's settings when it loads. Shot camera still runs again after the enhancer for what the rewrite left out.
 - **Guide frames and Audio coupling are in the Sampler window.** Both sit under Sampling now, so they show wherever the sampler settings are. An Image to Video saved before Guide frames existed gets the step added when it loads (it passes everything through while the mode is Off), so no preset has to be picked again.
 - **LTX's latent upscaler finds the video VAE on its own.** When the VAE loader had not been the one to hand it over (a cached load), the upscaler now looks for the loaded LTX video VAE itself instead of falling back to bicubic.
 - **JoyAI-Echo parts are back on LTX.** Guide frames (Middle frame and Memory from the last clips) and Audio coupling (the sound-follows-picture strength) were held back on LTX; they show again. Memory needs the JoyAI-Echo LoRA to mean anything. Both were confirmed on LTX 2.3 in v4 and are not yet re-run in v5.

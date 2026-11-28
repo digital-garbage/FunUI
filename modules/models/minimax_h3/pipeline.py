@@ -81,7 +81,7 @@ def h3_reference_to_video():
          "roles": [{"at": "generation.prompt", "input": "text", "label": "Prompt"},
                    {"at": "generation.prompt", "input": "enabled", "label": "Enhance prompt"}],
          # The picture it is shown is the scene's first picture reference, linked per run by the app.
-         "inputs": {"clip": ["clip", 0], "text": "", "enabled": False}},
+         "inputs": {"clip": ["clip", 0], "text": "", "enabled": False, "settings": ["settings", 0]}},
         # Off by default (its own switches in Settings): writes cut times, views and camera moves into [Shot N] blocks.
         {"id": "shot_camera", "group": "Preparation", "node": "FunUIShotCamera",
          "roles": [{"at": "project.video", "input": "length", "label": "Length", "drives": "frames"}],

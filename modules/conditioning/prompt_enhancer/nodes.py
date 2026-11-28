@@ -8,7 +8,7 @@ import time
 
 from comfy_api.latest import io
 
-from ..._core import log
+from ..._core import log, registry as registry_mod
 from . import enhance as en, history
 from .engine import ENGINE, EngineClip
 
@@ -401,6 +401,25 @@ def _prompt_id():
         return ""
 
 
+_SECONDS = re.compile(r"([\d.]+)\s*seconds?", re.I)
+
+
+def prepare(text, settings, video_length=""):
+    """The prompt steps that are switched on run before the model is asked: whatever they write is part of the prompt it rewrites.
+    Each step is a module's own answer to the "prompt_step" capability (text, settings, seconds -> text, or None for not mine)."""
+    found = _SECONDS.search(str(video_length or ""))
+    seconds = float(found.group(1)) if found else None
+    for spec, step in registry_mod.current().providers("prompt_step"):
+        try:
+            got = step(text, settings, seconds)
+        except Exception as exc:                                  # noqa: BLE001 -- the prompt must still go through
+            log.warning("FunUI Prompt enhancer", f"{spec.id} could not prepare the prompt: {exc}; it goes as typed")
+            continue
+        if isinstance(got, str) and got:
+            text = got
+    return text
+
+
 class FunUIEnhancePrompt(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -537,6 +556,8 @@ class FunUIEnhancePrompt(io.ComfyNode):
                                 tooltip="How long the clip being made is, as text such as '5.0 seconds (121 frames at 24 fps)' (set by the app). The VIDEO_LENGTH macro."),
                 io.String.Input("aspect_ratio", default="", optional=True,
                                 tooltip="The clip's target aspect ratio, as text such as '16:9 landscape' (set by the app). The ASPECT_RATIO macro."),
+                io.Custom("FUNUI_SETTINGS").Input("settings", optional=True,
+                                                  tooltip="The pipeline's settings: the prompt steps switched on there (such as Shot camera) run on the prompt first, before it goes to the model."),
             ],
             outputs=[io.String.Output(display_name="enhanced"),
                      io.String.Output(display_name="status")],
@@ -553,7 +574,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
                 temperature=0.7, top_p=0.92, top_k=50, min_p=0.05, repetition_penalty=1.3,
                 presence_penalty=0.0, seed=0, thinking=False, thinking_comments=True, thinking_chat=True, thinking_helper=True, helper_max_length=0, helper_temperature=0.3, thinking_budget=0, encoder_file="", encoder_family="stable_diffusion", image=None, image_2=None, image_3=None, image_4=None, use_image=True, shortcuts="",
                 lorebooks="", reference_intro="", name_entries=True, chat="", style="default", scope="whole", last_frame=False, pass_rating=False, comment_button=False, notes="", video_length="", aspect_ratio="", rating_prefix="", rating_line="", to_chat=False, conversation="", scene="", compact=True, context_tokens=0, head="", tail="",
-                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, compile_decode=False, briefing=False, use_comfy=False) -> io.NodeOutput:
+                chat_prompt="", notes_prompt="", compact_prompt="", revision_prompt="", conversation_prompt="", turns_prompt="", marks_prompt="", fixed_prompt="", edit_prompt="", self_edit=False, refine_passes=0, refine_prompt="", precision="auto", prefix_cache=True, lookup_tokens=0, compile_decode=False, briefing=False, use_comfy=False, settings=None) -> io.NodeOutput:
         from . import engine as _eng
         _eng.ASKING.budget = max(int(thinking_budget or 0), 0)
         if not enabled:
@@ -563,7 +584,7 @@ class FunUIEnhancePrompt(io.ComfyNode):
             return io.NodeOutput(text, "off")
         prompts = {"chat_prompt": chat_prompt, "notes_prompt": notes_prompt, "compact_prompt": compact_prompt, "revision_prompt": revision_prompt,
                    "conversation_prompt": conversation_prompt, "turns_prompt": turns_prompt, "marks_prompt": marks_prompt, "fixed_prompt": fixed_prompt, "edit_prompt": edit_prompt, "refine_prompt": refine_prompt}
-        text = str(text or "")
+        text = prepare(str(text or ""), settings, video_length)
         pre = post = ""
         body = text
         if scope == "own":              # only what sits between the global prefix and postfix goes to the model

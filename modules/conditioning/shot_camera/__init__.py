@@ -31,6 +31,16 @@ STATUS = "experimental"
 
 NODES = [FunUIShotCamera]
 
+
+def prompt_step(text, settings, seconds):
+    """The prompt enhancer asks every prompt step to go first: what is switched on here is written before the model sees the prompt."""
+    from .nodes import _rewrites, _values, rewritten
+    values = _values(settings)
+    if not _rewrites(values, text):
+        return None
+    return rewritten(text, values, seconds)[0]
+
+
 SETTINGS = {
     "camera_moves": {"type": "bool", "default": False, "label": "Camera moves",
                      "hint": "Adds a camera move, aimed at the most specific thing in the shot, to every [Shot N] that has none."},
@@ -90,4 +100,4 @@ def routes(table, base, web):
         return web.json_response({"forgotten": gone})
 
 
-PROVIDES = {"on_rating": on_rating, "routes": routes}
+PROVIDES = {"on_rating": on_rating, "routes": routes, "prompt_step": prompt_step}

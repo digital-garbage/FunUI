@@ -197,3 +197,16 @@ def test_camera_switch_turns_off_the_camera_rewrites_and_only_those(tmp_path, mo
     assert set(nodes.CAMERA_SWITCHES + nodes.CAMERA_CHANCES) <= set(m.SETTINGS)
     untouched = {k for k in m.SETTINGS} - set(nodes.CAMERA_SWITCHES + nodes.CAMERA_CHANCES)
     assert all(off[k] == nodes._values(on)[k] for k in untouched)
+
+
+def test_shot_camera_answers_the_enhancers_prompt_step_only_when_it_will_change_the_prompt(tmp_path, monkeypatch):
+    import types
+    monkeypatch.setenv("SHOT_CAMERA_MEMORY", str(tmp_path / "m.json"))
+    m = _mod()
+    spec = types.SimpleNamespace(id=nodes.ID, settings=m.SETTINGS, defaults=lambda: {k: v.get("default") for k, v in m.SETTINGS.items()})
+    monkeypatch.setattr(nodes.registry_mod, "current", lambda *a, **k: types.SimpleNamespace(specs={nodes.ID: spec}))
+    text = "[Shot 1] A woman walks.\n[Shot 2] She sits down."
+    assert m.prompt_step(text, {}, 5.0) is None                                              # nothing switched on: not its business
+    assert m.prompt_step("no shots here", {nodes.ID: {"shot_cuts": True}}, 5.0) is None
+    got = m.prompt_step(text, {nodes.ID: {"shot_cuts": True, "shot_cuts_chance": 1.0}}, 6.0)
+    assert got and got != text and "[Shot 2]" in got

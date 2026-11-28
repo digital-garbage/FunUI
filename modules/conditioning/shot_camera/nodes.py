@@ -107,6 +107,19 @@ def _rewrites(values, text):
     return bool(on and engine.SHOT.search(text or ""))
 
 
+def rewritten(text, values, seconds, project=""):
+    """-> (new text, what happened); what the run chose is kept for the rating that follows."""
+    out, said, chose = rewrite(text, values, seconds=seconds, project=project)
+    pid = _prompt_id()
+    if pid and (chose["views"] or chose["arms"] or chose.get("text") is not None):
+        try:
+            memory.record_run(pid, chose)
+        except Exception as exc:                               # noqa: BLE001 -- only the learning is lost, not the run
+            log.broke("FunUI Shot Camera", exc, "remembering this run")
+    log.info("FunUI Shot Camera", said)
+    return out, said
+
+
 class FunUIShotCamera(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -142,15 +155,8 @@ class FunUIShotCamera(io.ComfyNode):
         if not _rewrites(values, text):
             return io.NodeOutput(text, "unchanged")
         try:
-            out, said, chose = rewrite(text, values, seconds=length / frame_rate if frame_rate else None, project=project)
+            out, said = rewritten(text, values, length / frame_rate if frame_rate else None, project)
         except Exception as exc:                               # noqa: BLE001 -- a rewrite is never worth the run
             log.broke("FunUI Shot Camera", exc, "rewriting the prompt")
             return io.NodeOutput(text, f"left as written ({exc})")
-        pid = _prompt_id()
-        if pid and (chose["views"] or chose["arms"] or chose.get("text") is not None):
-            try:
-                memory.record_run(pid, chose)
-            except Exception as exc:                           # noqa: BLE001 -- only the learning is lost, not the run
-                log.broke("FunUI Shot Camera", exc, "remembering this run")
-        log.info("FunUI Shot Camera", said)
         return io.NodeOutput(out, said)
