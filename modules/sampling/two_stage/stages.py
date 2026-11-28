@@ -215,6 +215,18 @@ def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0, sample
     return outer
 
 
+def whole_range(sigmas, steps):
+    """The whole schedule, 1 to 0, in `steps` steps: the run's sigmas read at evenly spaced places (its own list when the counts match)."""
+    total = len(sigmas) - 1
+    if steps >= total:
+        return sigmas
+    at = torch.linspace(0, total, steps + 1, dtype=torch.float64)
+    lo = at.floor().long().clamp(max=total)
+    hi = (lo + 1).clamp(max=total)
+    frac = (at - lo).to(sigmas.dtype)
+    return sigmas[lo] * (1 - frac) + sigmas[hi] * frac
+
+
 def backed_up(sigmas, steps, amount, start=0.0):
     """The schedule for the full-size stage. The hand-over starts `amount` of the way from the cut back to the sigma
     before it: the enlarged guess gets more fresh noise, and the model is told the true noise level it now sees.
@@ -268,11 +280,10 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
 
     noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed = (list(args) + [None] * 8)[:8]
     latent_shapes = kwargs.get("latent_shapes")
-    # `refine` > 0: the first stage runs the WHOLE schedule (a finished small video), and the full size only redoes its last `refine` steps.
+    # `refine` > 0: the first stage runs the WHOLE range of the schedule in `steps` steps (a finished small video), and the full size
+    # then runs the last `refine` steps of it. The run's own steps only give the schedule's shape; the calls are steps + refine.
     total = len(sigmas) - 1
     cut = max(1, total - int(refine)) if refine else steps
-    if refine:
-        steps = total
     why = _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, cut)
     if why is None:
         _t, _c, frames, h, w = latent_shapes[0]
@@ -301,7 +312,7 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
         picture_video = None
         small_image, _ = comfy.utils.pack_latents(
             (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
-    first, second = sigmas[:steps + 1], backed_up(sigmas, cut, back_up, start_sigma)
+    first, second = (whole_range(sigmas, steps) if refine else sigmas[:steps + 1]), backed_up(sigmas, cut, back_up, start_sigma)
     if scheduler2:
         second = second_schedule(guider.model_patcher.get_model_object("model_sampling"), scheduler2, sigmas, cut, second)
     sampler_two = sampler
@@ -336,10 +347,10 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
     base_model = guider.model_patcher
     first_model, second_model = model_for_stage(base_model, "First"), model_for_stage(base_model, "Second")
     whole = sigmas.clone()
-    if not refine:                                  # (a finished first stage is the whole schedule as it is; the refine pass is a run of its own)
+    if not refine:
         whole[steps:] = second.to(whole)           # the schedule the model sees follows the second stage's own
         whole[steps] = second[0]                    # the step index is found by sigma, so the schedule the model sees holds the one it is called at
-    setattr(guider, FULL, whole)
+    setattr(guider, FULL, None if refine else whole)      # a finished first stage and the refine pass are each a run of their own
     setattr(guider, dit_hooks.STAGE, 1)
     guider.model_patcher = first_model
     try:                                            # everything from here to the end: an error between the stages (enlarging) must not leave the stage-1 model on a guider ComfyUI may cache
@@ -364,8 +375,6 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
             def shifted(step, x0, x, total):
                 return callback(step + steps, x0, x, total + steps)
         setattr(guider, dit_hooks.STAGE, 2)
-        if refine:
-            setattr(guider, FULL, None)               # the refine pass sees its own short schedule, as a run of its own would
         guider.model_patcher = second_model
         return run(noise, handed, sampler_two, second, denoise_mask, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
     finally:

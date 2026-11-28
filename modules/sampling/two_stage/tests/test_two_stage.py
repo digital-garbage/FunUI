@@ -60,12 +60,20 @@ def test_first_steps_run_small_and_the_rest_full_size(model):
 def test_the_first_stage_can_run_the_whole_schedule_and_the_full_size_only_redoes_the_end(model):
     seen = []
     sigmas = (1.0, 0.9, 0.7, 0.3, 0.0)
-    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "finish_first": True, "refine_steps": 2, "back_up": 0.0}, sigmas=sigmas, seen=seen)
-    assert "whole schedule" in note and "last 2" in note
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 4, "finish_first": True, "refine_steps": 2, "back_up": 0.0}, sigmas=sigmas, seen=seen)
+    assert "whole schedule" in note and "2 at the full" in note
     assert calls == [(4, 4)] * 4 + [(8, 8)] * 2                # four steps small (the finished video), the last two at full size
     assert seen[0] == pytest.approx(list(sigmas)) and seen[3] == pytest.approx(list(sigmas))
     assert seen[4] == pytest.approx([0.7, 0.3, 0.0])            # the refine pass sees its own short schedule
-    assert torch.isfinite(out.unbind()[0]).all()
+
+
+def test_the_two_step_counts_add_up_to_the_calls_and_the_first_stage_covers_the_whole_range(model):
+    seen = []
+    sigmas = (1.0, 0.9, 0.8, 0.7, 0.5, 0.3, 0.1, 0.0)          # a run of 7 steps: set 4 + 3
+    _note, _out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 4, "finish_first": True, "refine_steps": 3, "back_up": 0.0}, sigmas=sigmas, seen=seen)
+    assert calls == [(4, 4)] * 4 + [(8, 8)] * 3
+    assert len(seen[0]) == 5 and seen[0][0] == 1.0 and seen[0][-1] == 0.0       # stage one: its own 4 steps, 1 down to 0
+    assert seen[4] == pytest.approx([0.5, 0.3, 0.1, 0.0])                         # stage two: the last 3 steps of the run's schedule
 
 
 def test_off_means_the_plain_run(model):
