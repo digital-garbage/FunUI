@@ -327,6 +327,9 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
     if resize:
         try:
             upscaler = _upscaler(resize)
+            if is_ltx_upscaler(upscaler) and not takes_picture(guider):         # takes_picture: the model is an LTX one
+                log.warning(TITLE, f"latent upscaler not used, bicubic instead: {resize} is made for LTX, and this model is not LTX; pick the upscaler made for it")
+                upscaler = None
         except Exception as e:                      # noqa: BLE001 -- a missing file must not lose the run
             log.warning(TITLE, f"latent upscaler not used, bicubic instead: {e}")
     log.info(TITLE, f"first {steps} step(s) at latent {h1}x{w1} instead of {h}x{w}, then {len(second) - 1} at the full size")

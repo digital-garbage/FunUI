@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **Two stages says what is wrong when an LTX upscaler file is picked on another model.** On H3 the log now says the file is made for LTX and the hand-over is enlarged by Bicubic, instead of talking about LTX's VAE.
 - **Two stages can finish the video in the first stage.** "Finish the video in the first stage" runs the whole schedule on the smaller picture, so the first stage makes a finished small video. The full size then redoes only the last few steps ("Steps at the full size", 3 by default, as in LTX's own two-stage) on the enlarged picture. Off by default; the usual cut after a few steps is unchanged.
 - **Prompt steps run before the enhancer.** What is switched on in Shot camera (camera moves, cut times, views, reframes) is written into the prompt first, so the enhancer rewrites a prompt that already has them. This works for saved pipelines too; the enhancer is linked to the pipeline's settings when it loads. Shot camera still runs again after the enhancer for what the rewrite left out.
 - **Guide frames and Audio coupling are in the Sampler window.** Both sit under Sampling now, so they show wherever the sampler settings are. An Image to Video saved before Guide frames existed gets the step added when it loads (it passes everything through while the mode is Off), so no preset has to be picked again.

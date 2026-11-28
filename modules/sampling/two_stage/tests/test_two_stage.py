@@ -422,3 +422,12 @@ def test_a_named_start_level_sets_the_full_size_stage_noise_and_ignores_a_lower_
     assert abs(float(backed_up(sigmas, 2, 0.5, 0.8)[0]) - 0.8) < 1e-6              # it wins over the back-up amount
     assert backed_up(sigmas, 2, 0.5, 0.5).tolist() == backed_up(sigmas, 2, 0.5).tolist()      # below where the first stage stopped: unchanged
     assert float(backed_up(sigmas, 2, 0.0, 1.0)[0]) < float(sigmas[1])                # never as far back as the previous step
+
+
+def test_an_ltx_upscaler_picked_on_another_model_says_so_and_is_not_run(model, monkeypatch):
+    from modules.sampling.two_stage import stages
+    monkeypatch.setattr(stages, "_upscaler", lambda name: __import__('types').SimpleNamespace(model=type("LatentUpsampler", (), {})()))
+    said = []
+    monkeypatch.setattr(stages.log, "warning", lambda title, msg: said.append(msg))
+    _run(model, {"enabled": True, "size": 0.5, "steps": 2, "resize": "upscaler", "upscaler": "ltx-x2.safetensors"})
+    assert any("made for LTX" in m for m in said)

@@ -73,3 +73,4 @@ def test_the_ltx_upscaler_runs_between_un_normalise_and_normalise_and_the_hand_o
     assert torch.allclose(seen["in"], stats.un_normalize(video)) and out.shape == (1, 4, 2, 6, 6)
     stats._LAST.clear()                                # no tables: the run goes on with the plain resize
     assert stages.enlarge(video, 6, 6, upscaler=up).shape == (1, 4, 2, 6, 6)
+
