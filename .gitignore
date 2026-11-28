@@ -52,3 +52,4 @@ app/playwright-report/
 /log.jsonl
 /console.log
 /console.prev.log
+/remote.json

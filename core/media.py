@@ -150,7 +150,7 @@ def get(mid: str) -> dict | None:
     return next((it for it in _load_index() if it.get("id") == mid), None)
 
 
-def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
+def save_upload(orig_name: str, data: bytes, limit=..., mid: str | None = None) -> dict:
     """Write one uploaded file and record it. Raises ValueError for anything
     this store refuses -- an empty upload, an extension not on the allowlist,
     or a file over MAX_BYTES -- so the route can turn that into a 400 naming
@@ -164,7 +164,9 @@ def save_upload(orig_name: str, data: bytes, limit=...) -> dict:
     if ext not in ALLOWED_EXT:
         raise ValueError(f"{ext or 'that file type'} is not something FunUI imports")
 
-    mid = uuid.uuid4().hex[:12]
+    if mid is not None and not is_id(mid):
+        raise ValueError("that is not a media id")
+    mid = mid or uuid.uuid4().hex[:12]          # a given id is a copy of a file another FunUI holds (Remote Instance)
     filename = mid + ext
     _dir()
     (config.MEDIA_DIR / filename).write_bytes(data)
