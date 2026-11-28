@@ -151,7 +151,7 @@ def _add_aspect(slots):
     out = []
     for x in slots:
         if x is latent:
-            out += [fresh["aspect_source"], aspect]
+            out += ([] if "aspect_source" in ids else [fresh["aspect_source"]]) + [aspect]      # the page may have laid the picture slot in already (a new media input of the preset): not twice
             x = {**x, "inputs": {**x["inputs"], "width": ["aspect", 0], "height": ["aspect", 1]},
                  "roles": [r for r in x.get("roles") or [] if r.get("input") not in ("width", "height")]}
         elif x is start:
@@ -180,8 +180,19 @@ def _add_text_fallback(slots):
     return [dict(x, roles=new) if x is start else x for x in slots]
 
 
+def _once(slots):
+    """A slot id twice (an earlier build laid the picture slot in beside its own copy): the first copy stays."""
+    seen, out = set(), []
+    for x in slots:
+        if x.get("id") in seen:
+            continue
+        seen.add(x.get("id"))
+        out.append(x)
+    return out
+
+
 def upgrade(slots, _outputs=None):
-    return _add_text_fallback(_add_aspect(_upgrade_video(slots)))
+    return _add_text_fallback(_add_aspect(_upgrade_video(_once(slots))))
 
 
 def _upgrade_video(slots):

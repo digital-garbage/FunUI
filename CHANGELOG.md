@@ -4,6 +4,7 @@ What is new in each version, in plain words. Newest first.
 
 ## [Unreleased]
 
+- **LTX project that said "'aspect_source' is used by more than one slot" loads again.** A saved Image to Video pipeline could hold the reference picture slot twice (the page laid it in beside the one the upgrade added). The duplicate is dropped when the project loads, and the upgrade no longer adds a second.
 - **Gemma 4 and Qwen 3.5 as the text encoder for MiniMax-H3.** The CLIP Loader has a new "adapter" choice: put an adapter file for your encoder (from the TE-PK-Minimax-H3 page) in `models/clip_projections`, pick it, and H3 reads its prompt through that encoder. The adapter must match the encoder's size. Pictures of a request are not read by the adapted encoder, only the words. Credit: Alisson Anjos.
 - **Blank choice in a loader slot works.** Picking the empty entry of an optional file slot (for example the extra CLIP files) now clears the slot instead of bringing the old file back.
 - **A thought that goes round in circles is cut off.** When a thinking model repeats the same passage again and again (for example saying over and over that it will read a rule first), the thought is closed and the model answers from there, so the Helper no longer stalls on it.

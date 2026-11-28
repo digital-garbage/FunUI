@@ -278,6 +278,21 @@ def test_an_image_to_video_pipeline_saved_before_the_aspect_source_gets_it():
     assert upgrade(now) == now
 
 
+def test_a_saved_pipeline_that_already_holds_the_aspect_source_picture_is_not_given_a_second():
+    from modules.models.ltx.pipeline import presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    old = [x for x in now if x["id"] != "aspect"]                    # the page laid the picture slot in, the size slot is still missing
+    ids = [x["id"] for x in upgrade(old)]
+    assert sorted(ids) == sorted(x["id"] for x in now) and len(ids) == len(set(ids))
+
+
+def test_a_saved_pipeline_that_already_holds_a_slot_twice_is_repaired_when_it_loads():
+    from modules.models.ltx.pipeline import presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    twice = [*now, dict(next(x for x in now if x["id"] == "aspect_source"))]
+    assert [x["id"] for x in upgrade(twice)] == [x["id"] for x in now]
+
+
 def test_the_block_count_is_read_off_the_header(comfyui):
     m = _ltx()
     keys = {f"model.diffusion_model.transformer_blocks.{i}.attn1.to_q.weight" for i in range(48)} | {"model.diffusion_model.audio_adaln_single.linear.weight"}
