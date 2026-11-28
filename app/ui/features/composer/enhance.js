@@ -3,6 +3,7 @@
 import { composer as c } from "../../composer/composer.js";
 import { RATING_PREFIX } from "../rating/choices.js";
 import { pickFiles } from "./repo_pick.js";
+import { withEnhancer } from "./add_enhancer.js";
 
 const NODE = "FunUIEnhancePrompt";
 const DIALS = [["temperature", 0.7, 0, 2, 0.05, "Higher gives more varied wording, lower more predictable."], ["top_p", 0.92, 0, 1, 0.01, "Picks only among the likeliest words whose chances add up to this share."],
@@ -82,7 +83,11 @@ export function enhance(app, own) {
   const scroller = (n) => { for (let e = n && n.parentElement; e; e = e.parentElement) if (e.scrollHeight > e.clientHeight && /(auto|scroll)/.test((e.ownerDocument.defaultView.getComputedStyle(e) || {}).overflowY || "")) return e; return null; };
   function paint() {
     const sl = slot();
-    if (!sl) return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: "Pick a preset that has one, or add the “FunUI Enhance Prompt” node in Settings ▸ Models & Pipeline." })]);
+    if (!sl) {
+      const plan = withEnhancer(ps.slots());
+      return page.set([c.emptyState.default({ icon: "✎", title: "No prompt enhancer here", hint: plan.why || "This pipeline has none. Add one and it is wired in front of the prompt, off until you switch it on.",
+        action: plan.slots ? c.button.md({ label: "Add enhancer", tone: "primary", onClick: async () => { const res = await ps.edit({ slots: plan.slots }); if (res && res.refused && res.refused.length) c.toast.warn({ text: `Could not add the enhancer: ${res.refused[0]}` }); } }) : undefined })]);
+    }
     const v = sl.inputs || {}, val = (n, d) => (v[n] === undefined ? d : v[n]);
     const on = val("enabled", false), greedy = val("greedy", false);
     const styles = defaults && defaults.styles ? Object.keys(defaults.styles) : ["default", "dynamic"], style = styles.includes(val("style", "default")) ? val("style", "default") : "default";

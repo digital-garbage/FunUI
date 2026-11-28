@@ -347,4 +347,39 @@ def routes(table, base, web):
             return web.json_response({"files": [], "families": [], "why": f"the CLIP loader module is not available: {exc}"})
 
 
-PROVIDES = {"routes": routes}
+def _is_link(v):
+    return isinstance(v, (list, tuple)) and len(v) == 2 and isinstance(v[0], str)
+
+
+def upgrade_slots(slots, _outputs=None):
+    """An enhancer added by hand that nothing reads (the prompt still goes straight to the encoder) is wired in front of the
+    prompt, as the shipped presets have it. Its own settings are kept; only the links and the prompt roles are put right."""
+    slots = list(slots)
+    for e in [x for x in slots if x.get("node") == "FunUIEnhancePrompt"]:
+        if any(_is_link(v) and v[0] == e["id"] for x in slots for v in (x.get("inputs") or {}).values()):
+            continue                                              # something reads it already
+        mine = [x for x in slots if x is not e and x.get("node") == "CLIPTextEncode" and not _is_link((x.get("inputs") or {}).get("text"))
+                and any(r.get("at") == "generation.prompt" and r.get("input") == "text" for r in x.get("roles") or [])]
+        if len(mine) != 1:
+            continue
+        t = mine[0]
+        role = next(r for r in t["roles"] if r.get("at") == "generation.prompt" and r.get("input") == "text")
+        inputs = dict(e.get("inputs") or {})
+        if not _is_link(inputs.get("clip")) and _is_link((t.get("inputs") or {}).get("clip")):
+            inputs["clip"] = list(t["inputs"]["clip"])
+        if not inputs.get("text"):
+            inputs["text"] = (t.get("inputs") or {}).get("text") or ""
+        roles = list(e.get("roles") or [])
+        for need in ({"at": "generation.prompt", "input": "text", "label": role.get("label") or "Prompt"},
+                     {"at": "generation.prompt", "input": "enabled", "label": "Enhance prompt"}):
+            if not any(r.get("at") == need["at"] and r.get("input") == need["input"] for r in roles):
+                roles.append(need)
+        fixed = {**e, "inputs": inputs, "roles": roles, "group": e.get("group") or t.get("group") or "Preparation"}
+        moved = {**t, "roles": [r for r in t["roles"] if r is not role], "inputs": {**t["inputs"], "text": [e["id"], 0]}}
+        slots = [x for x in slots if x is not e]
+        slots = [fixed if x is None else (moved if x is t else x) for x in slots]
+        slots.insert(slots.index(moved), fixed)                  # before what reads it
+    return slots
+
+
+PROVIDES = {"routes": routes, "upgrade_slots": upgrade_slots}
