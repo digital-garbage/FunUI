@@ -52,22 +52,22 @@ SETTINGS = {
         "hint": "Share of the full width and height. 0.7 is about half the work per step.",
         "when": {"enabled": True},
     },
-    "finish_first": {
-        "type": "bool", "default": False,
-        "label": "Finish the video in the first stage",
-        "hint": "The first stage goes through the whole schedule (in the steps set below) and makes a finished small video; the full size then runs the last steps of the schedule on the enlarged picture. The calls are the two step counts added; the sampler's own steps only shape the schedule.",
+    "steps": {
+        "type": "int", "default": 2, "min": 1, "max": 100, "step": 1,
+        "label": "Steps in the first stage",
+        "hint": "With Two stages on, the sampler's own Steps are not used: the steps here and at the full size are the run (4 and 3 make 7 calls). The sampler's Steps and scheduler only give the schedule its shape.",
         "when": {"enabled": True},
     },
     "refine_steps": {
-        "type": "int", "default": 3, "min": 1, "max": 8, "step": 1,
+        "type": "int", "default": 3, "min": 1, "max": 100, "step": 1,
         "label": "Steps at the full size",
-        "hint": "The last steps of the schedule, run at the full size (LTX's own two-stage uses 3).",
-        "when": {"enabled": True, "finish_first": True},
+        "hint": "The steps run at the full size, after the first stage (LTX's own two-stage uses 3).",
+        "when": {"enabled": True},
     },
-    "steps": {
-        "type": "int", "default": 2, "min": 1, "max": 8, "step": 1,
-        "label": "Steps in the first stage",
-        "hint": "Out of the run's own steps. At least one step is always left for the full size. With Finish the video in the first stage: all the steps of the first stage.",
+    "finish_first": {
+        "type": "bool", "default": False,
+        "label": "Finish the video in the first stage",
+        "hint": "The first stage goes through the whole schedule in its steps and makes a finished small video; the full size then runs the last steps of the schedule on the enlarged picture. Off: the first stage runs the first part of the schedule and the full size the rest.",
         "when": {"enabled": True},
     },
     "back_up": {
@@ -139,10 +139,10 @@ def install(patcher, values, key):
         log.once("two_stage:no_upscaler_file", log.WARNING, TITLE, "Latent upscaler is chosen but no file is picked (models/latent_upscale_models is empty), so the hand-over is enlarged by Bicubic")
     patcher.add_wrapper_with_key(WrappersMP.OUTER_SAMPLE, key, make_wrapper(size, steps, resize, method, float(values.get("back_up", 0.5)),
                                   _known(values.get("sampler2"), comfy.samplers.SAMPLER_NAMES), _known(values.get("scheduler2"), comfy.samplers.SCHEDULER_NAMES), float(values.get("start_sigma", 0.0)),
-                                  int(values.get("refine_steps", 3)) if values.get("finish_first") else 0))
+                                  int(values.get("refine_steps", 0)), bool(values.get("finish_first"))))
     patcher.add_wrapper_with_key(WrappersMP.SAMPLER_SAMPLE, f"{key}.schedule", keep_whole_schedule)
     other = [n for n in (values.get("sampler2"), values.get("scheduler2")) if _known(n, comfy.samplers.SAMPLER_NAMES + comfy.samplers.SCHEDULER_NAMES)]
-    return (f"the whole schedule in {steps} step(s) at {size:.0%} of the size, then {int(values.get('refine_steps', 3))} at the full size" if values.get("finish_first") else f"first {steps} step(s) at {size:.0%} of the size" + (f", full size by {'/'.join(other)}" if other else "") + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else ""))
+    return (f"{'the whole schedule in ' if values.get('finish_first') else 'first '}{steps} step(s) at {size:.0%} of the size, then {int(values.get("refine_steps") or 0) or "the rest"} at the full size" + (f", full size by {'/'.join(other)}" if other else "") + (f", enlarged by {resize}" if resize else ", no latent upscaler file found: enlarged by Bicubic" if nofile else f", enlarged by {method}" if method != "bicubic" else ""))
 
 
 PROVIDES = {"modifier": install, "setting_options": lambda: {"upscaler": _options()}}

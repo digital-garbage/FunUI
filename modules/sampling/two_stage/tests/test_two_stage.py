@@ -76,6 +76,14 @@ def test_the_two_step_counts_add_up_to_the_calls_and_the_first_stage_covers_the_
     assert seen[4] == pytest.approx([0.5, 0.3, 0.1, 0.0])                         # stage two: the last 3 steps of the run's schedule
 
 
+def test_with_both_step_counts_set_the_samplers_own_steps_are_not_used(model):
+    sigmas = (1.0, 0.9, 0.8, 0.7, 0.5, 0.3, 0.1, 0.0)          # the sampler says 7
+    note, _out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 3, "refine_steps": 2, "back_up": 0.0}, sigmas=sigmas)
+    assert calls == [(4, 4)] * 3 + [(8, 8)] * 2                # 3 + 2 calls, not 7
+    _note, _out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 6, "refine_steps": 5, "back_up": 0.0}, sigmas=sigmas)
+    assert calls == [(4, 4)] * 6 + [(8, 8)] * 5                # more than the run's steps works too
+
+
 def test_off_means_the_plain_run(model):
     note, out, calls = _run(model, {"enabled": False})
     assert note is None and calls == [(8, 8)] * 4
