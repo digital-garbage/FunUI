@@ -241,11 +241,14 @@ def register(routes, prefix=None):
     _git_lock = asyncio.Lock()
 
     from . import envelope_http
-    envelope_http.register(routes, P)                  # the one address the browser sends its calls to, wrapped (light privacy)
+    envelope_http.register(routes, P)
+    from . import remote
+    remote.register(routes, P)                         # Settings ▸ Remote Instance: connect to another machine over SSH                  # the one address the browser sends its calls to, wrapped (light privacy)
 
     @routes.get(P + "/api/health")
     async def _health(_req):
-        return web.json_response({"ok": True})
+        from . import remote
+        return web.json_response({"ok": True, **remote.identity()})
 
     @routes.get(P + "/api/modules")
     async def _modules(req):
@@ -1053,6 +1056,31 @@ def register(routes, prefix=None):
             return web.json_response({"problems": problems}, status=400)
         return web.json_response({"media": saved, "problems": problems})
 
+    @routes.post(P + "/api/mirror/media")
+    async def _media_mirror(req):
+        """A copy of a media file under the id another FunUI gave it: how a remote machine receives what the local project holds.
+        Multipart: an `id` field, then the file. Answers with whether it is held now."""
+        reader = await req.multipart()
+        mid, saved = None, False
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+            if part.name == "id":
+                mid = (await part.text()).strip()
+            elif part.filename:
+                if media.get(mid or ""):
+                    await part.release()
+                    saved = True
+                    continue
+                data = bytes(await part.read(decode=False))
+                try:
+                    await asyncio.to_thread(media.save_upload, part.filename, data, None, mid)
+                    saved = True
+                except ValueError as exc:
+                    return web.json_response({"problems": [str(exc)]}, status=400)
+        return web.json_response({"held": bool(saved and mid and media.get(mid))})
+
     @routes.get(P + "/api/media/{mid}/file")
     async def _media_file(req):
         path = media.path_for(req.match_info["mid"])
@@ -1354,6 +1382,8 @@ if web is not None and PromptServer is not None:
     # an unguarded attribute here takes the whole pack down with it.
     try:
         register(PromptServer.instance.routes)
+        from . import remote as _remote
+        _remote.install(PromptServer.instance.app)     # while a remote instance is connected, calls go there (core/remote.py)
     except Exception as exc:  # noqa: BLE001
         log.failed("route registration", exc)
     else:

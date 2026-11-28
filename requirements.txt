@@ -20,3 +20,6 @@ accelerate
 # The enhancer engine reads any model's tokenizer; older ones ship only a sentencepiece file.
 sentencepiece
 protobuf
+
+# Remote Instance (Settings ▸ Remote Instance): the SSH connection to another machine, with key or password login and a tunnel.
+paramiko

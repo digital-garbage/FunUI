@@ -7,6 +7,7 @@ import { engine } from "./engine.js";
 import { modules } from "./modules.js";
 import { system } from "./system.js";
 import { packs } from "./packs.js";
+import { remote } from "./remote.js";
 import { taste } from "./taste.js";
 import { editor } from "./editor.js";
 import { shotMemory } from "./shotmemory.js";
@@ -42,6 +43,8 @@ export default {
     app.pipeline.subscribe(offerShot);
     add("system", "Updates & ComfyUI", "Update FunUI, switch its branch, roll back, or restart ComfyUI.", "⟳", "good",
       system(app), "System", "update git branch restart rollback");
+    add("remote", "Remote Instance", "Control ComfyUI and FunUI on another machine over SSH.", "⇄", "accent",
+      remote(app), "System", "remote ssh rental vast gpu server connect tunnel");
     add("customnodes", "Custom Nodes", "Install, update and remove ComfyUI node packs.", "⧉", "neutral",
       packs(app), "System", "custom nodes packs install");
   },
