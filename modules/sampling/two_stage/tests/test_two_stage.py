@@ -57,6 +57,17 @@ def test_first_steps_run_small_and_the_rest_full_size(model):
     assert torch.isfinite(video).all() and torch.isfinite(audio).all()
 
 
+def test_the_first_stage_can_run_the_whole_schedule_and_the_full_size_only_redoes_the_end(model):
+    seen = []
+    sigmas = (1.0, 0.9, 0.7, 0.3, 0.0)
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "finish_first": True, "refine_steps": 2, "back_up": 0.0}, sigmas=sigmas, seen=seen)
+    assert "whole schedule" in note and "last 2" in note
+    assert calls == [(4, 4)] * 4 + [(8, 8)] * 2                # four steps small (the finished video), the last two at full size
+    assert seen[0] == pytest.approx(list(sigmas)) and seen[3] == pytest.approx(list(sigmas))
+    assert seen[4] == pytest.approx([0.7, 0.3, 0.0])            # the refine pass sees its own short schedule
+    assert torch.isfinite(out.unbind()[0]).all()
+
+
 def test_off_means_the_plain_run(model):
     note, out, calls = _run(model, {"enabled": False})
     assert note is None and calls == [(8, 8)] * 4

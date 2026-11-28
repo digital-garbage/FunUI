@@ -203,13 +203,13 @@ def enlarge(video, h, w, upscaler=None, method="bicubic"):
     return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
-def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0, sampler2=None, scheduler2=None, start_sigma=0.0):
+def make_wrapper(size, steps, resize=None, method="bicubic", back_up=0.0, sampler2=None, scheduler2=None, start_sigma=0.0, refine=0):
     def outer(executor, *args, **kwargs):
         # Every OUTER_SAMPLE wrapper behind this one belongs around the WHOLE run, not around each stage (Noise
         # merging's per-run state, Taste, STAS' report ...). They are moved to wrap the staged run as one call.
         from comfy.patcher_extension import WrapperExecutor
         rest = executor.wrappers[executor.idx + 1:]
-        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, *a, **k)
+        staged = lambda *a, **k: _staged(executor.original, executor.class_obj, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, refine, *a, **k)
         return WrapperExecutor.new_class_executor(staged, executor.class_obj, rest, 0).execute(*args, **kwargs)
 
     return outer
@@ -260,7 +260,7 @@ def model_for_stage(patcher, stage):
     return staged
 
 
-def _staged(original, guider, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, *args, **kwargs):
+def _staged(original, guider, size, steps, resize, method, back_up, sampler2, scheduler2, start_sigma, refine, *args, **kwargs):
     run = original
     import comfy.nested_tensor
     import comfy.utils
@@ -268,7 +268,12 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
 
     noise, latent_image, sampler, sigmas, denoise_mask, callback, disable_pbar, seed = (list(args) + [None] * 8)[:8]
     latent_shapes = kwargs.get("latent_shapes")
-    why = _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps)
+    # `refine` > 0: the first stage runs the WHOLE schedule (a finished small video), and the full size only redoes its last `refine` steps.
+    total = len(sigmas) - 1
+    cut = max(1, total - int(refine)) if refine else steps
+    if refine:
+        steps = total
+    why = _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, cut)
     if why is None:
         _t, _c, frames, h, w = latent_shapes[0]
         h1, w1 = small_grid(h, w, size)
@@ -296,9 +301,9 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
         picture_video = None
         small_image, _ = comfy.utils.pack_latents(
             (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
-    first, second = sigmas[:steps + 1], backed_up(sigmas, steps, back_up, start_sigma)
+    first, second = sigmas[:steps + 1], backed_up(sigmas, cut, back_up, start_sigma)
     if scheduler2:
-        second = second_schedule(guider.model_patcher.get_model_object("model_sampling"), scheduler2, sigmas, steps, second)
+        second = second_schedule(guider.model_patcher.get_model_object("model_sampling"), scheduler2, sigmas, cut, second)
     sampler_two = sampler
     if sampler2:
         import comfy.samplers
@@ -328,8 +333,9 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
     base_model = guider.model_patcher
     first_model, second_model = model_for_stage(base_model, "First"), model_for_stage(base_model, "Second")
     whole = sigmas.clone()
-    whole[steps:] = second.to(whole)               # the schedule the model sees follows the second stage's own
-    whole[steps] = second[0]                        # the step index is found by sigma, so the schedule the model sees holds the one it is called at
+    if not refine:                                  # (a finished first stage is the whole schedule as it is; the refine pass is a run of its own)
+        whole[steps:] = second.to(whole)           # the schedule the model sees follows the second stage's own
+        whole[steps] = second[0]                    # the step index is found by sigma, so the schedule the model sees holds the one it is called at
     setattr(guider, FULL, whole)
     setattr(guider, dit_hooks.STAGE, 1)
     guider.model_patcher = first_model
@@ -355,6 +361,8 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
             def shifted(step, x0, x, total):
                 return callback(step + steps, x0, x, total + steps)
         setattr(guider, dit_hooks.STAGE, 2)
+        if refine:
+            setattr(guider, FULL, None)               # the refine pass sees its own short schedule, as a run of its own would
         guider.model_patcher = second_model
         return run(noise, handed, sampler_two, second, denoise_mask, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
     finally:
