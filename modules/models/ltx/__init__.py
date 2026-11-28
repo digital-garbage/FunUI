@@ -64,8 +64,8 @@ def detect(keys) -> bool:
 
 
 #: Enhancements that run on LTX but have not been proven on a real run there: held back (hidden) until they have.
-#: Proven on LTX so far: Step merging and the Attention explorer. Take an id off this list once it has been.
-HELD_BACK = ("conditioning_identity_transfer", "guide_frames", "camera_move", "shot_memory", "audio_coupling", "decisiveness",
+#: Proven on LTX so far: Step merging, the Attention explorer, Guide frames and Audio coupling (v4's JoyAI-Echo parts, confirmed on LTX 2.3 with the LoRA). Take an id off this list once it has been.
+HELD_BACK = ("conditioning_identity_transfer", "camera_move", "shot_memory", "decisiveness",
              "echoshift", "dynashift", "momentum", "output_guidance", "reins", "sharpness", "trajectory_guidance", "velocity_bias", "alg",
              "attention_temperature", "block_repeat", "context_windows", "explore_first_step", "identity_bank", "prompt_nudge",
              "score_slider", "temporal_style")
