@@ -5,12 +5,20 @@ import torch
 
 
 class _Stats:
-    def get_buffer(self, name):
-        return torch.full((4,), 2.0) if name == "std-of-means" else torch.full((4,), 0.5)
+    def un_normalize(self, x):
+        return x * 2.0 + 0.5
+
+    def normalize(self, x):
+        return (x - 0.5) / 2.0
 
 
 class _VideoVAE:                                      # the name is how the loader tells an LTX video VAE from an audio one
     per_channel_statistics = _Stats()
+
+
+class _Vae:
+    def __init__(self, model):
+        self.first_stage_model = model
 
 
 class _Fake:
@@ -28,9 +36,11 @@ class _Fake:
 def stats():
     from core import latent_stats
     latent_stats._LAST.clear()
-    latent_stats.remember(_VideoVAE())
+    vae = _Vae(_VideoVAE())
+    latent_stats.remember(vae)
     yield latent_stats
     latent_stats._LAST.clear()
+    del vae
 
 
 def test_the_tables_normalise_and_un_normalise_each_other(stats):
@@ -42,7 +52,7 @@ def test_an_audio_vae_leaves_the_tables_alone(stats):
     class AudioVAE:
         per_channel_statistics = _Stats()
     stats._LAST.clear()
-    stats.remember(AudioVAE())
+    stats.remember(_Vae(AudioVAE()))
     assert not stats.available()
 
 

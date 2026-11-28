@@ -79,6 +79,6 @@ class FunUIVAELoader(io.ComfyNode):
             keys = sorted(state_dict)
             raise RuntimeError(f"ComfyUI did not recognise {vae_name} as a VAE ({len(keys)} weights, first keys: "
                                f"{', '.join(keys[:6])}; header: {sorted(metadata or {})[:6]})")
-        latent_stats.remember(vae.first_stage_model)             # LTX's latent upscaler needs the video VAE's tables (Two stages)
+        latent_stats.remember(vae)             # LTX's latent upscaler needs the video VAE's tables (Two stages)
         log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
         return vae

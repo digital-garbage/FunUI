@@ -256,7 +256,7 @@ def test_image_to_video_from_references_takes_its_start_from_the_first_reference
     fallback = next(r["text_fallback"] for s in slots for r in s.get("roles") or [] if r.get("text_fallback"))
     assert {"slot": "anchor", "input": "bypass", "value": True} in fallback["set"]      # nothing in References: the anchor is bypassed
     anchor = next(s for s in slots if s["id"] == "anchor")
-    assert anchor["inputs"]["image"] == ["source_image", 1]
+    assert anchor["inputs"]["image"] == ["fit", 0]                     # through the fit step
 
 
 def test_an_image_to_video_pipeline_saved_before_the_aspect_source_gets_it():
@@ -303,6 +303,17 @@ def test_image_to_video_has_its_schedule_as_a_setting_and_an_old_saved_one_gets_
     assert next(x for x in upgrade(old) if x["id"] == "sigmas")["node"] == "FunUISchedule"
     written = [dict(x, inputs={"sigmas": "1.0, 0.5, 0.0"}) if x["id"] == "sigmas" else x for x in old]
     assert next(x for x in upgrade(written) if x["id"] == "sigmas")["node"] == "ManualSigmas"       # a schedule the person wrote stays
+
+
+def test_the_start_picture_goes_through_a_fit_step_and_an_old_saved_pipeline_gets_it():
+    from modules.models.ltx.pipeline import presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    fit = next(x for x in now if x["id"] == "fit")
+    assert fit["node"] == "FunUIFitPicture" and fit["inputs"]["fit"] == "crop" and fit["inputs"]["image"] == ["source_image", 1]
+    assert fit["inputs"]["width"] == ["aspect", 0] and next(x for x in now if x["id"] == "anchor")["inputs"]["image"] == ["fit", 0]
+    old = [{**x, "inputs": {**x["inputs"], "image": ["source_image", 1]}} if x["id"] == "anchor" else x for x in now if x["id"] != "fit"]
+    fixed = upgrade(old)
+    assert [x["id"] for x in fixed] == [x["id"] for x in now] and upgrade(fixed) == fixed
 
 
 def test_the_block_count_is_read_off_the_header(comfyui):

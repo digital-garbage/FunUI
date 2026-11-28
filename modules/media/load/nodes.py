@@ -188,3 +188,28 @@ class FunUILoadMedia(io.ComfyNode):
         sound = components.audio or _SILENCE
         log.info("FunUI Load Media", f"loaded {name}: {count} frames at {REF_VIDEO_FPS} fps")
         return io.NodeOutput(first, images[index], sound)
+
+
+class FunUIFitPicture(io.ComfyNode):
+    """A picture brought to a given size: crop the overflow, pad the gap, or stretch. The stock start-picture nodes always crop."""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="FunUIFitPicture",
+            display_name="FunUI Fit Picture",
+            category="FunUI/Media",
+            description="Brings a picture to the width and height given: crop what overflows, pad the gap with black, or stretch.",
+            inputs=[
+                io.Image.Input("image"),
+                io.Int.Input("width", default=0, min=0, max=16384, tooltip="0 keeps the picture's own width."),
+                io.Int.Input("height", default=0, min=0, max=16384, tooltip="0 keeps the picture's own height."),
+                io.Combo.Input("fit", options=list(prep.FITS), default="crop",
+                               tooltip="crop: fill the size, cutting what overflows. pad: keep the whole picture, black bars. stretch: fill the size, changing the shape."),
+            ],
+            outputs=[io.Image.Output(display_name="image")],
+        )
+
+    @classmethod
+    def execute(cls, image, width: int, height: int, fit: str) -> io.NodeOutput:
+        return io.NodeOutput(prep.shape(image, width=int(width), height=int(height), fit=fit))

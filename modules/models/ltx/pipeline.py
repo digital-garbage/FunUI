@@ -15,6 +15,13 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
+def _fit():
+    """The start picture brought to the clip's shape the way the person says (the stock node always crops)."""
+    return {"id": "fit", "group": "Preparation", "node": "FunUIFitPicture",
+            "roles": [{"at": "generation.sampling", "input": "fit", "label": "Start picture fit"}],
+            "inputs": {"image": ["source_image", 1], "width": ["aspect", 0], "height": ["aspect", 1], "fit": "crop"}}
+
+
 def _schedule(latent_source):
     """The schedule as a setting: the official distilled list unless another scheduler or step count is picked."""
     return {"id": "sigmas", "group": "Sampling", "node": "FunUISchedule",
@@ -89,8 +96,9 @@ def _image_to_video():
                                       "size": {"slot": "aspect", "width": "width", "height": "height"}}}],
          "inputs": {"media_id": ""}},
         {"id": "split", "group": "Preparation", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["latent", 0]}},
+        _fit(),
         {"id": "anchor", "group": "Preparation", "node": "LTXVImgToVideoInplace",
-         "inputs": {"vae": ["vae", 0], "image": ["source_image", 1], "latent": ["split", 0],
+         "inputs": {"vae": ["vae", 0], "image": ["fit", 0], "latent": ["split", 0],
                     "strength": 1.0, "bypass": False}},
         # Pictures from the clips before (Guide frames, filled per run by the app; nothing in it passes everything through).
         {"id": "guides", "group": "Preparation", "node": "FunUIGuideFrames",
@@ -199,6 +207,22 @@ def _once(slots):
     return out
 
 
+def _add_fit(slots):
+    """An Image to Video saved before the start picture could be fitted: the fit step goes between the picture and the anchor
+    ("crop" is what the stock node did, so nothing changes until another fit is picked)."""
+    ids = {x.get("id"): x for x in slots}
+    anchor, aspect = ids.get("anchor"), ids.get("aspect")
+    if "fit" in ids or not anchor or not aspect or anchor.get("node") != "LTXVImgToVideoInplace" or (anchor.get("inputs") or {}).get("image") != ["source_image", 1]:
+        return slots
+    out = []
+    for x in slots:
+        if x is anchor:
+            out.append(_fit())
+            x = {**x, "inputs": {**x["inputs"], "image": ["fit", 0]}}
+        out.append(x)
+    return out
+
+
 def _add_schedule(slots):
     """An Image to Video saved with the schedule written out as numbers gets the schedule as a setting (steps, scheduler);
     the numbers are the official list, so nothing changes until another one is picked."""
@@ -212,7 +236,7 @@ def _add_schedule(slots):
 
 
 def upgrade(slots, _outputs=None):
-    return _add_schedule(_add_text_fallback(_add_aspect(_upgrade_video(_once(slots)))))
+    return _add_fit(_add_schedule(_add_text_fallback(_add_aspect(_upgrade_video(_once(slots))))))
 
 
 def _upgrade_video(slots):
