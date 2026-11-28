@@ -52,6 +52,7 @@ FROZEN = {
         "sampler_name", "scheduler", "denoise", "settings", "sigmas",
     ],
     "FunUILoadModifiers": ["model", "settings"],
+    "FunUISchedule": ["model", "latent", "steps", "scheduler"],
     "FunUILatentUpscalerLoader": ["upscaler_name"],
     "FunUICutOpening": ["images", "frames", "fps", "audio"],
     "FunUISaveVideo": ["images", "audio", "fps", "filename_prefix", "encoder", "codec", "quality", "settings"],

@@ -293,6 +293,18 @@ def test_a_saved_pipeline_that_already_holds_a_slot_twice_is_repaired_when_it_lo
     assert [x["id"] for x in upgrade(twice)] == [x["id"] for x in now]
 
 
+def test_image_to_video_has_its_schedule_as_a_setting_and_an_old_saved_one_gets_it():
+    from modules.models.ltx.pipeline import DISTILLED_SIGMAS, presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    sigmas = next(x for x in now if x["id"] == "sigmas")
+    assert sigmas["node"] == "FunUISchedule" and {r["input"] for r in sigmas["roles"]} == {"steps", "scheduler"}
+    assert sigmas["inputs"]["scheduler"] == "distilled (official)" and sigmas["inputs"]["steps"] == 8
+    old = [dict(x, node="ManualSigmas", inputs={"sigmas": DISTILLED_SIGMAS}, roles=[]) if x["id"] == "sigmas" else x for x in now]
+    assert next(x for x in upgrade(old) if x["id"] == "sigmas")["node"] == "FunUISchedule"
+    written = [dict(x, inputs={"sigmas": "1.0, 0.5, 0.0"}) if x["id"] == "sigmas" else x for x in old]
+    assert next(x for x in upgrade(written) if x["id"] == "sigmas")["node"] == "ManualSigmas"       # a schedule the person wrote stays
+
+
 def test_the_block_count_is_read_off_the_header(comfyui):
     m = _ltx()
     keys = {f"model.diffusion_model.transformer_blocks.{i}.attn1.to_q.weight" for i in range(48)} | {"model.diffusion_model.audio_adaln_single.linear.weight"}

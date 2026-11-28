@@ -7,7 +7,8 @@ size, and the remaining steps finish there. References and text are untouched; o
 sampled differs. This is the cross-resolution schedule of NVIDIA's Sol-H3 (arXiv 2609.35110); see the
 README Thank you section.
 
-It installs on the model, so it works with any sampler. Not yet run on a real H3 here.
+It installs on the model, so it works with any sampler. Works on any video model that makes sound with the picture (H3, LTX).
+Not yet run on a real LTX here.
 """
 
 from comfy.patcher_extension import WrappersMP
@@ -25,7 +26,7 @@ MOUNT = "generation.sampling"
 STAGE = "load"
 CATEGORY = "sampling"
 STATUS = "experimental"
-REQUIRES = ["audio_stream", "adaln_modalities"]
+REQUIRES = ["audio_stream"]
 
 
 def _files():

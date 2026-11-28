@@ -15,7 +15,15 @@ the conditioning, the sound's length and the saved video agree on.
 DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 
 
-def _common(latent_slots, latent_source, positive_source, negative_source, decode_source=("sampler", 0)):
+def _schedule(latent_source):
+    """The schedule as a setting: the official distilled list unless another scheduler or step count is picked."""
+    return {"id": "sigmas", "group": "Sampling", "node": "FunUISchedule",
+            "roles": [{"at": "generation.sampling", "input": "steps", "label": "Steps"},
+                      {"at": "generation.sampling", "input": "scheduler", "label": "Scheduler"}],
+            "inputs": {"model": ["model", 0], "latent": list(latent_source), "steps": 8, "scheduler": "distilled (official)"}}
+
+
+def _common(latent_slots, latent_source, positive_source, negative_source, decode_source=("sampler", 0), picked_schedule=False):
     """What both pipelines share: the four loaders, the prompt, the sampler and the render.
     `latent_slots` hold the latent the sampler starts from and whatever makes it."""
     video = {"at": "project.video", "input": "frame_rate", "label": "FPS", "drives": "fps"}
@@ -38,7 +46,7 @@ def _common(latent_slots, latent_source, positive_source, negative_source, decod
         {"id": "settings", "group": "Preparation", "node": "FunUIModifierSettings", "inputs": {"settings": "{}"}},
         {"id": "modifiers", "group": "Preparation", "node": "FunUILoadModifiers",
          "inputs": {"model": ["model", 0], "settings": ["settings", 0]}},
-        {"id": "sigmas", "group": "Sampling", "node": "ManualSigmas", "inputs": {"sigmas": DISTILLED_SIGMAS}},
+        _schedule(["latent", 0]) if picked_schedule else {"id": "sigmas", "group": "Sampling", "node": "ManualSigmas", "inputs": {"sigmas": DISTILLED_SIGMAS}},
         {"id": "sampler", "group": "Sampling", "node": "FunUISampler",
          "roles": [{"at": "generation.sampling", "input": "sampler_name", "label": "Sampler"},
                    {"at": "generation.seed", "input": "seed", "label": "Seed"}],
@@ -97,7 +105,7 @@ def _image_to_video():
         {"id": "join_made", "group": "Render", "node": "LTXVConcatAVLatent",
          "inputs": {"video_latent": ["crop", 2], "audio_latent": ["split_made", 1]}},
     ]
-    return _common(latent, ["join", 0], ["guides", 0], ["guides", 1], decode_source=("join_made", 0))
+    return _common(latent, ["join", 0], ["guides", 0], ["guides", 1], decode_source=("join_made", 0), picked_schedule=True)
 
 
 def _direct_video_to_video():
@@ -191,8 +199,20 @@ def _once(slots):
     return out
 
 
+def _add_schedule(slots):
+    """An Image to Video saved with the schedule written out as numbers gets the schedule as a setting (steps, scheduler);
+    the numbers are the official list, so nothing changes until another one is picked."""
+    ids = {x.get("id"): x for x in slots}
+    old, latent = ids.get("sigmas"), ids.get("latent")
+    if not old or old.get("node") != "ManualSigmas" or not latent or latent.get("node") != "FunUIEmptyLatent":
+        return slots
+    if str((old.get("inputs") or {}).get("sigmas", "")).replace(" ", "") != DISTILLED_SIGMAS.replace(" ", ""):
+        return slots                                    # a schedule the person wrote: left as it is
+    return [{**_schedule(["latent", 0]), **({"group": old["group"]} if old.get("group") else {})} if x is old else x for x in slots]
+
+
 def upgrade(slots, _outputs=None):
-    return _add_text_fallback(_add_aspect(_upgrade_video(_once(slots))))
+    return _add_schedule(_add_text_fallback(_add_aspect(_upgrade_video(_once(slots)))))
 
 
 def _upgrade_video(slots):
