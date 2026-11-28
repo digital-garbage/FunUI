@@ -235,8 +235,41 @@ def _add_schedule(slots):
     return [{**_schedule(["latent", 0]), **({"group": old["group"]} if old.get("group") else {})} if x is old else x for x in slots]
 
 
+def _add_guides(slots):
+    """An Image to Video saved before Guide frames existed gets the step (nothing in it passes everything through), so its
+    settings show without picking the preset again: guides after the anchor, cut off again before the decode."""
+    ids = {x.get("id"): x for x in slots}
+    anchor, join, sampler, decode = ids.get("anchor"), ids.get("join"), ids.get("sampler"), ids.get("decode")
+    if "guides" in ids or not (anchor and join and sampler and decode and ids.get("conditioning") and ids.get("split")):
+        return slots
+    if (join.get("inputs") or {}).get("video_latent") != ["anchor", 0] or (sampler.get("inputs") or {}).get("latent") != ["join", 0]:
+        return slots
+    if any(x.get("id") in ("split_made", "crop", "join_made") for x in slots):
+        return slots
+    guides = {"id": "guides", "group": "Preparation", "node": "FunUIGuideFrames",
+              "inputs": {"positive": ["conditioning", 0], "negative": ["conditioning", 1], "vae": ["vae", 0],
+                         "latent": ["anchor", 0], "frames": ""}}
+    made = [{"id": "split_made", "group": "Render", "node": "LTXVSeparateAVLatent", "inputs": {"av_latent": ["sampler", 0]}},
+            {"id": "crop", "group": "Render", "node": "LTXVCropGuides",
+             "inputs": {"positive": ["guides", 0], "negative": ["guides", 1], "latent": ["split_made", 0]}},
+            {"id": "join_made", "group": "Render", "node": "LTXVConcatAVLatent",
+             "inputs": {"video_latent": ["crop", 2], "audio_latent": ["split_made", 1]}}]
+    out = []
+    for x in slots:
+        if x is join:
+            out.append(guides)
+            x = {**x, "inputs": {**x["inputs"], "video_latent": ["guides", 2]}}
+        elif x is sampler:
+            x = {**x, "inputs": {**x["inputs"], "positive": ["guides", 0], "negative": ["guides", 1]}}
+        elif x is decode:
+            out.extend(made)
+            x = {**x, "inputs": {**x["inputs"], "samples": ["join_made", 0]}}
+        out.append(x)
+    return out
+
+
 def upgrade(slots, _outputs=None):
-    return _add_fit(_add_schedule(_add_text_fallback(_add_aspect(_upgrade_video(_once(slots))))))
+    return _add_guides(_add_fit(_add_schedule(_add_text_fallback(_add_aspect(_upgrade_video(_once(slots)))))))
 
 
 def _upgrade_video(slots):

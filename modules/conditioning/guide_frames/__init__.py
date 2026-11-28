@@ -21,7 +21,7 @@ ID = "guide_frames"
 TITLE = "Guide frames"
 MOUNT = "settings.general"
 STAGE = "conditioning"
-CATEGORY = "continuity"
+CATEGORY = "sampling"
 STATUS = "experimental"
 REQUIRES = ["ltx_av"]
 

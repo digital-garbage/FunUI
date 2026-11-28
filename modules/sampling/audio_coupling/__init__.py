@@ -12,7 +12,7 @@ ID = "audio_coupling"
 TITLE = "Video→audio coupling"
 MOUNT = "generation.sampling"
 STAGE = "guidance"
-CATEGORY = "guidance"
+CATEGORY = "sampling"
 STATUS = "experimental"
 REQUIRES = ["ltx_av"]
 

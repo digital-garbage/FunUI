@@ -13,16 +13,34 @@ _LAST = []
 
 def remember(vae):
     """Called by the VAE loader with the VAE it just made; anything that is not an LTX video VAE is ignored."""
-    model = getattr(vae, "first_stage_model", None)
-    stats = getattr(model, "per_channel_statistics", None)
-    if stats is None or not hasattr(stats, "un_normalize") or "video" not in (type(model).__module__ + type(model).__name__).lower():
+    if not _is_video_vae(getattr(vae, "first_stage_model", None)):
         return
     _LAST[:] = [weakref.ref(vae)]
 
 
-def _stats():
+def _is_video_vae(model):
+    stats = getattr(model, "per_channel_statistics", None)
+    return stats is not None and hasattr(stats, "un_normalize") and "video" in (type(model).__module__ + type(model).__name__).lower()
+
+
+def _found():
+    """The VAE the loader left, or (it was never asked: a cached or older load, another way in) a live LTX video VAE."""
     vae = _LAST[0]() if _LAST else None
-    return vae.first_stage_model.per_channel_statistics if vae is not None else None
+    if vae is not None:
+        return vae.first_stage_model
+    import gc
+    for obj in gc.get_objects():
+        try:
+            if type(obj).__name__ == "VideoVAE" and _is_video_vae(obj):
+                return obj
+        except Exception:                       # noqa: BLE001  an object that cannot be asked is not it
+            continue
+    return None
+
+
+def _stats():
+    found = _found()
+    return found.per_channel_statistics if found is not None else None
 
 
 def available():

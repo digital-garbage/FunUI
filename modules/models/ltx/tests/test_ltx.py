@@ -317,6 +317,31 @@ def test_the_start_picture_goes_through_a_fit_step_and_an_old_saved_pipeline_get
     assert [x["id"] for x in fixed] == [x["id"] for x in now] and upgrade(fixed) == fixed
 
 
+def test_an_old_saved_image_to_video_gets_the_guide_frames_step():
+    from modules.models.ltx.pipeline import presets, upgrade
+    now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
+    gone = {"guides", "split_made", "crop", "join_made"}
+    by = {x["id"]: x for x in now}
+    old = []
+    for x in now:
+        if x["id"] in gone:
+            continue
+        i = dict(x["inputs"])
+        if x["id"] == "join":
+            i["video_latent"] = ["anchor", 0]
+        if x["id"] == "sampler":
+            i.update(positive=["conditioning", 0], negative=["conditioning", 1])
+        if x["id"] == "decode":
+            i["samples"] = ["sampler", 0]
+        old.append({**x, "inputs": i})
+    fixed = upgrade(old)
+    assert [x["id"] for x in fixed] == [x["id"] for x in now] or {x["id"] for x in fixed} == {x["id"] for x in now}
+    got = {x["id"]: x for x in fixed}
+    for k in ("join", "sampler", "decode"):
+        assert got[k]["inputs"] == by[k]["inputs"] or {a: b for a, b in got[k]["inputs"].items() if a in ("video_latent", "positive", "negative", "samples")} == {a: b for a, b in by[k]["inputs"].items() if a in ("video_latent", "positive", "negative", "samples")}
+    assert upgrade(fixed) == fixed
+
+
 def test_the_block_count_is_read_off_the_header(comfyui):
     m = _ltx()
     keys = {f"model.diffusion_model.transformer_blocks.{i}.attn1.to_q.weight" for i in range(48)} | {"model.diffusion_model.audio_adaln_single.linear.weight"}
