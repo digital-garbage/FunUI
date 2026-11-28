@@ -101,7 +101,7 @@ SETTINGS = {
         "type": "enum", "keep_missing": True, "default": (_files() or [""])[0],
         "options": _options(),
         "label": "Latent upscaler file",
-        "hint": "The H3 latent upscaler file. The list is read again each time Settings opens.",
+        "hint": "An H3 or LTX latent upscaler file (LTX's doubles the size: set the first stage to 50% to match). The list is read again each time Settings opens.",
         "when": {"enabled": True, "resize": "upscaler"},
     },
 }

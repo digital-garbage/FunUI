@@ -12,7 +12,7 @@ import folder_paths
 import torch
 from comfy_api.latest import io
 
-from ..._core import log
+from ..._core import latent_stats, log
 
 # Chosen, not inferred. bf16 is the default because fp16 is a known failure on
 # the AV VAEs, and fp32 decodes slowly for no visible gain.
@@ -79,5 +79,6 @@ class FunUIVAELoader(io.ComfyNode):
             keys = sorted(state_dict)
             raise RuntimeError(f"ComfyUI did not recognise {vae_name} as a VAE ({len(keys)} weights, first keys: "
                                f"{', '.join(keys[:6])}; header: {sorted(metadata or {})[:6]})")
+        latent_stats.remember(vae.first_stage_model)             # LTX's latent upscaler needs the video VAE's tables (Two stages)
         log.info("FunUI VAE Loader", f"{vae_name} loaded as {dtype}")
         return vae

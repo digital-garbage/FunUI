@@ -79,8 +79,38 @@ def _upscaler(name):
     stamp = (path, os.path.getmtime(path))
     if _CACHE.get("stamp") != stamp:
         _CACHE.clear()
-        _CACHE.update(stamp=stamp, model=load_upscaler(name))
+        try:
+            model = load_upscaler(name)
+        except RuntimeError:
+            model = _ltx_upscaler(name)                 # not an H3 upscaler: Lightricks' (ComfyUI loads it, its header holds the shape)
+        _CACHE.update(stamp=stamp, model=model)
     return _CACHE["model"]
+
+
+def _ltx_upscaler(name):
+    from comfy_extras.nodes_hunyuan import LatentUpscaleModelLoader
+    model = LatentUpscaleModelLoader.execute(name).result[0]
+    if type(getattr(model, "model", None)).__name__ != "LatentUpsampler":
+        raise RuntimeError(f"{name} is neither an H3 nor an LTX latent upscaler")
+    return model
+
+
+def is_ltx_upscaler(upscaler):
+    return type(getattr(upscaler, "model", None)).__name__ == "LatentUpsampler"
+
+
+def run_ltx_upscaler(upscaler, video):
+    """Lightricks' upscaler on a video latent: the VAE's statistics take it out of the sampler's normalised space and back
+    (what ComfyUI's LTXV Latent Upsampler does). Doubles the width and height."""
+    import math
+    import comfy.model_management as mm
+    from ..._core import latent_stats
+    if not latent_stats.available():
+        raise RuntimeError("the LTX upscaler needs the video VAE's statistics, and no LTX video VAE has been loaded by FunUI's VAE loader")
+    mm.load_models_gpu([upscaler], memory_required=math.prod(video.shape) * 3000.0)
+    x = video.to(dtype=upscaler.model_dtype(), device=upscaler.load_device)
+    out = upscaler.model(latent_stats.un_normalize(x))
+    return latent_stats.normalize(out).to(dtype=video.dtype, device=mm.intermediate_device())
 
 
 METHODS = ("bicubic", "mitchell", "catmull-rom", "lanczos", "bislerp", "bilinear", "area", "nearest-exact")
@@ -164,6 +194,12 @@ def enlarge(video, h, w, upscaler=None, method="bicubic"):
     ratio = (h / video.shape[-2] + w / video.shape[-1]) / 2.0
     if ratio <= 1.0:
         return video
+    if is_ltx_upscaler(upscaler):
+        try:
+            return resize_video(run_ltx_upscaler(upscaler, video), h, w)         # always 2x; trimmed to the exact grid
+        except RuntimeError as e:                                                # a run is not lost over the upscaler
+            log.warning(TITLE, f"latent upscaler not used, bicubic instead: {e}")
+            return resize_video(video, h, w)
     return resize_video(run_upscaler(upscaler, video, ratio), h, w)
 
 
