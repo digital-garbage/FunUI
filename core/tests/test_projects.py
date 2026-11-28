@@ -648,3 +648,9 @@ def test_a_scene_keeps_its_own_prefix_even_an_empty_one():
     p = projects.Project.from_dict({"scenes": [{"id": "a" * 12, "text": "x"}, {"id": "b" * 12, "text": "y", "anchor": ""}, {"id": "c" * 12, "text": "z", "anchor": "warm"}, {"id": "d" * 12, "anchor": 5}]})
     assert [s.anchor for s in p.scenes] == [None, "", "warm", None]
     assert [s["anchor"] for s in projects.Project.from_dict(p.to_dict()).to_dict()["scenes"]] == [None, "", "warm", None]
+
+
+def test_picture_fit_is_crop_unless_the_project_says_a_known_fit():
+    assert projects.Project.from_dict({"name": "old"}).picture_fit == "crop"
+    assert projects.Project.from_dict({"picture_fit": "weird"}).picture_fit == "crop"
+    assert projects.Project.from_dict({"picture_fit": "pad"}).picture_fit == "pad"

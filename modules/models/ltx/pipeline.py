@@ -18,7 +18,7 @@ DISTILLED_SIGMAS = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421
 def _fit():
     """The start picture brought to the clip's shape the way the person says (the stock node always crops)."""
     return {"id": "fit", "group": "Preparation", "node": "FunUIFitPicture",
-            "roles": [{"at": "generation.sampling", "input": "fit", "label": "Start picture fit"}],
+            "roles": [{"at": "project.picture_fit", "input": "fit", "label": "Start picture fit"}],
             "inputs": {"image": ["source_image", 1], "width": ["aspect", 0], "height": ["aspect", 1], "fit": "crop"}}
 
 

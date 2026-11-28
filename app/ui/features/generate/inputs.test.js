@@ -291,6 +291,12 @@ test("video to video, direct: the scene's own picture is named as unused, not dr
   assert.deepEqual(r.left, []);
 });
 
+test("the project's start picture fit reaches the fit slot", async () => {
+  const s = [{ id: "f", node: "FunUIFitPicture", roles: [{ at: "project.picture_fit", input: "fit" }], inputs: { fit: "crop" } }];
+  const run = (project) => buildInputs({ project, scene: {}, slots: s, expand: async () => null });
+  assert.deepEqual((await run({ picture_fit: "pad", video: {} })).inputs.f, { fit: "pad" });
+});
+
 test("the project's Short side / Long side choice reaches the aspect slot, and a size saved under an older name still counts", async () => {
   const s = [{ id: "a", node: "FunUIAspectSize", roles: [{ at: "project.video", input: "width", was: "target_width" }, { at: "project.video", input: "height", was: "target_height" }, { at: "project.resolution_basis", input: "basis" }], inputs: { width: 1344, height: 768, basis: "short" } }];
   const run = (project) => buildInputs({ project, scene: {}, slots: s, expand: async () => null });

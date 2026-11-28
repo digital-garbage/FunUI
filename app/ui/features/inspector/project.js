@@ -16,6 +16,11 @@ const BASIS_HINT = { short: "With Short side: the clip's shorter side is the sma
 const basis = (p, slots) => (slots || []).some((s) => (s.roles || []).some((r) => r.at === "project.resolution_basis")) ? c.field.default({ label: "Resolution is the", hint: BASIS_HINT[p.project.resolution_basis] || BASIS_HINT.short,
   control: c.select.md({ label: "Resolution is the", options: BASES, value: BASES.some((b) => b.value === p.project.resolution_basis) ? p.project.resolution_basis : "area", onChange: (v) => p.setField("resolution_basis", v) }) }) : null;
 
+/** For a pipeline that fits the start picture to the clip's shape: crop, pad or stretch (every such pipeline reads this one setting). */
+const FITS = [{ value: "crop", label: "Crop" }, { value: "pad", label: "Pad" }, { value: "stretch", label: "Stretch" }];
+const pictureFit = (p, slots) => (slots || []).some((s) => (s.roles || []).some((r) => r.at === "project.picture_fit")) ? c.field.default({ label: "Start picture fit", hint: "When the start picture's shape differs from the clip's: Crop cuts what overflows, Pad keeps the whole picture with black bars, Stretch fills the clip and changes the picture's shape.",
+  control: c.select.md({ label: "Start picture fit", options: FITS, value: FITS.some((f) => f.value === p.project.picture_fit) ? p.project.picture_fit : "crop", onChange: (v) => p.setField("picture_fit", v) }) }) : null;
+
 // What the pipeline lets the project decide (width, length, rate...): one whole-number control per slot input
 // that declares the role. A role that `drives` length or rate edits the number the timeline draws.
 const videoControls = (p, slots) => (slots || []).flatMap((slot) => (slot.roles || []).filter((r) => r.at === "project.video" && r.input).map((role) => {
@@ -115,6 +120,7 @@ export function projectRows(p, slots, api, app = {}) {
       size.length ? c.field.row({ fields: size.map((x) => x.field) }) : null,
       flip(p, size),
       basis(p, slots),
+      pictureFit(p, slots),
       ...custom(p, open)),
     ...frameCarry(app),
     c.label.section({ text: "Prompt" }),

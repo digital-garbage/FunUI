@@ -309,6 +309,7 @@ def test_the_start_picture_goes_through_a_fit_step_and_an_old_saved_pipeline_get
     from modules.models.ltx.pipeline import presets, upgrade
     now = next(p["slots"] for p in presets() if p["id"] == "ltx23_image_to_video_references")
     fit = next(x for x in now if x["id"] == "fit")
+    assert fit["roles"] == [{"at": "project.picture_fit", "input": "fit", "label": "Start picture fit"}]            # one project-wide setting, not the sampler popup
     assert fit["node"] == "FunUIFitPicture" and fit["inputs"]["fit"] == "crop" and fit["inputs"]["image"] == ["source_image", 1]
     assert fit["inputs"]["width"] == ["aspect", 0] and next(x for x in now if x["id"] == "anchor")["inputs"]["image"] == ["fit", 0]
     old = [{**x, "inputs": {**x["inputs"], "image": ["source_image", 1]}} if x["id"] == "anchor" else x for x in now if x["id"] != "fit"]
