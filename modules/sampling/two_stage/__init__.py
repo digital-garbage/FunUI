@@ -44,7 +44,7 @@ SETTINGS = {
     "enabled": {
         "type": "bool", "default": False,
         "label": "Two stages",
-        "hint": "Runs the first steps on a smaller picture and the last at full size: cheaper steps, same final size. Skipped when starting from a picture or mask.",
+        "hint": "Runs the first steps on a smaller picture and the last at full size: cheaper steps, same final size. On H3 skipped when starting from a picture or mask.",
     },
     "size": {
         "type": "float", "default": 0.7, "min": 0.4, "max": 0.95, "step": 0.05,

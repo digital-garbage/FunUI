@@ -22,12 +22,19 @@ def small_grid(h, w, size):
     return (best[1], best[2]) if best else (h, w)
 
 
+def takes_picture(guider):
+    """LTX holds a start picture as frames of the latent that a mask keeps from being re-noised, so the first stage can carry a
+    shrunk copy of both and the second the full-size ones. (H3's start pictures are conditions sized to the full picture.)"""
+    return type(getattr(guider.model_patcher, "model", None)).__name__.startswith("LTX")
+
+
 def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
-    if denoise_mask is not None:
+    picture = takes_picture(guider)
+    if denoise_mask is not None and not picture:
         return "the run has a mask"
     if latent_shapes is None or len(latent_shapes) != 2 or len(latent_shapes[0]) != 5:
         return "the latent is not a video with a soundtrack"
-    if int(torch.count_nonzero(latent_image)) > 0:
+    if int(torch.count_nonzero(latent_image)) > 0 and not picture:
         return "the run starts from a picture, not from noise"
     if len(sigmas) - 1 < 2 or steps >= len(sigmas) - 1:
         return f"the run has {len(sigmas) - 1} step(s), too few to cut after {steps}"
@@ -35,6 +42,8 @@ def _why_not(guider, latent_image, denoise_mask, sigmas, latent_shapes, steps):
         for c in conds:
             if "minimax_keyframes" in c.get("model_conds", {}) or "minimax_keyframes" in c:
                 return "the shot has first/last picture pins sized to the full picture"
+            if picture and ("keyframe_idxs" in c or "keyframe_idxs" in c.get("model_conds", {})):
+                return "the shot has guide frames placed on the full picture"
     try:
         from ..ptd.controller import CONTROLLER_KEY
         if CONTROLLER_KEY in guider.model_options or CONTROLLER_KEY in guider.model_patcher.model_options:
@@ -240,8 +249,17 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
     # A crop of the full noise keeps its statistics (a resize would smooth them) and is fixed by the seed.
     small_noise, shapes1 = comfy.utils.pack_latents(
         (video_noise[..., :h1, :w1].contiguous(), audio_noise))
-    small_image, _ = comfy.utils.pack_latents(
-        (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
+    small_mask = None
+    if takes_picture(guider) and int(torch.count_nonzero(latent_image)) > 0:
+        picture_video, picture_audio = comfy.utils.unpack_latents(latent_image, latent_shapes)
+        small_image, _ = comfy.utils.pack_latents((resize_video(picture_video, h1, w1, "area"), picture_audio))
+        if denoise_mask is not None:
+            mask_video, mask_audio = comfy.utils.unpack_latents(denoise_mask, latent_shapes)
+            small_mask, _ = comfy.utils.pack_latents((resize_video(mask_video, h1, w1, "area"), mask_audio))
+    else:
+        picture_video = None
+        small_image, _ = comfy.utils.pack_latents(
+            (torch.zeros(*latent_shapes[0][:3], h1, w1, dtype=latent_image.dtype, device=latent_image.device), audio_zero))
     first, second = sigmas[:steps + 1], backed_up(sigmas, steps, back_up, start_sigma)
     if scheduler2:
         second = second_schedule(guider.model_patcher.get_model_object("model_sampling"), scheduler2, sigmas, steps, second)
@@ -280,7 +298,7 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
     setattr(guider, dit_hooks.STAGE, 1)
     guider.model_patcher = first_model
     try:                                            # everything from here to the end: an error between the stages (enlarging) must not leave the stage-1 model on a guider ComfyUI may cache
-        run(small_noise, small_image, sampler, first, None, first_stage_callback, disable_pbar, seed,
+        run(small_noise, small_image, sampler, first, small_mask, first_stage_callback, disable_pbar, seed,
              latent_shapes=shapes1)
         if "x0" not in seen:
             raise RuntimeError("the first stage gave no clean guess to hand over")
@@ -289,6 +307,9 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
         done = guider.model_patcher.model.process_latent_out(comfy.nested_tensor.NestedTensor((video, audio)).cpu())
         video, audio = done.unbind()
         enlarged = enlarge(video, h, w, upscaler, method)
+        if picture_video is not None and denoise_mask is not None:
+            keep = comfy.utils.unpack_latents(denoise_mask, latent_shapes)[0].to(enlarged.device, enlarged.dtype)        # 1 = free, 0 = the picture's own frames
+            enlarged = enlarged * keep + picture_video.to(enlarged.device, enlarged.dtype) * (1 - keep)
         handed, _ = comfy.utils.pack_latents(
             (enlarged.to(latent_image.device, latent_image.dtype), audio.to(latent_image.device, latent_image.dtype)))
 
@@ -299,7 +320,7 @@ def _staged(original, guider, size, steps, resize, method, back_up, sampler2, sc
                 return callback(step + steps, x0, x, total + steps)
         setattr(guider, dit_hooks.STAGE, 2)
         guider.model_patcher = second_model
-        return run(noise, handed, sampler_two, second, None, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
+        return run(noise, handed, sampler_two, second, denoise_mask, shifted, disable_pbar, seed, latent_shapes=latent_shapes)
     finally:
         guider.model_patcher = base_model
         setattr(guider, FULL, None)

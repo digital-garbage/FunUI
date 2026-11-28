@@ -22,7 +22,7 @@ def model(comfyui):
     return mp.ModelPatcher(base, load_device=torch.device("cpu"), offload_device=torch.device("cpu"))
 
 
-def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None, seen=None):
+def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None, seen=None, mask=None):
     import comfy.samplers
     from comfy.nested_tensor import NestedTensor
     from modules.sampling.two_stage import install
@@ -42,7 +42,7 @@ def _run(model, values, sigmas=(1.0, 0.9, 0.7, 0.3, 0.0), latent=None, seen=None
     noise = NestedTensor((torch.randn(1, 24, 2, 8, 8), torch.randn(1, 32, 2, 3)))
     try:
         out = guider.sample(noise, latent, comfy.samplers.sampler_object("euler"), torch.tensor(sigmas),
-                            seed=1, disable_pbar=True)
+                            denoise_mask=mask, seed=1, disable_pbar=True)
     finally:
         hook.remove()
     return note, out, calls
@@ -69,6 +69,21 @@ def test_a_run_that_cannot_be_cut_is_left_alone(model):
     assert calls == [(8, 8)] * 4                             # a start from a picture is not cut
     _n, _o, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 4})
     assert calls == [(8, 8)] * 4                             # nothing would be left for the full size
+
+
+def test_a_model_that_holds_its_start_picture_in_the_latent_is_cut_with_the_picture_and_its_mask_shrunk(model, monkeypatch):
+    from comfy.nested_tensor import NestedTensor
+    from modules.sampling.two_stage import stages
+    monkeypatch.setattr(stages, "takes_picture", lambda guider: True)           # what an LTX model says
+    video = torch.zeros(1, 24, 2, 8, 8)
+    video[:, :, 0] = 1.0                                                          # frame 0 is the picture
+    mask = torch.ones(1, 1, 2, 8, 8)
+    mask[:, :, 0] = 0.0                                                           # and it is kept
+    started = NestedTensor((video, torch.zeros(1, 32, 2, 3)))
+    note, out, calls = _run(model, {"enabled": True, "size": 0.5, "steps": 2}, latent=started, mask=mask)
+    assert "first 2 step(s)" in note and calls == [(4, 4), (4, 4), (8, 8), (8, 8)]
+    picture = out.unbind()[0][:, :, 0]
+    assert torch.allclose(picture, torch.ones_like(picture), atol=1e-4)           # the picture's own frame came back at full size, untouched
 
 
 def test_every_stage_sees_the_whole_schedule(model):
