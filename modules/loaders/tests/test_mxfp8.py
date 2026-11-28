@@ -49,3 +49,22 @@ def test_second_pass_and_foreign_files_are_left_alone():
     assert m.quantize_state_dict(sd)[0] == 0 and all(torch.equal(sd[k].view(torch.uint8), again[k].view(torch.uint8)) for k in sd)
     n, note = m.quantize_state_dict({"unet.weight": torch.zeros(4, 4)})
     assert n == 0 and "loaded as is" in note
+
+
+def test_ltx_converts_the_picture_stream_of_the_middle_blocks_only():
+    _quantizable()
+    r = lambda *a: torch.randn(*a, dtype=torch.bfloat16)
+    sd = {}
+    for i in range(8):
+        for name in ("attn1.to_q", "attn1.to_out.0", "attn2.to_k", "ff.net.0.proj", "ff.net.2", "audio_attn1.to_q", "audio_ff.net.2", "audio_to_video_attn.to_q"):
+            sd[f"transformer_blocks.{i}.{name}.weight"] = r(64, 64)
+    keep = {k: v.clone() for k, v in sd.items()}
+    n, note = m.quantize_state_dict(sd)
+    assert n == 15 and "blocks 2-4" in note                                   # 5 picture-stream weights in each of blocks 2, 3, 4
+    for k, v in keep.items():
+        i, name = int(k.split(".")[1]), k.split(".", 2)[2]
+        picture = name.startswith(("attn1", "attn2", "ff."))
+        if picture and i in (2, 3, 4):
+            assert sd[k].dtype == torch.float8_e4m3fn, k
+        else:
+            assert torch.equal(sd[k], v), k

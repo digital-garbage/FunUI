@@ -114,7 +114,7 @@ class FunUIDiffusionModelLoader(io.ComfyNode):
                               min=0.0, max=0.95, step=0.05, optional=True,
                               tooltip="Skips less at the first steps and more at the last, up to the sparsity above. 0 turns it off. Try 0.70 with sparsity 0.90."),
                 io.Boolean.Input("mxfp8", default=False, optional=True,
-                                 tooltip="MiniMax H3 only: about twice the speed on RTX 50 and newer GPUs, with slightly different pictures. Requires torch 2.10+ with CUDA 13; otherwise skipped."),
+                                 tooltip="MiniMax H3 and LTX: about twice the speed on RTX 50 and newer GPUs, with slightly different pictures. Requires torch 2.10+ with CUDA 13; otherwise skipped."),
                 # Added last: saved workflows store widget values by position.
                 io.Combo.Input("veda_predictor", extra_dict=shows(("sla", [True]), ("sla_method", ["veda"])), options=veda_attention.predictor_choices(),
                                default="auto", optional=True,

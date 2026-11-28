@@ -1,4 +1,4 @@
-"""MXFP8 weights for MiniMax H3, made from an ordinary (bf16/fp16) file at load.
+"""MXFP8 weights for MiniMax H3 and LTX, made from an ordinary (bf16/fp16) file at load.
 
 Blackwell's tensor cores run FP8 at twice the bf16 rate, and the MXFP8 format keeps one power-of-two scale
 per 32 weights, so no lone outlier spoils a whole row (the failure that gave plain fp8 NaN audio). The
@@ -8,6 +8,11 @@ weights are stored in exactly the layout a pre-quantized file has, so ComfyUI's 
 The recipe follows NVIDIA's Sol-H3 (arXiv 2609.35110): the attention and MLP projections of the middle
 blocks only. The first two blocks and the last three stay as they are, the timestep modulation (adaLN),
 embeddings, the output layer and the text refiner too. The result is an approximation of the file.
+
+LTX has no published recipe, so it takes the same shape: the picture stream's attention (self and text) and feed-forward
+weights of the middle blocks. The sound stream, the audio-video cross attention, the first two and last three blocks and
+everything else stay as they are (plain low-precision weights are what gave H3 NaN sound). ComfyUI's own layers read the
+format from the tag, so nothing else is model-specific. Not yet run on a real LTX.
 """
 
 import json
@@ -16,6 +21,7 @@ import re
 import torch
 
 _BIG = re.compile(r"(?:^|\.)(?<!refiner\.)blocks\.(\d+)\.(?:attn\.(?:qkv_proj|out_proj)|mlp\.(?:fc1|fc2))\.weight$")
+_LTX = re.compile(r"(?:^|\.)transformer_blocks\.(\d+)\.(?:attn[12]\.(?:to_q|to_k|to_v|to_out\.0)|ff\.net\.0\.proj|ff\.net\.2)\.weight$")
 KEEP_FIRST = 2
 KEEP_LAST = 3
 GROUP = 32
@@ -37,9 +43,9 @@ def quantize_state_dict(sd, device=None):
     """Rewrite `sd` in place. -> (layers converted, note). Already-quantized layers and weights whose width is
     not a multiple of 32 are left as they are, and the note says so."""
     from comfy.quant_ops import QuantizedTensor
-    keys = [(k, int(m.group(1))) for k in sd if (m := _BIG.search(k))]
+    keys = [(k, int(m.group(1))) for k in sd if (m := _BIG.search(k) or _LTX.search(k))]
     if not keys:
-        return 0, "mxfp8: no H3 attention/MLP weights found to convert (not an H3 file, or already quantized) -- loaded as is"
+        return 0, "mxfp8: no H3 or LTX attention/MLP weights found to convert (another model, or already quantized) -- loaded as is"
     count = max(i for _, i in keys) + 1
     done, odd = 0, 0
     for key, index in keys:
